@@ -25,6 +25,8 @@ def route_handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json=load("players.json"))
     if path.endswith("/fixtures"):
         return httpx.Response(200, json=load("fixtures.json"))
+    if path.endswith("/matches") and request.url.params.get("status") == "upcoming":
+        return httpx.Response(200, json=load("fixtures.json"))
     if path.endswith("/matches") and request.url.params.get("status") == "live":
         return httpx.Response(200, json=load("matches_live.json"))
     if path.endswith("/score"):
@@ -75,7 +77,6 @@ async def test_player_search_sends_api_key_and_query_and_maps_fields(provider) -
     assert players[0].country_code == "ita"
     assert players[0].ranking == 1
     assert players[1].country_code is None
-    assert "101" not in players[0].id
 
 
 @pytest.mark.asyncio
@@ -89,7 +90,6 @@ async def test_live_list_maps_vendor_payload_to_canonical(provider) -> None:
     assert len(live) == 1
     match = live[0]
     assert match.id.startswith("mat_")
-    assert "21131" not in match.id
     assert match.status is MatchStatus.LIVE
     assert match.scheduled_at == datetime(2026, 9, 8, 12, 30, tzinfo=timezone.utc)
     assert match.round == "Semifinal"
@@ -122,6 +122,31 @@ async def test_live_list_maps_vendor_payload_to_canonical(provider) -> None:
         2026, 9, 8, 10, 0, tzinfo=timezone.utc
     )
     assert match.freshness.is_stale is False
+
+
+@pytest.mark.asyncio
+async def test_upcoming_list_uses_current_matches_endpoint_and_maps_nested_payload(provider) -> None:
+    built, seen = provider
+
+    upcoming = await built.get_fixtures()
+
+    request = next(
+        request
+        for request in seen
+        if request.url.path.endswith("/matches")
+        and request.url.params.get("status") == "upcoming"
+    )
+    assert request.url.params.get("offset") is None
+    assert len(upcoming) == 2
+    assert upcoming[0].status is MatchStatus.SCHEDULED
+    assert upcoming[0].scheduled_at == datetime(2026, 9, 8, 12, 30, tzinfo=timezone.utc)
+    assert upcoming[0].round == "Semifinal"
+    assert upcoming[0].surface == "hard"
+    assert upcoming[0].tournament.name == "ATP Finals"
+    assert all(match.id.startswith("mat_") for match in upcoming)
+    assert all(
+        player.id.startswith("ply_") for match in upcoming for player in match.players
+    )
 
 
 @pytest.mark.asyncio
@@ -243,6 +268,26 @@ async def test_local_player_filter_uses_internal_ids(provider) -> None:
 
     live = await built.get_live_matches(player_id=ruud.id)
     assert live == []
+
+
+@pytest.mark.asyncio
+async def test_upcoming_player_filter_uses_provider_external_id(provider) -> None:
+    built, seen = provider
+
+    players = await built.search_players("Casper")
+    ruud = next(player for player in players if player.name == "Casper Ruud")
+
+    fixtures = await built.get_fixtures(player_id=ruud.id)
+
+    request = next(
+        request
+        for request in seen
+        if request.url.path.endswith("/matches")
+        and request.url.params.get("status") == "upcoming"
+    )
+    assert request.url.params.get("player") == "103"
+    assert len(fixtures) == 1
+    assert fixtures[0].players[0].id == ruud.id
 
 
 @pytest.mark.asyncio

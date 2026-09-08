@@ -92,7 +92,12 @@ const upcomingDto: MatchDto = {
   },
 }
 
-function mockStream(options: { data?: StructuredData; text?: string; errorCode?: string }) {
+function mockStream(options: {
+  data?: StructuredData
+  text?: string
+  errorCode?: string
+  errorDetails?: Record<string, unknown>
+}) {
   streamChatMock.mockImplementation(() => {
     async function* generate(): AsyncGenerator<ChatEvent> {
       yield { type: 'status', payload: { stage: 'resolving' } }
@@ -101,7 +106,7 @@ function mockStream(options: { data?: StructuredData; text?: string; errorCode?:
       if (options.errorCode) {
         yield {
           type: 'error',
-          payload: { code: options.errorCode, message: 'failed', details: {} },
+          payload: { code: options.errorCode, message: 'failed', details: options.errorDetails ?? {} },
         }
       } else {
         yield { type: 'done', payload: { ok: true } }
@@ -179,6 +184,22 @@ describe('HomePage slate', () => {
     expect(await screen.findByText(/provider_unavailable/)).toBeVisible()
     const retry = screen.getByRole('button', { name: '重试加载比赛数据' })
     expect(retry).toBeVisible()
+  })
+
+  it('keeps the healthy upcoming section when live loading fails', async () => {
+    getMatchesMock.mockImplementation(async (status: string) => {
+      if (status === 'live') {
+        throw Object.assign(new Error('live down'), { code: 'provider_unavailable' })
+      }
+      return [upcomingDto]
+    })
+
+    render(<HomePage />)
+
+    expect(await screen.findByText(/直播比赛加载失败（provider_unavailable）/)).toBeVisible()
+    expect(screen.getByRole('heading', { name: '今晚比赛' })).toBeVisible()
+    expect(screen.getByText('Carlos Alcaraz')).toBeVisible()
+    expect(screen.queryByText(/比赛数据加载失败（provider_unavailable）/)).toBeNull()
   })
 })
 
@@ -274,6 +295,18 @@ describe('HomePage chat', () => {
     const errorCopies = await screen.findAllByText(/llm_unavailable/)
     expect(errorCopies.length).toBeGreaterThan(0)
     expect(errorCopies[0]).toBeVisible()
+    expect(screen.getByRole('button', { name: '重试提问' })).toBeVisible()
+  })
+
+  it('renders a friendly quota message with the retry interval', async () => {
+    mockStream({ errorCode: 'rate_limited', errorDetails: { retry_after: '30' } })
+    render(<HomePage />)
+    await screen.findByText('Jannik Sinner')
+
+    await askQuestion('郑钦文下一场比赛是什么时候？')
+
+    expect(await screen.findByText(/数据服务配额暂时用完/)).toBeVisible()
+    expect(screen.getByText(/30 秒后重试/)).toBeVisible()
     expect(screen.getByRole('button', { name: '重试提问' })).toBeVisible()
   })
 

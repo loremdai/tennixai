@@ -35,6 +35,22 @@ type HomePageProps = {
   initialQuestion?: string
 }
 
+type SlateStatuses = {
+  live: SlateState
+  upcoming: SlateState
+}
+
+type SlateErrorCodes = {
+  live: string | null
+  upcoming: string | null
+}
+
+function getErrorCode(error: unknown): string {
+  return typeof error === 'object' && error !== null && 'code' in error
+    ? String((error as { code: unknown }).code)
+    : 'internal_error'
+}
+
 export function HomePage({ initialQuestion }: HomePageProps) {
   const [phase, setPhase] = useState<ProductPhase>('p1')
   const [prompt, setPrompt] = useState('')
@@ -47,24 +63,36 @@ export function HomePage({ initialQuestion }: HomePageProps) {
     live: [],
     upcoming: [],
   })
-  const [slateState, setSlateState] = useState<SlateState>('loading')
-  const [slateErrorCode, setSlateErrorCode] = useState<string | null>(null)
+  const [slateState, setSlateState] = useState<SlateStatuses>({
+    live: 'loading',
+    upcoming: 'loading',
+  })
+  const [slateErrorCodes, setSlateErrorCodes] = useState<SlateErrorCodes>({
+    live: null,
+    upcoming: null,
+  })
 
   const loadSlate = useCallback(async () => {
-    setSlateState('loading')
-    try {
-      const [live, upcoming] = await Promise.all([getMatches('live'), getMatches('upcoming')])
-      setSlate({ live, upcoming })
-      setSlateErrorCode(null)
-      setSlateState('success')
-    } catch (error) {
-      const code =
-        typeof error === 'object' && error !== null && 'code' in error
-          ? String((error as { code: unknown }).code)
-          : 'internal_error'
-      setSlateErrorCode(code)
-      setSlateState('error')
-    }
+    setSlateState({ live: 'loading', upcoming: 'loading' })
+    setSlateErrorCodes({ live: null, upcoming: null })
+
+    const [liveResult, upcomingResult] = await Promise.allSettled([
+      getMatches('live'),
+      getMatches('upcoming'),
+    ])
+
+    setSlate({
+      live: liveResult.status === 'fulfilled' ? liveResult.value : [],
+      upcoming: upcomingResult.status === 'fulfilled' ? upcomingResult.value : [],
+    })
+    setSlateState({
+      live: liveResult.status === 'fulfilled' ? 'success' : 'error',
+      upcoming: upcomingResult.status === 'fulfilled' ? 'success' : 'error',
+    })
+    setSlateErrorCodes({
+      live: liveResult.status === 'rejected' ? getErrorCode(liveResult.reason) : null,
+      upcoming: upcomingResult.status === 'rejected' ? getErrorCode(upcomingResult.reason) : null,
+    })
   }, [])
 
   useEffect(() => {
@@ -113,6 +141,11 @@ export function HomePage({ initialQuestion }: HomePageProps) {
   const featured = featuredDto ? toMatchViewModel(featuredDto) : null
   const liveCards = slate.live.map(toHomeMatch)
   const upcomingCards = slate.upcoming.map(toHomeMatch)
+  const allSlateFailed = slateState.live === 'error' && slateState.upcoming === 'error'
+  const featuredState: SlateState =
+    featuredDto || slateState.live === 'success' || slateState.upcoming === 'success'
+      ? 'success'
+      : 'loading'
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -196,13 +229,26 @@ export function HomePage({ initialQuestion }: HomePageProps) {
           </aside>
 
           <div className="flex min-w-0 flex-col gap-6 lg:col-start-1 lg:row-start-1">
-            {slateState === 'error' && slateErrorCode ? (
-              <SlateErrorPanel code={slateErrorCode} onRetry={() => void loadSlate()} />
+            {allSlateFailed ? (
+              <SlateErrorPanel
+                code={slateErrorCodes.live ?? slateErrorCodes.upcoming ?? 'internal_error'}
+                onRetry={() => void loadSlate()}
+              />
             ) : (
               <>
-                <FeaturedMatchSection phase={phase} match={featured} state={slateState} onAsk={focusAssistant} />
-                <LiveNowSection matches={liveCards} state={slateState} onRefresh={() => void loadSlate()} />
-                <UpcomingSection matches={upcomingCards} state={slateState} />
+                <FeaturedMatchSection phase={phase} match={featured} state={featuredState} onAsk={focusAssistant} />
+                <LiveNowSection
+                  matches={liveCards}
+                  state={slateState.live}
+                  errorCode={slateErrorCodes.live}
+                  onRefresh={() => void loadSlate()}
+                />
+                <UpcomingSection
+                  matches={upcomingCards}
+                  state={slateState.upcoming}
+                  errorCode={slateErrorCodes.upcoming}
+                  onRefresh={() => void loadSlate()}
+                />
               </>
             )}
             <FollowedPlayersSection />

@@ -50,7 +50,8 @@ cd frontend && TENNIX_E2E_REAL_PROVIDER=1 TENNIX_E2E_REAL_LLM=1 pnpm test:e2e en
 | `end-to-end-live.spec.ts`（浏览器） | 真实 | 真实 | test.skip（需两个标志） |
 
 - 运行前在 shell 中导出 `TENNIX_LLM_API_KEY` / `TENNIX_LLM_BASE_URL`（以及 provider 门需要的 `TENNIX_LIVETENNIS_API_KEY`）；Playwright 的 backend webServer 会继承这些变量；未设置真实凭据时 webServer 自动回退 fake 模式，不会启动失败。
-- 真实 provider 受 Free 配额限制（100 请求/日、30 请求/分钟）；P1 无自动轮询，读取仅来自初始加载、手动刷新与提问。
+- 真实 provider 受 Free 配额限制（100 请求/日、30 请求/分钟）；upcoming 使用 `/matches?status=upcoming`，Home 未指定球员时只读取供应商第一页，指定球员时使用供应商 `player` 过滤，不会无界分页；P1 无自动轮询，读取仅来自初始加载、手动刷新与提问。
+- provider 返回 429 时，后端保留 `Retry-After`，前端显示配额暂时用完及重试间隔；重试必须由用户手动触发。
 
 ## 4. 路由与数据边界速查
 
@@ -65,6 +66,8 @@ cd frontend && TENNIX_E2E_REAL_PROVIDER=1 TENNIX_E2E_REAL_LLM=1 pnpm test:e2e en
 | 症状 | 处理 |
 |---|---|
 | Home 显示 `比赛数据加载失败（code）` | 后端未启动或 provider 不可用；检查 `:8000/api/v1/health` 与 `.env`；点击“重试加载” |
+| Home 只有 live 或 upcoming 一侧失败 | 这是局部降级；健康的一侧仍可用，失败分区会显示自己的 code 和“重试加载”按钮；检查对应 provider 请求，不要刷新整个页面循环重试 |
+| Chat 显示数据服务配额暂时用完 | 等待 `Retry-After` 指定的时间后手动重试；不要通过分页或脚本连续探测 Free API |
 | Match Page 显示 `比赛不存在或已失效` | 进程重启后内部 ID 失效；从 Home 重新进入比赛 |
 | 视觉测试失败 | 查看 `frontend/test-results/` 下 diff；仅当确认是获准的数据文案变化才 `--update-snapshots` 并逐张审阅 |
 | live 门 skip | 缺少对应凭据；属预期行为，不代表失败 |

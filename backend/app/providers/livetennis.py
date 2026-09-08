@@ -27,7 +27,6 @@ from app.errors import AppError
 from app.identity import MemoryIdentityRepository
 from app.providers.livetennis_dtos import (
     ListResponse,
-    LiveFixtureDto,
     LiveMatchDto,
     LivePlayerDto,
     LiveScoreDto,
@@ -150,7 +149,7 @@ class LiveTennisProvider:
         )
 
     @staticmethod
-    def _map_status(dto: LiveMatchDto | LiveFixtureDto) -> MatchStatus:
+    def _map_status(dto: LiveMatchDto) -> MatchStatus:
         event_status = (dto.event_status or "").strip().casefold()
         if event_status in EVENT_STATUS_MAP:
             return EVENT_STATUS_MAP[event_status]
@@ -165,7 +164,7 @@ class LiveTennisProvider:
             return player_ids[1]
         return None
 
-    def _map_match(self, dto: LiveMatchDto | LiveFixtureDto) -> Match | None:
+    def _map_match(self, dto: LiveMatchDto) -> Match | None:
         p1_dto = dto.players.get("p1")
         p2_dto = dto.players.get("p2")
         if p1_dto is None or p2_dto is None:
@@ -234,13 +233,34 @@ class LiveTennisProvider:
             if any(player.id == player_id for player in match.players)
         ]
 
+    def _list_params(
+        self, status: str, player_id: str | None
+    ) -> dict[str, Any] | None:
+        params: dict[str, Any] = {"status": status}
+        if player_id is None:
+            return params
+
+        external_id = self._identities.external_id(
+            "player", PROVIDER_NAME, player_id
+        )
+        if external_id is None:
+            return None
+        params["player"] = external_id
+        return params
+
     async def get_live_matches(self, *, player_id: str | None = None) -> list[Match]:
-        payload = await self._request("/matches", {"status": "live"})
+        params = self._list_params("live", player_id)
+        if params is None:
+            return []
+        payload = await self._request("/matches", params)
         return self._filter(self._map_list(payload, LiveMatchDto), player_id)
 
     async def get_fixtures(self, *, player_id: str | None = None) -> list[Match]:
-        payload = await self._request("/fixtures")
-        return self._filter(self._map_list(payload, LiveFixtureDto), player_id)
+        params = self._list_params("upcoming", player_id)
+        if params is None:
+            return []
+        payload = await self._request("/matches", params)
+        return self._filter(self._map_list(payload, LiveMatchDto), player_id)
 
     async def search_players(self, query: str) -> list[Player]:
         payload = await self._request("/players", {"search": query})

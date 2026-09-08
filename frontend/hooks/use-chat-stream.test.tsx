@@ -135,6 +135,26 @@ describe('useChatStream', () => {
     expect(result.current.state.text).toBe('比赛数据已找到，但 AI 说明暂时不可用。')
   })
 
+  it('preserves provider error details for rate-limit UX', async () => {
+    streamChatMock.mockImplementation(
+      scriptedStream([
+        {
+          type: 'error',
+          payload: { code: 'rate_limited', message: 'quota exceeded', details: { retry_after: '30' } },
+        },
+      ]),
+    )
+
+    const { result } = renderHook(() => useChatStream('global'))
+
+    await act(async () => {
+      await result.current.send('郑钦文下一场比赛是什么时候？')
+    })
+
+    expect(result.current.state.error?.code).toBe('rate_limited')
+    expect(result.current.state.error?.details).toEqual({ retry_after: '30' })
+  })
+
   it('surfaces transport failures as typed errors', async () => {
     streamChatMock.mockImplementation(scriptedStream([], { failWith: new Error('network down') }))
 

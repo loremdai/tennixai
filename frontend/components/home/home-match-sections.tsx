@@ -28,6 +28,27 @@ import { cn } from '@/lib/utils'
 
 export type SlateState = 'loading' | 'success' | 'error'
 
+function SlateSectionError({
+  title,
+  code,
+  onRetry,
+}: {
+  title: string
+  code: string | null | undefined
+  onRetry: () => void
+}) {
+  return (
+    <div role="alert" className="flex flex-col items-start gap-3 rounded-xl border border-dashed bg-muted/15 p-5">
+      <p className="text-sm font-medium">{title}加载失败（{code ?? 'internal_error'}）</p>
+      <p className="text-sm text-muted-foreground">该部分暂时不可用，其他比赛信息仍可继续查看。</p>
+      <Button variant="outline" onClick={onRetry} aria-label={`重试加载${title}`}>
+        <RefreshCw data-icon="inline-start" aria-hidden="true" />
+        重试加载
+      </Button>
+    </div>
+  )
+}
+
 function FeaturedPlayer({
   player,
   serving,
@@ -286,10 +307,12 @@ function CompactLiveCard({ match }: { match: HomeMatchViewModel }) {
 export function LiveNowSection({
   matches,
   state,
+  errorCode,
   onRefresh,
 }: {
   matches: HomeMatchViewModel[]
   state: SlateState
+  errorCode?: string | null
   onRefresh: () => void
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null)
@@ -326,6 +349,8 @@ export function LiveNowSection({
         <p className="rounded-xl border border-dashed bg-muted/15 p-5 text-sm text-muted-foreground">
           正在加载直播比赛…
         </p>
+      ) : state === 'error' ? (
+        <SlateSectionError title="直播比赛" code={errorCode} onRetry={onRefresh} />
       ) : matches.length === 0 ? (
         <p className="rounded-xl border border-dashed bg-muted/15 p-5 text-sm text-muted-foreground">
           暂无直播比赛
@@ -342,9 +367,13 @@ export function LiveNowSection({
 export function UpcomingSection({
   matches,
   state,
+  errorCode,
+  onRefresh,
 }: {
   matches: HomeMatchViewModel[]
   state: SlateState
+  errorCode?: string | null
+  onRefresh: () => void
 }) {
   return (
     <section id="upcoming" className="flex scroll-mt-24 flex-col gap-4" aria-labelledby="upcoming-title">
@@ -364,6 +393,8 @@ export function UpcomingSection({
         <p className="rounded-xl border border-dashed bg-muted/15 p-5 text-sm text-muted-foreground">
           正在加载今晚赛程…
         </p>
+      ) : state === 'error' ? (
+        <SlateSectionError title="今晚赛程" code={errorCode} onRetry={onRefresh} />
       ) : matches.length === 0 ? (
         <p className="rounded-xl border border-dashed bg-muted/15 p-5 text-sm text-muted-foreground">
           今晚暂无待开赛比赛

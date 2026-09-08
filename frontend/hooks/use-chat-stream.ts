@@ -10,7 +10,7 @@ export type ChatViewState = {
   question: string
   text: string
   data: StructuredData | null
-  error: { code: string; message: string } | null
+  error: { code: string; message: string; details: Record<string, unknown> } | null
 }
 
 type HistoryMessage = { role: 'user' | 'assistant'; content: string }
@@ -23,6 +23,16 @@ const IDLE_STATE: ChatViewState = {
   text: '',
   data: null,
   error: null,
+}
+
+function getErrorDetails(error: unknown): Record<string, unknown> {
+  if (typeof error !== 'object' || error === null || !('details' in error)) {
+    return {}
+  }
+  const details = (error as { details: unknown }).details
+  return typeof details === 'object' && details !== null && !Array.isArray(details)
+    ? (details as Record<string, unknown>)
+    : {}
 }
 
 export function useChatStream(scope: 'global' | 'match', matchId?: string): {
@@ -81,7 +91,11 @@ export function useChatStream(scope: 'global' | 'match', matchId?: string): {
               setState((current) => ({
                 ...current,
                 phase: 'error',
-                error: { code: event.payload.code, message: event.payload.message },
+                error: {
+                  code: event.payload.code,
+                  message: event.payload.message,
+                  details: event.payload.details ?? {},
+                },
               }))
               break
             case 'done':
@@ -110,7 +124,11 @@ export function useChatStream(scope: 'global' | 'match', matchId?: string): {
             ? String((error as { code: unknown }).code)
             : 'internal_error'
         const message = error instanceof Error ? error.message : 'Chat stream failed'
-        setState((current) => ({ ...current, phase: 'error', error: { code, message } }))
+        setState((current) => ({
+          ...current,
+          phase: 'error',
+          error: { code, message, details: getErrorDetails(error) },
+        }))
       }
     },
     [scope, matchId],

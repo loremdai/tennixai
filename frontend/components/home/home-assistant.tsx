@@ -158,6 +158,19 @@ function answerTitle(chat: ChatViewState, cards: HomeMatchViewModel[]): string {
   return '正在整理回答'
 }
 
+function errorSummary(error: ChatViewState['error']): string {
+  if (!error) return ''
+  if (error.code === 'rate_limited') {
+    const retryAfter = error.details.retry_after
+    const retryLabel =
+      typeof retryAfter === 'string' || typeof retryAfter === 'number'
+        ? `${retryAfter} 秒后`
+        : '稍后'
+    return `数据服务配额暂时用完，请在${retryLabel}重试。`
+  }
+  return `查询失败（${error.code}），请重试。`
+}
+
 type HomeAssistantProps = {
   prompt: string
   chat: ChatViewState
@@ -203,7 +216,7 @@ export function HomeAssistant({
     chat.phase !== 'idle' && (Boolean(chat.data) || Boolean(chat.text) || Boolean(chat.error))
   const summary =
     chat.text ||
-    (chat.error ? `查询失败（${chat.error.code}），请重试。` : '')
+    errorSummary(chat.error)
 
   return (
     <Card id="assistant" data-tone="assistant" className="scroll-mt-24">
