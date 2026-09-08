@@ -1,0 +1,26 @@
+[project]
+name = "tennix-api"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.135,<1",
+  "httpx>=0.28,<1",
+  "openai>=2,<3",
+  "pydantic-settings>=2,<3",
+  "uvicorn[standard]>=0.35,<1",
+]
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "pytest-asyncio>=1,<2"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+asyncio_mode = "auto"
+markers = [
+  "llm_live: calls the configured real LLM",
+  "provider_live: calls LiveTennisAPI",
+  "end_to_end_live: calls both real integrations",
+]
+
+[tool.uv]
+package = false

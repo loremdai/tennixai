@@ -31,3 +31,9 @@ Thumbs.db
 frontend/playwright-report/
 frontend/test-results/
 frontend/blob-report/
+
+# Python generated files
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
