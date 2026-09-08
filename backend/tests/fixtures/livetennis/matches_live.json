@@ -1,0 +1,31 @@
+{
+  "data": [
+    {
+      "id": 21131,
+      "tournament": "ATP Finals",
+      "tournament_id": "1217",
+      "tour": "atp",
+      "surface": "hard",
+      "indoor": true,
+      "format": "BO3",
+      "round": "Semifinal",
+      "status": "live",
+      "event_status": null,
+      "scheduled_time": "2026-09-08T12:30:00Z",
+      "players": {
+        "p1": {"id": 101, "name": "Jannik Sinner", "country": "ita", "ranking": 1},
+        "p2": {"id": 102, "name": "Carlos Alcaraz", "country": "esp", "ranking": 2}
+      },
+      "score": {
+        "sets": [1, 1],
+        "games": [[6, 4, 4], [4, 6, 5]],
+        "points": ["30", "15"],
+        "server": 1,
+        "is_tiebreak": false,
+        "timestamp": "2026-09-08T10:00:00Z"
+      },
+      "future_additive_field": "ignored"
+    }
+  ],
+  "meta": {"limit": 50, "offset": 0, "count": 1, "total": 1, "has_more": false}
+}

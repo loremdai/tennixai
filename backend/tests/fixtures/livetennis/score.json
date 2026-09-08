@@ -1,0 +1,9 @@
+{
+  "sets": [1, 1],
+  "games": [[6, 4, 4], [4, 6, 5]],
+  "points": ["30", "15"],
+  "server": 1,
+  "is_tiebreak": false,
+  "timestamp": "2026-09-08T10:00:00Z",
+  "win_probability_p1": null
+}
