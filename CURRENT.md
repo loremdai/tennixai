@@ -3,79 +3,79 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-08 14:23 CST
+**最后更新：** 2026-09-08 14:33 CST
 
-**当前任务：** T12 — Add Typed Frontend API, SSE Parsing, and View Models
+**当前任务：** T13 — Connect Home to Real Structured Data Without Redesigning It
 
-**任务状态：** `in_progress`
+**任务状态：** `ready`
 
-**当前执行者 / ADE：** Claude Code（Codex Goal：完成 P1 T02–T15，顺序执行，不进 P2）
+**当前执行者 / ADE：** `unassigned`
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**任务起始提交：** `1d547ec`
+**任务起始提交：** `unassigned`（领取任务时记录当时的 HEAD）
 
-**最后验证的产品提交：** `174866a`
+**最后验证的产品提交：** `bd79e84`
 
 **远程：** `origin` → `https://github.com/loremdai/tennixai.git`
 
 ## 60 秒恢复
 
-- T11 已完成（`174866a`）：`app/chat/client.py`（`ChatModel` protocol、`FakeChatModel` 脚本回合+运行时启发式、`OpenAICompatibleChatModel` AsyncOpenAI→llm_unavailable）、`app/chat/orchestrator.py`（历史守卫零调用、status→data→text_delta→done、两轮上限、数据优先 fallback `比赛数据已找到，但 AI 说明暂时不可用。`）、`POST /api/v1/chat/stream` SSE（no-cache no-transform、X-Accel-Buffering: no）；fake llm 模式下 `create_app` 默认装配 orchestrator。
-- T10（`9d988ed`）：chat 契约 + BusinessTools + is_historical_query（历史拒绝文案 `P1 暂不支持历史比赛结果查询。`）。T09（`e6d59ca`）：前端薄代理。T08（`039d144`）：REST + 错误信封。更早：T07 service、T06 cache、T05 LiveTennisProvider、T04 Fake、T03 models、T02 FastAPI 基础、T01 视觉基线。
-- 当前唯一主任务是 T12：前端 typed API——`lib/api/types.ts`（snake_case DTO + ChatEvent 判别联合）、`lib/api/client.ts`（getPlayers/getMatches/getMatch 只解 `data`、parseSse 处理跨 chunk 分裂帧、streamChat POST + AbortSignal、ApiError）、`lib/view-models.ts`（toHomeMatch/toMatchViewModel：Asia/Macau 本地化、null→`暂未提供`、scheduled→upcoming、cancelled/postponed/unknown→unavailable、freshness label）、`hooks/use-chat-stream.ts`（idle|loading|streaming|success|error、12 条消息历史、AbortController、绝不从 prose 派生卡片）。测试优先：client.test.ts、view-models.test.ts、use-chat-stream.test.tsx。不改动 Home/Match 组件（T13/T14）。
+- T12 已完成（`bd79e84`）：`lib/api/types.ts`（snake_case DTO + ChatEvent 判别联合）、`lib/api/client.ts`（getPlayers/getMatches/getMatch 解 `data` 信封、ApiError、parseSse 分裂帧/CRLF/多字节安全、streamChat+AbortSignal）、`lib/view-models.ts`（toHomeMatch/toMatchViewModel：澳门时间、`暂未提供`、stale→`数据较旧 · N 秒未刷新`、initials 无国旗 URL）、`hooks/use-chat-stream.ts`（idle|loading|streaming|success|error、12 条历史、abort/cancel/reset）。前端 vitest 40/40、typecheck、build 全过。
+- T11（`174866a`）：后端 SSE chat（fake 模式默认装配）。T10（`9d988ed`）：业务工具+历史守卫。T09（`e6d59ca`）：薄代理。T08（`039d144`）：REST。更早 T02–T07 后端基础/模型/provider/cache/service 全部完成。
+- 当前唯一主任务是 T13：Home 接真数据、不重设计——保留 `HomePage`/`HomeHero`/`HomeAssistant` DOM 层级与 Tailwind 类；`answerHomeQuestion` 换成 `useChatStream('global')`；卡片只来自 `chat.state.data.matches.map(toHomeMatch)`；slate 用 `getMatches('live')`+`getMatches('upcoming')` 一次性加载与显式刷新回调（绝不加 timer/轮询）；`RecentResultsCard` 显示 `P1 暂不支持历史赛果`；`FollowedPlayersSection` 显示 `关注功能将在后续阶段接入`（无虚构状态）；HomeAssistant status-label map 增加 `unavailable`→`状态待确认`；footer 改为 `数据由 Tennix 服务提供 · 时间为澳门本地时间`。测试优先写 `components/home-page.test.tsx`（只 mock `lib/api/client`）。视觉基线：`pnpm test:e2e --grep prototype` diff 必须是已审阅的数据文案变化且布局几何不变，逐张审阅后才能更新基线。
 - 当前没有产品阻塞项。
-- 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`（任务外）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`（next dev 自动生成）、`frontend/next-env.d.ts`（Next 工具链生成）；一律保留，不得顺手提交或删除。
+- 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`（任务外）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`（next dev 自动生成，内容为 Next 16 文档提示）、`frontend/next-env.d.ts`（Next 工具链生成）；一律保留，不得顺手提交或删除。
 
 ## 当前任务
 
 ### 目标
 
-按计划 Task 12 实现：DTO 类型与后端字段一一对应（无 provider ID 字段可表达）；`parseSse` 用单个 TextDecoder 流式解码、保留不完整 buffer、按 `/\r?\n\r?\n/` 分帧、合并重复 data: 行、忽略注释/空行；非 2xx 先抛 `ApiError`（code/details）再解析；view-model 映射用 `Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Macau' })`，`/matches/${encodeURIComponent(id)}` 链接，initials 而非合成国旗 URL；`useChatStream` 精确接口（state/send/cancel/reset），新请求 abort 旧请求，卸载 abort 且不再 setState。
+按计划 Task 13 将 Home 从 mock 路由切换到真实结构化数据：initial question（`?q=`）恰好触发一次；初始 slate 各调用 live/upcoming 一次且无 timer；刷新按钮触发新一对调用；loading 期间禁止重复提交；历史问题渲染 unsupported 且无卡片；stale 徽章可见；空列表保留 section 外壳与事实性中文空文案；API 失败渲染 typed 重试文案；home-data.ts 保留 `homeExampleQueries` 与阶段营销标签，删除 `answerHomeQuestion`、假比赛数组、假 recent results、假 followed-player 状态数据（生产路径）。
 
 ### 为什么现在做
 
-T13 Home 与 T14 Match Page 都只消费这些 typed API 与 view models；SSE 解析的跨 chunk 分裂与 abort 行为必须先有确定性测试。
+P1.4 exit gate：Home → Match 真实链路 + 内部 ID + 视觉回归受控；T14 Match Page 依赖 Home 卡片 href `/matches/{id}`。
 
 ### 实施依据
 
-- [P1 实施计划 — Task 12](./docs/superpowers/plans/2026-09-08-tennixai-p1-implementation.md#task-12-add-typed-frontend-api-sse-parsing-and-view-models)
+- [P1 实施计划 — Task 13](./docs/superpowers/plans/2026-09-08-tennixai-p1-implementation.md#task-13-connect-home-to-real-structured-data-without-redesigning-it)
 
 ### 预计变更范围
 
-- `frontend/lib/api/types.ts`、`frontend/lib/api/client.ts`、`frontend/lib/api/client.test.ts`
-- `frontend/lib/view-models.ts`、`frontend/lib/view-models.test.ts`
-- `frontend/hooks/use-chat-stream.ts`、`frontend/hooks/use-chat-stream.test.tsx`
+- `frontend/components/home-page.tsx`、`frontend/components/home/home-assistant.tsx`、`frontend/components/home/home-data.ts`、`frontend/components/home/home-match-sections.tsx`、`frontend/components/home/home-player-sections.tsx`、`frontend/app/page.tsx`
+- `frontend/components/home-page.test.tsx`
+- （如基线经审阅确认）`frontend/e2e/__screenshots__/**`
 
 ### 完成门
 
-- `pnpm test -- lib/api/client.test.ts lib/view-models.test.ts hooks/use-chat-stream.test.tsx` 通过（含分裂帧、abort、stale 标签、`暂未提供`、比分 player-major 行映射）。
-- `pnpm typecheck` 通过。
-- 不改动 Home/Match 组件与视觉基线（T13/T14）；无自动轮询/timer。
-- `ROADMAP.md` 的 T12 写入完成提交和验证证据；T13 变为 `ready`。
+- `pnpm test -- components/home-page.test.tsx` 通过；`pnpm typecheck` 通过。
+- `pnpm test:e2e --grep prototype`：通过，或 diff 仅为已审阅的数据文案变化且布局几何不变；更新基线必须逐张审阅并记录理由。
+- 生产 Home 路径无 setInterval/setTimeout 轮询、无 mock 路由残留。
+- `ROADMAP.md` 的 T13 写入完成提交和验证证据；T14 变为 `ready`。
 
 ## 下一步操作
 
 1. 执行者先运行 `git fetch origin`、`git status --short --branch`、`git branch --show-current`，确认本文件与仓库一致。
 2. 保持在 `main`，写入执行者/ADE、任务起始 HEAD 和更新时间，将状态改为 `in_progress`。
 3. 仅提交并推送该次任务领取更新到 `origin/main`；不要包含现有未跟踪的 `.codex/` 与 next 生成文件。
-4. 按 Task 12 的测试优先顺序实施，不扩大到 T13。
+4. 按 Task 13 的测试优先顺序实施，不扩大到 T14。
 
 ## 最近验证
 
 | 日期 | 提交 | 验证 | 结果 |
 |---|---|---|---|
+| 2026-09-08 | `bd79e84` | `pnpm test` 40/40；`pnpm typecheck` 通过；`pnpm build` exit 0 | T12 验收通过 |
 | 2026-09-08 | `174866a` | `uv run pytest tests/test_chat_orchestrator.py tests/test_chat_api.py -v` 17/17；全套确定性 suite 107/107 | T11 验收通过（无真实 LLM 调用） |
 | 2026-09-08 | `9d988ed` | `uv run pytest tests/test_chat_tools.py tests/test_service.py -v` 34/34；全套确定性 suite 90/90 | T10 验收通过 |
-| 2026-09-08 | `e6d59ca` | `pnpm test -- lib/server/backend-proxy.test.ts` 8/8；`pnpm typecheck`；`pnpm build` exit 0；`pnpm test:e2e --grep prototype` 10/10 | T09 验收通过 |
 
 任务完成前必须把实际运行的命令、结果和对应提交补充到这里。未运行或失败的验收不能写成通过。
 
 ## 最近交接
 
-**状态：** T11 已由 Claude Code（Codex Goal）于 2026-09-08 完成并交接（提交 `174866a`）；T12 可领取。
+**状态：** T12 已由 Claude Code（Codex Goal）于 2026-09-08 完成并交接（提交 `bd79e84`）；T13 可领取。
 
-**交接说明：** 后端 SSE 协议已冻结（`backend/tests/test_chat_api.py` 为准）：事件 `status|data|text_delta|done|error`；`data` payload 为 `{kind: matches|match|unsupported, matches: MatchDto[]}`；`error` payload 为 `{code,message,details}`；帧以恰好两个 `\n` 结束；REST DTO 字段名 snake_case（`scheduled_at`、`sets_won`、`player1_games`、`server_player_id`、`freshness.{provider,source_updated_at,observed_at,is_stale,age_seconds}`）；REST 信封 `{data: ...}`，错误信封 `{error:{...},request_id}`。前端调用一律走同源 `/api/*`（T09 代理已就绪），不得直连 FastAPI。hook 测试用 `@testing-library/react` + jsdom（vitest 默认环境已是 jsdom；server-only 测试用 `// @vitest-environment node` docblock）。
+**交接说明：** T13 只 mock `frontend/lib/api/client.ts`（`vi.mock`），断言行为不测实现细节。既有 Home 组件从 `home-data.ts` 导入假数据：`featuredMatch`、`liveMatches`、`upcomingMatches`、`followedPlayers`、`recentResults`、`answerHomeQuestion`。HomeMatchResult 类型与 `toHomeMatch` 输出的 HomeMatchViewModel 字段相近但不同（location/currentSet/elapsed/actionLabel 不在 view model 中）——组件 props 改为消费 HomeMatchViewModel，删除或改造 HomeMatchResult。视觉真源是 10 张基线：布局几何（间距、字体、颜色、栅格）必须不变，仅数据文案允许变化且需逐张审阅。`?q=` initial question 由 `app/page.tsx` 读取 searchParams 传入。fake 后端 `TENNIX_FIXED_NOW=2026-09-08T10:00:00Z` 时 Home 数据为 Sinner vs Alcaraz（scheduled 20:30 澳门）与 Sinner vs Ruud（live）。
 
 **已知本地状态：** 未跟踪的 `.codex/skills/ui-ux-pro-max/SKILL.md`、`frontend/AGENTS.md`、`frontend/CLAUDE.md`（next dev 生成）、`frontend/next-env.d.ts`（Next 工具链生成），保留原样。
 
@@ -85,11 +85,11 @@ T13 Home 与 T14 Match Page 都只消费这些 typed API 与 view models；SSE �
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-08 | T12 完成：typed frontend API、SSE 解析与 view models | `bd79e84` |
+| 2026-09-08 | 领取 T12 并置为 in_progress | `e7fd969` |
 | 2026-09-08 | T11 完成：OpenAI-compatible tool loop 与 SSE 路由 | `174866a` |
 | 2026-09-08 | 领取 T11 并置为 in_progress | `3e34314` |
 | 2026-09-08 | T10 完成：chat 契约、历史守卫与三个业务工具 | `9d988ed` |
-| 2026-09-08 | 领取 T10 并置为 in_progress | `9bd26c1` |
-| 2026-09-08 | T09 完成：Next.js 薄代理与 vitest 骨架 | `e6d59ca` |
 
 ## 接手与更新规则
 

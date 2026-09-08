@@ -41,7 +41,7 @@
 | P1.1 — Foundation | `in_progress` | FastAPI、配置、健康检查、测试骨架、Next.js 薄代理 | T02（`8b15efe`）、T09（`e6d59ca`）已完成；浏览器级 health/SSE smoke 随 T11 SSE 路由与 T15 E2E 最终验证 |
 | P1.2 — Domain and provider | `done` | canonical models、provider protocol、fake/live adapters、进程内 identity | 已完成：T03–T06 + T08 公开 DTO 泄漏门（`test_match_list_never_exposes_provider_ids` 等断言响应零供应商 ID） |
 | P1.3 — Service and REST | `done` | TennisService、时间语义、缓存、确定性 REST | 已完成：T07（`000ca1a`）+ T08（`039d144`）——事实问题不经 LLM 可答；时区/歧义/不可用字段/stale/429 均有确定性测试 |
-| P1.4 — Real frontend data | `planned` | typed client、Home、动态 Match Page、加载/错误/刷新状态 | Home → Match 真实链路通过，内部 ID 正确，视觉回归受控 |
+| P1.4 — Real frontend data | `in_progress` | typed client、Home、动态 Match Page、加载/错误/刷新状态 | T09（`e6d59ca`）、T12（`bd79e84`）已完成；剩余 T13 Home 接真数据、T14 Match Page |
 | P1.5 — Conversational path | `in_progress` | 三个业务工具、Qwen tool loop、SSE、全局与比赛 Chat | T10（`9d988ed`）、T11（`174866a`）已完成；剩余前端消费（T12/T14）与 P1.6 验收 |
 | P1.6 — Acceptance and hardening | `planned` | 验收集、真实服务 opt-in 测试、Playwright、runbook | 全部确定性门通过；可用 live gates 通过；无 P1 范围膨胀 |
 
@@ -64,8 +64,8 @@
 | T09 | P1.1/P1.4 | Add Thin Next.js Route Handler Proxies | `done` | `e6d59ca` | `pnpm test -- lib/server/backend-proxy.test.ts` 8/8 通过（SSE body 原样透传、query/method/content-type 转发、429+Retry-After、authorization/cookie 不转发、fetch 失败→502 internal_error、未配置→500、零 base URL 泄漏、POST 流式 duplex half）；`pnpm typecheck` 通过；`pnpm build` exit 0（四个代理路由均 dynamic）；`pnpm test:e2e --grep prototype` 10/10 视觉基线不受影响（2026-09-08） |
 | T10 | P1.5 | Define Chat Models, Historical Guard, and Business Tools | `done` | `9d988ed` | `uv run pytest tests/test_chat_tools.py tests/test_service.py -v` 34/34 通过（catalog 恰为三工具且 time_scope enum 内联、match scope 注入并忽略模型提供 ID、global get_match 缺 ID→422、malformed args→invalid_request+tool、未知工具拒绝、service 错误透传、9 个历史短语大小写不敏感守卫、StructuredToolResult 含 domain models、ChatRequest 1–12 条边界）；全套确定性 suite 90/90（2026-09-08） |
 | T11 | P1.5 | Add the OpenAI-Compatible Tool Loop and SSE Route | `done` | `174866a` | `uv run pytest tests/test_chat_orchestrator.py tests/test_chat_api.py -v` 17/17 通过（事件顺序 status→data→text_delta→done、LLM 失败保留结构化结果+固定 fallback、历史守卫零 model/provider 调用、provider 异常仅 status,error、第三轮工具→invalid_request、match scope system message 含内部 ID、SSE 帧恰以两个换行结束、`/api/v1/chat/stream` 端到端 fake 模式、422 请求体校验）；全套确定性 suite 107/107；未调用真实 LLM（2026-09-08） |
-| T12 | P1.4/P1.5 | Add Typed Frontend API, SSE Parsing, and View Models | `ready` | — | — |
-| T13 | P1.4 | Connect Home to Real Structured Data Without Redesigning It | `planned` | — | — |
+| T12 | P1.4/P1.5 | Add Typed Frontend API, SSE Parsing, and View Models | `done` | `bd79e84` | `pnpm test` 40/40 通过（SSE 跨 chunk 分裂帧、多字节字符切分、CRLF、注释/多 data 行、REST data 信封解包、ApiError code/details、abort 不变 internal_error、view-model Asia/Macau 时间/`暂未提供`/stale 标签/比分行/initials、useChatStream 全生命周期/12 条历史/abort/cancel/reset/unmount）；`pnpm typecheck` 通过；`pnpm build` exit 0（2026-09-08） |
+| T13 | P1.4 | Connect Home to Real Structured Data Without Redesigning It | `ready` | — | — |
 | T14 | P1.4/P1.5 | Add the Internal-ID Match Page and Contextual Chat | `planned` | — | — |
 | T15 | P1.6 | Complete Browser E2E, Live Gates, and the P1 Runbook | `planned` | — | — |
 
