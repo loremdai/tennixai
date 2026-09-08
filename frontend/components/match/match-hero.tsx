@@ -1,6 +1,7 @@
 import {
   Clock3,
   Radio,
+  RefreshCw,
   Sparkles,
   Trophy,
 } from 'lucide-react'
@@ -15,36 +16,39 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import type { MatchScoreDto } from '@/lib/api/types'
+import type { MatchViewModel } from '@/lib/view-models'
 import { cn } from '@/lib/utils'
 
+import type { MatchHighlight } from './match-data'
+import { setLabel } from './match-data'
 import {
-  finishedScore,
-  getPlayer,
-  liveScore,
-  matchMeta,
-  type MatchHighlight,
-  type MatchStatus,
-  type Player,
-  players,
-} from './match-data'
+  getPreviewPlayer,
+  previewMatchMeta,
+  type PreviewPlayer,
+} from './match-preview-data'
 
 type MatchHeroProps = {
-  status: MatchStatus
+  match: MatchViewModel
   highlight: MatchHighlight
   onAsk: () => void
+  onRefresh?: () => void
+  preview?: boolean
 }
 
 function PlayerSummary({
   player,
+  previewPlayer,
   side,
-  status,
+  visualStatus,
   isServing,
   isWinner,
   highlight,
 }: {
-  player: Player
+  player: MatchViewModel['players'][number]
+  previewPlayer: PreviewPlayer | null
   side: 'left' | 'right'
-  status: MatchStatus
+  visualStatus: MatchViewModel['visualStatus']
   isServing: boolean
   isWinner: boolean
   highlight: MatchHighlight
@@ -57,29 +61,37 @@ function PlayerSummary({
       )}
     >
       <div className={cn('flex flex-wrap items-center gap-2', side === 'right' && 'justify-end')}>
-        <img
-          src={player.flagUrl}
-          alt={`${player.country}国旗`}
-          width={20}
-          height={14}
-          loading="eager"
-          fetchPriority="high"
-          className="h-3.5 w-5 rounded-sm object-cover ring-1 ring-border"
-        />
+        {previewPlayer ? (
+          <img
+            src={previewPlayer.flagUrl}
+            alt={`${previewPlayer.country}国旗`}
+            width={20}
+            height={14}
+            loading="eager"
+            fetchPriority="high"
+            className="h-3.5 w-5 rounded-sm object-cover ring-1 ring-border"
+          />
+        ) : null}
         <span className="font-mono text-xs text-muted-foreground">{player.countryCode}</span>
-        <Badge variant="outline">{player.seed} 号种子</Badge>
+        {player.ranking !== null ? (
+          <Badge variant="outline">{previewPlayer ? `${previewPlayer.seed} 号种子` : `#${player.ranking}`}</Badge>
+        ) : (
+          <Badge variant="outline">排名暂未提供</Badge>
+        )}
       </div>
 
       <div className="min-w-0">
         <p className="text-pretty text-lg font-semibold leading-tight tracking-tight sm:text-2xl lg:text-3xl">
           {player.name}
         </p>
-        <p className="mt-1 text-sm text-muted-foreground">世界排名 #{player.rank}</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {player.ranking !== null ? `世界排名 #${player.ranking}` : '世界排名暂未提供'}
+        </p>
       </div>
 
-      {status === 'upcoming' ? (
+      {visualStatus === 'upcoming' ? (
         <span className="text-sm text-muted-foreground">赛前档案</span>
-      ) : status === 'finished' ? (
+      ) : visualStatus === 'finished' ? (
         isWinner ? (
           <Badge variant="secondary">
             <Trophy data-icon="inline-start" aria-hidden="true" />
@@ -88,7 +100,7 @@ function PlayerSummary({
         ) : (
           <span className="text-sm text-muted-foreground">亚军</span>
         )
-      ) : isServing ? (
+      ) : visualStatus === 'live' && isServing ? (
         <div
           id="server-indicator"
           className={cn(
@@ -100,14 +112,16 @@ function PlayerSummary({
           <span className="live-pulse size-2 rounded-full bg-primary" aria-hidden="true" />
           当前发球
         </div>
-      ) : (
+      ) : visualStatus === 'live' ? (
         <span className="text-sm text-muted-foreground">接发球</span>
+      ) : (
+        <span className="text-sm text-muted-foreground">状态待确认</span>
       )}
     </div>
   )
 }
 
-function ScheduledMatch() {
+function ScheduledMatch({ match, preview }: { match: MatchViewModel; preview: boolean }) {
   return (
     <div className="flex min-h-40 flex-col items-center justify-center gap-2 rounded-xl bg-background/35 p-4 text-center">
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -115,17 +129,41 @@ function ScheduledMatch() {
         预计开赛
       </div>
       <p className="font-mono text-4xl font-semibold tracking-tighter sm:text-5xl">
-        {matchMeta.scheduledTime}
+        {match.scheduledTime}
       </p>
       <p className="text-sm text-muted-foreground">
-        {matchMeta.scheduledDate} · {matchMeta.timezone}
+        {match.scheduledDate} · {preview ? previewMatchMeta.timezone : match.timezoneLabel}
       </p>
-      <Badge variant="secondary">赛前简报已就绪</Badge>
+      <Badge variant="secondary">{preview ? '赛前简报已就绪' : match.format}</Badge>
     </div>
   )
 }
 
-function LiveScore({ highlight }: { highlight: MatchHighlight }) {
+function scoreRows(match: MatchViewModel, score: MatchScoreDto) {
+  return match.players.map((player, index) => ({
+    player,
+    serving: match.serverPlayerId === player.id,
+    sets: score.sets.map((set) =>
+      index === 0 ? set.player1_games ?? null : set.player2_games ?? null,
+    ),
+    points: score.points[index] ?? null,
+  }))
+}
+
+function LiveScore({
+  match,
+  highlight,
+  preview,
+}: {
+  match: MatchViewModel
+  highlight: MatchHighlight
+  preview: boolean
+}) {
+  const score = match.score
+  if (!score) return null
+  const rows = scoreRows(match, score)
+  const setCount = score.sets.length
+
   return (
     <div
       id="live-scoreboard"
@@ -137,56 +175,83 @@ function LiveScore({ highlight }: { highlight: MatchHighlight }) {
     >
       <div className="flex flex-wrap items-center justify-center gap-2 text-sm font-medium text-primary">
         <Radio aria-hidden="true" className="size-4" />
-        第 {matchMeta.currentSet} 盘 · 第 {matchMeta.currentGame} 局
-        <span className="font-mono text-muted-foreground">{matchMeta.liveElapsed}</span>
+        {preview
+          ? <>第 {previewMatchMeta.currentSet} 盘 · 第 {previewMatchMeta.currentGame} 局</>
+          : <>第 {setCount} 盘</>}
+        <span className="font-mono text-muted-foreground">
+          {preview ? previewMatchMeta.liveElapsed : match.freshnessLabel}
+        </span>
       </div>
 
       <table className="w-full table-fixed text-center" aria-label="实时比赛比分">
-        <caption className="sr-only">Jannik Sinner 对阵 Carlos Alcaraz 的逐盘比分与当前局分</caption>
+        <caption className="sr-only">
+          {match.players[0].name} 对阵 {match.players[1].name} 的逐盘比分与当前局分
+        </caption>
         <thead>
           <tr className="font-mono text-xs text-muted-foreground sm:text-sm">
             <th scope="col" className="w-20 text-left font-normal">球员</th>
-            <th scope="col" className="font-normal">1</th>
-            <th scope="col" className="font-normal">2</th>
-            <th scope="col" className="font-normal text-primary">3</th>
+            {score.sets.map((set) => (
+              <th key={set.number} scope="col" className={cn('font-normal', set.number === setCount && 'text-primary')}>
+                {set.number}
+              </th>
+            ))}
             <th scope="col" className="font-normal">局分</th>
           </tr>
         </thead>
         <tbody className="font-mono text-2xl font-semibold tabular-nums sm:text-3xl">
-          {liveScore.rows.map((row) => {
-            const player = getPlayer(row.playerId)
-            return (
-              <tr key={row.playerId}>
-                <th scope="row" className="py-2 text-left font-sans text-sm font-medium">
-                  <span className="flex items-center gap-2">
-                    {row.serving ? <span className="size-2 rounded-full bg-primary" aria-label="发球方" /> : null}
-                    {player.shortName}
-                  </span>
-                </th>
-                {row.sets.map((score, index) => (
-                  <td key={`${row.playerId}-${index}`} className={cn('py-2', index === 2 && 'text-primary')}>
-                    {score}
-                  </td>
-                ))}
-                <td className="py-2 text-foreground">{row.points}</td>
-              </tr>
-            )
-          })}
+          {rows.map((row) => (
+            <tr key={row.player.id}>
+              <th scope="row" className="py-2 text-left font-sans text-sm font-medium">
+                <span className="flex items-center gap-2">
+                  {row.serving ? <span className="size-2 rounded-full bg-primary" aria-label="发球方" /> : null}
+                  {row.player.shortName}
+                </span>
+              </th>
+              {row.sets.map((games, index) => (
+                <td key={`${row.player.id}-${index}`} className={cn('py-2', index === setCount - 1 && 'text-primary')}>
+                  {games ?? '-'}
+                </td>
+              ))}
+              <td className="py-2 text-foreground">{row.points ?? ''}</td>
+            </tr>
+          ))}
         </tbody>
       </table>
 
       <div className="flex flex-wrap items-center justify-center gap-2 text-sm text-muted-foreground">
-        <span>Sinner 发球</span>
+        <span>
+          {match.serverPlayerId
+            ? `${match.players.find((player) => player.id === match.serverPlayerId)?.shortName ?? ''} 发球`
+            : '发球方暂未提供'}
+        </span>
         <span aria-hidden="true">·</span>
-        <span>当前局 30–15</span>
+        <span>当前局 {score.points[0] ?? '–'}–{score.points[1] ?? '–'}</span>
         <span aria-hidden="true">·</span>
-        <span>第三盘 4–5</span>
+        <span>
+          {setLabel(setCount - 1)} {rows[0].sets[setCount - 1] ?? '-'}–{rows[1].sets[setCount - 1] ?? '-'}
+        </span>
       </div>
     </div>
   )
 }
 
-function FinishedScore({ highlight }: { highlight: MatchHighlight }) {
+function FinishedScore({
+  match,
+  highlight,
+  preview,
+}: {
+  match: MatchViewModel
+  highlight: MatchHighlight
+  preview: boolean
+}) {
+  const score = match.score
+  if (!score) return null
+  const rows = scoreRows(match, score)
+  const winner = match.players.find((player) => player.id === match.winnerPlayerId)
+  const setsSummary = rows[0].sets
+    .map((games, index) => `${games ?? '-'}–${rows[1].sets[index] ?? '-'}`)
+    .join('、')
+
   return (
     <div
       id="final-scoreboard"
@@ -198,42 +263,42 @@ function FinishedScore({ highlight }: { highlight: MatchHighlight }) {
     >
       <div className="flex items-center justify-center gap-2 text-sm font-medium text-primary">
         <Trophy aria-hidden="true" className="size-4" />
-        Sinner 获胜 · {matchMeta.finalDuration}
+        {winner ? `${winner.shortName} 获胜` : '比赛已结束'} · {preview ? previewMatchMeta.finalDuration : match.freshnessLabel}
       </div>
       <table className="w-full table-fixed text-center" aria-label="最终比赛比分">
-        <caption className="sr-only">Jannik Sinner 以 6–4、4–6、6–3 击败 Carlos Alcaraz</caption>
+        <caption className="sr-only">
+          {match.players[0].name} 对阵 {match.players[1].name} 的最终逐盘比分
+        </caption>
         <thead>
           <tr className="font-mono text-xs text-muted-foreground sm:text-sm">
             <th scope="col" className="w-20 text-left font-normal">球员</th>
-            <th scope="col" className="font-normal">1</th>
-            <th scope="col" className="font-normal">2</th>
-            <th scope="col" className="font-normal">3</th>
+            {score.sets.map((set) => (
+              <th key={set.number} scope="col" className="font-normal">{set.number}</th>
+            ))}
           </tr>
         </thead>
         <tbody className="font-mono text-2xl font-semibold tabular-nums sm:text-3xl">
-          {finishedScore.rows.map((row) => {
-            const player = getPlayer(row.playerId)
-            return (
-              <tr key={row.playerId} className={row.winner ? 'text-primary' : undefined}>
-                <th scope="row" className="py-2 text-left font-sans text-sm font-medium">
-                  {player.shortName}
-                </th>
-                {row.sets.map((score, index) => (
-                  <td key={`${row.playerId}-${index}`} className="py-2">{score}</td>
-                ))}
-              </tr>
-            )
-          })}
+          {rows.map((row) => (
+            <tr key={row.player.id} className={row.player.id === match.winnerPlayerId ? 'text-primary' : undefined}>
+              <th scope="row" className="py-2 text-left font-sans text-sm font-medium">
+                {row.player.shortName}
+              </th>
+              {row.sets.map((games, index) => (
+                <td key={`${row.player.id}-${index}`} className="py-2">{games ?? '-'}</td>
+              ))}
+            </tr>
+          ))}
         </tbody>
       </table>
-      <p className="text-center text-sm text-muted-foreground">最终比分 6–4、4–6、6–3</p>
+      <p className="text-center text-sm text-muted-foreground">最终比分 {setsSummary}</p>
     </div>
   )
 }
 
-export function MatchHero({ status, highlight, onAsk }: MatchHeroProps) {
-  const isLive = status === 'live'
-  const isFinished = status === 'finished'
+export function MatchHero({ match, highlight, onAsk, onRefresh, preview = false }: MatchHeroProps) {
+  const visualStatus = match.visualStatus
+  const isLive = visualStatus === 'live'
+  const isFinished = visualStatus === 'finished'
 
   return (
     <Card id="match" data-tone="hero" className="relative">
@@ -241,12 +306,14 @@ export function MatchHero({ status, highlight, onAsk }: MatchHeroProps) {
         <CardTitle>
           <h1 className="text-balance text-base font-semibold">
             {isFinished
-              ? `${players[0].name} 击败 ${players[1].name}`
-              : `${players[0].name} 对阵 ${players[1].name}`}
+              ? `${match.players[0].name} 击败 ${match.players[1].name}`
+              : `${match.players[0].name} 对阵 ${match.players[1].name}`}
           </h1>
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          {matchMeta.tournament} · {matchMeta.event} · {matchMeta.surface}
+          {preview
+            ? `${previewMatchMeta.tournament} · ${previewMatchMeta.event} · ${previewMatchMeta.surface}`
+            : `${match.tournament} · ${match.round} · ${match.surface}`}
         </p>
         <CardAction>
           {isLive ? (
@@ -256,8 +323,10 @@ export function MatchHero({ status, highlight, onAsk }: MatchHeroProps) {
             </Badge>
           ) : isFinished ? (
             <Badge variant="secondary" role="status">已完赛</Badge>
-          ) : (
+          ) : visualStatus === 'upcoming' ? (
             <Badge variant="outline" role="status">即将开始</Badge>
+          ) : (
+            <Badge variant="outline" role="status">状态待确认</Badge>
           )}
         </CardAction>
       </CardHeader>
@@ -265,40 +334,53 @@ export function MatchHero({ status, highlight, onAsk }: MatchHeroProps) {
       <CardContent className="flex flex-col gap-5 pt-1">
         <div className="grid grid-cols-2 gap-5 lg:grid-cols-[1fr_1.35fr_1fr] lg:items-center">
           <PlayerSummary
-            player={players[0]}
+            player={match.players[0]}
+            previewPlayer={preview ? getPreviewPlayer(match.players[0].id) : null}
             side="left"
-            status={status}
-            isServing={isLive}
-            isWinner={isFinished}
+            visualStatus={visualStatus}
+            isServing={match.serverPlayerId === match.players[0].id}
+            isWinner={match.winnerPlayerId === match.players[0].id}
             highlight={highlight}
           />
           <div className="order-3 col-span-2 lg:order-none lg:col-span-1">
-            {status === 'upcoming' ? <ScheduledMatch /> : null}
-            {status === 'live' ? <LiveScore highlight={highlight} /> : null}
-            {status === 'finished' ? <FinishedScore highlight={highlight} /> : null}
+            {visualStatus === 'upcoming' || visualStatus === 'unavailable' ? (
+              <ScheduledMatch match={match} preview={preview} />
+            ) : null}
+            {isLive ? <LiveScore match={match} highlight={highlight} preview={preview} /> : null}
+            {isFinished ? <FinishedScore match={match} highlight={highlight} preview={preview} /> : null}
           </div>
           <PlayerSummary
-            player={players[1]}
+            player={match.players[1]}
+            previewPlayer={preview ? getPreviewPlayer(match.players[1].id) : null}
             side="right"
-            status={status}
-            isServing={false}
-            isWinner={false}
+            visualStatus={visualStatus}
+            isServing={match.serverPlayerId === match.players[1].id}
+            isWinner={match.winnerPlayerId === match.players[1].id}
             highlight={highlight}
           />
         </div>
       </CardContent>
 
       <CardFooter className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-        <Button className="w-full sm:w-auto" onClick={onAsk}>
-          <Sparkles data-icon="inline-start" aria-hidden="true" />
-          询问本场比赛
-        </Button>
+        <div className="flex w-full gap-2 sm:w-auto">
+          <Button className="w-full sm:w-auto" onClick={onAsk}>
+            <Sparkles data-icon="inline-start" aria-hidden="true" />
+            询问本场比赛
+          </Button>
+          {onRefresh ? (
+            <Button variant="outline" className="w-full sm:w-auto" onClick={onRefresh} aria-label="刷新比赛数据">
+              <RefreshCw aria-hidden="true" />
+            </Button>
+          ) : null}
+        </div>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          {status === 'upcoming'
-            ? '赛程与背景资料已同步'
-            : status === 'live'
-              ? '实时数据延迟约 2.4 秒'
-              : '最终比分与赛后摘要已核验'}
+          {preview
+            ? visualStatus === 'upcoming'
+              ? '赛程与背景资料已同步'
+              : visualStatus === 'live'
+                ? '实时数据延迟约 2.4 秒'
+                : '最终比分与赛后摘要已核验'
+            : match.freshnessLabel}
         </p>
       </CardFooter>
     </Card>

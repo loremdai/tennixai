@@ -1,6 +1,6 @@
 'use client'
 
-import type { KeyboardEvent } from 'react'
+import { useState, type KeyboardEvent } from 'react'
 import {
   BrainCircuit,
   CircleCheck,
@@ -25,54 +25,59 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from '@/components/ui/input-group'
+import type { ChatViewState } from '@/hooks/use-chat-stream'
+import type { MatchViewModel } from '@/lib/view-models'
 
+import type { MatchStatus } from './match-data'
 import {
-  players,
-  type MatchHighlight,
-  type MatchStatus,
-} from './match-data'
-
-export type AssistantAnswer = {
-  label: string
-  question: string
-  answer: string
-  highlight?: Exclude<MatchHighlight, null>
-  metrics?: Array<{ label: string; value: string }>
-}
+  previewAnswerQuestion,
+  previewContextDescriptions,
+  previewPromptsByStatus,
+  type PreviewAnswer,
+} from './match-preview-data'
 
 type AssistantPanelProps = {
-  status: MatchStatus
-  prompt: string
-  answer: AssistantAnswer | null
-  onPromptChange: (value: string) => void
-  onPromptSelect: (value: string) => void
+  match: MatchViewModel
+  preview: boolean
+  chat: ChatViewState | null
   onSubmit: (value: string) => void
 }
 
-const promptsByStatus: Record<MatchStatus, string[]> = {
+const productionPromptsByStatus: Record<MatchViewModel['visualStatus'], string[]> = {
   upcoming: ['这场比赛几点开始？', '这是什么赛事？', '现在进行到哪一轮？', '比赛是什么场地？'],
-  live: ['现在谁在发球？', '当前比分是多少？', '谁赢了第一盘？', 'Sinner 发球表现如何？', '比赛动量改变了吗？'],
-  finished: ['谁赢了？', '最终比分是多少？', '比赛持续了多久？', '总结这场比赛'],
+  live: ['现在谁在发球？', '当前比分是多少？'],
+  finished: ['谁赢了？', '最终比分是多少？'],
+  unavailable: ['这场比赛目前状态如何？'],
 }
 
-const contextDescriptions: Record<MatchStatus, string> = {
-  upcoming: '已锁定本场赛程与对阵背景',
-  live: '与当前比分和技术统计同步',
-  finished: '基于最终比分与赛后数据',
+const productionContextDescriptions: Record<MatchViewModel['visualStatus'], string> = {
+  upcoming: '已锁定本场比赛的赛程与对阵',
+  live: '与 Tennix 结构化比分同步',
+  finished: '基于本场比赛的最终结构化数据',
+  unavailable: '比赛状态待确认',
 }
 
-function AssistantPanel({
-  status,
-  prompt,
-  answer,
-  onPromptChange,
-  onPromptSelect,
-  onSubmit,
-}: AssistantPanelProps) {
+function AssistantPanel({ match, preview, chat, onSubmit }: AssistantPanelProps) {
+  const [prompt, setPrompt] = useState('')
+  const [previewAnswer, setPreviewAnswer] = useState<PreviewAnswer | null>(null)
+
+  const visualStatus = match.visualStatus
+  const previewStatus: MatchStatus =
+    visualStatus === 'unavailable' ? 'upcoming' : visualStatus
+  const prompts = preview ? previewPromptsByStatus[previewStatus] : productionPromptsByStatus[visualStatus]
+  const contextDescription = preview
+    ? previewContextDescriptions[previewStatus]
+    : productionContextDescriptions[visualStatus]
+
   function submitPrompt() {
     const value = prompt.trim()
     if (!value) return
-    onSubmit(value)
+    if (preview) {
+      setPreviewAnswer(previewAnswerQuestion(value, previewStatus))
+    } else {
+      onSubmit(value)
+    }
+    setPrompt('')
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -85,11 +90,15 @@ function AssistantPanel({
     submitPrompt()
   }
 
+  const busy = !preview && (chat?.phase === 'loading' || chat?.phase === 'streaming')
+  const chatHasContent =
+    !preview && chat !== null && (Boolean(chat.data) || Boolean(chat.text) || Boolean(chat.error))
+
   return (
     <Card id="assistant" data-tone="assistant" className="scroll-mt-24">
       <CardHeader>
         <CardTitle><h2>本场比赛助手</h2></CardTitle>
-        <p className="text-sm text-muted-foreground">{contextDescriptions[status]}</p>
+        <p className="text-sm text-muted-foreground">{contextDescription}</p>
         <CardAction>
           <Badge variant="secondary">
             <Sparkles data-icon="inline-start" aria-hidden="true" />
@@ -99,51 +108,80 @@ function AssistantPanel({
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <div className="flex flex-wrap gap-2" aria-label="本场比赛示例问题">
-          {promptsByStatus[status].map((item) => (
-            <Button key={item} variant="outline" size="sm" onClick={() => onPromptSelect(item)}>
+          {prompts.map((item) => (
+            <Button key={item} variant="outline" size="sm" onClick={() => {
+              if (preview) {
+                setPreviewAnswer(previewAnswerQuestion(item, previewStatus))
+              } else {
+                onSubmit(item)
+              }
+            }}>
               {item}
             </Button>
           ))}
         </div>
 
         <div aria-live="polite">
-          {answer ? (
+          {preview ? (
+            previewAnswer ? (
+              <article className="rounded-lg bg-muted/35 p-4">
+                <div className="flex items-center gap-2 text-sm font-medium text-primary">
+                  <BrainCircuit aria-hidden="true" className="size-4" />
+                  {previewAnswer.label}
+                </div>
+                <p className="mt-3 break-words text-sm font-medium">“{previewAnswer.question}”</p>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{previewAnswer.answer}</p>
+
+                {previewAnswer.metrics ? (
+                  <dl className="mt-4 grid grid-cols-3 gap-2 border-t pt-4">
+                    {previewAnswer.metrics.map((metric) => (
+                      <div key={metric.label} className="rounded-md bg-background/50 p-2">
+                        <dt className="text-[11px] leading-tight text-muted-foreground">{metric.label}</dt>
+                        <dd className="mt-1 font-mono text-lg font-semibold text-primary tabular-nums">{metric.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                ) : null}
+
+                <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+                  <CircleCheck aria-hidden="true" className="size-4" />
+                  已连接本场比赛上下文
+                </div>
+              </article>
+            ) : (
+              <PreviewEmptyState />
+            )
+          ) : chatHasContent && chat ? (
             <article className="rounded-lg bg-muted/35 p-4">
               <div className="flex items-center gap-2 text-sm font-medium text-primary">
                 <BrainCircuit aria-hidden="true" className="size-4" />
-                {answer.label}
+                {chat.error
+                  ? '查询未完成'
+                  : chat.data?.kind === 'unsupported'
+                    ? '暂不支持'
+                    : '本场比赛结构化结果'}
               </div>
-              <p className="mt-3 break-words text-sm font-medium">“{answer.question}”</p>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{answer.answer}</p>
-
-              {answer.metrics ? (
-                <dl className="mt-4 grid grid-cols-3 gap-2 border-t pt-4">
-                  {answer.metrics.map((metric) => (
-                    <div key={metric.label} className="rounded-md bg-background/50 p-2">
-                      <dt className="text-[11px] leading-tight text-muted-foreground">{metric.label}</dt>
-                      <dd className="mt-1 font-mono text-lg font-semibold text-primary tabular-nums">{metric.value}</dd>
-                    </div>
-                  ))}
-                </dl>
+              <p className="mt-3 break-words text-sm font-medium">“{chat.question}”</p>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                {chat.text || (chat.error ? `查询失败（${chat.error.code}），请重试。` : '')}
+              </p>
+              {chat.phase === 'loading' || chat.phase === 'streaming' ? (
+                <p className="mt-2 text-xs text-muted-foreground">正在查询…</p>
               ) : null}
-
               <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
                 <CircleCheck aria-hidden="true" className="size-4" />
                 已连接本场比赛上下文
               </div>
             </article>
-          ) : (
+          ) : chat && (chat.phase === 'loading' || chat.phase === 'streaming') ? (
             <div className="flex min-h-32 flex-col items-center justify-center gap-3 rounded-lg border border-dashed bg-muted/15 p-4 text-center">
               <div className="flex size-9 items-center justify-center rounded-full bg-secondary text-primary">
                 <BrainCircuit aria-hidden="true" className="size-4" />
               </div>
-              <div>
-                <p className="text-sm font-medium">无需重复球员姓名</p>
-                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                  直接询问时间、比分、发球或比赛结果。
-                </p>
-              </div>
+              <p className="text-sm font-medium">正在查询…</p>
             </div>
+          ) : (
+            <PreviewEmptyState />
           )}
         </div>
       </CardContent>
@@ -161,13 +199,13 @@ function AssistantPanel({
               id="match-question"
               name="match-question"
               value={prompt}
-              onChange={(event) => onPromptChange(event.target.value)}
+              onChange={(event) => setPrompt(event.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="例如：现在谁在发球？"
               autoComplete="off"
             />
             <InputGroupAddon align="inline-end">
-              <InputGroupButton type="submit" size="icon-sm" aria-label="发送问题">
+              <InputGroupButton type="submit" size="icon-sm" aria-label="发送问题" disabled={busy}>
                 <Send aria-hidden="true" />
               </InputGroupButton>
             </InputGroupAddon>
@@ -175,6 +213,22 @@ function AssistantPanel({
         </form>
       </CardFooter>
     </Card>
+  )
+}
+
+function PreviewEmptyState() {
+  return (
+    <div className="flex min-h-32 flex-col items-center justify-center gap-3 rounded-lg border border-dashed bg-muted/15 p-4 text-center">
+      <div className="flex size-9 items-center justify-center rounded-full bg-secondary text-primary">
+        <BrainCircuit aria-hidden="true" className="size-4" />
+      </div>
+      <div>
+        <p className="text-sm font-medium">无需重复球员姓名</p>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+          直接询问时间、比分、发球或比赛结果。
+        </p>
+      </div>
+    </div>
   )
 }
 
@@ -190,7 +244,7 @@ function KeyFact({ label, value, detail }: { label: string; value: string; detai
   )
 }
 
-function KeyFactsCard() {
+function KeyFactsCard({ match, preview }: { match: MatchViewModel; preview: boolean }) {
   return (
     <Card>
       <CardHeader>
@@ -199,18 +253,31 @@ function KeyFactsCard() {
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 gap-3 rounded-lg bg-muted/30 p-3">
-          {players.map((player) => (
+          {match.players.map((player) => (
             <div key={player.id} className="min-w-0">
               <p className="truncate text-sm text-muted-foreground">{player.shortName}</p>
-              <p className="mt-1 font-mono text-lg font-semibold">#{player.rank}</p>
+              <p className="mt-1 font-mono text-lg font-semibold">
+                {player.ranking !== null ? `#${player.ranking}` : '暂未提供'}
+              </p>
             </div>
           ))}
         </div>
         <div className="mt-3 divide-y">
-          <KeyFact label="交手记录" value="7–6" detail="Sinner 微弱领先" />
-          <KeyFact label="近 10 场" value="9–1 / 8–2" detail="双方均处于高水平状态" />
-          <KeyFact label="室内硬地" value="84% / 79%" detail="过去 24 个月胜率" />
-          <KeyFact label="比赛重要性" value="半决赛" detail="胜者进入赛季收官战" />
+          {preview ? (
+            <>
+              <KeyFact label="交手记录" value="7–6" detail="Sinner 微弱领先" />
+              <KeyFact label="近 10 场" value="9–1 / 8–2" detail="双方均处于高水平状态" />
+              <KeyFact label="室内硬地" value="84% / 79%" detail="过去 24 个月胜率" />
+              <KeyFact label="比赛重要性" value="半决赛" detail="胜者进入赛季收官战" />
+            </>
+          ) : (
+            <>
+              <KeyFact label="赛事" value={match.round} detail={match.tournament} />
+              <KeyFact label="场地" value={match.indoorLabel} detail={match.surface} />
+              <KeyFact label="赛制" value={match.format} detail={`开赛 ${match.scheduledTime}（${match.timezoneLabel}）`} />
+              <KeyFact label="数据新鲜度" value={match.isStale ? '较旧' : '最新'} detail={match.freshnessLabel} />
+            </>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -249,11 +316,12 @@ function MarketCard() {
   )
 }
 
-export function MatchSidebar(props: AssistantPanelProps) {
+export function MatchSidebar(props: AssistantPanelProps & { keyFactsPreview?: boolean }) {
+  const { match, preview } = props
   return (
     <aside className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-20 lg:col-start-2 lg:row-start-1 lg:self-start" aria-label="比赛助手与关键事实">
-      <AssistantPanel {...props} />
-      <KeyFactsCard />
+      <AssistantPanel match={match} preview={preview} chat={props.chat} onSubmit={props.onSubmit} />
+      <KeyFactsCard match={match} preview={preview} />
       <MarketCard />
     </aside>
   )

@@ -2,10 +2,11 @@ import type { Metadata } from 'next'
 
 import { MatchPage } from '@/components/match-page'
 import type { MatchStatus } from '@/components/match/match-data'
+import { buildPreviewMatch } from '@/components/match/match-preview-data'
 
 export const metadata: Metadata = {
-  title: 'Sinner 对阵 Alcaraz 比赛智能',
-  description: '预览赛前、直播与完赛状态，并通过 Tennix AI 理解比分、技术统计和比赛进程。',
+  title: '比赛状态预览 · Tennix',
+  description: '原型视觉预览路由：赛前、直播与完赛状态的样例展示，不连接真实数据。',
 }
 
 type PageProps = {
@@ -21,5 +22,5 @@ export default async function Page({ searchParams }: PageProps) {
     ? rawStatus as MatchStatus
     : 'upcoming'
 
-  return <MatchPage initialStatus={initialStatus} />
+  return <MatchPage previewMatch={buildPreviewMatch(initialStatus)} preview />
 }
