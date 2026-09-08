@@ -21,12 +21,21 @@ export default defineConfig({
       cwd: '../backend',
       command: 'uv run uvicorn app.main:app --host 127.0.0.1 --port 8000',
       url: 'http://127.0.0.1:8000/api/v1/health',
-      env: {
-        ...process.env,
-        TENNIX_PROVIDER_MODE: 'fake',
-        TENNIX_LLM_MODE: 'fake',
-        TENNIX_FIXED_NOW: '2026-09-08T10:00:00Z',
-      },
+      env: (() => {
+        const realProvider =
+          process.env.TENNIX_E2E_REAL_PROVIDER === '1' &&
+          Boolean(process.env.TENNIX_LIVETENNIS_API_KEY)
+        const realLlm =
+          process.env.TENNIX_E2E_REAL_LLM === '1' &&
+          Boolean(process.env.TENNIX_LLM_API_KEY) &&
+          Boolean(process.env.TENNIX_LLM_BASE_URL)
+        return {
+          ...process.env,
+          TENNIX_PROVIDER_MODE: realProvider ? 'live' : 'fake',
+          TENNIX_LLM_MODE: realLlm ? 'openai_compatible' : 'fake',
+          ...(realProvider ? {} : { TENNIX_FIXED_NOW: '2026-09-08T10:00:00Z' }),
+        }
+      })(),
       reuseExistingServer: !process.env.CI,
     },
     {

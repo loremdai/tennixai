@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
+import { useCallback, useEffect, useState, useTransition } from 'react'
 import { Layers3 } from 'lucide-react'
 
 import { HomeAssistant } from '@/components/home/home-assistant'
@@ -71,10 +71,10 @@ export function HomePage({ initialQuestion }: HomePageProps) {
     void loadSlate()
   }, [loadSlate])
 
-  const initialSentRef = useRef(false)
   useEffect(() => {
-    if (!initialQuestion || initialSentRef.current) return
-    initialSentRef.current = true
+    if (!initialQuestion) return
+    // StrictMode remounts abort the first send; re-sending on remount keeps the
+    // initial question working while production still sends exactly once.
     void chat.send(initialQuestion)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

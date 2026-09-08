@@ -15,7 +15,13 @@ for (const [name, path] of states) {
     // the product UI and appears nondeterministically; exclude its host element
     // (shadow DOM included) so baselines stay repeatable.
     await page.addStyleTag({ content: 'nextjs-portal { display: none !important; }' })
-    await page.evaluate(() => document.fonts.ready)
+    if (path === '/' || path.startsWith('/?')) {
+      await page.getByRole('link', { name: '打开 Sinner 对阵 Ruud' }).first().waitFor()
+    }
+    await page.evaluate(() => {
+      window.scrollTo(0, 0)
+      return document.fonts.ready
+    })
     await expect(page).toHaveScreenshot(`${name}.png`, {
       animations: 'disabled',
       fullPage: true,
