@@ -7,13 +7,13 @@
 
 **当前任务：** T01 — Freeze the Existing Prototype Visually
 
-**任务状态：** `ready`
+**任务状态：** `in_progress`
 
-**当前执行者 / ADE：** `unassigned`
+**当前执行者 / ADE：** Claude Code（superpowers:executing-plans）
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**任务起始提交：** `unassigned`（领取任务时记录当时的 HEAD）
+**任务起始提交：** `72caed3`（领取时 HEAD，与 `origin/main` 一致）
 
 **最后验证的产品提交：** `c7fb737`
 
@@ -24,7 +24,7 @@
 - P1 架构、路线和 15 项实施计划已经批准并提交。
 - 产品代码尚未进入真实实现；仓库仍是 v0 生成的 Next.js 前端原型，没有 FastAPI 后端。
 - 当前唯一主任务是先冻结现有 Home 与 Match 三态的桌面/移动视觉基线，后续真实数据接入必须以此防止走样。
-- T01 已满足领取条件，但尚未分配执行者；领取后直接在 `main` 推进。
+- T01 已由 Claude Code 于 2026-09-08 领取，状态 `in_progress`，直接在 `main` 推进。
 - 当前没有产品阻塞项。
 - 仓库存在未跟踪的 `.codex/skills/ui-ux-pro-max/SKILL.md`；它不属于本任务，必须保留且不得被顺手提交或删除。
 
