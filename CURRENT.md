@@ -3,78 +3,81 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-08 13:31 CST
+**最后更新：** 2026-09-08 13:34 CST
 
-**当前任务：** T04 — Add the Provider Contract and Deterministic Fake
+**当前任务：** T05 — Implement the LiveTennisAPI Adapter
 
-**任务状态：** `in_progress`
+**任务状态：** `ready`
 
-**当前执行者 / ADE：** Claude Code（Codex Goal：完成 P1 T02–T15，顺序执行，不进 P2）
+**当前执行者 / ADE：** `unassigned`
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**任务起始提交：** `c025b9b`
+**任务起始提交：** `unassigned`（领取任务时记录当时的 HEAD）
 
-**最后验证的产品提交：** `5ed8a18`
+**最后验证的产品提交：** `20735bd`
 
 **远程：** `origin` → `https://github.com/loremdai/tennixai.git`
 
 ## 60 秒恢复
 
-- T03 已完成（`5ed8a18`）：`backend/app/domain.py` 七个 canonical models + `MatchStatus` 枚举（frozen、extra=forbid、UTC 校验），`backend/app/identity.py` 进程内 `MemoryIdentityRepository`（mat_/ply_/trn_ 前缀，可逆映射，内部 ID 不含外部 ID）。
-- T02 已完成（`8b15efe`）：FastAPI 基础——typed `Settings`、`AppError`、`GET /api/v1/health`、`X-Request-ID` 中间件、`create_app()` 工厂、uv/pytest 骨架。
-- T01 已完成：Home 与 Match 三态在桌面/移动视口的 10 张视觉基线已入 Git（最终版 `c035f5a`），visual suite 可重复通过。历史提醒：首版基线 `d13d6dd` 混入 Next dev overlay，done 曾于 `c37ad36` 回退；最终版隐藏 `nextjs-portal` 后重建。
-- 当前唯一主任务是 T04：定义 `TennisDataProvider` 五方法 async protocol（`backend/app/providers/base.py`）与确定性 `FakeTennisProvider`（`backend/app/providers/fake.py`），先写失败的 contract 测试。不实现 LiveTennisAPI adapter、cache、service 或路由。
+- T04 已完成（`20735bd`）：`TennisDataProvider` 五方法 async Protocol（`backend/app/providers/base.py`）与确定性 `FakeTennisProvider`（`backend/app/providers/fake.py`）——scheduled Sinner vs Alcaraz（12:30Z，Semifinal/hard/indoor/BO3）、live Sinner vs Ruud（10:00Z，sets 6–4/4–6/4–5，points 30–15，Sinner 发球）、4 名球员可搜索、unknown ID 抛 `AppError("not_found", ..., 404)`。
+- T03 已完成（`5ed8a18`）：七个 canonical models + `MatchStatus`（frozen、extra=forbid、UTC 校验）与 `MemoryIdentityRepository`（mat_/ply_/trn_，可逆，内部 ID 不含外部 ID）。
+- T02 已完成（`8b15efe`）：FastAPI 基础（typed Settings、AppError、health、X-Request-ID、create_app、uv/pytest 骨架）。
+- T01 已完成：10 张视觉基线入 Git（`c035f5a`），visual suite 可重复通过。
+- 当前唯一主任务是 T05：实现 `LiveTennisProvider`（vendor DTO 边界 `livetennis_dtos.py` + HTTP adapter `livetennis.py`），用 `httpx.MockTransport` 与录制的 sanitized fixtures 做确定性测试；不调用真实 API（真实调用属 T15 opt-in gate）。不实现 cache、service 或路由。
 - 当前没有产品阻塞项。
-- 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`（任务外）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`（next dev 自动生成的 agent 提示文件）、`frontend/next-env.d.ts`（Next 工具链生成）；一律保留，不得顺手提交或删除。
+- 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`（任务外）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`（next dev 自动生成）、`frontend/next-env.d.ts`（Next 工具链生成）；一律保留，不得顺手提交或删除。
 
 ## 当前任务
 
 ### 目标
 
-建立 provider contract 与确定性 fake：`TennisDataProvider` Protocol（`get_live_matches`、`get_fixtures`、`search_players`、`get_match`、`get_score`）与 `FakeTennisProvider`（固定 Sinner/Alcaraz/Djokovic/Ruud 数据：一场 2026-09-08T12:30Z scheduled、一场 10:00Z live 6–4/4–6/4–5、points 30–15、Sinner 发球；大小写不敏感子串搜索；unknown ID 抛 `AppError("not_found", ..., 404)`）。测试优先：先写失败的 `tests/test_provider_contract.py`。
+实现 LiveTennisAPI adapter：permissive vendor DTOs（`extra="ignore"`：`LivePlayerDto`、`LiveScoreDto`、`LiveMatchDto`、`LiveFixtureDto`、`ListResponse[T]`）、player-major games → `SetScore` 行转置、server `1/2` → 内部 player ID、`completed`→`finished`、`Postponed`→`postponed`、null 时间保持 `None`、`X-API-Key` 认证、精确错误翻译（404→not_found、429→rate_limited+retry_after、403→provider_unavailable 503、≥400→provider_unavailable 503）、fixture ID 映射进同一 match identity 命名空间、`/fixtures` 本地按 player 过滤。测试优先：先写 `tests/fixtures/livetennis/*.json` 与失败的 `tests/test_livetennis_provider.py`。
 
 ### 为什么现在做
 
-T05 live adapter 与 T07 service 都以该 protocol 为唯一 provider 边界；fake 是之后所有确定性测试与 E2E 的数据来源。
+P1 唯一真实数据源是 LiveTennisAPI Free；adapter 是供应商字段的终止边界，之后 service/REST/chat 只消费 canonical models。
 
 ### 实施依据
 
-- [P1 实施计划 — Task 4](./docs/superpowers/plans/2026-09-08-tennixai-p1-implementation.md#task-4-add-the-provider-contract-and-deterministic-fake)
+- [P1 实施计划 — Task 5](./docs/superpowers/plans/2026-09-08-tennixai-p1-implementation.md#task-5-implement-the-livetennisapi-adapter)
 
 ### 预计变更范围
 
-- `backend/app/providers/__init__.py`、`backend/app/providers/base.py`、`backend/app/providers/fake.py`
-- `backend/tests/test_provider_contract.py`
+- `backend/app/providers/livetennis_dtos.py`、`backend/app/providers/livetennis.py`
+- `backend/tests/fixtures/livetennis/{players,fixtures,matches_live,match_detail,score}.json`
+- `backend/tests/test_livetennis_provider.py`
 
 ### 完成门
 
-- `uv run pytest tests/test_provider_contract.py -v` 通过：五个 protocol 方法全部被行使，返回值均为 canonical models，公共 ID 不含 `fake-` 外部 ID。
-- 不实现 LiveTennisAPI adapter、cache、service、路由或前端（属 T05+）。
-- `ROADMAP.md` 的 T04 写入完成提交和验证证据；T05 变为 `ready`。
+- `uv run pytest tests/test_livetennis_provider.py tests/test_provider_contract.py -v` 通过：含 `X-API-Key`、query 参数、转置、null、unknown-field、404/429/403 断言；不调用真实网络。
+- 供应商字段（`event_key`、`event_first_player`、`score[0][1]` 等）不出现在 canonical 输出。
+- 不实现 cache、service、路由或前端（属 T06+）。
+- `ROADMAP.md` 的 T05 写入完成提交和验证证据；T06 变为 `ready`。
 
 ## 下一步操作
 
 1. 执行者先运行 `git fetch origin`、`git status --short --branch`、`git branch --show-current`，确认本文件与仓库一致。
 2. 保持在 `main`，写入执行者/ADE、任务起始 HEAD 和更新时间，将状态改为 `in_progress`。
 3. 仅提交并推送该次任务领取更新到 `origin/main`；不要包含现有未跟踪的 `.codex/` 与 next 生成文件。
-4. 按 Task 4 的测试优先顺序实施，不扩大到 T05。
+4. 按 Task 5 的测试优先顺序实施，不扩大到 T06。
 
 ## 最近验证
 
 | 日期 | 提交 | 验证 | 结果 |
 |---|---|---|---|
+| 2026-09-08 | `20735bd` | `uv run pytest tests/test_provider_contract.py -v` 8/8；全套确定性 suite 19/19 | T04 验收通过 |
 | 2026-09-08 | `5ed8a18` | `uv run pytest tests/test_domain.py tests/test_identity.py -v` 10/10；全套确定性 suite 11/11 | T03 验收通过 |
 | 2026-09-08 | `8b15efe` | `uv run pytest tests/test_health.py -v` 1/1（health 200 + `X-Request-ID` 透传）；`Settings(_env_file=None).llm_model` 输出 `qwen3.8-max-0902` | T02 验收通过 |
-| 2026-09-08 | `c035f5a` | `pnpm test:e2e:update` 10/10 重建基线 → 连续两次 plain `pnpm test:e2e` 各 10/10；`pnpm build` exit 0；10 张 PNG 逐张审阅 | T01 验收通过：基线可重复 |
 
 任务完成前必须把实际运行的命令、结果和对应提交补充到这里。未运行或失败的验收不能写成通过。
 
 ## 最近交接
 
-**状态：** T03 已由 Claude Code（Codex Goal）于 2026-09-08 完成并交接（提交 `5ed8a18`）；T04 可领取。
+**状态：** T04 已由 Claude Code（Codex Goal）于 2026-09-08 完成并交接（提交 `20735bd`）；T05 可领取。
 
-**交接说明：** 领域模型全部 frozen + `extra="forbid"`，`Match.players` 是 `tuple[Player, Player]`，`MatchScore.sets` 是 `tuple[SetScore, ...]`；fake provider 构造数据时必须提供 timezone-aware datetime。`MemoryIdentityRepository.get_or_create(entity, provider, external_id)` 的 entity 仅支持 `match`/`player`/`tournament`。`create_app()` 仍只接受 `Settings`，T08 才扩展注入参数。
+**交接说明：** fake provider 的公开属性为 `sinner_alcaraz`（scheduled）与 `live_match`（live，Sinner vs Ruud）；外部 ID 命名空间为 `fake-*`。T05 的 LiveTennisProvider 构造签名：注入一个 `httpx.AsyncClient`（10 秒 timeout 在 client 构造时设置）、`MemoryIdentityRepository` 与 UTC clock；live provider 的 identity provider 名用 `"livetennis"`，fixture 与 match 必须映射进同一 match 命名空间。真实网络调用只允许出现在 `provider_live`/`end_to_end_live` 标记测试（T15），T05 全部用 `httpx.MockTransport`。
 
 **已知本地状态：** 未跟踪的 `.codex/skills/ui-ux-pro-max/SKILL.md`、`frontend/AGENTS.md`、`frontend/CLAUDE.md`（next dev 生成）、`frontend/next-env.d.ts`（Next 工具链生成），保留原样。
 
@@ -84,11 +87,11 @@ T05 live adapter 与 T07 service 都以该 protocol 为唯一 provider 边界；
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-08 | T04 完成：provider contract 与确定性 FakeTennisProvider | `20735bd` |
+| 2026-09-08 | 领取 T04 并置为 in_progress | `66c9526` |
 | 2026-09-08 | T03 完成：canonical models 与进程内 identity | `5ed8a18` |
 | 2026-09-08 | 领取 T03 并置为 in_progress | `5104e71` |
-| 2026-09-08 | T02 完成：FastAPI 基础（settings/errors/health/request-ID/app 工厂/pytest 骨架） | `8b15efe` |
-| 2026-09-08 | 领取 T02 并置为 in_progress | `3686444` |
-| 2026-09-08 | 排除 dev overlay 并重建最终视觉基线，T01 完成交接 | `c035f5a` |
+| 2026-09-08 | T02 完成：FastAPI 基础 | `8b15efe` |
 
 ## 接手与更新规则
 
