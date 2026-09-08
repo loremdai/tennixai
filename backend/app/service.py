@@ -86,7 +86,7 @@ class TennisService:
         exact = [
             player
             for player in normalized_players
-            if player.name.casefold() == query.strip().casefold()
+            if player.name.strip().casefold() == query.strip().casefold()
         ]
         candidates = exact or normalized_players
         if not candidates:

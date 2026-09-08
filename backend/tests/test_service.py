@@ -245,6 +245,26 @@ async def test_djokovic_resolution_ignores_duplicate_and_composite_candidates() 
 
 
 @pytest.mark.asyncio
+async def test_exact_player_resolution_trims_candidate_name() -> None:
+    padded_sinner = Player(id="ply_padded", name=" Sinner ")
+    match = build_match(
+        "mat_padded_sinner",
+        MatchStatus.LIVE,
+        NOW_UTC,
+        players=(padded_sinner, ALCARAZ),
+    )
+    provider = CountingProvider(
+        players=[padded_sinner, SINNER],
+        live=[match],
+    )
+    service, _, _ = build_service(provider)
+
+    result = await service.list_matches("live", "Sinner")
+
+    assert [item.id for item in result] == ["mat_padded_sinner"]
+
+
+@pytest.mark.asyncio
 async def test_unknown_player_raises_not_found() -> None:
     provider = CountingProvider(players=[SINNER])
     service, _, _ = build_service(provider)
