@@ -1,8 +1,42 @@
-from fastapi import APIRouter
+from typing import Literal
+
+from fastapi import APIRouter, Depends, Query, Request
+
+from app.api.schemas import MatchListResponse, MatchResponse, PlayerListResponse
+from app.service import TennisService
 
 router = APIRouter(prefix="/api/v1")
+
+
+def get_service(request: Request) -> TennisService:
+    return request.app.state.tennis_service
 
 
 @router.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok", "service": "tennix-api"}
+
+
+@router.get("/players/search", response_model=PlayerListResponse)
+async def search_players(
+    q: str = Query(min_length=1),
+    service: TennisService = Depends(get_service),
+) -> PlayerListResponse:
+    return PlayerListResponse(data=await service.search_players(q))
+
+
+@router.get("/matches", response_model=MatchListResponse)
+async def list_matches(
+    status: Literal["live", "upcoming"] = Query(),
+    player: str | None = Query(default=None, min_length=1),
+    service: TennisService = Depends(get_service),
+) -> MatchListResponse:
+    return MatchListResponse(data=await service.list_matches(status, player))
+
+
+@router.get("/matches/{match_id}", response_model=MatchResponse)
+async def get_match(
+    match_id: str,
+    service: TennisService = Depends(get_service),
+) -> MatchResponse:
+    return MatchResponse(data=await service.get_match(match_id))
