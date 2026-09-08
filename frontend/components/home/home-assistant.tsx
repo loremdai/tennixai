@@ -7,17 +7,14 @@ import {
   BrainCircuit,
   CheckCircle2,
   Clock3,
-  MapPin,
   Radio,
+  RefreshCw,
   Send,
   Sparkles,
 } from 'lucide-react'
 
-import {
-  homeExampleQueries,
-  type HomeAnswer,
-  type HomeMatchResult,
-} from '@/components/home/home-data'
+import { homeExampleQueries } from '@/components/home/home-data'
+import type { ChatViewState } from '@/hooks/use-chat-stream'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import {
@@ -34,20 +31,23 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from '@/components/ui/input-group'
+import type { HomeMatchViewModel } from '@/lib/view-models'
+import { toHomeMatch } from '@/lib/view-models'
 import { cn } from '@/lib/utils'
 
 const statusDetails = {
   upcoming: { label: '即将开始', variant: 'outline' as const },
   live: { label: '直播', variant: 'destructive' as const },
   finished: { label: '已完赛', variant: 'secondary' as const },
+  unavailable: { label: '状态待确认', variant: 'outline' as const },
 }
 
 function MatchResultCard({
   match,
   onFollowUp,
 }: {
-  match: HomeMatchResult
-  onFollowUp: (match: HomeMatchResult) => void
+  match: HomeMatchViewModel
+  onFollowUp: (match: HomeMatchViewModel) => void
 }) {
   const status = statusDetails[match.status]
 
@@ -74,11 +74,11 @@ function MatchResultCard({
         {match.score ? (
           <div className="rounded-lg bg-muted/25 p-3">
             <div className="mb-2 flex items-center justify-between gap-3 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1.5 text-live">
+              <span className={cn('flex items-center gap-1.5', match.status === 'live' && 'text-live')}>
                 <Radio aria-hidden="true" className="size-3.5" />
-                {match.score.currentSet}
+                {match.status === 'live' ? '实时比分' : '比分'}
               </span>
-              <span>{match.score.note}</span>
+              <span>{match.freshnessLabel}</span>
             </div>
             <div className="flex flex-col gap-2">
               {match.score.rows.map((row) => (
@@ -108,10 +108,10 @@ function MatchResultCard({
             <dd className="mt-1 font-medium">{match.surface}</dd>
           </div>
           <div className="col-span-2">
-            <dt className="text-muted-foreground">地点</dt>
+            <dt className="text-muted-foreground">数据新鲜度</dt>
             <dd className="mt-1 flex items-center gap-1.5 font-medium">
-              <MapPin aria-hidden="true" className="size-3.5 text-primary" />
-              {match.location}
+              <CheckCircle2 aria-hidden="true" className="size-3.5 text-primary" />
+              {match.freshnessLabel}
             </dd>
           </div>
         </dl>
@@ -121,9 +121,9 @@ function MatchResultCard({
         <Link
           href={match.href}
           className={cn(buttonVariants(), 'w-full sm:flex-1')}
-          aria-label={`${match.actionLabel ?? '打开比赛'}：${match.players[0]} 对阵 ${match.players[1]}`}
+          aria-label={`打开比赛：${match.players[0]} 对阵 ${match.players[1]}`}
         >
-          {match.actionLabel ?? '打开比赛'}
+          打开比赛
           <ArrowRight data-icon="inline-end" aria-hidden="true" />
         </Link>
         <Button variant="outline" className="w-full sm:flex-1" onClick={() => onFollowUp(match)}>
@@ -134,9 +134,34 @@ function MatchResultCard({
   )
 }
 
+function answerLabel(chat: ChatViewState): string {
+  if (chat.error) return '查询未完成'
+  switch (chat.data?.kind) {
+    case 'match':
+      return '当前比赛'
+    case 'unsupported':
+      return '暂不支持'
+    case 'matches':
+      return '结构化比赛结果'
+    default:
+      return '回答'
+  }
+}
+
+function answerTitle(chat: ChatViewState, cards: HomeMatchViewModel[]): string {
+  if (cards.length > 0) {
+    return `${cards[0].players[0]} 对阵 ${cards[0].players[1]}`
+  }
+  if (chat.data?.kind === 'unsupported') return '历史结果查询暂不支持'
+  if (chat.data) return '没有符合条件的比赛'
+  if (chat.error) return `查询失败（${chat.error.code}）`
+  return '正在整理回答'
+}
+
 type HomeAssistantProps = {
   prompt: string
-  answer: HomeAnswer | null
+  chat: ChatViewState
+  busy: boolean
   onPromptChange: (value: string) => void
   onSubmit: (value: string) => void
   onPromptSelect: (value: string) => void
@@ -144,13 +169,15 @@ type HomeAssistantProps = {
 
 export function HomeAssistant({
   prompt,
-  answer,
+  chat,
+  busy,
   onPromptChange,
   onSubmit,
   onPromptSelect,
 }: HomeAssistantProps) {
   function submitPrompt(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault()
+    if (busy) return
     const value = prompt.trim()
     if (!value) return
     onSubmit(value)
@@ -166,10 +193,17 @@ export function HomeAssistant({
     submitPrompt()
   }
 
-  function followUp(match: HomeMatchResult) {
+  function followUp(match: HomeMatchViewModel) {
     onPromptChange(`${match.players[0]} 对阵 ${match.players[1]} 的比赛场地是什么？`)
     window.requestAnimationFrame(() => document.getElementById('home-question')?.focus())
   }
+
+  const cards = (chat.data?.matches ?? []).map((match) => toHomeMatch(match))
+  const hasAnswer =
+    chat.phase !== 'idle' && (Boolean(chat.data) || Boolean(chat.text) || Boolean(chat.error))
+  const summary =
+    chat.text ||
+    (chat.error ? `查询失败（${chat.error.code}），请重试。` : '')
 
   return (
     <Card id="assistant" data-tone="assistant" className="scroll-mt-24">
@@ -196,29 +230,52 @@ export function HomeAssistant({
         </div>
 
         <div aria-live="polite" className="flex flex-col gap-3">
-          {answer ? (
+          {hasAnswer ? (
             <>
               <article className="rounded-xl bg-muted/30 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <span className="flex items-center gap-2 text-xs font-semibold text-primary">
                     <BrainCircuit aria-hidden="true" className="size-4" />
-                    {answer.label}
+                    {answerLabel(chat)}
                   </span>
-                  <CheckCircle2 aria-label="已核验" className="size-4 text-muted-foreground" />
+                  {chat.error ? null : (
+                    <CheckCircle2 aria-label="结构化数据" className="size-4 text-muted-foreground" />
+                  )}
                 </div>
-                <p className="mt-3 break-words text-xs text-muted-foreground">“{answer.question}”</p>
-                <h3 className="mt-2 text-balance text-lg font-semibold">{answer.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{answer.summary}</p>
+                <p className="mt-3 break-words text-xs text-muted-foreground">“{chat.question}”</p>
+                <h3 className="mt-2 text-balance text-lg font-semibold">{answerTitle(chat, cards)}</h3>
+                {summary ? (
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{summary}</p>
+                ) : null}
+                {chat.phase === 'loading' || chat.phase === 'streaming' ? (
+                  <p className="mt-2 text-xs text-muted-foreground">正在查询…</p>
+                ) : null}
               </article>
 
-              <div className="flex flex-col gap-3" aria-label="结构化比赛结果">
-                {answer.matches.map((match) => (
-                  <MatchResultCard key={match.id} match={match} onFollowUp={followUp} />
-                ))}
-              </div>
+              {cards.length > 0 ? (
+                <div className="flex flex-col gap-3" aria-label="结构化比赛结果">
+                  {cards.map((match) => (
+                    <MatchResultCard key={match.id} match={match} onFollowUp={followUp} />
+                  ))}
+                </div>
+              ) : null}
 
-              <p className="font-mono text-[11px] text-muted-foreground">{answer.source}</p>
+              {chat.error ? (
+                <Button variant="outline" onClick={() => onSubmit(chat.question)} aria-label="重试提问">
+                  <RefreshCw data-icon="inline-start" aria-hidden="true" />
+                  重试提问
+                </Button>
+              ) : (
+                <p className="font-mono text-[11px] text-muted-foreground">结构化数据来自 Tennix 服务</p>
+              )}
             </>
+          ) : chat.phase === 'loading' ? (
+            <div className="flex min-h-36 flex-col items-center justify-center gap-3 rounded-xl border border-dashed bg-muted/15 p-5 text-center">
+              <div className="flex size-10 items-center justify-center rounded-full bg-secondary text-primary">
+                <BrainCircuit aria-hidden="true" className="size-5" />
+              </div>
+              <p className="font-medium">正在查询…</p>
+            </div>
           ) : (
             <div className="flex min-h-36 flex-col items-center justify-center gap-3 rounded-xl border border-dashed bg-muted/15 p-5 text-center">
               <div className="flex size-10 items-center justify-center rounded-full bg-secondary text-primary">
@@ -252,7 +309,7 @@ export function HomeAssistant({
               <BrainCircuit aria-hidden="true" />
             </InputGroupAddon>
             <InputGroupAddon align="inline-end">
-              <InputGroupButton type="submit" size="icon-sm" aria-label="发送问题">
+              <InputGroupButton type="submit" size="icon-sm" aria-label="发送问题" disabled={busy}>
                 <Send aria-hidden="true" />
               </InputGroupButton>
             </InputGroupAddon>

@@ -156,11 +156,11 @@ type QuickAction = {
 }
 
 const quickActions: QuickAction[] = [
-  { label: 'Live Now', detail: '5 场比赛', href: '#live', icon: Radio, live: true },
-  { label: 'Tonight’s Matches', detail: '12 场比赛', href: '#upcoming', icon: CalendarDays },
-  { label: 'Followed Players', detail: '4 位球员', href: '#players', icon: Star },
+  { label: 'Live Now', detail: '正在直播', href: '#live', icon: Radio, live: true },
+  { label: 'Tonight’s Matches', detail: '今晚赛程', href: '#upcoming', icon: CalendarDays },
+  { label: 'Followed Players', detail: '后续阶段接入', href: '#players', icon: Star },
   { label: 'Player Search', detail: '查找任意球员', href: '#assistant', icon: Search },
-  { label: 'Recent Results', detail: '最新赛果', href: '#results', icon: FileClock },
+  { label: 'Recent Results', detail: 'P1 暂不支持', href: '#results', icon: FileClock },
   { label: 'Market Watch', detail: '追踪机会', href: '#markets', icon: TrendingUp, beta: true },
 ]
 

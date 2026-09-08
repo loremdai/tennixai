@@ -1,19 +1,17 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
 import { Layers3 } from 'lucide-react'
 
 import { HomeAssistant } from '@/components/home/home-assistant'
-import {
-  answerHomeQuestion,
-  type HomeAnswer,
-} from '@/components/home/home-data'
 import { HomeHero, HomeQuickActions } from '@/components/home/home-hero'
 import { MarketIntelligenceCard } from '@/components/home/home-intelligence'
 import {
   FeaturedMatchSection,
   LiveNowSection,
+  SlateErrorPanel,
   UpcomingSection,
+  type SlateState,
 } from '@/components/home/home-match-sections'
 import {
   FollowedPlayersSection,
@@ -26,6 +24,10 @@ import {
 import { ProductHeader } from '@/components/match/match-header'
 import { Badge } from '@/components/ui/badge'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { useChatStream } from '@/hooks/use-chat-stream'
+import { getMatches } from '@/lib/api/client'
+import type { MatchDto } from '@/lib/api/types'
+import { toHomeMatch, toMatchViewModel } from '@/lib/view-models'
 
 const phases = Object.keys(phaseLabels) as ProductPhase[]
 
@@ -36,22 +38,61 @@ type HomePageProps = {
 export function HomePage({ initialQuestion }: HomePageProps) {
   const [phase, setPhase] = useState<ProductPhase>('p1')
   const [prompt, setPrompt] = useState('')
-  const [answer, setAnswer] = useState<HomeAnswer | null>(() =>
-    initialQuestion ? answerHomeQuestion(initialQuestion) : null,
-  )
   const [isPending, startTransition] = useTransition()
 
-  function showAnswer(question: string, scroll = true) {
-    const value = question.trim()
-    if (!value) return
-    setAnswer(answerHomeQuestion(value))
-    setPrompt('')
-    if (scroll) {
-      window.requestAnimationFrame(() => {
-        document.getElementById('assistant')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      })
+  const chat = useChatStream('global')
+  const busy = chat.state.phase === 'loading' || chat.state.phase === 'streaming'
+
+  const [slate, setSlate] = useState<{ live: MatchDto[]; upcoming: MatchDto[] }>({
+    live: [],
+    upcoming: [],
+  })
+  const [slateState, setSlateState] = useState<SlateState>('loading')
+  const [slateErrorCode, setSlateErrorCode] = useState<string | null>(null)
+
+  const loadSlate = useCallback(async () => {
+    setSlateState('loading')
+    try {
+      const [live, upcoming] = await Promise.all([getMatches('live'), getMatches('upcoming')])
+      setSlate({ live, upcoming })
+      setSlateErrorCode(null)
+      setSlateState('success')
+    } catch (error) {
+      const code =
+        typeof error === 'object' && error !== null && 'code' in error
+          ? String((error as { code: unknown }).code)
+          : 'internal_error'
+      setSlateErrorCode(code)
+      setSlateState('error')
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    void loadSlate()
+  }, [loadSlate])
+
+  const initialSentRef = useRef(false)
+  useEffect(() => {
+    if (!initialQuestion || initialSentRef.current) return
+    initialSentRef.current = true
+    void chat.send(initialQuestion)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const showAnswer = useCallback(
+    (question: string, scroll = true) => {
+      const value = question.trim()
+      if (!value || busy) return
+      void chat.send(value)
+      setPrompt('')
+      if (scroll) {
+        window.requestAnimationFrame(() => {
+          document.getElementById('assistant')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        })
+      }
+    },
+    [busy, chat],
+  )
 
   function handlePhaseChange(values: string[]) {
     const nextPhase = values.at(-1) as ProductPhase | undefined
@@ -67,6 +108,11 @@ export function HomePage({ initialQuestion }: HomePageProps) {
     document.getElementById('assistant')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     window.setTimeout(() => document.getElementById('home-question')?.focus(), 350)
   }
+
+  const featuredDto = slate.live[0] ?? slate.upcoming[0] ?? null
+  const featured = featuredDto ? toMatchViewModel(featuredDto) : null
+  const liveCards = slate.live.map(toHomeMatch)
+  const upcomingCards = slate.upcoming.map(toHomeMatch)
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -139,7 +185,8 @@ export function HomePage({ initialQuestion }: HomePageProps) {
           <aside className="flex min-w-0 flex-col gap-4 lg:col-start-2 lg:row-start-1" aria-label="Tennix 智能侧栏">
             <HomeAssistant
               prompt={prompt}
-              answer={answer}
+              chat={chat.state}
+              busy={busy}
               onPromptChange={setPrompt}
               onSubmit={showAnswer}
               onPromptSelect={showAnswer}
@@ -149,9 +196,15 @@ export function HomePage({ initialQuestion }: HomePageProps) {
           </aside>
 
           <div className="flex min-w-0 flex-col gap-6 lg:col-start-1 lg:row-start-1">
-            <FeaturedMatchSection phase={phase} onAsk={focusAssistant} />
-            <LiveNowSection />
-            <UpcomingSection />
+            {slateState === 'error' && slateErrorCode ? (
+              <SlateErrorPanel code={slateErrorCode} onRetry={() => void loadSlate()} />
+            ) : (
+              <>
+                <FeaturedMatchSection phase={phase} match={featured} state={slateState} onAsk={focusAssistant} />
+                <LiveNowSection matches={liveCards} state={slateState} onRefresh={() => void loadSlate()} />
+                <UpcomingSection matches={upcomingCards} state={slateState} />
+              </>
+            )}
             <FollowedPlayersSection />
           </div>
         </div>
@@ -160,7 +213,7 @@ export function HomePage({ initialQuestion }: HomePageProps) {
       <footer className="border-t">
         <div className="mx-auto flex max-w-7xl flex-col justify-between gap-2 px-4 py-6 text-sm text-muted-foreground sm:flex-row md:px-6">
           <span>Tennix · Tennis, data, intelligence.</span>
-          <span>样例数据仅用于产品界面演示</span>
+          <span>数据由 Tennix 服务提供 · 时间为澳门本地时间</span>
         </div>
       </footer>
     </div>
