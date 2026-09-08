@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-08 23:12 CST
+**最后更新：** 2026-09-08 23:37 CST
 
-**总体状态：** `in_progress`（P1 基线完成；T17 真实 upcoming 路径修复中；P2 保持 planned）
+**总体状态：** `in_progress`（P1 已完成；P2 保持 planned，等待明确启动）
 
-**当前里程碑：** P1 — 比赛信息查询助手（已完成）
+**当前里程碑：** P1 — 比赛信息查询助手（`done`；下一里程碑 P2 尚未启动）
 
-**当前阶段：** P1.6 — Acceptance and hardening（T17 修复中）
+**当前阶段：** P1.6 — Acceptance and hardening（`done`）
 
 ## 状态说明
 
@@ -28,7 +28,7 @@
 
 | 里程碑 | 状态 | 目标 | 进入/完成条件 |
 |---|---|---|---|
-| P1 — Match Information Assistant | `in_progress` | 跑通真实结构化比赛查询、卡片、Match Page 与上下文 Chat | 基线已完成（`5dcaa6a`）；T17 正修复真实 upcoming provider 与局部失败处理，修复后重新关闭 P1 |
+| P1 — Match Information Assistant | `done` | 跑通真实结构化比赛查询、卡片、Match Page 与上下文 Chat | T17 完成并验证（`69c8238`）；P1 关闭，P2 保持 planned |
 | P2 — Live Match Intelligence | `planned` | 技术统计、PBP、Momentum、持久化和多进程实时协调 | P1 全部门通过；API-Tennis 能力与迁移设计另行批准 |
 | P3 — Market & Decision Support | `planned` | 市场状态、预测、edge、confidence 和 paper trading | P2 数据可信；映射、模型评估和风控设计另行批准 |
 | Optional — Automated Execution | `deferred` | 在满足法律、风控、安全和可审计条件后考虑自动下单 | 不属于 P3 默认范围，必须单独批准 |
@@ -43,7 +43,7 @@
 | P1.3 — Service and REST | `done` | TennisService、时间语义、缓存、确定性 REST | 已完成：T07（`000ca1a`）+ T08（`039d144`）——事实问题不经 LLM 可答；时区/歧义/不可用字段/stale/429 均有确定性测试 |
 | P1.4 — Real frontend data | `done` | typed client、Home、动态 Match Page、加载/错误/刷新状态 | 已完成：T09/T12/T13/T14；Home→Match 内部 ID 链路经单元与视觉门验证，预览路由像素稳定 |
 | P1.5 — Conversational path | `done` | 三个业务工具、Qwen tool loop、SSE、全局与比赛 Chat | 已完成：T10/T11 + 前端消费（T12–T14）；chat 与 REST 同一事实、LLM/供应商失败不产生虚构结果经 orchestrator 测试与 E2E 验证 |
-| P1.6 — Acceptance and hardening | `in_progress` | 验收集、真实服务 opt-in 测试、Playwright、真实运行时边界与修复 | T16（`5dcaa6a`）完成原有运行时门；T17 修复真实 upcoming 响应格式、球员过滤/分页边界和 live/upcoming 局部失败处理 |
+| P1.6 — Acceptance and hardening | `done` | 验收集、真实服务 opt-in 测试、Playwright、真实运行时边界与修复 | T16（`5dcaa6a`）与 T17（`69c8238`）完成；确定性、真实 provider/LLM、浏览器和降级门均有证据 |
 
 详细阶段设计见 [产品路线设计 §12](./docs/superpowers/specs/2026-09-08-tennixai-product-roadmap-design.md#12-p1-execution-roadmap)。
 
@@ -69,7 +69,9 @@
 | T14 | P1.4/P1.5 | Add the Internal-ID Match Page and Contextual Chat | `done` | `d76821b` | `pnpm test -- components/match-page.test.tsx` 13/13 + 全套 `pnpm test` 66/66 通过（match scope 注入且用户 prompt 不含上下文、upcoming/live/finished hero 映射、server 高亮、缺失字段 `暂未提供`、stale 指示、显式刷新、404/错误重试、生产 stats/momentum 永远 `P2 数据暂不可用`、preview 保留样例）；`pnpm typecheck`、`pnpm build` 通过；`pnpm test:e2e --grep prototype` 10/10 且 6 张 match 基线逐像素零变化（经 4 轮 diff 审阅修复预览文案/图标/中文盘数后达成，未更新任何基线）（2026-09-08） |
 | T15 | P1.6 | Complete Browser E2E, Live Gates, and the P1 Runbook | `done` | `98075ef` | 干净工作区重跑：backend `pytest -m "not llm_live and not provider_live and not end_to_end_live"` 117 passed；frontend `pnpm test` 66/66、`typecheck` 通过、`build` exit 0、`pnpm test:e2e` 32 passed + 4 skipped（live specs 无标志）；验收矩阵 `test_p1_acceptance.py` 10/10（9 supported 工具路径 + 历史行零 provider/模型调用）；`llm_live` 后端 4/4、浏览器 `llm-live.spec.ts` 2/2（真实 Qwen，DEUCE 凭据经 env 注入）；`provider_live`/`end_to_end_live` 与浏览器 end-to-end 如实 skip（缺 LiveTennisAPI key）；p1.visual 12 张新基线逐张审阅入库；泄漏检查 `git grep -nE 'event_key|event_first_player|score\[0\]\[1\]' -- ':!docs'` 仅治理/策略文档命中、业务代码零命中；Final Gate 八条人工核对通过（凭据仅服务端、无轮询、无超范围实现、结构化事实、失败降级、预览/生产分离、双视口视觉）（2026-09-08） |
 | T16 | P1.6 | Harden the Real Live Runtime | `done` | `5dcaa6a` | `pytest -m "not llm_live and not provider_live and not end_to_end_live"` 124 passed；frontend `pnpm test` 66/66、typecheck、build、全 E2E 32 passed + 4 skipped；真实 `provider_live` 1/1、`llm_live` 4/4、`end_to_end_live` 1/1；真实浏览器 `end-to-end-live.spec.ts` desktop/mobile 2/2；手动 Djokovic 返回 `status → data(empty) → text_delta → done`；完整 SSE data 保留，LLM tool context 限 12 条摘要，超时降级保留结构化数据；配置与 runbook 已更新，计划见 [T16 计划](./docs/superpowers/plans/2026-09-08-tennixai-t16-real-runtime-hardening.md) |
-| T17 | P1.6 | Repair Real Upcoming Provider and Partial Failure Handling | `in_progress` | — | 计划与验收证据待补；根因已确认：当前 `/fixtures` 响应格式与适配器 DTO 不一致，且未利用 upcoming 的球员过滤/分页元数据；Free API 429 需保留并友好呈现 |
+| T17 | P1.6 | Repair Real Upcoming Provider and Partial Failure Handling | `done` | `69c8238` | `/matches?status=upcoming` 使用当前 nested payload 并映射 canonical ID；指定球员查询使用 provider external ID 过滤；全局列表只读供应商一页，不做无界分页；Home live/upcoming 单侧失败独立降级；429 保留 `Retry-After` 并显示友好重试文案。backend 确定性 126 passed、frontend 69/69、typecheck/build 通过，Playwright 32 passed + 4 skipped；真实 REST 返回 50 场 upcoming，Qinwen Zheng 指定查询与真实浏览器 Home→Match→上下文问答通过 |
+
+> T17 的已知非范围限制：LiveTennisAPI 的 `/players?search` 尚不能直接解析中文显示名“郑钦文”；canonical English name `Qinwen Zheng` 的真实查询已通过。中文别名/名称归一化需另立任务，不影响 T17 的 provider 修复验收。
 
 ## P1 验收矩阵
 
