@@ -38,7 +38,7 @@
 | 阶段 | 状态 | 核心交付 | Exit gate / 当前缺口 |
 |---|---|---|---|
 | P1.0 — Design freeze | `done` | 架构路线、原型状态清单、桌面/移动视觉基线 | 已完成：10 张基线入 Git（最终版 `c035f5a`，排除 dev overlay），重建后连续复跑 10/10，build exit 0 |
-| P1.1 — Foundation | `ready` | FastAPI、配置、健康检查、测试骨架、Next.js 薄代理 | 浏览器经同源代理访问后端，健康与 SSE smoke 通过，无凭据暴露 |
+| P1.1 — Foundation | `in_progress` | FastAPI、配置、健康检查、测试骨架、Next.js 薄代理 | T02 已完成（`8b15efe`）；剩余 T09 薄代理与 SSE smoke |
 | P1.2 — Domain and provider | `planned` | canonical models、provider protocol、fake/live adapters、进程内 identity | fake/live contract 一致，供应商字段不泄漏到公开 DTO |
 | P1.3 — Service and REST | `planned` | TennisService、时间语义、缓存、确定性 REST | 不经 LLM 也能回答所有受支持 P1 事实问题，边界错误有确定性测试 |
 | P1.4 — Real frontend data | `planned` | typed client、Home、动态 Match Page、加载/错误/刷新状态 | Home → Match 真实链路通过，内部 ID 正确，视觉回归受控 |
@@ -54,8 +54,8 @@
 | ID | 主要阶段 | 任务 | 状态 | 完成提交 | 验收证据 |
 |---|---|---|---|---|---|
 | T01 | P1.0 | Freeze the Existing Prototype Visually | `done` | `c035f5a` | 10 张桌面/移动基线入 Git（排除 dev overlay）；重建后 `--update-snapshots` 10/10 + 连续两次 plain 复跑 10/10；`pnpm build` exit 0；10 张 PNG 逐张审阅；历史：首版 `d13d6dd`、回退重开 `c37ad36`（2026-09-08） |
-| T02 | P1.1 | Establish the FastAPI Foundation | `ready` | — | — |
-| T03 | P1.2 | Define Canonical Models and In-Memory Identity | `planned` | — | — |
+| T02 | P1.1 | Establish the FastAPI Foundation | `done` | `8b15efe` | `uv run pytest tests/test_health.py -v` 1/1 通过（health 200 `{"status":"ok","service":"tennix-api"}`、`X-Request-ID` 原样透传）；`uv run python -c "from app.config import Settings; print(Settings(_env_file=None).llm_model)"` 输出恰为 `qwen3.8-max-0902`，无凭据打印；uv.lock 已入库（2026-09-08） |
+| T03 | P1.2 | Define Canonical Models and In-Memory Identity | `ready` | — | — |
 | T04 | P1.2 | Add the Provider Contract and Deterministic Fake | `planned` | — | — |
 | T05 | P1.2 | Implement the LiveTennisAPI Adapter | `planned` | — | — |
 | T06 | P1.2/P1.3 | Add the Bounded Async TTL Cache | `planned` | — | — |
