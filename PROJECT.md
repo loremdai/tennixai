@@ -5,7 +5,7 @@
 
 **最后更新：** 2026-09-08
 
-**产品阶段：** P1 — 比赛信息查询助手
+**产品阶段：** P1 — 比赛信息查询助手（已完成，2026-09-08）；P2 保持 planned，等待用户决定是否启动
 
 **详细基线：** [产品与架构上下文](./docs/product-context.md) · [产品路线设计](./docs/superpowers/specs/2026-09-08-tennixai-product-roadmap-design.md) · [P1 实施计划](./docs/superpowers/plans/2026-09-08-tennixai-p1-implementation.md)
 
@@ -13,7 +13,7 @@
 
 - TennixAI 不是通用网球聊天机器人，而是以结构化网球数据为核心、AI 作为交互层的数据与决策产品。
 - Home 负责全局发现、搜索和赛程入口；Match Page 负责单场比赛的事实、上下文问答和后续智能能力。
-- 当前进入 P1 实现，目标是跑通 LiveTennisAPI → Provider → Canonical Model → TennisService → REST/Chat → UI 的真实链路。
+- 当前进入 P1 实现，目标是跑通 LiveTennisAPI → Provider → Canonical Model → TennisService → REST/Chat → UI 的真实链路。P1 已于 2026-09-08 完成：fake 模式全链路确定性地跑通，真实 Qwen 经 opt-in 门验证；LiveTennisAPI live 门因缺少 key 如实 skip，待凭据就绪后可复跑。
 - P1 只处理当前、即将开始和正在进行的比赛；任意历史结果查询明确返回 `unsupported`。
 - 当前不引入 PostgreSQL、Redis、自动轮询、认证、LangGraph、实时技术统计或 Polymarket。
 - 不要从本文件猜当前做到哪里；以 [ROADMAP.md](./ROADMAP.md) 和 [CURRENT.md](./CURRENT.md) 为准。

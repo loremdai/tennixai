@@ -3,11 +3,11 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-08
+**最后更新：** 2026-09-08 15:52 CST
 
-**总体状态：** `in_progress`
+**总体状态：** `done`（P1 已完成；P2 保持 planned，等待用户决定）
 
-**当前里程碑：** P1 — 比赛信息查询助手
+**当前里程碑：** P1 — 比赛信息查询助手（已完成）
 
 **当前阶段：** P1.1/P1.4 — 薄代理与真实前端数据（T09 起；P1.2、P1.3 已完成）
 
@@ -28,7 +28,7 @@
 
 | 里程碑 | 状态 | 目标 | 进入/完成条件 |
 |---|---|---|---|
-| P1 — Match Information Assistant | `in_progress` | 跑通真实结构化比赛查询、卡片、Match Page 与上下文 Chat | 完成 P1.0–P1.6 和 P1 验收矩阵 |
+| P1 — Match Information Assistant | `done` | 跑通真实结构化比赛查询、卡片、Match Page 与上下文 Chat | 已完成（2026-09-08，`98075ef`）：P1.0–P1.6 与验收矩阵全部门通过，证据见任务登记表 |
 | P2 — Live Match Intelligence | `planned` | 技术统计、PBP、Momentum、持久化和多进程实时协调 | P1 全部门通过；API-Tennis 能力与迁移设计另行批准 |
 | P3 — Market & Decision Support | `planned` | 市场状态、预测、edge、confidence 和 paper trading | P2 数据可信；映射、模型评估和风控设计另行批准 |
 | Optional — Automated Execution | `deferred` | 在满足法律、风控、安全和可审计条件后考虑自动下单 | 不属于 P3 默认范围，必须单独批准 |
@@ -38,12 +38,12 @@
 | 阶段 | 状态 | 核心交付 | Exit gate / 当前缺口 |
 |---|---|---|---|
 | P1.0 — Design freeze | `done` | 架构路线、原型状态清单、桌面/移动视觉基线 | 已完成：10 张基线入 Git（最终版 `c035f5a`，排除 dev overlay），重建后连续复跑 10/10，build exit 0 |
-| P1.1 — Foundation | `in_progress` | FastAPI、配置、健康检查、测试骨架、Next.js 薄代理 | T02（`8b15efe`）、T09（`e6d59ca`）已完成；浏览器级 health/SSE smoke 随 T11 SSE 路由与 T15 E2E 最终验证 |
+| P1.1 — Foundation | `done` | FastAPI、配置、健康检查、测试骨架、Next.js 薄代理 | 已完成：T02/T09；浏览器级 health/SSE smoke 由 T15 p1-flow 与 llm-live E2E 验证（同源代理 + SSE 透传） |
 | P1.2 — Domain and provider | `done` | canonical models、provider protocol、fake/live adapters、进程内 identity | 已完成：T03–T06 + T08 公开 DTO 泄漏门（`test_match_list_never_exposes_provider_ids` 等断言响应零供应商 ID） |
 | P1.3 — Service and REST | `done` | TennisService、时间语义、缓存、确定性 REST | 已完成：T07（`000ca1a`）+ T08（`039d144`）——事实问题不经 LLM 可答；时区/歧义/不可用字段/stale/429 均有确定性测试 |
 | P1.4 — Real frontend data | `done` | typed client、Home、动态 Match Page、加载/错误/刷新状态 | 已完成：T09/T12/T13/T14；Home→Match 内部 ID 链路经单元与视觉门验证，预览路由像素稳定 |
-| P1.5 — Conversational path | `in_progress` | 三个业务工具、Qwen tool loop、SSE、全局与比赛 Chat | T10（`9d988ed`）、T11（`174866a`）已完成；剩余前端消费（T12/T14）与 P1.6 验收 |
-| P1.6 — Acceptance and hardening | `planned` | 验收集、真实服务 opt-in 测试、Playwright、runbook | 全部确定性门通过；可用 live gates 通过；无 P1 范围膨胀 |
+| P1.5 — Conversational path | `done` | 三个业务工具、Qwen tool loop、SSE、全局与比赛 Chat | 已完成：T10/T11 + 前端消费（T12–T14）；chat 与 REST 同一事实、LLM/供应商失败不产生虚构结果经 orchestrator 测试与 E2E 验证 |
+| P1.6 — Acceptance and hardening | `done` | 验收集、真实服务 opt-in 测试、Playwright、runbook | 已完成：T15（`98075ef`）——验收矩阵 10/10、p1-flow 10/10、p1.visual 12/12（连续两次全 E2E 32/32 稳定）、llm_live 后端 4/4 + 浏览器 2/2（真实 Qwen）、provider_live/end_to_end_live 如实 skip（无 LiveTennisAPI key）、runbook 入库、泄漏检查业务代码零命中 |
 
 详细阶段设计见 [产品路线设计 §12](./docs/superpowers/specs/2026-09-08-tennixai-product-roadmap-design.md#12-p1-execution-roadmap)。
 
@@ -67,7 +67,7 @@
 | T12 | P1.4/P1.5 | Add Typed Frontend API, SSE Parsing, and View Models | `done` | `bd79e84` | `pnpm test` 40/40 通过（SSE 跨 chunk 分裂帧、多字节字符切分、CRLF、注释/多 data 行、REST data 信封解包、ApiError code/details、abort 不变 internal_error、view-model Asia/Macau 时间/`暂未提供`/stale 标签/比分行/initials、useChatStream 全生命周期/12 条历史/abort/cancel/reset/unmount）；`pnpm typecheck` 通过；`pnpm build` exit 0（2026-09-08） |
 | T13 | P1.4 | Connect Home to Real Structured Data Without Redesigning It | `done` | `4a29050` | `pnpm test -- components/home-page.test.tsx` 13/13 + 全套 `pnpm test` 53/53 通过（结构化卡片只来自 stream data、initial question 一次、slate live/upcoming 各一次且无轮询、刷新新一对调用、loading 禁重复提交、unsupported 无卡片、stale 徽章、空外壳、typed 重试、无样例数据文案）；`pnpm typecheck`、`pnpm build` 通过；`pnpm test:e2e --grep prototype` 10/10——4 张 home 基线经逐张 diff 审阅后更新（真实数据替换 mock、占位文案、footer 文案；布局几何保留），6 张 match 基线零变化（2026-09-08） |
 | T14 | P1.4/P1.5 | Add the Internal-ID Match Page and Contextual Chat | `done` | `d76821b` | `pnpm test -- components/match-page.test.tsx` 13/13 + 全套 `pnpm test` 66/66 通过（match scope 注入且用户 prompt 不含上下文、upcoming/live/finished hero 映射、server 高亮、缺失字段 `暂未提供`、stale 指示、显式刷新、404/错误重试、生产 stats/momentum 永远 `P2 数据暂不可用`、preview 保留样例）；`pnpm typecheck`、`pnpm build` 通过；`pnpm test:e2e --grep prototype` 10/10 且 6 张 match 基线逐像素零变化（经 4 轮 diff 审阅修复预览文案/图标/中文盘数后达成，未更新任何基线）（2026-09-08） |
-| T15 | P1.6 | Complete Browser E2E, Live Gates, and the P1 Runbook | `ready` | — | — |
+| T15 | P1.6 | Complete Browser E2E, Live Gates, and the P1 Runbook | `done` | `98075ef` | 干净工作区重跑：backend `pytest -m "not llm_live and not provider_live and not end_to_end_live"` 117 passed；frontend `pnpm test` 66/66、`typecheck` 通过、`build` exit 0、`pnpm test:e2e` 32 passed + 4 skipped（live specs 无标志）；验收矩阵 `test_p1_acceptance.py` 10/10（9 supported 工具路径 + 历史行零 provider/模型调用）；`llm_live` 后端 4/4、浏览器 `llm-live.spec.ts` 2/2（真实 Qwen，DEUCE 凭据经 env 注入）；`provider_live`/`end_to_end_live` 与浏览器 end-to-end 如实 skip（缺 LiveTennisAPI key）；p1.visual 12 张新基线逐张审阅入库；泄漏检查 `git grep -nE 'event_key|event_first_player|score\[0\]\[1\]' -- ':!docs'` 仅治理/策略文档命中、业务代码零命中；Final Gate 八条人工核对通过（凭据仅服务端、无轮询、无超范围实现、结构化事实、失败降级、预览/生产分离、双视口视觉）（2026-09-08） |
 
 ## P1 验收矩阵
 
