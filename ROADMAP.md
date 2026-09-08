@@ -9,7 +9,7 @@
 
 **当前里程碑：** P1 — 比赛信息查询助手
 
-**当前阶段：** P1.0 — Design freeze
+**当前阶段：** P1.1 — Foundation
 
 ## 状态说明
 
@@ -37,8 +37,8 @@
 
 | 阶段 | 状态 | 核心交付 | Exit gate / 当前缺口 |
 |---|---|---|---|
-| P1.0 — Design freeze | `in_progress` | 架构路线、原型状态清单、桌面/移动视觉基线 | 架构与计划已落盘；首版基线入 Git 但含 dev overlay 指示器噪声、复跑不可重复，修复与重建中 |
-| P1.1 — Foundation | `planned` | FastAPI、配置、健康检查、测试骨架、Next.js 薄代理 | 浏览器经同源代理访问后端，健康与 SSE smoke 通过，无凭据暴露 |
+| P1.0 — Design freeze | `done` | 架构路线、原型状态清单、桌面/移动视觉基线 | 已完成：10 张基线入 Git（最终版 `c035f5a`，排除 dev overlay），重建后连续复跑 10/10，build exit 0 |
+| P1.1 — Foundation | `ready` | FastAPI、配置、健康检查、测试骨架、Next.js 薄代理 | 浏览器经同源代理访问后端，健康与 SSE smoke 通过，无凭据暴露 |
 | P1.2 — Domain and provider | `planned` | canonical models、provider protocol、fake/live adapters、进程内 identity | fake/live contract 一致，供应商字段不泄漏到公开 DTO |
 | P1.3 — Service and REST | `planned` | TennisService、时间语义、缓存、确定性 REST | 不经 LLM 也能回答所有受支持 P1 事实问题，边界错误有确定性测试 |
 | P1.4 — Real frontend data | `planned` | typed client、Home、动态 Match Page、加载/错误/刷新状态 | Home → Match 真实链路通过，内部 ID 正确，视觉回归受控 |
@@ -53,8 +53,8 @@
 
 | ID | 主要阶段 | 任务 | 状态 | 完成提交 | 验收证据 |
 |---|---|---|---|---|---|
-| T01 | P1.0 | Freeze the Existing Prototype Visually | `in_progress` | — | 首版基线 `d13d6dd` 复跑不可重复（dev overlay 指示器噪声），修复与重建中，证据见 CURRENT.md |
-| T02 | P1.1 | Establish the FastAPI Foundation | `planned` | — | — |
+| T01 | P1.0 | Freeze the Existing Prototype Visually | `done` | `c035f5a` | 10 张桌面/移动基线入 Git（排除 dev overlay）；重建后 `--update-snapshots` 10/10 + 连续两次 plain 复跑 10/10；`pnpm build` exit 0；10 张 PNG 逐张审阅；历史：首版 `d13d6dd`、回退重开 `c37ad36`（2026-09-08） |
+| T02 | P1.1 | Establish the FastAPI Foundation | `ready` | — | — |
 | T03 | P1.2 | Define Canonical Models and In-Memory Identity | `planned` | — | — |
 | T04 | P1.2 | Add the Provider Contract and Deterministic Fake | `planned` | — | — |
 | T05 | P1.2 | Implement the LiveTennisAPI Adapter | `planned` | — | — |
