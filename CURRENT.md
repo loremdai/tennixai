@@ -3,17 +3,17 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-08 13:50 CST
+**最后更新：** 2026-09-08 13:51 CST
 
 **当前任务：** T08 — Expose Deterministic REST APIs
 
-**任务状态：** `ready`
+**任务状态：** `in_progress`
 
-**当前执行者 / ADE：** `unassigned`
+**当前执行者 / ADE：** Claude Code（Codex Goal：完成 P1 T02–T15，顺序执行，不进 P2）
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**任务起始提交：** `unassigned`（领取任务时记录当时的 HEAD）
+**任务起始提交：** `49deed8`
 
 **最后验证的产品提交：** `000ca1a`
 
