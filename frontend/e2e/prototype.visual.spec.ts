@@ -11,6 +11,10 @@ const states = [
 for (const [name, path] of states) {
   test(`${name} matches approved prototype`, async ({ page }) => {
     await page.goto(path)
+    // The Next.js dev overlay (route indicator / issue badge) renders outside
+    // the product UI and appears nondeterministically; exclude its host element
+    // (shadow DOM included) so baselines stay repeatable.
+    await page.addStyleTag({ content: 'nextjs-portal { display: none !important; }' })
     await page.evaluate(() => document.fonts.ready)
     await expect(page).toHaveScreenshot(`${name}.png`, {
       animations: 'disabled',
