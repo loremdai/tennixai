@@ -37,3 +37,6 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .venv/
+
+# TypeScript incremental build cache
+*.tsbuildinfo
