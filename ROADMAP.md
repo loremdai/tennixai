@@ -9,7 +9,7 @@
 
 **当前里程碑：** P1 — 比赛信息查询助手
 
-**当前阶段：** P1.1 — Foundation
+**当前阶段：** P1.3 — Service and REST（P1.1 剩余 T09 薄代理随 P1.4 推进）
 
 ## 状态说明
 
@@ -39,7 +39,7 @@
 |---|---|---|---|
 | P1.0 — Design freeze | `done` | 架构路线、原型状态清单、桌面/移动视觉基线 | 已完成：10 张基线入 Git（最终版 `c035f5a`，排除 dev overlay），重建后连续复跑 10/10，build exit 0 |
 | P1.1 — Foundation | `in_progress` | FastAPI、配置、健康检查、测试骨架、Next.js 薄代理 | T02 已完成（`8b15efe`）；剩余 T09 薄代理与 SSE smoke |
-| P1.2 — Domain and provider | `in_progress` | canonical models、provider protocol、fake/live adapters、进程内 identity | T03（`5ed8a18`）、T04（`20735bd`）、T05（`16a0688`）已完成；剩余 T06 cache |
+| P1.2 — Domain and provider | `in_progress` | canonical models、provider protocol、fake/live adapters、进程内 identity | T03–T06 已完成（`5ed8a18`/`20735bd`/`16a0688`/`6605ecb`）；公开 DTO 泄漏门随 T08 API 测试最终验证 |
 | P1.3 — Service and REST | `planned` | TennisService、时间语义、缓存、确定性 REST | 不经 LLM 也能回答所有受支持 P1 事实问题，边界错误有确定性测试 |
 | P1.4 — Real frontend data | `planned` | typed client、Home、动态 Match Page、加载/错误/刷新状态 | Home → Match 真实链路通过，内部 ID 正确，视觉回归受控 |
 | P1.5 — Conversational path | `planned` | 三个业务工具、Qwen tool loop、SSE、全局与比赛 Chat | Chat 与 REST 使用同一事实；LLM/供应商失败不产生虚构结果 |
@@ -58,8 +58,8 @@
 | T03 | P1.2 | Define Canonical Models and In-Memory Identity | `done` | `5ed8a18` | `uv run pytest tests/test_domain.py tests/test_identity.py -v` 10/10 通过（naive datetime 拒绝、frozen/extra=forbid、内部 ID 稳定可逆且不含外部 ID、三前缀 mat_/ply_/trn_）；全套确定性 suite 11/11 通过（2026-09-08） |
 | T04 | P1.2 | Add the Provider Contract and Deterministic Fake | `done` | `20735bd` | `uv run pytest tests/test_provider_contract.py -v` 8/8 通过（五方法 protocol 全部行使、canonical models 返回、公共 ID 无 `fake-` 外部 ID、大小写不敏感搜索、player 过滤、not_found AppError）；全套确定性 suite 19/19 通过（2026-09-08） |
 | T05 | P1.2 | Implement the LiveTennisAPI Adapter | `done` | `16a0688` | `uv run pytest tests/test_livetennis_provider.py tests/test_provider_contract.py -v` 21/21 通过（X-API-Key/search/status=live 参数、player-major→SetScore 转置、server→内部 ID、completed→finished、Postponed→postponed、null 时间保持 None、unknown field 忽略、404/429+retry_after/403/500 精确翻译、fixture 与 match 同命名空间、vendor 字段零泄漏断言）；全套确定性 suite 32/32；全部用 `httpx.MockTransport`，无真实网络调用（2026-09-08） |
-| T06 | P1.2/P1.3 | Add the Bounded Async TTL Cache | `ready` | — | — |
-| T07 | P1.3 | Implement TennisService and Time Semantics | `planned` | — | — |
+| T06 | P1.2/P1.3 | Add the Bounded Async TTL Cache | `done` | `6605ecb` | `uv run pytest tests/test_cache.py -v` 8/8 通过（fresh 命中、并发 coalescing 仅 1 次 loader、stale fallback 标记、超 stale_ttl re-raise、LRU 257 驱逐、value-based TTL 负缓存 30s、过期重载）；全套确定性 suite 40/40；注入 FakeClock，无长 sleep（2026-09-08） |
+| T07 | P1.3 | Implement TennisService and Time Semantics | `ready` | — | — |
 | T08 | P1.3 | Expose Deterministic REST APIs | `planned` | — | — |
 | T09 | P1.1/P1.4 | Add Thin Next.js Route Handler Proxies | `planned` | — | — |
 | T10 | P1.5 | Define Chat Models, Historical Guard, and Business Tools | `planned` | — | — |
