@@ -3,17 +3,17 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-08 15:53 CST
+**最后更新：** 2026-09-08 18:30 CST
 
-**当前任务：** 无（P1 已全部完成；等待用户决定是否启动 P2 设计）
+**当前任务：** T16 — Harden the Real Live Runtime
 
-**任务状态：** `idle`
+**任务状态：** `in_progress`
 
-**当前执行者 / ADE：** `unassigned`
+**当前执行者 / ADE：** Codex（当前 ADE）
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**任务起始提交：** `n/a`
+**任务起始提交：** `93601bd`
 
 **最后验证的产品提交：** `98075ef`
 
@@ -21,7 +21,8 @@
 
 ## 60 秒恢复
 
-- P1（T01–T15）已于 2026-09-08 全部完成并推送：fake 模式全链路（LiveTennisAPI adapter 边界 → canonical models → TennisService → REST/SSE chat → Next 薄代理 → Home/Match UI）确定性地跑通；真实 Qwen 经 opt-in 门验证（后端 4/4、浏览器 2/2）；LiveTennisAPI live 门因仓库外无 key 如实 skip。
+- P1 核心实现（T01–T15）已完成并推送：fake 模式全链路确定性地跑通，真实 Qwen 单项门验证（后端 4/4、浏览器 2/2）；T16 正在补齐真实 LiveTennisAPI + LLM 组合链路的运行时边界。
+- T16 已确认的事实：真实 LiveTennisAPI 可返回 50 场 live matches；provider_live 通过；两套持久/备用 LLM 配置的 llm_live 均通过；完整 live chat 因把约 50 KB 全量 tool 结果交给 LLM 且无总时限而长时间不结束；`Djokovic` 因重复实名与组合名返回 `ambiguous_player`。
 - 最终验证（干净工作区）：backend `pytest -m "not llm_live and not provider_live and not end_to_end_live"` 117 passed；frontend `pnpm test` 66/66、`pnpm typecheck` 通过、`pnpm build` exit 0、`pnpm test:e2e` 32 passed + 4 skipped（live specs）；连续两次全 E2E 32/32 稳定。
 - 视觉：prototype 10 张基线（home 4 张经 T13/T15 审阅更新，match 6 张自 T01 起零变化）+ p1.visual 12 张新基线（逐张审阅入库）。
 - Final P1 Completion Gate 八条已人工核对（凭据仅服务端、无自动轮询、无超范围实现、结构化事实来源、供应商/LLM 失败降级、预览与生产路由分离、双视口视觉一致、泄漏检查业务代码零命中）。
@@ -31,7 +32,11 @@
 
 ## 当前任务
 
-无。P1 没有剩余实现任务。若用户决定启动 P2，应先做 P2 设计（含 API-Tennis 能力验证、存储 schema 与回滚策略、轮询配额模型），再建立新的任务登记表。
+T16 只处理真实运行时硬化，不扩大到 P2：
+
+- 按 [T16 实施计划](./docs/superpowers/plans/2026-09-08-tennixai-t16-real-runtime-hardening.md) 先写失败测试，再实现 LLM 上下文裁剪、可配置总时限与球员消歧。
+- 保留完整 `data` SSE 结构化结果，压缩范围只作用于发给 LLM 的 tool message。
+- 完成后复跑确定性 suite、真实 provider/LLM/组合门和浏览器真实门；按实际结果更新三份总控。
 
 ## 最近验证
 
@@ -45,18 +50,19 @@
 
 ## 最近交接
 
-**状态：** P1 已由 Claude Code（Codex Goal）于 2026-09-08 完成（最终提交 `98075ef`）。没有活动实现任务；下一步行动等待用户决定（是否启动 P2 设计）。
+**状态：** P1 核心实现由 Claude Code（Codex Goal）于 2026-09-08 完成（基线提交 `98075ef`）；Codex 于 2026-09-08 从 `93601bd` 领取 T16，当前在 `main` 进行真实运行时硬化。
 
-**交接说明：** 全链路以 fake 模式为默认确定性门；真实 LLM 凭据从环境变量注入（本次使用 DEUCE 项目的 key/baseurl，仅经 env，未入库）；LiveTennisAPI key 尚未配置，`provider_live`/`end_to_end_live` 与浏览器 end-to-end 门处于 skip 状态——拿到 key 后按 runbook 第 3 节复跑即可。已知小瑕疵记录：dev StrictMode 下 initial question 会先发一次被 abort 的请求再重发（生产单次）；视觉 spec 需 `window.scrollTo(0,0)` 与隐藏 `nextjs-portal` 保证 sticky 元素与 dev overlay 不干扰基线。
+**交接说明：** T16 的本地持久配置位于被忽略的 `backend/.env` 与 `frontend/.env.local`，未入库；当前配置下真实 provider 与单项 LLM 均可用。组合门尚未通过，修复前不得把 P1 标记为整体 done。已知视觉/StrictMode 说明保留在 T15 证据中。
 
 **已知本地状态：** 未跟踪的 `.codex/skills/ui-ux-pro-max/SKILL.md`、`frontend/AGENTS.md`、`frontend/CLAUDE.md`（next dev 生成）、`frontend/next-env.d.ts`（Next 工具链生成），保留原样。
 
-**阻塞：** 无。
+**阻塞：** 无，T16 正在执行。
 
 ## 近期变更（最多 5 条）
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-08 | 领取 T16：真实 live chat 上下文/超时/球员消歧硬化 | `93601bd`（起始） |
 | 2026-09-08 | T15 完成：验收矩阵、浏览器 E2E、live 门、runbook；P1 关闭 | `98075ef` |
 | 2026-09-08 | 领取 T15 并置为 in_progress | `8019ddb` |
 | 2026-09-08 | T14 完成：内部 ID Match Page 与上下文 Chat，preview 像素稳定 | `d76821b` |
