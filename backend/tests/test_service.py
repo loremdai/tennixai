@@ -24,6 +24,9 @@ SINNER = Player(id="ply_s", name="Jannik Sinner")
 SINNER_SHORT = Player(id="ply_short", name="Sinner")
 ALCARAZ = Player(id="ply_a", name="Carlos Alcaraz")
 JONES = Player(id="ply_j", name="Jannik Jones")
+DJOKOVIC_RANKED = Player(id="ply_d_ranked", name="Novak Djokovic", ranking=3)
+DJOKOVIC_DUPLICATE = Player(id="ply_d_duplicate", name="Novak Djokovic")
+DJOKOVIC_TEAM = Player(id="ply_d_team", name="Novak Djokovic / Casper Ruud")
 
 
 class UtcClock:
@@ -220,6 +223,25 @@ async def test_multiple_substring_matches_raise_ambiguous_player() -> None:
         {"id": "ply_s", "name": "Jannik Sinner"},
         {"id": "ply_j", "name": "Jannik Jones"},
     ]
+
+
+@pytest.mark.asyncio
+async def test_djokovic_resolution_ignores_duplicate_and_composite_candidates() -> None:
+    match = build_match(
+        "mat_djokovic",
+        MatchStatus.LIVE,
+        NOW_UTC,
+        players=(DJOKOVIC_RANKED, ALCARAZ),
+    )
+    provider = CountingProvider(
+        players=[DJOKOVIC_DUPLICATE, DJOKOVIC_TEAM, DJOKOVIC_RANKED],
+        live=[match],
+    )
+    service, _, _ = build_service(provider)
+
+    result = await service.list_matches("live", "Djokovic")
+
+    assert [item.id for item in result] == ["mat_djokovic"]
 
 
 @pytest.mark.asyncio

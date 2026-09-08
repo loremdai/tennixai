@@ -6,6 +6,7 @@ function calling; failures translate to typed `llm_unavailable` errors so the
 orchestrator can keep structured data visible.
 """
 
+import asyncio
 import json
 import re
 from collections.abc import AsyncIterator
@@ -129,11 +130,21 @@ class FakeChatModel:
 class OpenAICompatibleChatModel:
     """Qwen via an OpenAI-compatible Chat Completions endpoint."""
 
-    def __init__(self, *, api_key: str, base_url: str, model: str) -> None:
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        base_url: str,
+        model: str,
+        timeout_seconds: float = 45.0,
+    ) -> None:
         from openai import AsyncOpenAI
 
-        self._client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+        self._client = AsyncOpenAI(
+            api_key=api_key, base_url=base_url, timeout=timeout_seconds
+        )
         self._model = model
+        self._timeout_seconds = timeout_seconds
 
     async def choose(
         self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
@@ -141,13 +152,14 @@ class OpenAICompatibleChatModel:
         from openai import OpenAIError
 
         try:
-            response = await self._client.chat.completions.create(
-                model=self._model,
-                messages=messages,
-                tools=tools,
-                tool_choice="auto",
-            )
-        except OpenAIError as error:
+            async with asyncio.timeout(self._timeout_seconds):
+                response = await self._client.chat.completions.create(
+                    model=self._model,
+                    messages=messages,
+                    tools=tools,
+                    tool_choice="auto",
+                )
+        except (OpenAIError, TimeoutError) as error:
             raise AppError("llm_unavailable", "LLM request failed", 503) from error
 
         message = response.choices[0].message
@@ -172,17 +184,18 @@ class OpenAICompatibleChatModel:
         from openai import OpenAIError
 
         try:
-            stream = await self._client.chat.completions.create(
-                model=self._model,
-                messages=messages,
-                stream=True,
-                tool_choice="none",
-            )
-            async for chunk in stream:
-                if not chunk.choices:
-                    continue
-                delta = chunk.choices[0].delta
-                if delta is not None and delta.content:
-                    yield delta.content
-        except OpenAIError as error:
+            async with asyncio.timeout(self._timeout_seconds):
+                stream = await self._client.chat.completions.create(
+                    model=self._model,
+                    messages=messages,
+                    stream=True,
+                    tool_choice="none",
+                )
+                async for chunk in stream:
+                    if not chunk.choices:
+                        continue
+                    delta = chunk.choices[0].delta
+                    if delta is not None and delta.content:
+                        yield delta.content
+        except (OpenAIError, TimeoutError) as error:
             raise AppError("llm_unavailable", "LLM streaming failed", 503) from error

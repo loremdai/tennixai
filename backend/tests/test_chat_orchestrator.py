@@ -50,9 +50,15 @@ class RecordingProvider:
         return await self.inner.get_score(match_id)
 
 
-def build_orchestrator(model: FakeChatModel):
+class WideRecordingProvider(RecordingProvider):
+    async def get_live_matches(self, *, player_id=None):
+        matches = await super().get_live_matches(player_id=player_id)
+        return matches * 30
+
+
+def build_orchestrator(model: FakeChatModel, provider_type=RecordingProvider):
     fake = FakeTennisProvider(identities=MemoryIdentityRepository(), now=lambda: NOW)
-    recording = RecordingProvider(fake)
+    recording = provider_type(fake)
     cache: AsyncTTLCache[str, object] = AsyncTTLCache(max_entries=256)
     service = TennisService(recording, cache, now=lambda: NOW, timezone="Asia/Macau")
     tools = BusinessTools(service)
@@ -85,6 +91,27 @@ async def test_tool_result_precedes_generated_text() -> None:
     assert events[1].payload["matches"][0]["id"].startswith("mat_")
     assert events[2].payload["delta"] == "Sinner 今晚出场。"
     assert events[3].payload == {"ok": True}
+
+
+@pytest.mark.asyncio
+async def test_bounded_model_context_keeps_full_sse_data() -> None:
+    model = FakeChatModel(
+        turns=[tool_turn("get_live_matches", {}), ModelTurn()],
+        text_chunks=["当前有很多场比赛。"],
+    )
+    orchestrator, _ = build_orchestrator(model, WideRecordingProvider)
+
+    events = [event async for event in orchestrator.stream(global_request("现在有什么比赛？"))]
+
+    data = next(event for event in events if event.type == ChatEventType.DATA)
+    assert len(data.payload["matches"]) == 30
+
+    tool_message = next(message for message in model.choose_calls[-1] if message["role"] == "tool")
+    model_result = json.loads(tool_message["content"])
+    assert len(model_result["matches"]) <= 12
+    assert model_result["match_count"] == 30
+    assert model_result["truncated"] is True
+    assert "freshness" not in model_result["matches"][0]
 
 
 @pytest.mark.asyncio

@@ -24,6 +24,15 @@ class MatchTimeScope(StrEnum):
     NEXT = "next"
 
 
+def _is_composite_player_name(name: str) -> bool:
+    normalized = name.casefold()
+    return "/" in normalized or "&" in normalized or " vs " in normalized
+
+
+def _player_preference_key(player: Player) -> tuple[bool, int]:
+    return (player.ranking is None, player.ranking if player.ranking is not None else 1_000_000)
+
+
 def tonight_window(now_local: datetime) -> tuple[datetime, datetime]:
     day = now_local.date()
     if now_local.time() < time(6):
@@ -65,8 +74,21 @@ class TennisService:
 
     async def _resolve_player(self, query: str) -> Player:
         players = await self.search_players(query)
-        exact = [player for player in players if player.name.casefold() == query.strip().casefold()]
-        candidates = exact or players
+        individuals = [player for player in players if not _is_composite_player_name(player.name)]
+        unique: dict[str, Player] = {}
+        for player in individuals:
+            key = player.name.strip().casefold()
+            current = unique.get(key)
+            if current is None or _player_preference_key(player) < _player_preference_key(current):
+                unique[key] = player
+
+        normalized_players = list(unique.values())
+        exact = [
+            player
+            for player in normalized_players
+            if player.name.casefold() == query.strip().casefold()
+        ]
+        candidates = exact or normalized_players
         if not candidates:
             raise AppError("not_found", "Player not found", 404)
         if len(candidates) > 1:

@@ -74,6 +74,7 @@ def create_app(
                 api_key=api_key.get_secret_value(),
                 base_url=settings.llm_base_url,
                 model=settings.llm_model,
+                timeout_seconds=settings.llm_timeout_seconds,
             )
         else:
             chat_model = FakeChatModel()

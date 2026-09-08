@@ -19,11 +19,13 @@ from app.chat.models import (
     StructuredToolResult,
 )
 from app.chat.tools import BusinessTools, is_historical_query
+from app.domain import Match
 from app.errors import AppError
 
 HISTORICAL_REPLY = "P1 暂不支持历史比赛结果查询。"
 LLM_FALLBACK_REPLY = "比赛数据已找到，但 AI 说明暂时不可用。"
 MAX_TOOL_ROUNDS = 2
+MAX_MODEL_MATCHES = 12
 
 GLOBAL_SYSTEM_PROMPT = (
     "你是 TennixAI 的网球比赛信息助手。"
@@ -35,6 +37,56 @@ MATCH_SYSTEM_SUFFIX = (
     "当前比赛已由页面上下文确定（current match id: {match_id}），"
     "调用 get_match 时无需提供参数。"
 )
+
+
+def _model_match_summary(match: Match) -> dict[str, Any]:
+    player_names = {player.id: player.name for player in match.players}
+    score = None
+    if match.live_state is not None and match.live_state.score is not None:
+        match_score = match.live_state.score
+        score = {
+            "sets_won": list(match_score.sets_won),
+            "sets": [
+                {
+                    "number": set_score.number,
+                    "player1_games": set_score.player1_games,
+                    "player2_games": set_score.player2_games,
+                }
+                for set_score in match_score.sets
+            ],
+            "points": list(match_score.points),
+            "is_tiebreak": match_score.is_tiebreak,
+        }
+
+    return {
+        "id": match.id,
+        "status": match.status.value,
+        "players": [player.name for player in match.players],
+        "tournament": match.tournament.name,
+        "scheduled_at": match.scheduled_at.isoformat() if match.scheduled_at else None,
+        "round": match.round,
+        "surface": match.surface,
+        "indoor": match.indoor,
+        "format": match.format,
+        "score": score,
+        "server_player": (
+            player_names.get(match.live_state.server_player_id)
+            if match.live_state is not None
+            else None
+        ),
+        "winner_player": player_names.get(match.winner_player_id),
+        "is_stale": match.freshness.is_stale,
+    }
+
+
+def _model_tool_result(result: StructuredToolResult) -> dict[str, Any]:
+    matches = result.matches
+    return {
+        "kind": result.kind,
+        "match_count": len(matches),
+        "truncated": len(matches) > MAX_MODEL_MATCHES,
+        "matches": [_model_match_summary(match) for match in matches[:MAX_MODEL_MATCHES]],
+    }
 
 
 class ChatOrchestrator:
@@ -127,7 +179,7 @@ class ChatOrchestrator:
                             "role": "tool",
                             "tool_call_id": call.id,
                             "content": json.dumps(
-                                result.model_dump(mode="json"), ensure_ascii=False
+                                _model_tool_result(result), ensure_ascii=False
                             ),
                         }
                     )

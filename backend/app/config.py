@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import SecretStr, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     llm_api_key: SecretStr | None = None
     llm_base_url: str | None = None
     llm_model: str = "qwen3.8-max-0902"
+    llm_timeout_seconds: float = Field(default=45.0, gt=0, le=300)
     product_timezone: str = "Asia/Macau"
     cache_max_entries: int = 256
     fixed_now: str | None = None

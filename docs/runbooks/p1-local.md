@@ -14,7 +14,7 @@ cd frontend && pnpm dev --port 3100
 
 - `backend/.env` 只存在于本地，绝不提交；变量名前缀 `TENNIX_`。
 - `TENNIX_PROVIDER_MODE=fake|live`：fake 使用确定性 `FakeTennisProvider`；live 需要 `TENNIX_LIVETENNIS_API_KEY`。
-- `TENNIX_LLM_MODE=fake|openai_compatible`：openai_compatible 需要 `TENNIX_LLM_API_KEY` 与 `TENNIX_LLM_BASE_URL`（模型默认 `qwen3.8-max-0902`）。
+- `TENNIX_LLM_MODE=fake|openai_compatible`：openai_compatible 需要 `TENNIX_LLM_API_KEY` 与 `TENNIX_LLM_BASE_URL`（模型默认 `qwen3.8-max-0902`）。`TENNIX_LLM_TIMEOUT_SECONDS` 默认为 45 秒，限制单次工具选择或流式说明的总时长，超时会保留结构化数据并返回固定降级说明。
 - `TENNIX_FIXED_NOW`（可选，ISO8601 带时区）：冻结服务时钟，用于可重复的演示与视觉测试。
 - 浏览器只访问 `http://127.0.0.1:3100`；`TENNIX_BACKEND_URL` 仅存在于 frontend 服务端环境（Route Handler 代理），浏览器bundle 不含后端地址或任何凭据。
 
