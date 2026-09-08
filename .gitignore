@@ -26,3 +26,8 @@ pnpm-debug.log*
 # Local/system files
 .DS_Store
 Thumbs.db
+
+# Playwright generated reports (snapshot baselines stay tracked)
+frontend/playwright-report/
+frontend/test-results/
+frontend/blob-report/
