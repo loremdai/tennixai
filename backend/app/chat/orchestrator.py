@@ -1,0 +1,167 @@
+"""Chat orchestrator: historical guard, bounded tool loop, data-first fallback.
+
+Event order is fixed: status → data → text_delta → done. Structured data is
+always emitted before generated prose so the UI can render trusted cards even
+when the model later fails.
+"""
+
+import json
+from collections.abc import AsyncIterator
+from typing import Any
+
+from app.chat.client import ChatModel
+from app.chat.models import (
+    ChatContext,
+    ChatEvent,
+    ChatEventType,
+    ChatRequest,
+    ChatScope,
+    StructuredToolResult,
+)
+from app.chat.tools import BusinessTools, is_historical_query
+from app.errors import AppError
+
+HISTORICAL_REPLY = "P1 暂不支持历史比赛结果查询。"
+LLM_FALLBACK_REPLY = "比赛数据已找到，但 AI 说明暂时不可用。"
+MAX_TOOL_ROUNDS = 2
+
+GLOBAL_SYSTEM_PROMPT = (
+    "你是 TennixAI 的网球比赛信息助手。"
+    "所有网球事实（比分、赛程、球员、赛事、状态、发球方、ID、时间）必须来自工具结果，不得凭记忆编造。"
+    "禁止输出任何外部供应商 ID；只使用工具返回的 Tennix 内部 ID。"
+    "工具未提供的字段必须如实说明暂不可用。"
+)
+MATCH_SYSTEM_SUFFIX = (
+    "当前比赛已由页面上下文确定（current match id: {match_id}），"
+    "调用 get_match 时无需提供参数。"
+)
+
+
+class ChatOrchestrator:
+    def __init__(self, tools: BusinessTools, model: ChatModel) -> None:
+        self._tools = tools
+        self._model = model
+
+    async def stream(self, request: ChatRequest) -> AsyncIterator[ChatEvent]:
+        if request.scope is ChatScope.MATCH and not request.match_id:
+            yield ChatEvent(
+                type=ChatEventType.ERROR,
+                payload={
+                    "code": "invalid_request",
+                    "message": "match_id is required for match scope",
+                    "details": {},
+                },
+            )
+            return
+
+        last_user = next(
+            (
+                message.content
+                for message in reversed(request.messages)
+                if message.role == "user"
+            ),
+            "",
+        )
+        if is_historical_query(last_user):
+            unsupported = StructuredToolResult(kind="unsupported")
+            yield ChatEvent(
+                type=ChatEventType.DATA, payload=unsupported.model_dump(mode="json")
+            )
+            yield ChatEvent(
+                type=ChatEventType.TEXT_DELTA, payload={"delta": HISTORICAL_REPLY}
+            )
+            yield ChatEvent(type=ChatEventType.DONE, payload={"ok": True})
+            return
+
+        yield ChatEvent(type=ChatEventType.STATUS, payload={"stage": "resolving"})
+
+        context = ChatContext(scope=request.scope, match_id=request.match_id)
+        system = GLOBAL_SYSTEM_PROMPT
+        if request.scope is ChatScope.MATCH:
+            system = f"{system}\n{MATCH_SYSTEM_SUFFIX.format(match_id=request.match_id)}"
+
+        messages: list[dict[str, Any]] = [{"role": "system", "content": system}]
+        messages.extend(
+            {"role": message.role, "content": message.content}
+            for message in request.messages
+        )
+
+        data_emitted = False
+        rounds = 0
+        catalog = self._tools.catalog()
+
+        try:
+            while True:
+                turn = await self._model.choose(messages, catalog)
+                if not turn.tool_calls:
+                    break
+                rounds += 1
+                if rounds > MAX_TOOL_ROUNDS:
+                    raise AppError(
+                        "invalid_request", "Too many tool-call rounds requested", 422
+                    )
+
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": [
+                            {
+                                "id": call.id,
+                                "type": "function",
+                                "function": {
+                                    "name": call.name,
+                                    "arguments": json.dumps(
+                                        call.arguments, ensure_ascii=False
+                                    ),
+                                },
+                            }
+                            for call in turn.tool_calls
+                        ],
+                    }
+                )
+                for call in turn.tool_calls:
+                    result = await self._tools.execute(call.name, call.arguments, context)
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": call.id,
+                            "content": json.dumps(
+                                result.model_dump(mode="json"), ensure_ascii=False
+                            ),
+                        }
+                    )
+                    yield ChatEvent(
+                        type=ChatEventType.DATA, payload=result.model_dump(mode="json")
+                    )
+                    data_emitted = True
+        except AppError as error:
+            yield ChatEvent(
+                type=ChatEventType.ERROR,
+                payload={
+                    "code": error.code,
+                    "message": error.message,
+                    "details": error.details,
+                },
+            )
+            return
+
+        try:
+            async for chunk in self._model.stream_text(messages):
+                yield ChatEvent(type=ChatEventType.TEXT_DELTA, payload={"delta": chunk})
+        except Exception:
+            if data_emitted:
+                yield ChatEvent(
+                    type=ChatEventType.TEXT_DELTA, payload={"delta": LLM_FALLBACK_REPLY}
+                )
+            yield ChatEvent(
+                type=ChatEventType.ERROR,
+                payload={
+                    "code": "llm_unavailable",
+                    "message": "LLM streaming failed",
+                    "details": {},
+                },
+            )
+            return
+
+        yield ChatEvent(type=ChatEventType.DONE, payload={"ok": True})

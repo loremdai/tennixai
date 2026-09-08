@@ -1,3 +1,4 @@
+import json
 from enum import StrEnum
 from typing import Literal
 
@@ -46,8 +47,36 @@ class GetMatchArgs(BaseModel):
     match_id: str | None = None
 
 
+class ToolCall(BaseModel):
+    id: str
+    name: str
+    arguments: dict[str, object]
+
+
+class ModelTurn(BaseModel):
+    tool_calls: list[ToolCall] = Field(default_factory=list)
+
+
+class ChatEventType(StrEnum):
+    STATUS = "status"
+    DATA = "data"
+    TEXT_DELTA = "text_delta"
+    DONE = "done"
+    ERROR = "error"
+
+
+class ChatEvent(BaseModel):
+    type: ChatEventType
+    payload: dict[str, object]
+
+    def to_sse(self) -> str:
+        return f"event: {self.type.value}\ndata: {json.dumps(self.payload, ensure_ascii=False)}\n\n"
+
+
 __all__ = [
     "ChatContext",
+    "ChatEvent",
+    "ChatEventType",
     "ChatMessage",
     "ChatRequest",
     "ChatScope",
@@ -55,5 +84,7 @@ __all__ = [
     "GetLiveMatchesArgs",
     "GetMatchArgs",
     "MatchTimeScope",
+    "ModelTurn",
     "StructuredToolResult",
+    "ToolCall",
 ]

@@ -11,6 +11,9 @@ from fastapi.responses import JSONResponse
 from app.api.routes import router
 from app.api.schemas import ErrorBody, ErrorResponse
 from app.cache import AsyncTTLCache
+from app.chat.client import FakeChatModel, OpenAICompatibleChatModel
+from app.chat.orchestrator import ChatOrchestrator
+from app.chat.tools import BusinessTools
 from app.config import Settings
 from app.errors import AppError
 from app.identity import MemoryIdentityRepository
@@ -62,6 +65,20 @@ def create_app(
     cache: AsyncTTLCache[str, object] = AsyncTTLCache(max_entries=settings.cache_max_entries)
     service = TennisService(provider, cache, now=clock, timezone=settings.product_timezone)
 
+    if chat_orchestrator is None:
+        if settings.llm_mode == "openai_compatible":
+            api_key = settings.llm_api_key
+            if api_key is None or not settings.llm_base_url:
+                raise ValueError("TENNIX_LLM_API_KEY and TENNIX_LLM_BASE_URL are required")
+            chat_model = OpenAICompatibleChatModel(
+                api_key=api_key.get_secret_value(),
+                base_url=settings.llm_base_url,
+                model=settings.llm_model,
+            )
+        else:
+            chat_model = FakeChatModel()
+        chat_orchestrator = ChatOrchestrator(BusinessTools(service), chat_model)
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         yield
@@ -71,8 +88,7 @@ def create_app(
     app = FastAPI(title="Tennix API", lifespan=lifespan)
     app.state.settings = settings
     app.state.tennis_service = service
-    if chat_orchestrator is not None:
-        app.state.chat_orchestrator = chat_orchestrator
+    app.state.chat_orchestrator = chat_orchestrator
 
     @app.middleware("http")
     async def request_id(request: Request, call_next):

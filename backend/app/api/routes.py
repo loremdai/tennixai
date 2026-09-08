@@ -1,8 +1,12 @@
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import StreamingResponse
 
 from app.api.schemas import MatchListResponse, MatchResponse, PlayerListResponse
+from app.chat.models import ChatEvent, ChatEventType, ChatRequest
+from app.chat.orchestrator import ChatOrchestrator
+from app.errors import AppError
 from app.service import TennisService
 
 router = APIRouter(prefix="/api/v1")
@@ -10,6 +14,10 @@ router = APIRouter(prefix="/api/v1")
 
 def get_service(request: Request) -> TennisService:
     return request.app.state.tennis_service
+
+
+def get_orchestrator(request: Request) -> ChatOrchestrator:
+    return request.app.state.chat_orchestrator
 
 
 @router.get("/health")
@@ -40,3 +48,32 @@ async def get_match(
     service: TennisService = Depends(get_service),
 ) -> MatchResponse:
     return MatchResponse(data=await service.get_match(match_id))
+
+
+@router.post("/chat/stream")
+async def chat_stream(
+    payload: ChatRequest,
+    orchestrator: ChatOrchestrator = Depends(get_orchestrator),
+) -> StreamingResponse:
+    async def event_stream():
+        try:
+            async for event in orchestrator.stream(payload):
+                yield event.to_sse()
+        except AppError as error:
+            yield ChatEvent(
+                type=ChatEventType.ERROR,
+                payload={
+                    "code": error.code,
+                    "message": error.message,
+                    "details": error.details,
+                },
+            ).to_sse()
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+        },
+    )

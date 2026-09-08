@@ -1,0 +1,244 @@
+import json
+from collections import Counter
+from datetime import datetime, timezone
+
+import pytest
+
+from app.cache import AsyncTTLCache
+from app.chat.client import FakeChatModel
+from app.chat.models import (
+    ChatEvent,
+    ChatEventType,
+    ChatMessage,
+    ChatRequest,
+    ModelTurn,
+    ToolCall,
+)
+from app.chat.orchestrator import ChatOrchestrator
+from app.chat.tools import BusinessTools
+from app.errors import AppError
+from app.identity import MemoryIdentityRepository
+from app.providers.fake import FakeTennisProvider
+from app.service import TennisService
+
+NOW = datetime(2026, 9, 8, 10, 0, tzinfo=timezone.utc)
+
+
+class RecordingProvider:
+    def __init__(self, inner: FakeTennisProvider) -> None:
+        self.inner = inner
+        self.calls: Counter[str] = Counter()
+
+    async def search_players(self, query: str):
+        self.calls["search_players"] += 1
+        return await self.inner.search_players(query)
+
+    async def get_live_matches(self, *, player_id=None):
+        self.calls["get_live_matches"] += 1
+        return await self.inner.get_live_matches(player_id=player_id)
+
+    async def get_fixtures(self, *, player_id=None):
+        self.calls["get_fixtures"] += 1
+        return await self.inner.get_fixtures(player_id=player_id)
+
+    async def get_match(self, match_id: str):
+        self.calls["get_match"] += 1
+        return await self.inner.get_match(match_id)
+
+    async def get_score(self, match_id: str):
+        self.calls["get_score"] += 1
+        return await self.inner.get_score(match_id)
+
+
+def build_orchestrator(model: FakeChatModel):
+    fake = FakeTennisProvider(identities=MemoryIdentityRepository(), now=lambda: NOW)
+    recording = RecordingProvider(fake)
+    cache: AsyncTTLCache[str, object] = AsyncTTLCache(max_entries=256)
+    service = TennisService(recording, cache, now=lambda: NOW, timezone="Asia/Macau")
+    tools = BusinessTools(service)
+    return ChatOrchestrator(tools, model), recording
+
+
+def tool_turn(name: str, arguments: dict, call_id: str = "call_1") -> ModelTurn:
+    return ModelTurn(tool_calls=[ToolCall(id=call_id, name=name, arguments=arguments)])
+
+
+def global_request(content: str) -> ChatRequest:
+    return ChatRequest(scope="global", messages=[ChatMessage(role="user", content=content)])
+
+
+@pytest.mark.asyncio
+async def test_tool_result_precedes_generated_text() -> None:
+    model = FakeChatModel(
+        turns=[
+            tool_turn("find_player_matches", {"player_name": "Sinner", "time_scope": "tonight"}),
+            ModelTurn(),
+        ],
+        text_chunks=["Sinner 今晚出场。"],
+    )
+    orchestrator, _ = build_orchestrator(model)
+    request = global_request("今晚 Sinner 几点打？")
+
+    events = [event async for event in orchestrator.stream(request)]
+
+    assert [event.type for event in events] == ["status", "data", "text_delta", "done"]
+    assert events[1].payload["matches"][0]["id"].startswith("mat_")
+    assert events[2].payload["delta"] == "Sinner 今晚出场。"
+    assert events[3].payload == {"ok": True}
+
+
+@pytest.mark.asyncio
+async def test_llm_failure_after_data_keeps_structured_result() -> None:
+    model = FakeChatModel(
+        turns=[
+            tool_turn("get_live_matches", {}),
+            ModelTurn(),
+        ],
+        stream_error=RuntimeError("stream boom"),
+    )
+    orchestrator, _ = build_orchestrator(model)
+
+    events = [event async for event in orchestrator.stream(global_request("现在有什么比赛？"))]
+
+    assert [event.type for event in events] == ["status", "data", "text_delta", "error"]
+    assert events[2].payload["delta"] == "比赛数据已找到，但 AI 说明暂时不可用。"
+    assert events[3].payload["code"] == "llm_unavailable"
+
+
+@pytest.mark.asyncio
+async def test_historical_guard_emits_unsupported_without_model_or_provider() -> None:
+    model = FakeChatModel()
+    orchestrator, recording = build_orchestrator(model)
+
+    events = [event async for event in orchestrator.stream(global_request("昨天 Sinner 赢了吗？"))]
+
+    assert [event.type for event in events] == ["data", "text_delta", "done"]
+    assert events[0].payload["kind"] == "unsupported"
+    assert events[0].payload["matches"] == []
+    assert events[1].payload["delta"] == "P1 暂不支持历史比赛结果查询。"
+    assert model.choose_calls == []
+    assert sum(recording.calls.values()) == 0
+
+
+@pytest.mark.asyncio
+async def test_provider_exception_emits_only_status_and_error() -> None:
+    model = FakeChatModel(
+        turns=[
+            tool_turn("find_player_matches", {"player_name": "Federer", "time_scope": "next"}),
+        ],
+    )
+    orchestrator, _ = build_orchestrator(model)
+
+    events = [event async for event in orchestrator.stream(global_request("Federer 下一场对谁？"))]
+
+    assert [event.type for event in events] == ["status", "error"]
+    assert events[1].payload["code"] == "not_found"
+
+
+@pytest.mark.asyncio
+async def test_third_tool_round_is_rejected() -> None:
+    model = FakeChatModel(
+        turns=[
+            tool_turn("get_live_matches", {}, "call_1"),
+            tool_turn("get_live_matches", {}, "call_2"),
+            tool_turn("get_live_matches", {}, "call_3"),
+        ],
+    )
+    orchestrator, _ = build_orchestrator(model)
+
+    events = [event async for event in orchestrator.stream(global_request("现在有什么比赛？"))]
+
+    assert [event.type for event in events] == ["status", "data", "data", "error"]
+    assert events[3].payload["code"] == "invalid_request"
+
+
+@pytest.mark.asyncio
+async def test_match_scope_context_appears_in_system_message() -> None:
+    model = FakeChatModel(
+        turns=[tool_turn("get_match", {}), ModelTurn()],
+        text_chunks=["本场比赛数据已就绪。"],
+    )
+    orchestrator, recording = build_orchestrator(model)
+    known_match_id = recording.inner.live_match.id
+    request = ChatRequest(
+        scope="match",
+        match_id=known_match_id,
+        messages=[ChatMessage(role="user", content="谁在发球？")],
+    )
+
+    events = [event async for event in orchestrator.stream(request)]
+
+    assert [event.type for event in events] == ["status", "data", "text_delta", "done"]
+    assert events[1].payload["kind"] == "match"
+    assert events[1].payload["matches"][0]["id"] == known_match_id
+
+    system_message = model.choose_calls[0][0]
+    assert system_message["role"] == "system"
+    assert known_match_id in system_message["content"]
+
+
+@pytest.mark.asyncio
+async def test_match_scope_without_match_id_is_invalid() -> None:
+    model = FakeChatModel()
+    orchestrator, recording = build_orchestrator(model)
+    request = ChatRequest(scope="match", messages=[ChatMessage(role="user", content="谁在发球？")])
+
+    events = [event async for event in orchestrator.stream(request)]
+
+    assert [event.type for event in events] == ["error"]
+    assert events[0].payload["code"] == "invalid_request"
+    assert model.choose_calls == []
+    assert sum(recording.calls.values()) == 0
+
+
+@pytest.mark.asyncio
+async def test_choose_failure_without_data_emits_terminal_llm_error() -> None:
+    model = FakeChatModel(choose_error=AppError("llm_unavailable", "LLM down", 503))
+    orchestrator, _ = build_orchestrator(model)
+
+    events = [event async for event in orchestrator.stream(global_request("今晚 Sinner 几点打？"))]
+
+    assert [event.type for event in events] == ["status", "error"]
+    assert events[1].payload["code"] == "llm_unavailable"
+
+
+@pytest.mark.asyncio
+async def test_stream_failure_without_data_emits_only_terminal_error() -> None:
+    model = FakeChatModel(turns=[ModelTurn()], stream_error=RuntimeError("boom"))
+    orchestrator, _ = build_orchestrator(model)
+
+    events = [event async for event in orchestrator.stream(global_request("你好"))]
+
+    assert [event.type for event in events] == ["status", "error"]
+    assert events[1].payload["code"] == "llm_unavailable"
+
+
+def test_sse_frame_ends_with_exactly_two_newlines() -> None:
+    event = ChatEvent(type=ChatEventType.DATA, payload={"kind": "matches", "matches": []})
+    frame = event.to_sse()
+
+    assert frame == 'event: data\ndata: {"kind": "matches", "matches": []}\n\n'
+    assert frame.endswith("\n\n")
+    assert not frame.endswith("\n\n\n")
+
+
+def test_sse_frame_keeps_non_ascii_text() -> None:
+    event = ChatEvent(type=ChatEventType.TEXT_DELTA, payload={"delta": "你好"})
+    assert "你好" in event.to_sse()
+    assert json.loads(event.to_sse().split("data: ")[1])["delta"] == "你好"
+
+
+@pytest.mark.asyncio
+async def test_runtime_default_heuristics_drive_fake_model() -> None:
+    model = FakeChatModel()
+    orchestrator, _ = build_orchestrator(model)
+
+    events = [event async for event in orchestrator.stream(global_request("今晚 Sinner 几点打？"))]
+
+    types = [event.type for event in events]
+    assert types[0] == "status"
+    assert "data" in types
+    assert types[-1] == "done"
+    data = next(event for event in events if event.type == "data")
+    assert data.payload["kind"] == "matches"
+    assert data.payload["matches"], "heuristic should resolve Sinner tonight via the fake provider"
