@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     product_timezone: str = "Asia/Macau"
     cache_max_entries: int = 256
     fixed_now: str | None = None
+    database_url: str = "postgresql+asyncpg://tennix:tennix@127.0.0.1:5432/tennix"
+    redis_url: str = "redis://127.0.0.1:6379/0"
+    raw_payload_retention_days: int = Field(default=14, ge=1, le=90)
+    max_live_subscriptions: int = Field(default=8, ge=1, le=100)
+    viewer_lease_seconds: int = Field(default=45, ge=30, le=120)
+    subscription_grace_seconds: int = Field(default=60, ge=0, le=300)
 
     @model_validator(mode="after")
     def validate_required_credentials(self) -> "Settings":
