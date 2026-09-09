@@ -3,13 +3,13 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-09 23:32 CST
+**最后更新：** 2026-09-10 00:10 CST
 
 **当前任务：** T30 — Calibrate and Implement Recent Control Index v1
 
 **任务状态：** `in_progress`
 
-**当前执行者 / ADE：** Claude Code / Claude Code
+**当前执行者 / ADE：** Codex / Codex
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
@@ -18,6 +18,10 @@
 **最后验证的产品提交：** `ecd916b`
 
 **T30 起始提交：** `ecd916b`
+
+**T30 接管提交：** `577af46`
+
+**T30 接管时间：** 2026-09-10 00:10 CST
 
 **远程：** `origin` → `https://github.com/loremdai/tennixai.git`
 
@@ -65,10 +69,12 @@
 ### T30 — Calibrate and Implement Recent Control Index v1
 
 - **状态：** `in_progress`
-- **执行者 / ADE：** Claude Code / Claude Code
+- **执行者 / ADE：** Codex / Codex
 - **分支：** `main`
 - **起始提交：** `ecd916b`
-- **领取时间：** 2026-09-09 23:32 CST
+- **领取时间：** 2026-09-10 00:10 CST（异常接管）
+- **接管事实：** 原执行者因额度耗尽中断；项目所有者已明确批准本次接管。接管 HEAD 为 `577af46`。现场存在以下 5 个未提交 T30 草稿文件，均保留并逐项审阅：`backend/app/momentum/__init__.py`、`backend/app/momentum/engine.py`、`backend/app/momentum/calibration.py`、`backend/tests/test_momentum_engine.py`、`backend/tests/test_momentum_calibration.py`。
+- **接管基线：** 直接运行 `cd backend && uv run pytest tests/test_momentum_engine.py tests/test_momentum_calibration.py -v` 被宿主异常 `NO_PROXY/no_proxy`（`httpx.InvalidURL: Invalid port: ':1'`）拦截；临时移除这两个变量后为 18 collected、12 passed、6 failed。失败均已记录为草稿 helper/fixture、调用语义、校准样本和缺失聚合文件问题，待按设计修复。
 - **范围：** 按 [P2 实施计划 T30](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t30-calibrate-and-implement-recent-control-index-v1)：`backend/app/momentum/`（engine、calibration 命令、`calibration.v1.json` 聚合文件）、reducer/repositories 集成 momentum 观测、前端 `match-momentum.tsx` 控制图；无固定关键分倍率、无未来泄漏、不确定分不更新。
 - **阻塞：** 无。
 
@@ -190,7 +196,7 @@
 
 **状态：** T29 已由 Claude Code 于 2026-09-09 在 `main` 完成，实现提交 `ecd916b`；T30 已于 23:32 CST 领取，`in_progress`。
 
-**交接说明：** 接手 T30 前完整阅读 [P2 设计规格 §13](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) 和 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t30-calibrate-and-implement-recent-control-index-v1)。所有 ADE 只使用根目录 `.env`；API-Tennis 凭据变量为 `TENNIX_API_TENNIS_API_KEY`，不得写入代码、文档、fixture、日志、提交或聊天输出。T29 起生产 Match 页经 `stream.snapshot` 渲染统计与逐分（fake 模式为空时显示诚实缺失文案）；calibration 命令只允许写聚合 JSON（schema 版本、样本数、先验均值/强度、alpha、scale），不得含原始 vendor 行或 ID；用户已追加要求：P2 收尾时用真实浏览器按业务流程逐项人工验收直到无 bug。
+**交接说明：** 接手 T30 前完整阅读 [P2 设计规格 §15](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md#15-recent-control-index-v1) 和 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t30-calibrate-and-implement-recent-control-index-v1)。原执行者因额度耗尽中断，项目所有者已明确批准 Codex 接管；接管时 HEAD 为 `577af46`，T30 定向基线为宿主 `NO_PROXY/no_proxy` 异常后临时移除变量的 18 collected、12 passed、6 failed。所有 ADE 只使用根目录 `.env`；API-Tennis 凭据变量为 `TENNIX_API_TENNIS_API_KEY`，不得写入代码、文档、fixture、日志、提交或聊天输出。T29 起生产 Match 页经 `stream.snapshot` 渲染统计与逐分（fake 模式为空时显示诚实缺失文案）；calibration 命令只允许写聚合 JSON（schema 版本、样本数、先验均值/强度、alpha、scale），不得含原始 vendor 行或 ID；用户已追加要求：P2 收尾时用真实浏览器按业务流程逐项人工验收直到无 bug。
 
 **旧交接（T29）：** 接手 T29 前完整阅读 [P2 设计规格 §14](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) 和 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t29-render-full-pbp-and-available-match-statistics)。所有 ADE 只使用根目录 `.env`；API-Tennis 凭据变量为 `TENNIX_API_TENNIS_API_KEY`，不得写入代码、文档、fixture、日志、提交或聊天输出。T28 起 MatchPage 经 `useMatchStream` 消费 `/api/matches/{id}` + `/stream`（snapshot 含 points/statistics/quality/state_version）；SSE 测试用进程内 uvicorn（ASGITransport 缓冲）；用户已追加要求：P2 收尾时用真实浏览器按业务流程逐项人工验收直到无 bug。
 

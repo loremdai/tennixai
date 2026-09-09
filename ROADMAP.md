@@ -3,7 +3,7 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-09 22:38 CST
+**最后更新：** 2026-09-10 00:10 CST
 
 **总体状态：** `in_progress`（P1 已完成；P2 实施中）
 
@@ -75,7 +75,7 @@
 | T27 | P2.3 | Add WebSocket Feed, Redis Leases, and the Realtime Worker | `done` | `d354aba` | `ApiTennisLiveFeedProvider`（batch 帧解析 + 客户端 `event_key` 过滤、secret-safe断线信号）；`ViewerLeaseStore`（lease TTL/renew/grace/demand index、arrival-order 容量优先）；`RealtimePublisher`（hot snapshot + pub/sub）；`RealtimeWorker`（一 match 一上游、REST 先行、断线丢弃旧帧后 REST reconcile 再继续、terminal 立即关闭、capacity_limited、14 天 raw cleanup）；lease 6 + worker 8 + feed 6 共 20 项确定性测试（20 轮 stress 全绿）；真实 opt-in WS smoke 1 passed（认证、收到真实 push、canonical 映射零泄漏）；REST smoke 1 passed；infrastructure 11 passed；全套确定性 276 passed/8 deselected |
 | T28 | P2.3 | Expose Match Snapshots and Versioned SSE to the Browser | `done` | `f03985b` | `GET /matches/{id}` 全量 MatchSnapshot（hot→PG→provider 并回存）；`GET /matches/{id}/stream` 版本化 SSE（ready/match_delta(id=version)/match_ended/heartbeat、lease acquire+20s renew+断开 release、gap 只转发不造事件）；Next 薄代理转发 Accept/Last-Event-ID；`useMatchStream`（REST 先行、delta=local+1 原子替换、重复忽略、跳号重取、错误保留数据重连、隐藏 60s 释放、恢复先 snapshot 再 SSE、unmount abort）；stream 9 项 + hook 8 项新测试；backend 286 passed/8 deselected、infrastructure 12 passed；frontend 106 passed + typecheck + build；完整 e2e 40 passed/4 skipped 且 P1 视觉基线零变化 |
 | T29 | P2.4 | Render Full PBP and Available Match Statistics | `done` | `ecd916b` | Set→Game→Point、关键分、partial/unavailable 和 22-stat UI |
-| T30 | P2.4 | Calibrate and Implement Recent Control Index v1 | `planned` | — | aggregate calibration、发球校正、EWMA、无固定关键分倍率 |
+| T30 | P2.4 | Calibrate and Implement Recent Control Index v1 | `in_progress` | — | aggregate calibration、发球校正、EWMA、无固定关键分倍率 |
 | T31 | P2.4 | Add P2 Intelligence Tools and Versioned Chat Answers | `planned` | — | compact fact packet、history/H2H/tools、answer version/as_of |
 | T32 | P2.5 | Add Replay E2E, Fault Recovery, Runbook, and Final P2 Gate | `planned` | — | deterministic replay、重启/纠错/断线、真实 smoke 与完整验收 |
 
