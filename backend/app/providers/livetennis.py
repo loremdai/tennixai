@@ -14,17 +14,21 @@ import httpx
 from pydantic import ValidationError
 
 from app.domain import (
+    CapabilityStatus,
     DataFreshness,
+    DataQuality,
+    HeadToHead,
     LiveMatchState,
     Match,
     MatchScore,
+    MatchSnapshot,
     MatchStatus,
     Player,
     SetScore,
     Tournament,
 )
 from app.errors import AppError
-from app.identity import MemoryIdentityRepository
+from app.identity import IdentityRepository
 from app.providers.livetennis_dtos import (
     ListResponse,
     LiveMatchDto,
@@ -33,6 +37,8 @@ from app.providers.livetennis_dtos import (
 )
 
 PROVIDER_NAME = "livetennis"
+
+SNAPSHOT_GAP_CAPABILITIES = ("point_by_point", "statistics", "momentum")
 
 STATUS_MAP = {
     "upcoming": MatchStatus.SCHEDULED,
@@ -82,7 +88,7 @@ class LiveTennisProvider:
         self,
         *,
         client: httpx.AsyncClient,
-        identities: MemoryIdentityRepository,
+        identities: IdentityRepository,
         api_key: str,
         now: Callable[[], datetime],
     ) -> None:
@@ -139,10 +145,12 @@ class LiveTennisProvider:
                 503,
             ) from error
 
-    def _map_player(self, dto: LivePlayerDto, fallback_external_id: str) -> Player:
+    async def _map_player(self, dto: LivePlayerDto, fallback_external_id: str) -> Player:
         external_id = str(dto.id) if dto.id is not None else fallback_external_id
         return Player(
-            id=self._identities.get_or_create("player", PROVIDER_NAME, external_id),
+            id=await self._identities.get_or_create(
+                "player", PROVIDER_NAME, external_id
+            ),
             name=dto.name,
             country_code=dto.country,
             ranking=dto.ranking,
@@ -164,20 +172,22 @@ class LiveTennisProvider:
             return player_ids[1]
         return None
 
-    def _map_match(self, dto: LiveMatchDto) -> Match | None:
+    async def _map_match(self, dto: LiveMatchDto) -> Match | None:
         p1_dto = dto.players.get("p1")
         p2_dto = dto.players.get("p2")
         if p1_dto is None or p2_dto is None:
             return None
 
-        match_id = self._identities.get_or_create("match", PROVIDER_NAME, str(dto.id))
-        p1 = self._map_player(p1_dto, f"fixture:{dto.id}:p1")
-        p2 = self._map_player(p2_dto, f"fixture:{dto.id}:p2")
+        match_id = await self._identities.get_or_create(
+            "match", PROVIDER_NAME, str(dto.id)
+        )
+        p1 = await self._map_player(p1_dto, f"fixture:{dto.id}:p1")
+        p2 = await self._map_player(p2_dto, f"fixture:{dto.id}:p2")
         player_ids = (p1.id, p2.id)
         self._match_players[match_id] = player_ids
 
         tournament = Tournament(
-            id=self._identities.get_or_create(
+            id=await self._identities.get_or_create(
                 "tournament",
                 PROVIDER_NAME,
                 dto.tournament_id or dto.tournament or str(dto.id),
@@ -214,11 +224,11 @@ class LiveTennisProvider:
             ),
         )
 
-    def _map_list(self, payload: Any, item_model: type) -> list:
+    async def _map_list(self, payload: Any, item_model: type) -> list:
         listing = self._validate(ListResponse[item_model], payload)  # type: ignore[valid-type]
         mapped = []
         for dto in listing.data:
-            match = self._map_match(dto)
+            match = await self._map_match(dto)
             if match is not None:
                 mapped.append(match)
         return mapped
@@ -233,14 +243,14 @@ class LiveTennisProvider:
             if any(player.id == player_id for player in match.players)
         ]
 
-    def _list_params(
+    async def _list_params(
         self, status: str, player_id: str | None
     ) -> dict[str, Any] | None:
         params: dict[str, Any] = {"status": status}
         if player_id is None:
             return params
 
-        external_id = self._identities.external_id(
+        external_id = await self._identities.external_id(
             "player", PROVIDER_NAME, player_id
         )
         if external_id is None:
@@ -249,18 +259,18 @@ class LiveTennisProvider:
         return params
 
     async def get_live_matches(self, *, player_id: str | None = None) -> list[Match]:
-        params = self._list_params("live", player_id)
+        params = await self._list_params("live", player_id)
         if params is None:
             return []
         payload = await self._request("/matches", params)
-        return self._filter(self._map_list(payload, LiveMatchDto), player_id)
+        return self._filter(await self._map_list(payload, LiveMatchDto), player_id)
 
     async def get_fixtures(self, *, player_id: str | None = None) -> list[Match]:
-        params = self._list_params("upcoming", player_id)
+        params = await self._list_params("upcoming", player_id)
         if params is None:
             return []
         payload = await self._request("/matches", params)
-        return self._filter(self._map_list(payload, LiveMatchDto), player_id)
+        return self._filter(await self._map_list(payload, LiveMatchDto), player_id)
 
     async def search_players(self, query: str) -> list[Player]:
         payload = await self._request("/players", {"search": query})
@@ -271,7 +281,7 @@ class LiveTennisProvider:
                 continue
             players.append(
                 Player(
-                    id=self._identities.get_or_create(
+                    id=await self._identities.get_or_create(
                         "player", PROVIDER_NAME, str(dto.id)
                     ),
                     name=dto.name,
@@ -281,19 +291,62 @@ class LiveTennisProvider:
             )
         return players
 
+    async def get_player(self, player_id: str) -> Player:
+        raise self._unsupported("player lookup")
+
     async def get_match(self, match_id: str) -> Match:
-        external_id = self._identities.external_id("match", PROVIDER_NAME, match_id)
+        external_id = await self._identities.external_id(
+            "match", PROVIDER_NAME, match_id
+        )
         if external_id is None:
             raise AppError("not_found", "Match not found", 404)
         payload = await self._request(f"/matches/{external_id}")
         dto = self._validate(LiveMatchDto, payload)
-        match = self._map_match(dto)
+        match = await self._map_match(dto)
         if match is None:
             raise AppError("not_found", "Match not found", 404)
         return match
 
+    async def get_match_snapshot(self, match_id: str) -> MatchSnapshot:
+        match = await self.get_match(match_id)
+        live_state = match.live_state
+        observed_at = match.freshness.observed_at
+        return MatchSnapshot(
+            match=match,
+            quality=tuple(
+                DataQuality(
+                    capability=capability,
+                    status=CapabilityStatus.UNAVAILABLE,
+                    provider=PROVIDER_NAME,
+                    reason="backup_adapter",
+                    observed_at=observed_at,
+                )
+                for capability in SNAPSHOT_GAP_CAPABILITIES
+            ),
+            state_version=live_state.state_version if live_state is not None else 0,
+            as_of=observed_at,
+        )
+
+    async def get_recent_results(self, player_id: str, *, limit: int) -> list[Match]:
+        raise self._unsupported("recent results")
+
+    async def get_head_to_head(
+        self, first_player_id: str, second_player_id: str, *, limit: int
+    ) -> HeadToHead:
+        raise self._unsupported("head to head")
+
+    @staticmethod
+    def _unsupported(capability: str) -> AppError:
+        return AppError(
+            "unsupported",
+            f"Backup LiveTennisAPI adapter does not support {capability}",
+            501,
+        )
+
     async def get_score(self, match_id: str) -> LiveMatchState:
-        external_id = self._identities.external_id("match", PROVIDER_NAME, match_id)
+        external_id = await self._identities.external_id(
+            "match", PROVIDER_NAME, match_id
+        )
         if external_id is None:
             raise AppError("not_found", "Match not found", 404)
         payload = await self._request(f"/matches/{external_id}/score")

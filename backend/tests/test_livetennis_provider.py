@@ -359,3 +359,47 @@ async def test_vendor_fields_never_leak_into_canonical_models(provider) -> None:
         '"p1"',
     ]:
         assert vendor_token not in dumped
+
+
+@pytest.mark.asyncio
+async def test_backup_adapter_snapshot_is_version_consistent_and_declares_gaps(provider) -> None:
+    built, _ = provider
+
+    live = await built.get_live_matches()
+    snapshot = await built.get_match_snapshot(live[0].id)
+
+    assert snapshot.match.id == live[0].id
+    assert snapshot.state_version == (
+        snapshot.match.live_state.state_version
+        if snapshot.match.live_state is not None
+        else 0
+    )
+    assert snapshot.points == ()
+    assert snapshot.statistics == ()
+    assert snapshot.momentum == ()
+    declared = {item.capability: item.status for item in snapshot.quality}
+    assert declared["point_by_point"].value == "unavailable"
+    assert declared["statistics"].value == "unavailable"
+    assert declared["momentum"].value == "unavailable"
+    assert "21131" not in snapshot.model_dump_json()
+
+    with pytest.raises(AppError) as error_info:
+        await built.get_match_snapshot("mat_missing")
+    assert error_info.value.code == "not_found"
+
+
+@pytest.mark.asyncio
+async def test_backup_adapter_reports_typed_unsupported_for_p2_capabilities(provider) -> None:
+    built, seen = provider
+
+    for call in (
+        lambda: built.get_player("ply_missing"),
+        lambda: built.get_recent_results("ply_missing", limit=5),
+        lambda: built.get_head_to_head("ply_a", "ply_b", limit=5),
+    ):
+        with pytest.raises(AppError) as error_info:
+            await call()
+        assert error_info.value.code == "unsupported"
+        assert error_info.value.status_code == 501
+
+    assert seen == []

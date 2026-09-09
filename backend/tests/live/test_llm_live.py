@@ -29,14 +29,19 @@ class LiveGateFakeProvider(FakeTennisProvider):
 
     def __init__(self, now) -> None:
         super().__init__(identities=MemoryIdentityRepository(), now=now)
+
+    async def _post_build(self) -> None:
+        now = self._now
         djokovic = next(player for player in self._players if player.name == "Novak Djokovic")
         ruud = next(player for player in self._players if player.name == "Casper Ruud")
         match = Match(
-            id=self._identities.get_or_create("match", "fake", "fake-djokovic-next"),
+            id=await self._identities.get_or_create("match", "fake", "fake-djokovic-next"),
             status=MatchStatus.SCHEDULED,
             players=(djokovic, ruud),
             tournament=Tournament(
-                id=self._identities.get_or_create("tournament", "fake", "fake-atp-finals"),
+                id=await self._identities.get_or_create(
+                    "tournament", "fake", "fake-atp-finals"
+                ),
                 name="ATP Finals",
                 tour="atp",
             ),

@@ -1,40 +1,51 @@
 from datetime import datetime, timezone
 
 import pytest
+from pydantic import ValidationError
 
-from app.domain import LiveMatchState, Match, MatchStatus, Player
+from app.domain import (
+    CapabilityStatus,
+    HeadToHead,
+    LiveMatchState,
+    Match,
+    MatchSnapshot,
+    MatchStatus,
+    Player,
+)
 from app.errors import AppError
 from app.identity import MemoryIdentityRepository
-from app.providers.base import TennisDataProvider
+from app.providers.base import ProviderLiveEnvelope, TennisDataProvider
 from app.providers.fake import FakeTennisProvider
+
+NOW = datetime(2026, 9, 8, 10, 0, tzinfo=timezone.utc)
 
 
 @pytest.fixture()
-def provider() -> TennisDataProvider:
+async def provider() -> FakeTennisProvider:
     repository = MemoryIdentityRepository()
-    return FakeTennisProvider(
+    return await FakeTennisProvider.create(
         identities=repository,
-        now=lambda: datetime(2026, 9, 8, 10, 0, tzinfo=timezone.utc),
+        now=lambda: NOW,
     )
 
 
 @pytest.mark.asyncio
 async def test_fake_provider_satisfies_contract_without_external_ids() -> None:
     repository = MemoryIdentityRepository()
-    provider: TennisDataProvider = FakeTennisProvider(
+    provider: TennisDataProvider = await FakeTennisProvider.create(
         identities=repository,
-        now=lambda: datetime(2026, 9, 8, 10, 0, tzinfo=timezone.utc),
+        now=lambda: NOW,
     )
 
     players = await provider.search_players("Sinner")
     fixtures = await provider.get_fixtures(player_id=players[0].id)
     live = await provider.get_live_matches(player_id=None)
     detail = await provider.get_match(fixtures[0].id)
-    score = await provider.get_score(live[0].id)
+    snapshot = await provider.get_match_snapshot(live[0].id)
 
     assert fixtures[0].status is MatchStatus.SCHEDULED
     assert detail.id == fixtures[0].id
-    assert score.server_player_id == live[0].players[0].id
+    assert isinstance(snapshot, MatchSnapshot)
     assert all("fake-" not in item.id for item in [*players, *fixtures, *live])
 
 
@@ -138,3 +149,122 @@ async def test_public_methods_return_new_lists(provider: TennisDataProvider) -> 
     assert first == second
     assert isinstance(first[0], Match)
     assert isinstance(first[0].players[0], Player)
+
+
+@pytest.mark.asyncio
+async def test_get_player_returns_canonical_player_or_not_found(
+    provider: FakeTennisProvider,
+) -> None:
+    players = await provider.search_players("sinner")
+    player = await provider.get_player(players[0].id)
+
+    assert isinstance(player, Player)
+    assert player.id == players[0].id
+    assert player.name == "Jannik Sinner"
+
+    with pytest.raises(AppError) as error_info:
+        await provider.get_player("ply_missing")
+    assert error_info.value.code == "not_found"
+    assert error_info.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_match_snapshot_is_version_consistent_and_honest_about_gaps(
+    provider: FakeTennisProvider,
+) -> None:
+    live = await provider.get_live_matches()
+    snapshot = await provider.get_match_snapshot(live[0].id)
+
+    assert isinstance(snapshot, MatchSnapshot)
+    assert snapshot.match.id == live[0].id
+    assert snapshot.match.live_state is not None
+    assert snapshot.state_version == snapshot.match.live_state.state_version
+    assert snapshot.as_of.tzinfo is not None
+    assert snapshot.points == ()
+    assert snapshot.statistics == ()
+    assert snapshot.momentum == ()
+    # Missing P2 capabilities are declared, never fabricated as zero.
+    declared = {item.capability: item.status for item in snapshot.quality}
+    assert declared["point_by_point"] is CapabilityStatus.UNAVAILABLE
+    assert declared["statistics"] is CapabilityStatus.UNAVAILABLE
+    assert declared["momentum"] is CapabilityStatus.UNAVAILABLE
+
+    fixtures = await provider.get_fixtures()
+    upcoming_snapshot = await provider.get_match_snapshot(fixtures[0].id)
+    assert upcoming_snapshot.state_version == 0
+
+    with pytest.raises(AppError) as error_info:
+        await provider.get_match_snapshot("mat_missing")
+    assert error_info.value.code == "not_found"
+
+
+@pytest.mark.asyncio
+async def test_get_recent_results_is_bounded_and_canonical(
+    provider: FakeTennisProvider,
+) -> None:
+    players = await provider.search_players("sinner")
+
+    results = await provider.get_recent_results(players[0].id, limit=5)
+    again = await provider.get_recent_results(players[0].id, limit=5)
+    assert results == []
+    assert results is not again
+
+    with pytest.raises(AppError) as error_info:
+        await provider.get_recent_results("ply_missing", limit=5)
+    assert error_info.value.code == "not_found"
+
+
+@pytest.mark.asyncio
+async def test_get_head_to_head_returns_canonical_shape(
+    provider: FakeTennisProvider,
+) -> None:
+    players = await provider.search_players("sinner")
+    others = await provider.search_players("alcaraz")
+
+    head_to_head = await provider.get_head_to_head(
+        players[0].id, others[0].id, limit=5
+    )
+
+    assert isinstance(head_to_head, HeadToHead)
+    assert head_to_head.first_player_id == players[0].id
+    assert head_to_head.second_player_id == others[0].id
+    assert head_to_head.meetings == ()
+    assert head_to_head.freshness.provider == "fake"
+
+    with pytest.raises(AppError) as error_info:
+        await provider.get_head_to_head(players[0].id, "ply_missing", limit=5)
+    assert error_info.value.code == "not_found"
+
+
+def test_provider_live_envelope_is_private_typed_and_timezone_aware() -> None:
+    envelope = ProviderLiveEnvelope(
+        external_match_id="11997372",
+        provider="api_tennis",
+        channel="websocket",
+        kind="snapshot",
+        received_at=NOW,
+        payload={"scores": {"1": {"1": "6"}}},
+    )
+    assert envelope.external_match_id == "11997372"
+    assert envelope.kind == "snapshot"
+
+    with pytest.raises(ValidationError):
+        ProviderLiveEnvelope(
+            external_match_id="1",
+            provider="api_tennis",
+            channel="websocket",
+            kind="snapshot",
+            received_at=datetime(2026, 9, 8, 10, 0),
+            payload={},
+        )
+
+    with pytest.raises(ValidationError):
+        ProviderLiveEnvelope(
+            external_match_id="1",
+            provider="api_tennis",
+            channel="websocket",
+            kind="snapshot",
+            received_at=NOW,
+            payload={},
+            extra_field="x",
+        )

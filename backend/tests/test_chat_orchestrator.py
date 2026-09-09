@@ -186,6 +186,7 @@ async def test_match_scope_context_appears_in_system_message() -> None:
         text_chunks=["本场比赛数据已就绪。"],
     )
     orchestrator, recording = build_orchestrator(model)
+    await recording.inner.build()
     known_match_id = recording.inner.live_match.id
     request = ChatRequest(
         scope="match",

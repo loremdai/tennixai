@@ -32,14 +32,19 @@ class AcceptanceFakeProvider(FakeTennisProvider):
 
     def __init__(self, now) -> None:
         super().__init__(identities=MemoryIdentityRepository(), now=now)
+
+    async def _post_build(self) -> None:
+        now = self._now
         djokovic = next(player for player in self._players if player.name == "Novak Djokovic")
         ruud = next(player for player in self._players if player.name == "Casper Ruud")
         match = Match(
-            id=self._identities.get_or_create("match", "fake", "fake-djokovic-next"),
+            id=await self._identities.get_or_create("match", "fake", "fake-djokovic-next"),
             status=MatchStatus.SCHEDULED,
             players=(djokovic, ruud),
             tournament=Tournament(
-                id=self._identities.get_or_create("tournament", "fake", "fake-atp-finals"),
+                id=await self._identities.get_or_create(
+                    "tournament", "fake", "fake-atp-finals"
+                ),
                 name="ATP Finals",
                 tour="atp",
             ),
@@ -124,8 +129,9 @@ class AcceptanceHarness:
 
 
 @pytest.fixture()
-def acceptance_harness() -> AcceptanceHarness:
+async def acceptance_harness() -> AcceptanceHarness:
     fake = AcceptanceFakeProvider(now=lambda: NOW)
+    await fake.build()
     counting = CountingProviderWrapper(fake)
     cache: AsyncTTLCache[str, object] = AsyncTTLCache(max_entries=256)
     service = TennisService(counting, cache, now=lambda: NOW, timezone="Asia/Macau")

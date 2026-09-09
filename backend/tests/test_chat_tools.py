@@ -21,8 +21,10 @@ NOW = datetime(2026, 9, 8, 10, 0, tzinfo=timezone.utc)
 
 
 @pytest.fixture()
-def fake_provider() -> FakeTennisProvider:
-    return FakeTennisProvider(identities=MemoryIdentityRepository(), now=lambda: NOW)
+async def fake_provider() -> FakeTennisProvider:
+    return await FakeTennisProvider.create(
+        identities=MemoryIdentityRepository(), now=lambda: NOW
+    )
 
 
 @pytest.fixture()
