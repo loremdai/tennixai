@@ -3,9 +3,9 @@
 > 本文件回答“这个项目是什么、为什么做、哪些原则不能被破坏”。
 > 全局进度见 [ROADMAP.md](./ROADMAP.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-10 00:25 CST
+**最后更新：** 2026-09-10 00:50 CST
 
-**产品阶段：** P1 — 比赛信息查询助手（已完成，2026-09-08）；P2 — Live Match Intelligence（实施中，P2.4 进行中：PBP、22 项统计与近期控制指数已接入，版本化问答待接）
+**产品阶段：** P1 — 比赛信息查询助手（已完成，2026-09-08）；P2 — Live Match Intelligence（实施中，P2.4 已完成：PBP、22 项统计、近期控制指数与版本化 Chat 已接入；P2.5 验收中）
 
 **详细基线：** [产品与架构上下文](./docs/product-context.md) · [产品路线设计](./docs/superpowers/specs/2026-09-08-tennixai-product-roadmap-design.md) · [P1 实施计划](./docs/superpowers/plans/2026-09-08-tennixai-p1-implementation.md) · [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) · [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md)
 
@@ -14,7 +14,7 @@
 - TennixAI 不是通用网球聊天机器人，而是以结构化网球数据为核心、AI 作为交互层的数据与决策产品。
 - Home 负责全局发现、搜索和赛程入口；Match Page 负责单场比赛的事实、上下文问答和后续智能能力。
 - P1 已完成：fake 模式全链路确定性地跑通；真实 LiveTennisAPI provider、真实 Qwen 单项与组合门均通过；真实 live 列表现在只把有限摘要交给 LLM，完整结构化数据仍通过 SSE 交给 UI，LLM 请求有 45 秒可配置总时限，真实 Djokovic 查询的重复实名/组合名也已稳定处理。
-- P1 只处理当前、即将开始和正在进行的比赛；P2 将增加 API-Tennis 按需的昨天/近期结果与 H2H，但不建设完整历史镜像。
+- P1 只处理当前、即将开始和正在进行的比赛；P2.4 已增加 API-Tennis 按需的昨天/近期结果、有限 H2H、compact fact packet 与版本化 Match Chat，但不建设完整历史镜像。
 - P2 设计已冻结：API-Tennis WebSocket 是实时主路径，PostgreSQL 保存长期 canonical 事实，Redis 负责租约、热状态和 pub/sub，FastAPI 通过版本化 SSE 服务浏览器。
 - Home 默认展示 ATP + WTA、全部性别、单打，并允许赛事级别、性别、单双打叠加筛选；赛事按 ATP/WTA → Challenger → ITF → other 排序。
 - Match Page 将提供完整 PBP、尽可能多的可信技术统计、近期控制指数和带 `state_version/as_of` 的上下文问答。

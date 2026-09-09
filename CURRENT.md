@@ -3,9 +3,9 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-10 00:25 CST
+**最后更新：** 2026-09-10 00:50 CST
 
-**当前任务：** T31 — Add P2 Intelligence Tools and Versioned Chat Answers
+**当前任务：** T32 — Add Replay E2E, Fault Recovery, Runbook, and Final P2 Gate
 
 **任务状态：** `in_progress`
 
@@ -13,15 +13,17 @@
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**最近完成任务提交：** `8c9e161`
+**最近完成任务提交：** `128518f`
 
-**最后验证的产品提交：** `8c9e161`
+**最后验证的产品提交：** `128518f`
 
 **T30 完成提交：** `8c9e161`
 
-**T31 起始提交：** `8c9e161`
+**T31 完成提交：** `128518f`
 
-**T31 领取时间：** 2026-09-10 00:25 CST
+**T32 起始提交：** `128518f`
+
+**T32 领取时间：** 2026-09-10 00:50 CST
 
 **远程：** `origin` → `https://github.com/loremdai/tennixai.git`
 
@@ -60,22 +62,37 @@
 - T28 已确认的事实：SSE 每版本仅一帧且 id=state_version；gap 只转发不造事件；隐藏 60s abort 释放 lease；httpx ASGITransport 缓冲响应，SSE 测试须用进程内 uvicorn；全套确定性 286 passed/8 deselected、infrastructure 12、frontend 106、e2e 40/4 skipped 且视觉零变化。
 - T29 已于 2026-09-09 完成并推送：生产 Match 页渲染 canonical snapshot 的 22 项技术统计（分组/单位/partial/缺失不猜测）与 Set→Game→Point 时间线（关键分徽章、纠错提示、近底自动跟随）；实现提交为 `ecd916b`。
 - T29 已确认的事实：preview 原型与卡片顺序零变化；fake 模式统计/逐分为空时显示诚实缺失文案；`p1-match-live` 生产视觉基线经审阅有意重生成（desktop+mobile）；另以 `6c1b448` 修复 T27 提交遗漏的 `api_tennis.py`/`realtime/models.py`（HEAD 曾无法 import live feed）。
-- 当前唯一任务是 T31（版本化 P2 Intelligence tools 与 Chat），必须按启动入口继续；T30 已完成。
+- T31 已于 2026-09-10 完成并推送：compact intelligence packet、三项 P2 Chat 工具、有限历史/H2H 能力路由和不可变 `answer_context`；实现提交为 `128518f`。
+- T31 验证事实：focused backend 56 passed；全确定性 backend 322 passed/11 deselected；frontend 127 passed、typecheck/build；完整 Playwright 40 passed/4 skipped；真实 LLM opt-in 运行结果为 7 failed，根因是 endpoint 对配置模型返回 403 `AccessDenied.Unpurchased`，不能作为通过证据。
+- 当前唯一任务是 T32（Replay E2E、故障恢复、runbook 与 Final P2 Gate），必须按启动入口继续；T31 已完成。
 - 已知非 T17 限制：LiveTennisAPI 的 `/players?search` 当前不能把中文显示名“郑钦文”直接映射到 `Qinwen Zheng`；canonical English name 查询已通过，中文别名/名称归一化需另立任务批准。
 - 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`（任务外）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`（next dev 自动生成）、`frontend/next-env.d.ts`（Next 工具链生成）；保留原样。
 
 ## 当前任务
 
-### T31 — Add P2 Intelligence Tools and Versioned Chat Answers
+### T32 — Add Replay E2E, Fault Recovery, Runbook, and Final P2 Gate
 
 - **状态：** `in_progress`
 - **执行者 / ADE：** Codex / Codex
 - **分支：** `main`
+- **起始提交：** `128518f`
+- **领取时间：** 2026-09-10 00:50 CST
+- **前置完成：** T31 已以 `128518f` 完成并通过确定性验证；本次领取从该产品提交开始，未创建分支。
+- **范围：** 按 [P2 实施计划 T32](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t32-add-replay-e2e-fault-recovery-runbook-and-final-p2-gate)：deterministic replay、重启/纠错/断线恢复、双视口功能/视觉验收、真实 smoke、runbook 与 Final P2 Gate；不引入预测、odds、market 或交易能力。
+- **阻塞：** 无。
+
+### T31 — Add P2 Intelligence Tools and Versioned Chat Answers
+
+- **状态：** `done`
+- **执行者 / ADE：** Codex / Codex
+- **分支：** `main`
 - **起始提交：** `8c9e161`
 - **领取时间：** 2026-09-10 00:25 CST
-- **前置完成：** T30 已以 `8c9e161` 完成并通过验证；本次领取从该产品提交开始，未创建分支。
+- **完成提交：** `128518f`
 - **范围：** 按 [P2 实施计划 T31](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t31-add-p2-intelligence-tools-and-versioned-chat-answers)：compact fact packet、history/H2H/tools、版本化上下文 Chat；不引入预测、odds、market 或交易能力。
-- **阻塞：** 无。
+- **完成事实：** Match Chat 按 topic 返回 compact canonical packet，最多 20 条近期 determinate points、20 条 momentum、20 条 key points，并保留 statistics/quality 的 partial/unavailable；LLM 不接收 vendor provider/raw/fingerprint 字段。新增有限昨天/近期赛果、H2H 和 broad-history typed unsupported 路由；Match scope 使用页面 context，首个结构化数据事件写入 `answer_context`，前端在 live 版本更新时只显示“比赛已更新”而不改写旧 prose 或自动重问。
+- **验证门：** TDD focused backend 56 passed；全确定性 backend 322 passed/11 deselected；frontend 127 passed、typecheck/build；完整 Playwright 40 passed/4 skipped；`git diff --check` 通过。真实 opt-in `TENNIX_RUN_LLM_LIVE=1 env -u NO_PROXY -u no_proxy uv run pytest -m llm_live tests/live/test_llm_live.py -q` 实际为 7 failed，endpoint 明确返回 403 `AccessDenied.Unpurchased`，因此未写成通过；需具备模型 entitlement 后重跑。
+- **阻塞：** 产品代码与确定性门无阻塞；真实 LLM entitlement 是外部验证缺口。
 
 ### T30 — Calibrate and Implement Recent Control Index v1
 
@@ -188,6 +205,7 @@
 
 | 日期 | 提交 | 验证 | 结果 |
 |---|---|---|---|
+| 2026-09-10 | `128518f` | T31 focused backend 56 passed；全确定性 backend 322 passed/11 deselected；frontend 127 passed + typecheck + build；完整 Playwright 40 passed/4 skipped；`git diff --check` 通过；真实 LLM opt-in 7 failed（endpoint 403 `AccessDenied.Unpurchased`） | T31 产品完成并推送；T32 已领取，真实 LLM 门待 entitlement 后重跑 |
 | 2026-09-10 | `8c9e161` | T30 focused backend 33 passed；infrastructure 6 passed；全确定性 backend 309 passed/8 deselected；frontend 124 passed + typecheck + build；完整 Playwright 40 passed/4 skipped，prototype 10/10、P1 visual 12/12；CLI `--help` 无 import warning，`git diff --check` 通过 | T30 完成；Recent Control v1、聚合校准、reducer/persistence 与控制图就绪，T31 进行中 |
 | 2026-09-09 | `ecd916b` | TDD：统计 5 + 逐分 6 + 映射测试先失败后通过；frontend 121 passed + typecheck + build；prototype e2e 20 passed；完整 e2e 40 passed/4 skipped，p1-match-live 基线审阅后重生成；backend 286 passed/8 deselected（含 `6c1b448` HEAD 修复） | T29 完成；PBP 与统计 UI 就绪，T30 ready |
 | 2026-09-09 | `f03985b` | TDD：stream 9 + hook 8 先失败后通过；backend 286 passed/8 deselected、infrastructure 12；frontend 106 + typecheck + build；完整 e2e 40 passed/4 skipped 视觉零变化 | T28 完成；snapshot + 版本化 SSE 就绪，T29 ready |
