@@ -150,9 +150,11 @@ async def test_match_detail_round_trip(client: AsyncClient) -> None:
     body = response.json()
 
     assert response.status_code == 200
-    assert body["data"]["id"] == match_id
-    assert body["data"]["round"] == "Semifinal"
-    assert body["data"]["surface"] == "hard"
+    assert body["data"]["match"]["id"] == match_id
+    assert body["data"]["match"]["round"] == "Semifinal"
+    assert body["data"]["match"]["surface"] == "hard"
+    assert body["data"]["state_version"] >= 0
+    assert body["data"]["as_of"]
 
 
 @pytest.mark.asyncio

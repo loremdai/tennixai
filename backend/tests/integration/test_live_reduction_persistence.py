@@ -129,6 +129,24 @@ async def candidate(database: Database, *, points: int = 3, aces: float = 2) -> 
     )
 
 
+async def test_load_snapshot_rebuilds_the_canonical_view(database: Database) -> None:
+    repository = MatchSnapshotRepository(database)
+    reduction = reduce_live_snapshot(None, await candidate(database, points=2, aces=4))
+    await repository.save_reduction(reduction)
+
+    loaded = await repository.load_snapshot(reduction.match_id)
+
+    assert loaded is not None
+    assert loaded.state_version == reduction.snapshot.state_version
+    assert [point.sequence for point in loaded.points] == [1, 2]
+    assert loaded.points[0].winner_player_id == "ply_a"
+    aces = next(stat for stat in loaded.statistics if stat.name is StatisticName.ACES)
+    assert aces.player1_value == 4
+    assert loaded.match.players[0].id == "ply_a"
+    assert loaded.match.live_state is not None
+    assert loaded.match.live_state.state_version == loaded.state_version
+
+
 async def test_save_reduction_writes_snapshot_points_and_statistics(database: Database) -> None:
     repository = MatchSnapshotRepository(database)
     reduction = reduce_live_snapshot(None, await candidate(database))
@@ -257,17 +275,26 @@ async def test_failed_reduction_save_leaves_previous_version_readable(
     first = reduce_live_snapshot(None, await candidate(database))
     await repository.save_reduction(first)
 
-    foreign = first.snapshot.model_copy(
-        update={
-            "match": first.snapshot.match.model_copy(update={"id": "mat_missing_fk"}),
-        }
-    )
-    broken = first.model_copy(
-        update={"match_id": "mat_missing_fk", "snapshot": foreign}
-    )
+    async def violate_foreign_key(session) -> None:
+        session.add(
+            PointEventRow(
+                id="pe_boom",
+                match_id="mat_no_such_match",
+                sequence=99,
+                set_number=1,
+                game_number=1,
+                point_number=1,
+                score_after={"sets_won": [0, 0], "sets": [], "points": ["15", "0"], "is_tiebreak": False},
+                observed_at=NOW,
+                provider="itest",
+                source_fingerprint="boom",
+                revision=1,
+            )
+        )
+        await session.flush()
 
     with pytest.raises(IntegrityError):
-        await repository.save_reduction(broken)
+        await repository.save_reduction(first, before_commit=violate_foreign_key)
 
     current = await repository.get_current_state(first.match_id)
     assert current is not None
@@ -280,4 +307,10 @@ async def test_failed_reduction_save_leaves_previous_version_readable(
                 select(PointEventRow).where(PointEventRow.match_id == first.match_id)
             )
         ).scalars().all()
+        boom = (
+            await session.execute(
+                select(PointEventRow).where(PointEventRow.id == "pe_boom")
+            )
+        ).scalar_one_or_none()
     assert len(points) == 3
+    assert boom is None

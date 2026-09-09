@@ -2,7 +2,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from app.domain import Match, Player
+from app.domain import Match, MatchSnapshot, Player
 from app.service import HeadToHeadResult, MatchCatalog, PlayerResults
 
 
@@ -16,6 +16,10 @@ class MatchListResponse(BaseModel):
 
 class MatchResponse(BaseModel):
     data: Match
+
+
+class MatchSnapshotResponse(BaseModel):
+    data: MatchSnapshot
 
 
 class MatchCatalogResponse(BaseModel):

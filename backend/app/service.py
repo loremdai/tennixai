@@ -22,11 +22,13 @@ from app.domain import (
     Gender,
     HeadToHead,
     Match,
+    MatchSnapshot,
     MatchStatus,
     Player,
 )
 from app.errors import AppError
 from app.providers.base import TennisDataProvider
+from app.realtime.reducer import reduce_live_snapshot
 
 
 class MatchTimeScope(StrEnum):
@@ -144,11 +146,16 @@ class TennisService:
         cache: AsyncTTLCache[str, object],
         now: Callable[[], datetime],
         timezone: str,
+        *,
+        snapshots=None,
+        publisher=None,
     ) -> None:
         self._provider = provider
         self._cache = cache
         self._now = now
         self._timezone = ZoneInfo(timezone)
+        self._snapshots = snapshots
+        self._publisher = publisher
 
     async def search_players(self, query: str) -> list[Player]:
         normalized = query.strip()
@@ -491,6 +498,28 @@ class TennisService:
             f"h2h:{first_player_id}:{second_player_id}", load, ttl=ttl, stale_ttl=0
         )
         return outcome.value
+
+    # ------------------------------------------------------- P2 snapshot read
+
+    async def resolve_match_snapshot(self, match_id: str) -> MatchSnapshot:
+        """Redis hot snapshot first, PostgreSQL second, provider REST last.
+
+        A provider-resolved snapshot is persisted so later reads are PG-first.
+        """
+        if self._publisher is not None:
+            hot = await self._publisher.get_hot_snapshot(match_id)
+            if hot is not None:
+                return hot
+        if self._snapshots is not None:
+            stored = await self._snapshots.load_snapshot(match_id)
+            if stored is not None:
+                return stored
+        candidate = await self._provider.get_match_snapshot(match_id)
+        if self._snapshots is not None:
+            reduction = reduce_live_snapshot(None, candidate)
+            await self._snapshots.save_reduction(reduction)
+            return reduction.snapshot
+        return candidate
 
     async def get_head_to_head(
         self, first_player_id: str, second_player_id: str, limit: int

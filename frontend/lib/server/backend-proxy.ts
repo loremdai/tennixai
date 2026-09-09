@@ -19,6 +19,10 @@ export async function proxyBackend(request: Request, path: string): Promise<Resp
   })
   const requestId = request.headers.get('x-request-id')
   if (requestId) headers.set('X-Request-ID', requestId)
+  const accept = request.headers.get('accept')
+  if (accept) headers.set('Accept', accept)
+  const lastEventId = request.headers.get('last-event-id')
+  if (lastEventId) headers.set('Last-Event-ID', lastEventId)
 
   let upstream: Response
   try {

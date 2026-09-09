@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     max_live_subscriptions: int = Field(default=8, ge=1, le=100)
     viewer_lease_seconds: int = Field(default=45, ge=30, le=120)
     subscription_grace_seconds: int = Field(default=60, ge=0, le=300)
+    sse_heartbeat_seconds: int = Field(default=15, ge=1, le=60)
 
     @model_validator(mode="after")
     def validate_required_credentials(self) -> "Settings":

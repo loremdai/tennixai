@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ApiError, getMatch, getMatchCatalog, getMatches, getPlayers, parseSse, streamChat } from './client'
+import { ApiError, getMatchCatalog, getMatches, getMatchSnapshot, getPlayers, parseSse, streamChat } from './client'
 import type { ChatEvent } from './types'
 
 afterEach(() => {
@@ -108,7 +108,7 @@ describe('REST helpers', () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: { id: 'mat_1' } }))
     vi.stubGlobal('fetch', fetchMock)
 
-    await getMatch('mat_1/2')
+    await getMatchSnapshot('mat_1/2')
 
     expect(fetchMock.mock.calls[0][0]).toBe('/api/matches/mat_1%2F2')
   })
@@ -174,7 +174,7 @@ describe('REST helpers', () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response('boom', { status: 503 }))
     vi.stubGlobal('fetch', fetchMock)
 
-    const error = await getMatch('mat_1').catch((caught: unknown) => caught)
+    const error = await getMatchSnapshot('mat_1').catch((caught: unknown) => caught)
 
     expect(error).toBeInstanceOf(ApiError)
     expect((error as ApiError).status).toBe(503)

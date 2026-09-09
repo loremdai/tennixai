@@ -4,15 +4,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { MatchPage } from './match-page'
 import { buildPreviewMatch } from './match/match-preview-data'
-import type { ChatEvent, MatchDto, StructuredData } from '@/lib/api/types'
+import type { ChatEvent, MatchDto, MatchSnapshotDto, StructuredData } from '@/lib/api/types'
 
-const { getMatchMock, streamChatMock } = vi.hoisted(() => ({
-  getMatchMock: vi.fn(),
+const { getMatchSnapshotMock, openMatchStreamMock, streamChatMock } = vi.hoisted(() => ({
+  getMatchSnapshotMock: vi.fn(),
+  openMatchStreamMock: vi.fn(),
   streamChatMock: vi.fn(),
 }))
 
 vi.mock('@/lib/api/client', () => ({
-  getMatch: getMatchMock,
+  getMatchSnapshot: getMatchSnapshotMock,
+  openMatchStream: openMatchStreamMock,
+  parseMatchStream: async function* parseMatchStreamMock() {
+    await new Promise(() => {})
+  },
   getMatches: vi.fn(),
   getPlayers: vi.fn(),
   streamChat: streamChatMock,
@@ -30,6 +35,20 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/matches/mat_1',
   useSearchParams: () => new URLSearchParams(),
 }))
+
+let nextMatch: MatchDto | null = null
+
+function wrapSnapshot(match: MatchDto): MatchSnapshotDto {
+  return {
+    match,
+    points: [],
+    statistics: [],
+    momentum: [],
+    quality: [],
+    state_version: 1,
+    as_of: match.freshness.observed_at,
+  }
+}
 
 function makeMatch(overrides: Partial<MatchDto> = {}): MatchDto {
   return {
@@ -89,7 +108,9 @@ function mockStream(options: { data?: StructuredData; text?: string; errorCode?:
 beforeEach(() => {
   vi.clearAllMocks()
   Element.prototype.scrollIntoView = vi.fn()
-  getMatchMock.mockResolvedValue(makeMatch())
+  nextMatch = makeMatch()
+  getMatchSnapshotMock.mockImplementation(async () => wrapSnapshot(nextMatch as MatchDto))
+  openMatchStreamMock.mockResolvedValue(new Response(null, { status: 200 }))
   mockStream({ data: { kind: 'match', matches: [makeMatch()] }, text: 'Sinner 正在发球。' })
 })
 
@@ -127,7 +148,7 @@ describe('production match page', () => {
       scheduled_at: '2026-09-08T12:30:00Z',
       live_state: null,
     })
-    getMatchMock.mockResolvedValue(scheduled)
+    nextMatch = scheduled
     mockStream({ data: { kind: 'match', matches: [scheduled] }, text: '比赛今晚开始。' })
 
     render(<MatchPage matchId="mat_1" />)
@@ -151,7 +172,7 @@ describe('production match page', () => {
   })
 
   it('maps finished hero state with winner', async () => {
-    getMatchMock.mockResolvedValue(
+    nextMatch =
       makeMatch({
         status: 'finished',
         winner_player_id: 'ply_1',
@@ -168,8 +189,7 @@ describe('production match page', () => {
           },
           server_player_id: null,
         },
-      }),
-    )
+      })
 
     render(<MatchPage matchId="mat_1" />)
 
@@ -178,9 +198,8 @@ describe('production match page', () => {
   })
 
   it('shows unavailable copy for missing round, surface, and server', async () => {
-    getMatchMock.mockResolvedValue(
-      makeMatch({ round: null, surface: null, indoor: null, live_state: { score: null, server_player_id: null } }),
-    )
+    nextMatch =
+      makeMatch({ round: null, surface: null, indoor: null, live_state: { score: null, server_player_id: null } })
 
     render(<MatchPage matchId="mat_1" />)
 
@@ -189,9 +208,8 @@ describe('production match page', () => {
   })
 
   it('shows the stale indicator', async () => {
-    getMatchMock.mockResolvedValue(
-      makeMatch({ freshness: { provider: 'fake', source_updated_at: null, observed_at: '2026-09-08T10:00:00Z', is_stale: true, age_seconds: 180 } }),
-    )
+    nextMatch =
+      makeMatch({ freshness: { provider: 'fake', source_updated_at: null, observed_at: '2026-09-08T10:00:00Z', is_stale: true, age_seconds: 180 } })
 
     render(<MatchPage matchId="mat_1" />)
 
@@ -201,17 +219,17 @@ describe('production match page', () => {
   it('refresh reloads the match exactly once more', async () => {
     render(<MatchPage matchId="mat_1" />)
     await screen.findByText('Jannik Sinner')
-    expect(getMatchMock).toHaveBeenCalledTimes(1)
+    expect(getMatchSnapshotMock).toHaveBeenCalledTimes(1)
 
     await userEvent.click(screen.getByRole('button', { name: '刷新比赛数据' }))
 
     await waitFor(() => {
-      expect(getMatchMock).toHaveBeenCalledTimes(2)
+      expect(getMatchSnapshotMock).toHaveBeenCalledTimes(2)
     })
   })
 
   it('renders a not-found state for unknown matches', async () => {
-    getMatchMock.mockRejectedValue(
+    getMatchSnapshotMock.mockRejectedValue(
       Object.assign(new Error('Match not found'), { code: 'not_found', status: 404 }),
     )
 
@@ -221,7 +239,7 @@ describe('production match page', () => {
   })
 
   it('renders provider errors with retry', async () => {
-    getMatchMock.mockRejectedValue(
+    getMatchSnapshotMock.mockRejectedValue(
       Object.assign(new Error('down'), { code: 'provider_unavailable', status: 503 }),
     )
 
@@ -231,7 +249,7 @@ describe('production match page', () => {
     await userEvent.click(screen.getByRole('button', { name: '重试加载比赛' }))
 
     await waitFor(() => {
-      expect(getMatchMock).toHaveBeenCalledTimes(2)
+      expect(getMatchSnapshotMock).toHaveBeenCalledTimes(2)
     })
   })
 
@@ -293,6 +311,6 @@ describe('prototype preview route', () => {
     await waitFor(() => {
       expect(screen.getByText('比赛状态预览')).toBeVisible()
     })
-    expect(getMatchMock).not.toHaveBeenCalled()
+    expect(getMatchSnapshotMock).not.toHaveBeenCalled()
   })
 })

@@ -74,6 +74,93 @@ export type MatchCatalogDto = {
   facet_counts: FacetCountsDto
   featured_match_id: string | null
 }
+
+export type DataQualityDto = {
+  capability: string
+  status: CapabilityStatus
+  provider: string
+  reason: string | null
+  observed_at: string
+}
+export type PointEventDto = {
+  id: string
+  match_id: string
+  sequence: number
+  set_number: number
+  game_number: number
+  point_number: number
+  server_player_id: string | null
+  winner_player_id: string | null
+  score_before: MatchScoreDto | null
+  score_after: MatchScoreDto
+  is_break_point: boolean
+  is_set_point: boolean
+  is_match_point: boolean
+  observed_at: string
+  provider: string
+  source_fingerprint: string
+  revision: number
+  quality: DataQualityDto | null
+}
+export type MatchStatisticDto = {
+  match_id: string
+  name: string
+  period: string
+  player1_value: number | null
+  player2_value: number | null
+  unit: string | null
+  provenance: string
+  availability: CapabilityStatus
+  as_of: string
+}
+export type MomentumObservationDto = {
+  match_id: string
+  point_sequence: number
+  state_version: number
+  algorithm_version: string
+  value: number
+  leader_player_id: string | null
+  is_provisional: boolean
+  as_of: string
+  input_summary: string
+}
+export type MatchSnapshotDto = {
+  match: MatchDto
+  points: PointEventDto[]
+  statistics: MatchStatisticDto[]
+  momentum: MomentumObservationDto[]
+  quality: DataQualityDto[]
+  state_version: number
+  as_of: string
+}
+export type MatchStreamFrame =
+  | {
+      type: 'ready'
+      id: string | null
+      payload: { snapshot: MatchSnapshotDto; state_version: number; as_of: string }
+    }
+  | {
+      type: 'match_delta'
+      id: string | null
+      payload: {
+        match_id: string
+        state_version: number
+        as_of: string
+        changes: string[]
+        snapshot: MatchSnapshotDto
+      }
+    }
+  | {
+      type: 'match_ended'
+      id: string | null
+      payload: { match_id: string; state_version: number | null; as_of: string }
+    }
+  | { type: 'heartbeat'; id: string | null; payload: Record<string, never> }
+  | {
+      type: 'error'
+      id: string | null
+      payload: { code: string; message: string; details: Record<string, unknown> }
+    }
 export type StructuredData = { kind: 'matches' | 'match' | 'unsupported'; matches: MatchDto[] }
 export type ChatRequest = {
   scope: 'global' | 'match'

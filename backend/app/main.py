@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from typing import Any
 from uuid import uuid4
 
@@ -42,6 +43,7 @@ def create_app(
     *,
     provider: TennisDataProvider | None = None,
     chat_orchestrator: Any = None,
+    realtime: Any = None,
 ) -> FastAPI:
     settings = settings or Settings()
     clock = _build_clock(settings)
@@ -50,6 +52,8 @@ def create_app(
     live_client: httpx.AsyncClient | None = None
     api_tennis_client: httpx.AsyncClient | None = None
     database: Database | None = None
+    redis_client = None
+    owns_realtime = realtime is None
     if provider is None:
         if settings.provider_mode == "api_tennis":
             api_key = settings.api_tennis_api_key
@@ -84,7 +88,38 @@ def create_app(
             provider = FakeTennisProvider(identities=identities, now=clock)
 
     cache: AsyncTTLCache[str, object] = AsyncTTLCache(max_entries=settings.cache_max_entries)
-    service = TennisService(provider, cache, now=clock, timezone=settings.product_timezone)
+
+    if realtime is None:
+        import time as _time
+
+        import redis.asyncio as aioredis
+
+        from app.persistence.repositories import MatchSnapshotRepository
+        from app.realtime.leases import ViewerLeaseStore
+        from app.realtime.publisher import RealtimePublisher
+
+        database = database or Database(settings.database_url)
+        redis_client = aioredis.from_url(settings.redis_url)
+        realtime = SimpleNamespace(
+            redis=redis_client,
+            leases=ViewerLeaseStore(
+                redis_client,
+                lease_seconds=settings.viewer_lease_seconds,
+                grace_seconds=settings.subscription_grace_seconds,
+                now=_time.time,
+            ),
+            publisher=RealtimePublisher(redis_client, now=clock),
+            store=MatchSnapshotRepository(database),
+        )
+
+    service = TennisService(
+        provider,
+        cache,
+        now=clock,
+        timezone=settings.product_timezone,
+        snapshots=realtime.store,
+        publisher=realtime.publisher,
+    )
 
     if chat_orchestrator is None:
         if settings.llm_mode == "openai_compatible":
@@ -108,13 +143,16 @@ def create_app(
             await live_client.aclose()
         if api_tennis_client is not None:
             await api_tennis_client.aclose()
-        if database is not None:
+        if owns_realtime and redis_client is not None:
+            await redis_client.aclose()
+        if owns_realtime and database is not None:
             await database.dispose()
 
     app = FastAPI(title="Tennix API", lifespan=lifespan)
     app.state.settings = settings
     app.state.tennis_service = service
     app.state.chat_orchestrator = chat_orchestrator
+    app.state.realtime = realtime
 
     @app.middleware("http")
     async def request_id(request: Request, call_next):

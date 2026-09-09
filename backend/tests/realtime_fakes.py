@@ -8,7 +8,9 @@ from datetime import datetime, timezone
 
 from app.domain import MatchSnapshot
 from app.providers.base import ProviderLiveEnvelope
+from app.realtime.leases import ViewerLeaseStore
 from app.realtime.models import LiveReduction
+from app.realtime.publisher import RealtimePublisher
 
 
 class FakeClock:
@@ -194,6 +196,19 @@ def snapshot_envelope(snapshot: MatchSnapshot, received_at: datetime) -> Provide
     )
 
 
+class RealtimeBundle:
+    """In-memory stand-in for the app's realtime dependencies."""
+
+    def __init__(self, clock: FakeClock) -> None:
+        self.clock = clock
+        self.redis = InMemoryRedis(clock)
+        self.store = InMemorySnapshotStore()
+        self.leases = ViewerLeaseStore(
+            self.redis, lease_seconds=45, grace_seconds=60, now=clock.now
+        )
+        self.publisher = RealtimePublisher(self.redis, now=clock.utcnow)
+
+
 class InMemorySnapshotStore:
     def __init__(self) -> None:
         self.saved: list[LiveReduction] = []
@@ -210,6 +225,9 @@ class InMemorySnapshotStore:
         return snapshot.match.live_state, snapshot.as_of
 
     async def get_snapshot(self, match_id: str) -> MatchSnapshot | None:
+        return self.current.get(match_id)
+
+    async def load_snapshot(self, match_id: str) -> MatchSnapshot | None:
         return self.current.get(match_id)
 
 

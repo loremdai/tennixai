@@ -5,15 +5,34 @@ Every method here is explicit about the rows it touches; retention deletion
 targets only `raw_provider_events.observed_at < before`.
 """
 
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 
-from app.domain import LiveMatchState
+from app.domain import (
+    CapabilityStatus,
+    CircuitTier,
+    DataFreshness,
+    DataQuality,
+    Discipline,
+    Gender,
+    LiveMatchState,
+    Match,
+    MatchScore,
+    MatchSnapshot,
+    MatchStatistic,
+    MatchStatus,
+    Player,
+    PointEvent,
+    StatisticName,
+    StatisticProvenance,
+    Tournament,
+)
 from app.persistence.database import Database
 from app.persistence.models import (
     MatchExternalIdRow,
@@ -147,7 +166,142 @@ class MatchSnapshotRepository:
             return None
         return LiveMatchState.model_validate(row.state), row.as_of
 
-    async def save_reduction(self, reduction: LiveReduction) -> None:
+    async def load_snapshot(self, match_id: str) -> MatchSnapshot | None:
+        """Rebuild the canonical snapshot from PostgreSQL rows."""
+        async with self._database.session() as session:
+            row = await session.get(MatchStateSnapshotRow, match_id)
+            if row is None:
+                return None
+            match_row = await session.get(MatchRow, match_id)
+            if match_row is None:
+                return None
+            player_rows = {}
+            for player_id in (match_row.player1_id, match_row.player2_id):
+                if player_id is not None:
+                    player_rows[player_id] = await session.get(PlayerRow, player_id)
+            tournament_row = (
+                await session.get(TournamentRow, match_row.tournament_id)
+                if match_row.tournament_id is not None
+                else None
+            )
+            point_rows = (
+                (
+                    await session.execute(
+                        select(PointEventRow)
+                        .where(PointEventRow.match_id == match_id)
+                        .order_by(PointEventRow.sequence)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            stat_rows = (
+                (
+                    await session.execute(
+                        select(MatchStatisticRow).where(
+                            MatchStatisticRow.match_id == match_id
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+
+        def player_or_placeholder(player_id: str | None) -> Player:
+            row = player_rows.get(player_id) if player_id else None
+            return Player(
+                id=player_id or "ply_unknown",
+                name=(row.name if row and row.name else "Unknown player"),
+                country_code=row.country_code if row else None,
+                ranking=row.ranking if row else None,
+            )
+
+        match = Match(
+            id=match_row.id,
+            status=MatchStatus(match_row.status) if match_row.status else MatchStatus.UNKNOWN,
+            players=(
+                player_or_placeholder(match_row.player1_id),
+                player_or_placeholder(match_row.player2_id),
+            ),
+            tournament=Tournament(
+                id=tournament_row.id if tournament_row else "trn_unknown",
+                name=(tournament_row.name if tournament_row and tournament_row.name else "Unknown tournament"),
+                tour=tournament_row.tour if tournament_row else None,
+                circuit=CircuitTier(tournament_row.circuit) if tournament_row else CircuitTier.OTHER,
+                gender=Gender(tournament_row.gender) if tournament_row else Gender.UNKNOWN,
+                discipline=Discipline(tournament_row.discipline) if tournament_row else Discipline.UNKNOWN,
+            ),
+            scheduled_at=match_row.scheduled_at,
+            round=match_row.round,
+            surface=match_row.surface,
+            indoor=match_row.indoor,
+            format=match_row.format,
+            live_state=LiveMatchState.model_validate(row.state),
+            winner_player_id=match_row.winner_player_id,
+            freshness=DataFreshness(provider="postgres", observed_at=row.as_of),
+        )
+        points = tuple(
+            PointEvent(
+                id=point.id,
+                match_id=point.match_id,
+                sequence=point.sequence,
+                set_number=point.set_number,
+                game_number=point.game_number,
+                point_number=point.point_number,
+                server_player_id=point.server_player_id,
+                winner_player_id=point.winner_player_id,
+                score_before=(
+                    MatchScore.model_validate(point.score_before)
+                    if point.score_before is not None
+                    else None
+                ),
+                score_after=MatchScore.model_validate(point.score_after),
+                is_break_point=point.is_break_point,
+                is_set_point=point.is_set_point,
+                is_match_point=point.is_match_point,
+                observed_at=point.observed_at,
+                provider=point.provider,
+                source_fingerprint=point.source_fingerprint,
+                revision=point.revision,
+                quality=(
+                    DataQuality.model_validate(point.quality)
+                    if point.quality is not None
+                    else None
+                ),
+            )
+            for point in point_rows
+        )
+        statistics = tuple(
+            MatchStatistic(
+                match_id=stat.match_id,
+                name=StatisticName(stat.name),
+                period=stat.period,
+                player1_value=stat.player1_value,
+                player2_value=stat.player2_value,
+                unit=stat.unit,
+                provenance=StatisticProvenance(stat.provenance),
+                availability=CapabilityStatus(stat.availability),
+                as_of=stat.as_of,
+            )
+            for stat in stat_rows
+        )
+        quality = tuple(DataQuality.model_validate(item) for item in (row.quality or []))
+        return MatchSnapshot(
+            match=match,
+            points=points,
+            statistics=statistics,
+            momentum=(),
+            quality=quality,
+            state_version=row.state_version,
+            as_of=row.as_of,
+        )
+
+    async def save_reduction(
+        self,
+        reduction: LiveReduction,
+        *,
+        before_commit: Callable[[Any], Awaitable[None]] | None = None,
+    ) -> None:
         """Persist snapshot, points, revisions, statistics and quality in one
         transaction. Returns only after commit; a failed transaction leaves
         the previous version fully readable."""
@@ -157,6 +311,79 @@ class MatchSnapshotRepository:
 
         async with self._database.session() as session:
             async with session.begin():
+                match = snapshot.match
+                for player in match.players:
+                    player_statement = pg_insert(PlayerRow).values(
+                        id=player.id,
+                        name=player.name,
+                        country_code=player.country_code,
+                        ranking=player.ranking,
+                    )
+                    await session.execute(
+                        player_statement.on_conflict_do_update(
+                            index_elements=["id"],
+                            set_={
+                                "name": player_statement.excluded.name,
+                                "country_code": player_statement.excluded.country_code,
+                                "ranking": player_statement.excluded.ranking,
+                                "updated_at": func.now(),
+                            },
+                        )
+                    )
+                tournament = match.tournament
+                tournament_statement = pg_insert(TournamentRow).values(
+                    id=tournament.id,
+                    name=tournament.name,
+                    tour=tournament.tour,
+                    circuit=tournament.circuit.value,
+                    gender=tournament.gender.value,
+                    discipline=tournament.discipline.value,
+                )
+                await session.execute(
+                    tournament_statement.on_conflict_do_update(
+                        index_elements=["id"],
+                        set_={
+                            "name": tournament_statement.excluded.name,
+                            "tour": tournament_statement.excluded.tour,
+                            "circuit": tournament_statement.excluded.circuit,
+                            "gender": tournament_statement.excluded.gender,
+                            "discipline": tournament_statement.excluded.discipline,
+                            "updated_at": func.now(),
+                        },
+                    )
+                )
+                match_statement = pg_insert(MatchRow).values(
+                    id=match.id,
+                    status=match.status.value,
+                    player1_id=match.players[0].id,
+                    player2_id=match.players[1].id,
+                    tournament_id=match.tournament.id,
+                    scheduled_at=match.scheduled_at,
+                    round=match.round,
+                    surface=match.surface,
+                    indoor=match.indoor,
+                    format=match.format,
+                    winner_player_id=match.winner_player_id,
+                )
+                await session.execute(
+                    match_statement.on_conflict_do_update(
+                        index_elements=["id"],
+                        set_={
+                            "status": match_statement.excluded.status,
+                            "player1_id": match_statement.excluded.player1_id,
+                            "player2_id": match_statement.excluded.player2_id,
+                            "tournament_id": match_statement.excluded.tournament_id,
+                            "scheduled_at": match_statement.excluded.scheduled_at,
+                            "round": match_statement.excluded.round,
+                            "surface": match_statement.excluded.surface,
+                            "indoor": match_statement.excluded.indoor,
+                            "format": match_statement.excluded.format,
+                            "winner_player_id": match_statement.excluded.winner_player_id,
+                            "updated_at": func.now(),
+                        },
+                    )
+                )
+
                 statement = pg_insert(MatchStateSnapshotRow).values(
                     match_id=reduction.match_id,
                     state=live_state.model_dump(mode="json"),
@@ -273,6 +500,8 @@ class MatchSnapshotRepository:
                             },
                         )
                     )
+                if before_commit is not None:
+                    await before_commit(session)
 
 
 class RawProviderEventRepository:

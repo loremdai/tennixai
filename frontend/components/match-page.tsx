@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useChatStream } from '@/hooks/use-chat-stream'
-import { getMatch } from '@/lib/api/client'
+import { useMatchStream } from '@/hooks/use-match-stream'
 import type { MatchViewModel } from '@/lib/view-models'
 import { toMatchViewModel } from '@/lib/view-models'
 
@@ -46,27 +46,28 @@ export function MatchPage({ matchId, previewMatch, preview = false }: MatchPageP
 
   const chat = useChatStream('match', isPreview ? undefined : matchId)
 
+  const stream = useMatchStream(isPreview ? undefined : matchId)
+
   const load = useCallback(async () => {
-    if (isPreview || !matchId) return
-    setLoadState('loading')
-    try {
-      const dto = await getMatch(matchId)
-      setMatch(toMatchViewModel(dto))
-      setLoadErrorCode(null)
-      setLoadState('success')
-    } catch (error) {
-      const code =
-        typeof error === 'object' && error !== null && 'code' in error
-          ? String((error as { code: unknown }).code)
-          : 'internal_error'
-      setLoadErrorCode(code)
-      setLoadState(code === 'not_found' ? 'notfound' : 'error')
-    }
-  }, [isPreview, matchId])
+    await stream.refresh()
+  }, [stream.refresh])
 
   useEffect(() => {
-    void load()
-  }, [load])
+    if (isPreview || !stream.snapshot) return
+    setMatch(toMatchViewModel(stream.snapshot.match))
+    setLoadErrorCode(null)
+    setLoadState('success')
+  }, [isPreview, stream.snapshot])
+
+  useEffect(() => {
+    if (isPreview) return
+    if (stream.phase === 'loading') {
+      setLoadState('loading')
+    } else if (stream.phase === 'error') {
+      setLoadErrorCode(stream.errorCode)
+      setLoadState(stream.errorCode === 'not_found' ? 'notfound' : 'error')
+    }
+  }, [isPreview, stream.phase, stream.errorCode])
 
   useEffect(() => {
     if (isPreview || !chat.state.data) return

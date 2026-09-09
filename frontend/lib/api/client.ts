@@ -4,6 +4,8 @@ import type {
   MatchCatalogDto,
   MatchDto,
   MatchFiltersDto,
+  MatchSnapshotDto,
+  MatchStreamFrame,
   PlayerDto,
 } from './types'
 
@@ -64,8 +66,79 @@ export function getMatches(
   return requestJson<MatchDto[]>(`/api/matches?${params.toString()}`, signal)
 }
 
-export function getMatch(matchId: string, signal?: AbortSignal): Promise<MatchDto> {
-  return requestJson<MatchDto>(`/api/matches/${encodeURIComponent(matchId)}`, signal)
+export function getMatchSnapshot(
+  matchId: string,
+  signal?: AbortSignal,
+): Promise<MatchSnapshotDto> {
+  return requestJson<MatchSnapshotDto>(`/api/matches/${encodeURIComponent(matchId)}`, signal)
+}
+
+export async function openMatchStream(
+  matchId: string,
+  options: { signal?: AbortSignal; lastEventId?: string | null } = {},
+): Promise<Response> {
+  const headers: Record<string, string> = { Accept: 'text/event-stream' }
+  if (options.lastEventId) headers['Last-Event-ID'] = options.lastEventId
+  let response: Response
+  try {
+    response = await fetch(`/api/matches/${encodeURIComponent(matchId)}/stream`, {
+      cache: 'no-store',
+      headers,
+      signal: options.signal,
+    })
+  } catch (error) {
+    if (isAbortError(error)) throw error
+    throw new ApiError(502, 'internal_error', 'Match stream request failed')
+  }
+  if (!response.ok) throw await toApiError(response)
+  if (!response.body) throw new ApiError(502, 'internal_error', 'Match stream has no body')
+  return response
+}
+
+export async function* parseMatchStream(
+  stream: ReadableStream<Uint8Array>,
+): AsyncGenerator<MatchStreamFrame> {
+  const decoder = new TextDecoder()
+  const reader = stream.getReader()
+  let buffer = ''
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const frames = buffer.split(/\r?\n\r?\n/)
+      buffer = frames.pop() ?? ''
+      for (const frame of frames) {
+        const parsed = parseMatchFrame(frame)
+        if (parsed) yield parsed
+      }
+    }
+    buffer += decoder.decode()
+    if (buffer.trim()) {
+      const parsed = parseMatchFrame(buffer)
+      if (parsed) yield parsed
+    }
+  } finally {
+    reader.releaseLock()
+  }
+}
+
+function parseMatchFrame(frame: string): MatchStreamFrame | null {
+  let type: string | null = null
+  let id: string | null = null
+  const dataLines: string[] = []
+  for (const line of frame.split(/\r?\n/)) {
+    if (!line || line.startsWith(':')) continue
+    if (line.startsWith('event:')) {
+      type = line.slice('event:'.length).trim()
+    } else if (line.startsWith('id:')) {
+      id = line.slice('id:'.length).trim()
+    } else if (line.startsWith('data:')) {
+      dataLines.push(line.slice('data:'.length).trim())
+    }
+  }
+  if (!type || dataLines.length === 0) return null
+  return { type, id, payload: JSON.parse(dataLines.join('\n')) } as MatchStreamFrame
 }
 
 export function getMatchCatalog(

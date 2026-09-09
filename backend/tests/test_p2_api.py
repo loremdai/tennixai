@@ -8,6 +8,7 @@ from httpx import ASGITransport, AsyncClient
 from app.config import Settings
 from app.main import create_app
 from p2_fakes import P2_NOW, CatalogFakeProvider
+from realtime_fakes import FakeClock, RealtimeBundle
 
 FIXED_NOW = "2026-09-09T12:00:00Z"
 
@@ -23,7 +24,11 @@ async def p2_env(catalog_provider: CatalogFakeProvider):
         catalog_provider.finished_match("h1", P2_NOW - timedelta(days=20)),
         catalog_provider.finished_match("h2", P2_NOW - timedelta(days=40)),
     ]
-    app = create_app(Settings(_env_file=None, fixed_now=FIXED_NOW), provider=catalog_provider)
+    app = create_app(
+        Settings(_env_file=None, fixed_now=FIXED_NOW),
+        provider=catalog_provider,
+        realtime=RealtimeBundle(FakeClock()),
+    )
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as http_client:
         yield http_client, catalog_provider
@@ -238,7 +243,7 @@ async def test_catalog_literal_route_takes_precedence_over_match_id(p2_env) -> N
 
     response = await http_client.get(f"/api/v1/matches/{provider.live_match.id}")
     assert response.status_code == 200
-    assert response.json()["data"]["id"] == provider.live_match.id
+    assert response.json()["data"]["match"]["id"] == provider.live_match.id
 
     response = await http_client.get("/api/v1/matches/catalog")
     assert response.status_code == 422  # missing status param, not swallowed by /{match_id}

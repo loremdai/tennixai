@@ -1,4 +1,8 @@
+import asyncio
+import contextlib
+import json
 from typing import Literal
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
@@ -7,7 +11,7 @@ from app.api.schemas import (
     HeadToHeadResultResponse,
     MatchCatalogResponse,
     MatchListResponse,
-    MatchResponse,
+    MatchSnapshotResponse,
     PlayerListResponse,
     PlayerResultsResponse,
 )
@@ -15,9 +19,12 @@ from app.chat.models import ChatEvent, ChatEventType, ChatRequest
 from app.chat.orchestrator import ChatOrchestrator
 from app.domain import CircuitTier, Discipline, Gender
 from app.errors import AppError
+from app.realtime.publisher import match_channel
 from app.service import MatchFilters, TennisService
 
 router = APIRouter(prefix="/api/v1")
+
+VIEWER_RENEW_SECONDS = 20
 
 
 def get_service(request: Request) -> TennisService:
@@ -70,12 +77,93 @@ async def match_catalog(
     return MatchCatalogResponse(data=await service.list_catalog(status, filters))
 
 
-@router.get("/matches/{match_id}", response_model=MatchResponse)
+@router.get("/matches/{match_id}", response_model=MatchSnapshotResponse)
 async def get_match(
     match_id: str,
     service: TennisService = Depends(get_service),
-) -> MatchResponse:
-    return MatchResponse(data=await service.get_match(match_id))
+) -> MatchSnapshotResponse:
+    return MatchSnapshotResponse(data=await service.resolve_match_snapshot(match_id))
+
+
+@router.get("/matches/{match_id}/stream")
+async def match_stream(
+    match_id: str,
+    request: Request,
+    service: TennisService = Depends(get_service),
+):
+    realtime = request.app.state.realtime
+    settings = request.app.state.settings
+    snapshot = await service.resolve_match_snapshot(match_id)
+    viewer_id = f"view_{uuid4().hex}"
+
+    async def event_stream():
+        await realtime.leases.acquire(match_id, viewer_id)
+        renew_task = asyncio.create_task(_renew_loop(realtime.leases, match_id, viewer_id))
+        pubsub = realtime.redis.pubsub()
+        await pubsub.subscribe(match_channel(match_id))
+        try:
+            yield _frame(
+                "ready",
+                {
+                    "snapshot": json.loads(snapshot.model_dump_json()),
+                    "state_version": snapshot.state_version,
+                    "as_of": snapshot.as_of.isoformat(),
+                },
+                frame_id=str(snapshot.state_version),
+            )
+            last_heartbeat = asyncio.get_running_loop().time()
+            while True:
+                message = await pubsub.get_message(
+                    ignore_subscribe_messages=True,
+                    timeout=settings.sse_heartbeat_seconds,
+                )
+                if message is None:
+                    now = asyncio.get_running_loop().time()
+                    if now - last_heartbeat >= settings.sse_heartbeat_seconds:
+                        last_heartbeat = now
+                        yield _frame("heartbeat", {})
+                    continue
+                last_heartbeat = asyncio.get_running_loop().time()
+                event = json.loads(message["data"])
+                event_type = event.get("type")
+                if event_type == "match_ended":
+                    yield _frame(
+                        "match_ended",
+                        event,
+                        frame_id=str(event.get("state_version")),
+                    )
+                    return
+                yield _frame(
+                    "match_delta",
+                    event,
+                    frame_id=str(event.get("state_version")),
+                )
+        finally:
+            renew_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await renew_task
+            await pubsub.aclose()
+            await realtime.leases.release(match_id, viewer_id)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+async def _renew_loop(leases, match_id: str, viewer_id: str) -> None:
+    while True:
+        await asyncio.sleep(VIEWER_RENEW_SECONDS)
+        await leases.renew(match_id, viewer_id)
+
+
+def _frame(event: str, data: dict, frame_id: str | None = None) -> str:
+    head = f"id: {frame_id}\n" if frame_id is not None else ""
+    return f"{head}event: {event}\ndata: {json.dumps(data)}\n\n"
 
 
 @router.get("/players/{player_id}/results", response_model=PlayerResultsResponse)
