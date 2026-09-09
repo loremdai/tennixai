@@ -3,13 +3,13 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-09 20:28 CST
+**最后更新：** 2026-09-09 20:32 CST
 
-**当前任务：** 无（T25 已完成；T26 已 ready，尚未领取）
+**当前任务：** T26 — Build the Canonical Live Reducer and Transactional Persistence
 
-**任务状态：** `idle`
+**任务状态：** `in_progress`
 
-**当前执行者 / ADE：** —
+**当前执行者 / ADE：** Claude Code / Claude Code
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
@@ -17,7 +17,7 @@
 
 **最后验证的产品提交：** `e904485`
 
-**T26 起始提交：** 待领取时填写
+**T26 起始提交：** `8a21c12`
 
 **远程：** `origin` → `https://github.com/loremdai/tennixai.git`
 
@@ -54,7 +54,15 @@
 
 ## 当前任务
 
-无。T25 已完成；T26（Build the Canonical Live Reducer and Transactional Persistence）已 ready，接手前须按启动入口另行领取。
+### T26 — Build the Canonical Live Reducer and Transactional Persistence
+
+- **状态：** `in_progress`
+- **执行者 / ADE：** Claude Code / Claude Code
+- **分支：** `main`
+- **起始提交：** `8a21c12`
+- **领取时间：** 2026-09-09 20:32 CST
+- **范围：** 按 [P2 实施计划 T26](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t26-build-the-canonical-live-reducer-and-transactional-persistence)：`app/realtime/models.py`（LiveReduction/PointRevision/typed changes）、`reducer.py`（full-snapshot diff、point append/correction、版本推进）、repositories 的原子 `save_reduction`（含 quality 存储 migration）、纯测试与 PostgreSQL integration 门。
+- **阻塞：** 无。
 
 ## 最近完成任务
 
@@ -121,11 +129,11 @@
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-09 | 领取 T26：canonical live reducer 与事务化持久化 | `8a21c12` 起始 |
 | 2026-09-09 | T25 完成：Home 叠加筛选、catalog 消费与优先级展示 | `e904485` |
 | 2026-09-09 | 领取 T25：Home 叠加筛选与优先级展示 | `13a545f` 起始 |
 | 2026-09-09 | T24 完成：catalog 筛选/排序/facet counts、history/H2H 服务与 REST 路由 | `dddb734` |
 | 2026-09-09 | 领取 T24：catalog 筛选、history/H2H 服务与 P2 REST APIs | `85dd65d` 起始 |
-| 2026-09-09 | T23 完成：API-Tennis REST adapter、分类映射与 provider mode 接线 | `015ff7f` |
 
 ## 接手与更新规则
 
