@@ -3,7 +3,7 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-09 17:07 CST
+**最后更新：** 2026-09-09 17:40 CST
 
 **总体状态：** `in_progress`（P1 已完成；P2 设计已冻结，P2.1 可开始）
 
@@ -64,7 +64,7 @@
 
 | ID | 主要阶段 | 任务 | 状态 | 完成提交 | 验收证据 |
 |---|---|---|---|---|---|
-| M01 | P2 preflight | Unify Root Environment Entry | `in_progress` | — | 根目录 `.env` 成为 backend/frontend/Playwright/真实测试唯一入口；迁移后回归与泄漏门 |
+| M01 | P2 preflight | Unify Root Environment Entry | `done` | `969c7ec` | 根目录 `.env` 成为唯一入口；backend 128 passed、frontend 72/72 + typecheck/build、Playwright 34 passed/4 skipped；路径/权限/最小权限/泄漏检查通过 |
 | T20 | P2.0 | Freeze P2 Live Match Intelligence Design and Roadmap | `done` | `b7921c0` | 702 行设计规格 + 1055 行实施计划；T21–T32 均有 files/interfaces/TDD/commit gate；占位符/敏感模式扫描无命中、文档链接存在、`git diff --check` 通过 |
 | T21 | P2.1 | Extend the Canonical Domain and Provider Contracts | `ready` | — | P2 models、async identity 和 query/live contracts；P1 provider 回归门 |
 | T22 | P2.1 | Add PostgreSQL, Redis, Migrations, and Durable Identity | `planned` | — | Compose health、Alembic up/down/up、并发 identity 与 repository integration |

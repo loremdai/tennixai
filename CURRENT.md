@@ -3,17 +3,17 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-09 17:22 CST
+**最后更新：** 2026-09-09 17:40 CST
 
-**当前任务：** M01 — Unify Root Environment Entry
+**当前任务：** 无（M01 已完成；T21 已 ready，尚未领取）
 
-**任务状态：** `in_progress`
+**任务状态：** `idle`
 
-**当前执行者 / ADE：** Codex
+**当前执行者 / ADE：** —
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**最近完成任务提交：** `b7921c0`
+**最近完成任务提交：** `969c7ec`
 
 **最后验证的产品提交：** `fdb0131`
 
@@ -37,7 +37,7 @@
 - P2（Live Match Intelligence）设计已逐项批准：API-Tennis REST/WebSocket、FastAPI + 独立 worker、PostgreSQL + Redis、snapshot + versioned SSE、Home facets、PBP/statistics、Recent Control、轻量 history/H2H 和 Replay 测试。
 - P2 详细规格已写入 [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md)，T21–T32 的逐任务文件、接口、TDD 步骤和验收命令见 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md)。
 - T20 已完成且未实现 P2 产品代码；下一任务是 T21 canonical domain/provider contracts，必须按启动入口另行领取。
-- M01 正在把本地配置统一迁移到根目录 `.env`；不改变 P2 范围、任务顺序或产品架构，T21 仍是迁移完成后的下一任务。
+- M01 已把本地配置统一迁移到根目录 `.env`；FastAPI、Next.js、Playwright 和真实测试均从该入口读取，Next 进程只接收 `TENNIX_BACKEND_URL`，不接收后端凭据。该迁移不改变 P2 范围、任务顺序或产品架构，T21 仍是下一任务。
 - 已知非 T17 限制：LiveTennisAPI 的 `/players?search` 当前不能把中文显示名“郑钦文”直接映射到 `Qinwen Zheng`；canonical English name 查询已通过，中文别名/名称归一化需另立任务批准。
 - 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`（任务外）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`（next dev 自动生成）、`frontend/next-env.d.ts`（Next 工具链生成）；保留原样。
 
@@ -45,21 +45,22 @@
 
 ### M01 — Unify Root Environment Entry
 
-- **状态：** `in_progress`
+- **状态：** `done`
 - **执行者 / ADE：** Codex
 - **分支：** `main`
 - **起始提交：** `aece736`
 - **领取时间：** 2026-09-09 17:22 CST
-- **完成提交：** —
+- **完成提交：** `969c7ec`
 - **范围：** 把 backend、frontend 和真实测试使用的本地配置统一到仓库根目录 `.env`；迁移现有值但不提交凭据，并同步唯一 `.env.example`、启动入口、运行文档和 P2 计划中的配置路径。
-- **完成事实：** 已完成配置读写者盘点，迁移与验证进行中。
-- **验证门：** 根目录 `.env` 无损包含原有配置且受 Git 忽略；子目录环境文件不再使用；FastAPI、Next.js、Playwright 与真实测试均从统一入口取得配置；确定性回归、构建和泄漏检查通过。
+- **完成事实：** 原 `backend/.env` 与 `frontend/.env.local` 已无损合并到权限 `0600`、受 Git 忽略的根目录 `.env`，旧本地文件及两个子目录模板已移除；根目录 `.env.example` 是唯一安全模板。FastAPI 使用绝对根路径；Next 只提取 server-only backend URL；Playwright 将完整配置仅传给 FastAPI 子进程；真实 pytest 门通过 `Settings` 读取根文件。
+- **验证门：** TDD 回归先 2 failed 后 2 passed；backend 确定性 128 passed/6 deselected；frontend 72/72、typecheck、build；Playwright 最终 34 passed/4 skipped，视觉基线未更新；路径、`0600` 权限、Git ignore、API-Tennis key 格式、Next 最小权限和 tracked 64 位敏感模式扫描均通过。
 - **阻塞：** 无。
 
 ## 最近验证
 
 | 日期 | 提交 | 验证 | 结果 |
 |---|---|---|---|
+| 2026-09-09 | `969c7ec` | root-env TDD 2/2；backend 128 passed；frontend 72/72 + typecheck/build；Playwright 34 passed/4 skipped；路径/权限/ignore/最小权限/敏感模式检查 | M01 完成；根目录 `.env` 成为唯一配置入口，T21 仍 ready |
 | 2026-09-09 | `b7921c0` | P2 规格/计划覆盖审查；12 个任务和 60 个步骤结构核对；占位符/敏感模式扫描无命中；本地链接存在；whitespace 与 diff check 通过 | T20 完成；P2.0 关闭，T21 ready |
 | 2026-09-09 | `fdb0131` | Home 单元 72/72；typecheck/build；长 Markdown 结构化卡片视口回归桌面/移动 12/12；完整 Playwright 34 passed/4 skipped，视觉基线通过 | T19 完成；回答完成后结构化比赛卡片保持可见 |
 | 2026-09-09 | `5572960` | TDD 先行测试验证两处原文显示失败；修复后 frontend 71/71 + typecheck + build；隔离服务 Playwright 10/10；真实浏览器 `strong=10`、`ul=1`、无 `**` | T18 完成；Home/Match 问答 Markdown 展示通过 |
@@ -73,9 +74,9 @@
 
 ## 最近交接
 
-**状态：** M01 已由 Codex 于 2026-09-09 在 `main` 领取，起始提交 `aece736`；T21 保持 ready，等待配置迁移完成。
+**状态：** M01 已由 Codex 于 2026-09-09 在 `main` 完成，实现提交 `969c7ec`；当前无领取中的任务，T21 保持 ready。
 
-**交接说明：** 当前只迁移本地配置入口，不实现 T21 或其他 P2 产品代码。用户提供的 API-Tennis 凭据只能存在于被忽略的根目录 `.env`，不得写入文档、测试 fixture、日志或提交。
+**交接说明：** 接手 T21 前完整阅读 [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) 和 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t21-extend-the-canonical-domain-and-provider-contracts)。所有 ADE 只使用根目录 `.env`；API-Tennis 凭据变量为 `TENNIX_API_TENNIS_API_KEY`，不得写入代码、文档、fixture、日志、提交或聊天输出。
 
 **已知本地状态：** 未跟踪的 `.codex/skills/ui-ux-pro-max/SKILL.md`、`frontend/AGENTS.md`、`frontend/CLAUDE.md`（next dev 生成）、`frontend/next-env.d.ts`（Next 工具链生成），保留原样。
 
@@ -85,11 +86,11 @@
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-09 | M01 完成：backend/frontend/Playwright/真实测试统一使用根目录 `.env` | `969c7ec` |
 | 2026-09-09 | 领取 M01：本地配置统一迁移到根目录 `.env` | `aece736` 起始 |
 | 2026-09-09 | T20 完成：P2 设计规格、T21–T32 实施计划与三份总控落盘 | `b7921c0` |
 | 2026-09-09 | 领取 T20：冻结 P2 Live Match Intelligence 设计与实施路线 | `17f4d89` 起始 |
 | 2026-09-09 | T19 完成：Markdown 回答完成后保持结构化比赛卡片可见 | `fdb0131` |
-| 2026-09-09 | 领取 T19：Markdown 回答完成后保持结构化比赛卡片可见 | `b1108ba` 起始 |
 
 ## 接手与更新规则
 
