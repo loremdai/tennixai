@@ -220,6 +220,22 @@ describe('HomePage chat', () => {
     ).toHaveAttribute('href', '/matches/mat_up1')
   })
 
+  it('renders markdown prose instead of showing raw markers', async () => {
+    mockStream({
+      data: { kind: 'matches', matches: [upcomingDto] },
+      text: '当前查到 **Qinwen Zheng**。\n\n- **对手**：Elena Rybakina\n- **赛事**：US Open',
+    })
+    render(<HomePage />)
+    await screen.findByText('Jannik Sinner')
+
+    await askQuestion('Qinwen Zheng 下一场比赛是什么时候？')
+
+    const answer = (await screen.findByText('结构化比赛结果')).closest('article') as HTMLElement
+    expect(answer.querySelector('strong')?.textContent).toBe('Qinwen Zheng')
+    expect(answer.querySelector('ul')).not.toBeNull()
+    expect(answer.textContent).not.toContain('**')
+  })
+
   it('triggers the initial question exactly once', async () => {
     render(<HomePage initialQuestion="Sinner 今晚几点比赛？" />)
 

@@ -11,6 +11,7 @@ import {
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { MarkdownAnswer } from '@/components/markdown-answer'
 import {
   Card,
   CardAction,
@@ -162,9 +163,7 @@ function AssistantPanel({ match, preview, chat, onSubmit }: AssistantPanelProps)
                     : '本场比赛结构化结果'}
               </div>
               <p className="mt-3 break-words text-sm font-medium">“{chat.question}”</p>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                {chat.text || (chat.error ? `查询失败（${chat.error.code}），请重试。` : '')}
-              </p>
+              <MarkdownAnswer content={chat.text || (chat.error ? `查询失败（${chat.error.code}），请重试。` : '')} />
               {chat.phase === 'loading' || chat.phase === 'streaming' ? (
                 <p className="mt-2 text-xs text-muted-foreground">正在查询…</p>
               ) : null}

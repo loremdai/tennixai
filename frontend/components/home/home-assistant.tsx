@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 
 import { homeExampleQueries } from '@/components/home/home-data'
+import { MarkdownAnswer } from '@/components/markdown-answer'
 import type { ChatViewState } from '@/hooks/use-chat-stream'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -257,9 +258,7 @@ export function HomeAssistant({
                 </div>
                 <p className="mt-3 break-words text-xs text-muted-foreground">“{chat.question}”</p>
                 <h3 className="mt-2 text-balance text-lg font-semibold">{answerTitle(chat, cards)}</h3>
-                {summary ? (
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{summary}</p>
-                ) : null}
+                {summary ? <MarkdownAnswer content={summary} /> : null}
                 {chat.phase === 'loading' || chat.phase === 'streaming' ? (
                   <p className="mt-2 text-xs text-muted-foreground">正在查询…</p>
                 ) : null}

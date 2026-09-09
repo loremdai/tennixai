@@ -254,6 +254,23 @@ describe('production match page', () => {
 
     expect(await screen.findByText('Sinner 正在发球。')).toBeVisible()
   })
+
+  it('renders contextual markdown instead of showing raw markers', async () => {
+    mockStream({
+      data: { kind: 'match', matches: [makeMatch()] },
+      text: '当前比赛为 **ATP Finals**。\n\n- **场地**：硬地\n- **赛制**：BO3',
+    })
+    render(<MatchPage matchId="mat_1" />)
+    await screen.findByText('Jannik Sinner')
+
+    await userEvent.type(screen.getByLabelText('向 Tennix 询问本场比赛'), '这是什么赛事？')
+    await userEvent.keyboard('{Enter}')
+
+    const answer = await screen.findByRole('article')
+    expect(answer.querySelector('strong')?.textContent).toBe('ATP Finals')
+    expect(answer.querySelector('ul')).not.toBeNull()
+    expect(answer.textContent).not.toContain('**')
+  })
 })
 
 describe('prototype preview route', () => {
