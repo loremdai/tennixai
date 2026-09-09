@@ -62,6 +62,12 @@ describe('MatchFiltersBar', () => {
     expect(screen.getByRole('button', { name: 'ATP（3 场）' })).toBeEnabled()
   })
 
+  it('hides empty unknown values while keeping other empty values visible', () => {
+    setup()
+    expect(screen.queryAllByRole('button', { name: '未知（0 场）' })).toHaveLength(0)
+    expect(screen.getByRole('button', { name: '混合（0 场）' })).toBeDisabled()
+  })
+
   it('keeps an active zero-count value clickable so it can be unselected', () => {
     setup({
       filters: { ...DEFAULT_MATCH_FILTERS, circuits: ['other'] },

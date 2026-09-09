@@ -75,6 +75,7 @@ export function MatchFiltersBar({
               {config.values.map((value) => {
                 const isActive = active.includes(value)
                 const count = counts ? counts[value as keyof typeof counts] ?? 0 : null
+                if (value === 'unknown' && count === 0 && !isActive) return null
                 const disabled = count === 0 && !isActive
                 const accessibleName =
                   count === null
