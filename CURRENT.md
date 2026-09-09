@@ -3,19 +3,21 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-09 09:20 CST
+**最后更新：** 2026-09-09 10:43 CST
 
-**当前任务：** 无（T18 已完成；等待下一阶段明确批准）
+**当前任务：** T19 — Keep Structured Match Cards Visible After Markdown Answers
 
-**任务状态：** `idle`
+**任务状态：** `in_progress`
 
-**当前执行者 / ADE：** —
+**当前执行者 / ADE：** Codex
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
 **最近完成任务提交：** `5572960`
 
 **最后验证的产品提交：** `5572960`
+
+**T19 起始提交：** `b1108ba`
 
 **远程：** `origin` → `https://github.com/loremdai/tennixai.git`
 
@@ -24,6 +26,7 @@
 - P1/T16 已于 2026-09-08 完成并推送：fake 模式全链路确定性地跑通；真实 LiveTennisAPI provider、真实 Qwen 单项与组合 chat、Next 同源代理浏览器门均通过。
 - T17 已于 2026-09-08 完成并推送：upcoming 改用当前 `/matches?status=upcoming` canonical 映射，指定球员使用供应商过滤，Home 的 live/upcoming 支持单侧失败降级，429 保留重试提示；实现提交为 `69c8238`。
 - T18 已于 2026-09-09 完成并推送：Home 与 Match 的问答 prose 统一使用安全 Markdown 渲染，粗体、无序列表和段落不再显示原始标记；实现提交为 `5572960`。
+- T19 已于 2026-09-09 领取：Markdown 列表使回答区域变高，结构化比赛卡片被推到视口下方；本任务只修复完成回答后的结果可见性，不改变原型视觉结构或数据契约。
 - T16 已确认的事实：真实 provider 可返回 50 场 live matches；完整 `data` SSE 仍保留全部 canonical matches；LLM 只接收最多 12 条摘要并有持久化的 45 秒总时限；真实 Djokovic 查询不再因重复实名/组合名报歧义，空赛程会诚实返回并以 `done` 结束。
 - 最终验证：backend `pytest -m "not llm_live and not provider_live and not end_to_end_live"` 126 passed；frontend `pnpm test` 69/69、`pnpm typecheck`、`pnpm build` 通过；隔离 fake 服务下完整 Playwright `32 passed + 4 skipped`。
 - T18 验证：前端 `pnpm test` 71/71、`pnpm typecheck`、`pnpm build` 通过；隔离服务下 P1 Playwright 10/10；真实浏览器回答区检测到 `strong=10`、`ul=1`、原始 `**` 不存在。
@@ -37,7 +40,17 @@
 
 ## 当前任务
 
-当前没有 `in_progress` 任务。P1 已完成；下一步只有在用户明确批准后，才为 P2 或已登记的后续任务建立新的领取记录。
+### T19 — Keep Structured Match Cards Visible After Markdown Answers
+
+- **状态：** `in_progress`
+- **执行者 / ADE：** Codex
+- **分支：** `main`
+- **起始提交：** `b1108ba`
+- **领取时间：** 2026-09-09 10:43 CST
+- **范围：** Home 全局问答的结构化比赛卡片；复现 Markdown 回答变高后卡片被推到视口外的问题。
+- **实施计划：** 增加流式回答完成后的结果定位/滚动回归测试；在不改变卡片数据来源和原型视觉的前提下，让结构化结果区域在最终回答完成后保持可见；覆盖桌面与移动浏览器验收。
+- **验证门：** 前端单元测试、typecheck、build、Playwright P1 flow（桌面/移动）和真实浏览器查询；完成时记录实际命令、结果与提交。
+- **阻塞：** 无。
 
 ## 最近验证
 
@@ -54,7 +67,7 @@
 
 ## 最近交接
 
-**状态：** T18 已由 Codex 于 2026-09-09 在 `main` 完成，实现提交 `5572960`；当前无领取中的任务。
+**状态：** T19 已由 Codex 于 2026-09-09 在 `main` 领取，起始提交 `b1108ba`；当前任务正在执行。
 
 **交接说明：** 本地持久配置位于被忽略的 `backend/.env` 与 `frontend/.env.local`，未入库；`backend/.env` 含 `TENNIX_LLM_TIMEOUT_SECONDS=45` 与当前可用的 LiveTennisAPI key。T17 已完成真实 provider、真实 LLM 与浏览器验收；服务可按 [docs/runbooks/p1-local.md](./docs/runbooks/p1-local.md) 启动。已知视觉/StrictMode 说明保留在 T15 证据中。
 
@@ -66,12 +79,11 @@
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-09 | 领取 T19：Markdown 回答完成后保持结构化比赛卡片可见 | `b1108ba` 起始 |
 | 2026-09-09 | T18 完成：Home/Match 问答 Markdown 安全渲染与浏览器验收 | `5572960` |
 | 2026-09-09 | 领取 T18：问答 Markdown 原文显示修复 | `c6e4120` 起始 |
 | 2026-09-08 | T17 完成：真实 upcoming provider、指定球员过滤、局部失败与 429 友好降级 | `69c8238` |
 | 2026-09-08 | 领取并规划 T17 | `ef85ea3` / `da27574` |
-| 2026-09-08 | T16 完成：真实 live chat 上下文/超时/球员消歧硬化 | `5dcaa6a` |
-| 2026-09-08 | T15 完成：验收矩阵、浏览器 E2E、live 门、runbook；P1 关闭 | `98075ef` |
 
 ## 接手与更新规则
 
