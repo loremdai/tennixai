@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-09 17:55 CST
+**最后更新：** 2026-09-09 19:01 CST
 
 **总体状态：** `in_progress`（P1 已完成；P2 实施中）
 
 **当前里程碑：** P2 — Live Match Intelligence（`in_progress`）
 
-**当前阶段：** P2.1 — Durable foundations（`in_progress`）
+**当前阶段：** P2.2 — Unified data and discovery（`ready`）
 
 ## 状态说明
 
@@ -29,7 +29,7 @@
 | 里程碑 | 状态 | 目标 | 进入/完成条件 |
 |---|---|---|---|
 | P1 — Match Information Assistant | `done` | 跑通真实结构化比赛查询、卡片、Match Page 与上下文 Chat | T17/T18/T19 均已完成（`69c8238`、`5572960`、`fdb0131`）；P1 已关闭 |
-| P2 — Live Match Intelligence | `in_progress` | 技术统计、PBP、近期控制指数、持久化和多进程实时协调 | T20 已完成（`b7921c0`）；T21 已完成（`5b479fc`）；T22 是下一可领取任务 |
+| P2 — Live Match Intelligence | `in_progress` | 技术统计、PBP、近期控制指数、持久化和多进程实时协调 | T20–T22 已完成（`b7921c0`、`5b479fc`、`20dac5f`）；T23 是下一可领取任务 |
 | P3 — Market & Decision Support | `planned` | 市场状态、预测、edge、confidence 和 paper trading | P2 数据可信；映射、模型评估和风控设计另行批准 |
 | Optional — Automated Execution | `deferred` | 在满足法律、风控、安全和可审计条件后考虑自动下单 | 不属于 P3 默认范围，必须单独批准 |
 
@@ -52,8 +52,8 @@
 | 阶段 | 状态 | 核心交付 | Exit gate / 当前缺口 |
 |---|---|---|---|
 | P2.0 — Design freeze | `done` | API-Tennis 能力边界、实时架构、领域模型、存储、UI、Chat、测试与任务路线 | T20 完成提交 `b7921c0`；规格、计划、总控一致性审查通过 |
-| P2.1 — Durable foundations | `in_progress` | P2 canonical domain、provider contracts、PostgreSQL、Redis、稳定 identity | T21 已完成（`5b479fc`）；T22 可领取 |
-| P2.2 — Unified data and discovery | `planned` | API-Tennis REST、历史/H2H、赛事分类和 Home 叠加筛选 | T23–T25；等待 P2.1 |
+| P2.1 — Durable foundations | `done` | P2 canonical domain、provider contracts、PostgreSQL、Redis、稳定 identity | T21（`5b479fc`）与 T22（`20dac5f`）完成；P2.2 可开始 |
+| P2.2 — Unified data and discovery | `ready` | API-Tennis REST、历史/H2H、赛事分类和 Home 叠加筛选 | T23 可领取；T24–T25 顺序跟进 |
 | P2.3 — Realtime pipeline | `planned` | Reducer、WebSocket worker、租约、持久化、snapshot + SSE | T26–T28；等待 P2.2 |
 | P2.4 — Match intelligence | `planned` | 完整 PBP、22 项统计、近期控制指数、版本化上下文 Chat | T29–T31；等待 P2.3 |
 | P2.5 — Acceptance and hardening | `planned` | Replay、恢复门、真实 smoke、双视口视觉和本地 runbook | T32；等待 P2.4 |
@@ -67,7 +67,8 @@
 | M01 | P2 preflight | Unify Root Environment Entry | `done` | `969c7ec` | 根目录 `.env` 成为唯一入口；backend 128 passed、frontend 72/72 + typecheck/build、Playwright 34 passed/4 skipped；路径/权限/最小权限/泄漏检查通过 |
 | T20 | P2.0 | Freeze P2 Live Match Intelligence Design and Roadmap | `done` | `b7921c0` | 702 行设计规格 + 1055 行实施计划；T21–T32 均有 files/interfaces/TDD/commit gate；占位符/敏感模式扫描无命中、文档链接存在、`git diff --check` 通过 |
 | T21 | P2.1 | Extend the Canonical Domain and Provider Contracts | `done` | `5b479fc` | 新增 CircuitTier/Gender/Discipline/ConnectionStatus/CapabilityStatus/22 项 StatisticName/StatisticProvenance 枚举与 PointEvent、MatchStatistic、MomentumObservation、DataQuality、HeadToHead、MatchSnapshot（版本一致性校验）、ProviderLiveEnvelope；`IdentityRepository` 契约 async 化（Fake/LiveTennis 映射路径全部 await，`mat_/ply_/trn_` 前缀与零供应商 ID 泄漏保持）；查询契约按规格 §6 扩展并新增 `TennisLiveFeedProvider`；`uv run pytest tests/test_p2_domain.py tests/test_domain.py tests/test_identity.py tests/test_provider_contract.py tests/test_livetennis_provider.py` 55 passed；全套确定性 150 passed/6 deselected（P1 回归含验收矩阵 10/10） |
-| T22 | P2.1 | Add PostgreSQL, Redis, Migrations, and Durable Identity | `ready` | — | Compose health、Alembic up/down/up、并发 identity 与 repository integration |
+| T22 | P2.1 | Add PostgreSQL, Redis, Migrations, and Durable Identity | `done` | `20dac5f` | compose（postgres:16+redis:7，127.0.0.1、healthchecks、无凭据）healthy；P2 core schema 13 表 migration `0001`，alembic upgrade→downgrade base→upgrade 均 exit 0；`PostgresIdentityRepository` insert-on-conflict+读重试，20 路并发收敛同一 ID、跨实例稳定；`(match_id,sequence)`/`(point_event_id,revision)` 唯一约束生效；snapshot 单行 upsert；`purge_raw_events` 严格 `< before` 且 canonical 不受影响；单元 17 passed + infrastructure integration 7 passed；全套确定性 174 passed/6 deselected；typed settings（14 天/8 订阅/45s lease/60s grace）边界校验 |
+| T23 | P2.2 | Implement the API-Tennis REST Adapter | `ready` | — | fixture contract + opt-in REST smoke；零 vendor 字段/secret 泄漏 |
 | T23 | P2.2 | Implement the API-Tennis REST Adapter | `planned` | — | fixture contract + opt-in REST smoke；零 vendor 字段/secret 泄漏 |
 | T24 | P2.2 | Add Match Catalog Filters, History, H2H, and P2 REST APIs | `planned` | — | tier sort、facet counts、昨天/近期/H2H、TTL 与 P1 regression |
 | T25 | P2.2 | Add Stackable Home Facets and Priority Presentation | `planned` | — | ATP+WTA/all/singles 默认；三类叠加筛选和双视口门 |
@@ -89,6 +90,7 @@
 - Chat 只消费 compact canonical facts，回答固定 `state_version/as_of`，旧回答不随比赛静默改写。
 - History/H2H 按需来自 API-Tennis；raw payload 14 天，canonical observations 长期；无完整供应商历史镜像。
 - P2 schema/API/UI 中不存在 odds、prediction、market、edge 或 trading 能力。
+- 用户追加验收门（2026-09-09）：T32 收尾时用真实浏览器和鼠标按业务流程逐项人工核对（Home 筛选→Featured→Match Page 实时更新→PBP/统计/控制指数→版本化 Chat→终态），发现的 bug 修复后复验，直到无 bug。
 - 完整 15 项技术完成门以 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#final-p2-completion-gate) 为准。
 
 ## P1 任务登记表
