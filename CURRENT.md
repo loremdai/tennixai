@@ -3,21 +3,21 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-09 17:46 CST
+**最后更新：** 2026-09-09 17:55 CST
 
-**当前任务：** T21 — Extend the Canonical Domain and Provider Contracts
+**当前任务：** 无（T21 已完成；T22 已 ready，尚未领取）
 
-**任务状态：** `in_progress`
+**任务状态：** `idle`
 
-**当前执行者 / ADE：** Claude Code / Claude Code
+**当前执行者 / ADE：** —
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**最近完成任务提交：** `969c7ec`
+**最近完成任务提交：** `5b479fc`
 
-**最后验证的产品提交：** `fdb0131`
+**最后验证的产品提交：** `5b479fc`
 
-**T21 起始提交：** `f574b1a`
+**T22 起始提交：** 待领取时填写
 
 **远程：** `origin` → `https://github.com/loremdai/tennixai.git`
 
@@ -36,42 +36,37 @@
 - 本地运行与 opt-in 真实门命令见 [docs/runbooks/p1-local.md](./docs/runbooks/p1-local.md)。
 - P2（Live Match Intelligence）设计已逐项批准：API-Tennis REST/WebSocket、FastAPI + 独立 worker、PostgreSQL + Redis、snapshot + versioned SSE、Home facets、PBP/statistics、Recent Control、轻量 history/H2H 和 Replay 测试。
 - P2 详细规格已写入 [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md)，T21–T32 的逐任务文件、接口、TDD 步骤和验收命令见 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md)。
-- T20 已完成且未实现 P2 产品代码；下一任务是 T21 canonical domain/provider contracts，必须按启动入口另行领取。
-- M01 已把本地配置统一迁移到根目录 `.env`；FastAPI、Next.js、Playwright 和真实测试均从该入口读取，Next 进程只接收 `TENNIX_BACKEND_URL`，不接收后端凭据。该迁移不改变 P2 范围、任务顺序或产品架构，T21 仍是下一任务。
+- T21 已于 2026-09-09 完成并推送：P2 canonical domain（CircuitTier/Gender/Discipline/ConnectionStatus/CapabilityStatus、22 项 StatisticName、PointEvent/MatchStatistic/MomentumObservation/DataQuality/HeadToHead/MatchSnapshot/ProviderLiveEnvelope）、async `IdentityRepository` 与扩展后的查询/live-feed provider contracts；实现提交为 `5b479fc`。
+- T21 已确认的事实：`MatchSnapshot` 强制与 `match.live_state.state_version` 一致（无 live_state 时版本必须为 0）；缺失能力用 `DataQuality` 声明而不是 0；备用 LiveTennis adapter 对 P2 独有能力返回 typed `unsupported`(501)；全套确定性 backend 150 passed/6 deselected，P1 验收矩阵 10/10 不回归。
+- M01 已把本地配置统一迁移到根目录 `.env`；FastAPI、Next.js、Playwright 和真实测试均从该入口读取，Next 进程只接收 `TENNIX_BACKEND_URL`，不接收后端凭据。
+- 下一任务是 T22（PostgreSQL、Redis、migrations 与 durable identity），必须按启动入口另行领取；T22 需要本地 Docker 可用以运行 compose 健康门。
 - 已知非 T17 限制：LiveTennisAPI 的 `/players?search` 当前不能把中文显示名“郑钦文”直接映射到 `Qinwen Zheng`；canonical English name 查询已通过，中文别名/名称归一化需另立任务批准。
 - 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`（任务外）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`（next dev 自动生成）、`frontend/next-env.d.ts`（Next 工具链生成）；保留原样。
 
 ## 当前任务
 
-### T21 — Extend the Canonical Domain and Provider Contracts
-
-- **状态：** `in_progress`
-- **执行者 / ADE：** Claude Code / Claude Code
-- **分支：** `main`
-- **起始提交：** `f574b1a`
-- **领取时间：** 2026-09-09 17:46 CST
-- **范围：** 按 [P2 实施计划 T21](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t21-extend-the-canonical-domain-and-provider-contracts)：新增 P2 canonical enums 与模型（CircuitTier/Gender/Discipline/ConnectionStatus/CapabilityStatus/PointEvent/MatchStatistic/MomentumObservation/DataQuality/HeadToHead/MatchSnapshot/ProviderLiveEnvelope），identity 契约改为 async，扩展查询 provider 与 live-feed 协议，并保持 P1 provider 回归门通过。
-- **阻塞：** 无。
+无。T21 已完成；T22（Add PostgreSQL, Redis, Migrations, and Durable Identity）已 ready，接手前须按启动入口另行领取。
 
 ## 最近完成任务
 
-### M01 — Unify Root Environment Entry
+### T21 — Extend the Canonical Domain and Provider Contracts
 
 - **状态：** `done`
-- **执行者 / ADE：** Codex
+- **执行者 / ADE：** Claude Code / Claude Code
 - **分支：** `main`
-- **起始提交：** `aece736`
-- **领取时间：** 2026-09-09 17:22 CST
-- **完成提交：** `969c7ec`
-- **范围：** 把 backend、frontend 和真实测试使用的本地配置统一到仓库根目录 `.env`；迁移现有值但不提交凭据，并同步唯一 `.env.example`、启动入口、运行文档和 P2 计划中的配置路径。
-- **完成事实：** 原 `backend/.env` 与 `frontend/.env.local` 已无损合并到权限 `0600`、受 Git 忽略的根目录 `.env`，旧本地文件及两个子目录模板已移除；根目录 `.env.example` 是唯一安全模板。FastAPI 使用绝对根路径；Next 只提取 server-only backend URL；Playwright 将完整配置仅传给 FastAPI 子进程；真实 pytest 门通过 `Settings` 读取根文件。
-- **验证门：** TDD 回归先 2 failed 后 2 passed；backend 确定性 128 passed/6 deselected；frontend 72/72、typecheck、build；Playwright 最终 34 passed/4 skipped，视觉基线未更新；路径、`0600` 权限、Git ignore、API-Tennis key 格式、Next 最小权限和 tracked 64 位敏感模式扫描均通过。
+- **起始提交：** `f574b1a`（领取记录 `7fc3ff6`）
+- **领取时间：** 2026-09-09 17:46 CST
+- **完成提交：** `5b479fc`
+- **范围：** 按 [P2 实施计划 T21](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t21-extend-the-canonical-domain-and-provider-contracts)：新增 P2 canonical enums 与模型（CircuitTier/Gender/Discipline/ConnectionStatus/CapabilityStatus/22 项 StatisticName/StatisticProvenance/PointEvent/MatchStatistic/MomentumObservation/DataQuality/HeadToHead/MatchSnapshot/ProviderLiveEnvelope），identity 契约改为 async，扩展查询 provider 与 live-feed 协议，并保持 P1 provider 回归门通过。
+- **完成事实：** TDD 先行：`test_p2_domain.py`（13 项）与 async `test_identity.py` 先失败（ImportError/await 失败）后实现。`MatchSnapshot` 以 `match.live_state` 为唯一 live-state 来源并强制版本一致（无 live_state 时版本必须为 0），校验 point/momentum/statistic 归属；`PointEvent.sequence>=1`、`revision>=1`；`MomentumObservation.value` 限定 -100..100；`DataQuality` 无 value 字段。`IdentityRepository` Protocol async 化，`MemoryIdentityRepository`、Fake（lazy `build()` + `_post_build` 钩子 + `create()` 工厂）与 LiveTennis 映射路径全部 await，`mat_/ply_/trn_` 前缀与零供应商 ID 泄漏保持。`TennisDataProvider` 按规格 §6 扩展（get_player/get_match_snapshot/get_recent_results/get_head_to_head），P1 legacy `get_score` 保留；新增 `TennisLiveFeedProvider` 协议与私有 `ProviderLiveEnvelope`。备用 LiveTennis adapter 对 P2 独有能力返回 typed `unsupported`(501)，snapshot 诚实声明 pbp/statistics/momentum unavailable。
+- **验证门：** `uv run pytest tests/test_p2_domain.py tests/test_domain.py tests/test_identity.py tests/test_provider_contract.py tests/test_livetennis_provider.py` 55 passed；全套确定性 `uv run pytest -m "not llm_live and not provider_live and not end_to_end_live"` 150 passed/6 deselected（含 P1 验收矩阵 10/10）；`git diff --check` 无命中。
 - **阻塞：** 无。
 
 ## 最近验证
 
 | 日期 | 提交 | 验证 | 结果 |
 |---|---|---|---|
+| 2026-09-09 | `5b479fc` | TDD：test_p2_domain 13 项与 async identity 先失败后通过；领域/兼容门 55 passed；全套确定性 150 passed/6 deselected（P1 验收矩阵 10/10）；`git diff --check` 通过 | T21 完成；P2 canonical domain 与 provider contracts 就绪，T22 ready |
 | 2026-09-09 | `969c7ec` | root-env TDD 2/2；backend 128 passed；frontend 72/72 + typecheck/build；Playwright 34 passed/4 skipped；路径/权限/ignore/最小权限/敏感模式检查 | M01 完成；根目录 `.env` 成为唯一配置入口，T21 仍 ready |
 | 2026-09-09 | `b7921c0` | P2 规格/计划覆盖审查；12 个任务和 60 个步骤结构核对；占位符/敏感模式扫描无命中；本地链接存在；whitespace 与 diff check 通过 | T20 完成；P2.0 关闭，T21 ready |
 | 2026-09-09 | `fdb0131` | Home 单元 72/72；typecheck/build；长 Markdown 结构化卡片视口回归桌面/移动 12/12；完整 Playwright 34 passed/4 skipped，视觉基线通过 | T19 完成；回答完成后结构化比赛卡片保持可见 |
@@ -80,15 +75,14 @@
 | 2026-09-08 | `5dcaa6a` | backend 确定性 124 passed；frontend 66/66 + typecheck + build + E2E 32 passed/4 skipped；provider_live 1/1；llm_live 4/4；end_to_end_live 1/1；真实浏览器 end-to-end 2/2；手动 Djokovic SSE 完整结束 | T16 与 P1 真实运行时验收通过 |
 | 2026-09-08 | `98075ef` | backend 确定性 suite 117 passed；frontend 66/66 + typecheck + build + e2e 32 passed/4 skipped；验收矩阵 10/10；llm_live 4/4 + 浏览器 2/2（真实 Qwen）；provider/end-to-end live 如实 skip；泄漏检查业务零命中；Final Gate 八条核对 | T15 与 P1 整体验收通过 |
 | 2026-09-08 | `d76821b` | match-page 13/13、全套 66/66；visual 10/10（match 基线零变化） | T14 验收通过 |
-| 2026-09-08 | `4a29050` | Home 13/13、全套 53/53；visual 10/10（home 基线经审阅更新） | T13 验收通过 |
 
 任务完成前必须把实际运行的命令、结果和对应提交补充到这里。未运行或失败的验收不能写成通过。
 
 ## 最近交接
 
-**状态：** M01 已由 Codex 于 2026-09-09 在 `main` 完成，实现提交 `969c7ec`；T21 已于 2026-09-09 17:46 CST 由 Claude Code 在 `main` 领取，起始提交 `f574b1a`。
+**状态：** T21 已由 Claude Code 于 2026-09-09 在 `main` 完成，实现提交 `5b479fc`；当前无领取中的任务，T22 保持 ready。
 
-**交接说明：** 接手 T21 前完整阅读 [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) 和 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t21-extend-the-canonical-domain-and-provider-contracts)。所有 ADE 只使用根目录 `.env`；API-Tennis 凭据变量为 `TENNIX_API_TENNIS_API_KEY`，不得写入代码、文档、fixture、日志、提交或聊天输出。
+**交接说明：** 接手 T22 前完整阅读 [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) 和 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t22-add-postgresql-redis-migrations-and-durable-identity)。所有 ADE 只使用根目录 `.env`；API-Tennis 凭据变量为 `TENNIX_API_TENNIS_API_KEY`，不得写入代码、文档、fixture、日志、提交或聊天输出。T21 起 identity 契约是 async（`IdentityRepository`）；Fake provider 构造后需 `await build()` 或使用 `await FakeTennisProvider.create(...)`，子类经 `_post_build` 扩展数据集。
 
 **已知本地状态：** 未跟踪的 `.codex/skills/ui-ux-pro-max/SKILL.md`、`frontend/AGENTS.md`、`frontend/CLAUDE.md`（next dev 生成）、`frontend/next-env.d.ts`（Next 工具链生成），保留原样。
 
@@ -98,11 +92,11 @@
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-09 | T21 完成：P2 canonical domain、async identity 与 provider contracts | `5b479fc` |
 | 2026-09-09 | 领取 T21：扩展 canonical domain 与 provider contracts | `f574b1a` 起始 |
 | 2026-09-09 | M01 完成：backend/frontend/Playwright/真实测试统一使用根目录 `.env` | `969c7ec` |
 | 2026-09-09 | 领取 M01：本地配置统一迁移到根目录 `.env` | `aece736` 起始 |
 | 2026-09-09 | T20 完成：P2 设计规格、T21–T32 实施计划与三份总控落盘 | `b7921c0` |
-| 2026-09-09 | 领取 T20：冻结 P2 Live Match Intelligence 设计与实施路线 | `17f4d89` 起始 |
 
 ## 接手与更新规则
 
