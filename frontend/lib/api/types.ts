@@ -133,6 +133,71 @@ export type MatchSnapshotDto = {
   state_version: number
   as_of: string
 }
+export type AnswerContextDto = {
+  match_id: string
+  state_version: number
+  as_of: string
+}
+export type IntelligenceTopic = 'overview' | 'score' | 'statistics' | 'points' | 'momentum'
+export type IntelligencePacketDto = {
+  topic: IntelligenceTopic
+  match_id: string
+  state_version: number
+  as_of: string
+  status: MatchStatus
+  players: [string, string]
+  tournament: string
+  round: string | null
+  scheduled_at: string | null
+  surface: string | null
+  indoor: boolean | null
+  format: string | null
+  winner: string | null
+  score: MatchScoreDto | null
+  server: string | null
+  statistics: Array<{
+    name: string
+    period: string
+    player1_value: number | null
+    player2_value: number | null
+    unit: string | null
+    provenance: string
+    availability: CapabilityStatus
+    as_of: string
+  }>
+  recent_points: Array<{
+    sequence: number
+    set_number: number
+    game_number: number
+    point_number: number
+    server: string | null
+    winner: string | null
+    score_after: MatchScoreDto
+    is_break_point: boolean
+    is_set_point: boolean
+    is_match_point: boolean
+  }>
+  momentum: Array<{
+    point_sequence: number
+    algorithm_version: string
+    value: number
+    leader: string | null
+    is_provisional: boolean
+    as_of: string
+    input_summary: string
+  }>
+  key_points: Array<{
+    sequence: number
+    labels: string[]
+    winner: string | null
+  }>
+  quality: Array<{
+    capability: string
+    status: CapabilityStatus
+    reason: string | null
+    observed_at: string
+  }>
+}
 export type MatchStreamFrame =
   | {
       type: 'ready'
@@ -161,7 +226,13 @@ export type MatchStreamFrame =
       id: string | null
       payload: { code: string; message: string; details: Record<string, unknown> }
     }
-export type StructuredData = { kind: 'matches' | 'match' | 'unsupported'; matches: MatchDto[] }
+export type StructuredData = {
+  kind: 'matches' | 'match' | 'intelligence' | 'unsupported'
+  matches: MatchDto[]
+  packet?: IntelligencePacketDto | null
+  metadata?: Record<string, unknown>
+  answer_context?: AnswerContextDto | null
+}
 export type ChatRequest = {
   scope: 'global' | 'match'
   match_id?: string

@@ -73,13 +73,14 @@ async def test_chat_stream_match_scope_uses_context(client: AsyncClient) -> None
 
     events = parse_sse(response.text)
     data = next(payload for event_type, payload in events if event_type == "data")
-    assert data["kind"] == "match"
-    assert data["matches"][0]["id"] == match_id
+    assert data["kind"] == "intelligence"
+    assert data["packet"]["match_id"] == match_id
+    assert data["answer_context"]["match_id"] == match_id
     assert events[-1][0] == "done"
 
 
 @pytest.mark.asyncio
-async def test_chat_stream_rejects_historical_queries(client: AsyncClient) -> None:
+async def test_chat_stream_routes_supported_historical_queries(client: AsyncClient) -> None:
     response = await client.post(
         "/api/v1/chat/stream",
         json={
@@ -89,9 +90,26 @@ async def test_chat_stream_rejects_historical_queries(client: AsyncClient) -> No
     )
 
     events = parse_sse(response.text)
+    assert [event_type for event_type, _ in events] == ["status", "data", "text_delta", "done"]
+    assert events[1][1]["kind"] == "matches"
+    assert events[1][1]["metadata"]["scope"] == "yesterday"
+    assert events[2][1]["delta"] == "当前没有查到符合条件的比赛。"
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_rejects_broad_historical_queries(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/v1/chat/stream",
+        json={
+            "scope": "global",
+            "messages": [{"role": "user", "content": "Sinner 的全部历史战绩"}],
+        },
+    )
+
+    events = parse_sse(response.text)
     assert [event_type for event_type, _ in events] == ["data", "text_delta", "done"]
     assert events[0][1]["kind"] == "unsupported"
-    assert events[1][1]["delta"] == "P1 暂不支持历史比赛结果查询。"
+    assert events[1][1]["delta"] == "P2 暂不支持大范围历史查询。"
 
 
 @pytest.mark.asyncio

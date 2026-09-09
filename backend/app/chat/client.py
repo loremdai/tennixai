@@ -80,13 +80,63 @@ class FakeChatModel:
 
         system = str(messages[0].get("content") or "") if messages else ""
         if MATCH_CONTEXT_MARKER in system:
+            last_user = self._last_user_message(messages)
+            lowered = last_user.casefold()
+            topic = None
+            if any(token in lowered for token in ("momentum", "走势", "动量", "控制指数")):
+                topic = "momentum"
+            elif any(token in lowered for token in ("statistics", "统计", "ace", "双误", "发球表现")):
+                topic = "statistics"
+            elif any(token in lowered for token in ("points", "逐分", "关键分", "pbp")):
+                topic = "points"
+            elif any(token in lowered for token in ("score", "比分", "发球")):
+                topic = "score"
             return ModelTurn(
-                tool_calls=[ToolCall(id="call_fake_match", name="get_match", arguments={})]
+                tool_calls=[
+                    ToolCall(
+                        id="call_fake_intelligence",
+                        name="get_match_intelligence",
+                        arguments={"topic": topic or "overview"},
+                    )
+                ]
             )
 
         last_user = self._last_user_message(messages)
         lowered = last_user.casefold()
         player_tokens = re.findall(r"[A-Za-z]{2,}", last_user)
+        if any(token in lowered for token in ("交手", "h2h", "head-to-head", "对战历史")):
+            if len(player_tokens) >= 2:
+                return ModelTurn(
+                    tool_calls=[
+                        ToolCall(
+                            id="call_fake_h2h",
+                            name="get_head_to_head",
+                            arguments={
+                                "first_player_name": player_tokens[0],
+                                "second_player_name": player_tokens[1],
+                                "limit": 5,
+                            },
+                        )
+                    ]
+                )
+        if any(token in last_user for token in ("昨天", "昨日", "上一场", "最近一场")) or any(
+            token in lowered for token in ("yesterday", "previous match", "last match", "recent")
+        ):
+            if player_tokens:
+                scope = "yesterday" if ("昨天" in last_user or "昨日" in last_user or "yesterday" in lowered) else "recent"
+                return ModelTurn(
+                    tool_calls=[
+                        ToolCall(
+                            id="call_fake_results",
+                            name="get_player_results",
+                            arguments={
+                                "player_name": player_tokens[0],
+                                "scope": scope,
+                                "limit": 5,
+                            },
+                        )
+                    ]
+                )
         if player_tokens:
             if "今天" in last_user or "today" in lowered:
                 time_scope = "today"
@@ -119,8 +169,13 @@ class FakeChatModel:
                 matches = result.get("matches") or []
                 if kind == "match" and matches:
                     return "已获取本场比赛的结构化数据。"
+                if kind == "intelligence":
+                    packet = result.get("packet") or {}
+                    if packet.get("quality"):
+                        return "已获取本场比赛的主题数据，并保留了可用性说明。"
+                    return "已获取本场比赛的主题数据。"
                 if kind == "unsupported":
-                    return "P1 暂不支持历史比赛结果查询。"
+                    return "P2 暂不支持大范围历史查询。"
                 if matches:
                     return f"已为你找到 {len(matches)} 场比赛的结构化数据。"
                 return "当前没有查到符合条件的比赛。"

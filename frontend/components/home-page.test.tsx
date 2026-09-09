@@ -397,17 +397,17 @@ describe('HomePage chat', () => {
     expect(streamChatMock).toHaveBeenCalledTimes(1)
   })
 
-  it('renders unsupported without a card for historical questions', async () => {
+  it('renders broad historical unsupported without a card', async () => {
     mockStream({
       data: { kind: 'unsupported', matches: [] },
-      text: 'P1 暂不支持历史比赛结果查询。',
+      text: 'P2 暂不支持大范围历史查询。',
     })
     render(<HomePage />)
     await screen.findByText('Jannik Sinner')
 
-    await askQuestion('昨天 Sinner 赢了吗？')
+    await askQuestion('Sinner 的全部历史战绩')
 
-    expect(await screen.findByText('P1 暂不支持历史比赛结果查询。')).toBeVisible()
+    expect(await screen.findByText('P2 暂不支持大范围历史查询。')).toBeVisible()
     expect(screen.queryByRole('link', { name: /打开比赛：Sinner 对阵/ })).toBeNull()
   })
 

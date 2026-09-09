@@ -74,7 +74,7 @@ def _require_credentials() -> tuple[str, str, str]:
     return api_key.get_secret_value(), base_url, settings.llm_model
 
 
-def _build() -> tuple[ChatOrchestrator, RecordingBusinessTools]:
+def _build() -> tuple[ChatOrchestrator, RecordingBusinessTools, LiveGateFakeProvider]:
     api_key, base_url, model_name = _require_credentials()
     provider = LiveGateFakeProvider(now=lambda: NOW)
     cache: AsyncTTLCache[str, object] = AsyncTTLCache(max_entries=256)
@@ -85,7 +85,7 @@ def _build() -> tuple[ChatOrchestrator, RecordingBusinessTools]:
         base_url=base_url,
         model=model_name,
     )
-    return ChatOrchestrator(tools, model), tools
+    return ChatOrchestrator(tools, model), tools, provider
 
 
 @pytest.mark.parametrize(
@@ -100,7 +100,7 @@ def _build() -> tuple[ChatOrchestrator, RecordingBusinessTools]:
 async def test_qwen_selects_expected_tool_for_acceptance_prompts(
     question: str, expected_tool: str
 ) -> None:
-    orchestrator, tools = _build()
+    orchestrator, tools, _ = _build()
 
     request = ChatRequest(
         scope="global",
@@ -123,7 +123,7 @@ async def test_qwen_selects_expected_tool_for_acceptance_prompts(
 
 @pytest.mark.asyncio
 async def test_qwen_selects_get_live_matches_for_live_question() -> None:
-    orchestrator, tools = _build()
+    orchestrator, tools, _ = _build()
 
     request = ChatRequest(
         scope="global",
@@ -141,4 +141,48 @@ async def test_qwen_selects_get_live_matches_for_live_question() -> None:
     assert any(name.split()[-1] in text for name in live_names), (
         f"prose should mention a live player, got: {text!r}"
     )
+    assert events[-1].type is ChatEventType.DONE
+
+
+@pytest.mark.parametrize(
+    ("question", "expected_tool"),
+    [
+        ("昨天 Sinner 赢了吗？", "get_player_results"),
+        ("Sinner 和 Alcaraz 的有限交手记录", "get_head_to_head"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_qwen_selects_bounded_p2_history_tools(
+    question: str, expected_tool: str
+) -> None:
+    orchestrator, tools, _ = _build()
+
+    request = ChatRequest(
+        scope="global",
+        messages=[ChatMessage(role="user", content=question)],
+    )
+    events = [event async for event in orchestrator.stream(request)]
+
+    assert tools.executed and tools.executed[0] == expected_tool
+    assert any(event.type is ChatEventType.DATA for event in events)
+    assert events[-1].type is ChatEventType.DONE
+
+
+@pytest.mark.asyncio
+async def test_qwen_selects_topic_intelligence_for_match_question() -> None:
+    orchestrator, tools, provider = _build()
+    await provider.build()
+    assert provider.live_match is not None
+
+    request = ChatRequest(
+        scope="match",
+        match_id=provider.live_match.id,
+        messages=[ChatMessage(role="user", content="最近走势如何？")],
+    )
+    events = [event async for event in orchestrator.stream(request)]
+
+    assert tools.executed and tools.executed[0] == "get_match_intelligence"
+    data = next(event.payload for event in events if event.type is ChatEventType.DATA)
+    assert data["kind"] == "intelligence"
+    assert data["answer_context"]["match_id"] == provider.live_match.id
     assert events[-1].type is ChatEventType.DONE

@@ -45,6 +45,18 @@ class RecordingProvider:
         self.calls["get_match"] += 1
         return await self.inner.get_match(match_id)
 
+    async def get_match_snapshot(self, match_id: str):
+        self.calls["get_match_snapshot"] += 1
+        return await self.inner.get_match_snapshot(match_id)
+
+    async def get_recent_results(self, player_id: str, *, limit: int):
+        self.calls["get_recent_results"] += 1
+        return await self.inner.get_recent_results(player_id, limit=limit)
+
+    async def get_head_to_head(self, first_player_id: str, second_player_id: str, *, limit: int):
+        self.calls["get_head_to_head"] += 1
+        return await self.inner.get_head_to_head(first_player_id, second_player_id, limit=limit)
+
     async def get_score(self, match_id: str):
         self.calls["get_score"] += 1
         return await self.inner.get_score(match_id)
@@ -133,18 +145,40 @@ async def test_llm_failure_after_data_keeps_structured_result() -> None:
 
 
 @pytest.mark.asyncio
-async def test_historical_guard_emits_unsupported_without_model_or_provider() -> None:
+async def test_broad_historical_query_emits_unsupported_without_model_or_provider() -> None:
     model = FakeChatModel()
     orchestrator, recording = build_orchestrator(model)
 
-    events = [event async for event in orchestrator.stream(global_request("昨天 Sinner 赢了吗？"))]
+    events = [event async for event in orchestrator.stream(global_request("Sinner 的全部历史战绩"))]
 
     assert [event.type for event in events] == ["data", "text_delta", "done"]
     assert events[0].payload["kind"] == "unsupported"
     assert events[0].payload["matches"] == []
-    assert events[1].payload["delta"] == "P1 暂不支持历史比赛结果查询。"
+    assert events[1].payload["delta"] == "P2 暂不支持大范围历史查询。"
     assert model.choose_calls == []
     assert sum(recording.calls.values()) == 0
+
+
+@pytest.mark.asyncio
+async def test_supported_yesterday_query_uses_history_tool() -> None:
+    model = FakeChatModel(
+        turns=[
+            tool_turn(
+                "get_player_results",
+                {"player_name": "Sinner", "scope": "yesterday", "limit": 5},
+            ),
+            ModelTurn(),
+        ],
+        text_chunks=["供应商当前未返回昨天的比赛。"],
+    )
+    orchestrator, recording = build_orchestrator(model)
+
+    events = [event async for event in orchestrator.stream(global_request("昨天 Sinner 赢了吗？"))]
+
+    assert [event.type for event in events] == ["status", "data", "text_delta", "done"]
+    assert events[1].payload["kind"] == "matches"
+    assert events[1].payload["metadata"]["scope"] == "yesterday"
+    assert recording.calls["get_recent_results"] == 1
 
 
 @pytest.mark.asyncio
@@ -199,10 +233,41 @@ async def test_match_scope_context_appears_in_system_message() -> None:
     assert [event.type for event in events] == ["status", "data", "text_delta", "done"]
     assert events[1].payload["kind"] == "match"
     assert events[1].payload["matches"][0]["id"] == known_match_id
+    assert events[1].payload["answer_context"]["match_id"] == known_match_id
 
     system_message = model.choose_calls[0][0]
     assert system_message["role"] == "system"
     assert known_match_id in system_message["content"]
+
+
+@pytest.mark.asyncio
+async def test_match_intelligence_data_carries_immutable_answer_context() -> None:
+    model = FakeChatModel(
+        turns=[
+            tool_turn("get_match_intelligence", {"topic": "momentum"}),
+            ModelTurn(),
+        ],
+        text_chunks=["当前走势数据暂不可用。"],
+    )
+    orchestrator, recording = build_orchestrator(model)
+    await recording.inner.build()
+    match_id = recording.inner.live_match.id
+
+    request = ChatRequest(
+        scope="match",
+        match_id=match_id,
+        messages=[ChatMessage(role="user", content="最近走势如何？")],
+    )
+    events = [event async for event in orchestrator.stream(request)]
+
+    data = next(event for event in events if event.type is ChatEventType.DATA)
+    assert data.payload["kind"] == "intelligence"
+    assert data.payload["answer_context"] == {
+        "match_id": match_id,
+        "state_version": data.payload["packet"]["state_version"],
+        "as_of": data.payload["packet"]["as_of"],
+    }
+    assert "event_key" not in json.dumps(data.payload)
 
 
 @pytest.mark.asyncio

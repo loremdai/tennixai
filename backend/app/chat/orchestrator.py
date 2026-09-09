@@ -18,11 +18,11 @@ from app.chat.models import (
     ChatScope,
     StructuredToolResult,
 )
-from app.chat.tools import BusinessTools, is_historical_query
+from app.chat.tools import BusinessTools, is_unsupported_historical_query
 from app.domain import Match
 from app.errors import AppError
 
-HISTORICAL_REPLY = "P1 暂不支持历史比赛结果查询。"
+HISTORICAL_REPLY = "P2 暂不支持大范围历史查询。"
 LLM_FALLBACK_REPLY = "比赛数据已找到，但 AI 说明暂时不可用。"
 MAX_TOOL_ROUNDS = 2
 MAX_MODEL_MATCHES = 12
@@ -32,10 +32,12 @@ GLOBAL_SYSTEM_PROMPT = (
     "所有网球事实（比分、赛程、球员、赛事、状态、发球方、ID、时间）必须来自工具结果，不得凭记忆编造。"
     "禁止输出任何外部供应商 ID；只使用工具返回的 Tennix 内部 ID。"
     "工具未提供的字段必须如实说明暂不可用。"
+    "昨天、最近有限场结果和两位球员的有限交手记录使用对应 P2 工具；大范围历史查询不支持。"
+    "Match scope 的主题问题使用 get_match_intelligence，topic 只能是 overview、score、statistics、points 或 momentum。"
 )
 MATCH_SYSTEM_SUFFIX = (
     "当前比赛已由页面上下文确定（current match id: {match_id}），"
-    "调用 get_match 时无需提供参数。"
+    "所有上下文事实问题先调用 get_match_intelligence，调用 get_match 时无需提供参数。"
 )
 
 
@@ -81,12 +83,19 @@ def _model_match_summary(match: Match) -> dict[str, Any]:
 
 def _model_tool_result(result: StructuredToolResult) -> dict[str, Any]:
     matches = result.matches
-    return {
+    payload: dict[str, Any] = {
         "kind": result.kind,
         "match_count": len(matches),
         "truncated": len(matches) > MAX_MODEL_MATCHES,
         "matches": [_model_match_summary(match) for match in matches[:MAX_MODEL_MATCHES]],
     }
+    if result.packet is not None:
+        payload["packet"] = result.packet.model_dump(mode="json")
+    if result.metadata:
+        payload["metadata"] = result.metadata
+    if result.answer_context is not None:
+        payload["answer_context"] = result.answer_context.model_dump(mode="json")
+    return payload
 
 
 class ChatOrchestrator:
@@ -114,7 +123,7 @@ class ChatOrchestrator:
             ),
             "",
         )
-        if is_historical_query(last_user):
+        if is_unsupported_historical_query(last_user):
             unsupported = StructuredToolResult(kind="unsupported")
             yield ChatEvent(
                 type=ChatEventType.DATA, payload=unsupported.model_dump(mode="json")

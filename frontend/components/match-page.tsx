@@ -232,6 +232,7 @@ export function MatchPage({ matchId, previewMatch, preview = false }: MatchPageP
                 preview={false}
                 chat={chat.state}
                 onSubmit={(value) => void chat.send(value)}
+                currentStateVersion={stream.snapshot?.state_version ?? null}
               />
               <div className="min-w-0 lg:col-start-1 lg:row-start-1">
                 <MatchMainColumn

@@ -144,6 +144,8 @@ function answerLabel(chat: ChatViewState): string {
       return '暂不支持'
     case 'matches':
       return '结构化比赛结果'
+    case 'intelligence':
+      return '本场比赛主题数据'
     default:
       return '回答'
   }

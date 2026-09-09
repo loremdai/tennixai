@@ -84,7 +84,7 @@ test.describe('P1 flow', () => {
     await page.getByLabel('向 Tennix 询问本场比赛').fill('谁在发球？')
     await page.getByLabel('向 Tennix 询问本场比赛').press('Enter')
 
-    await expect(page.getByText('已获取本场比赛的结构化数据。')).toBeVisible()
+    await expect(page.getByText(/已获取本场比赛的主题数据/)).toBeVisible()
     const serverIndicator = page.locator('#server-indicator')
     await expect(serverIndicator).toBeVisible()
   })
@@ -108,12 +108,12 @@ test.describe('P1 flow', () => {
     expect(requests.length).toBeGreaterThanOrEqual(2)
   })
 
-  test('historical question returns typed unsupported without a card', async ({ page }) => {
+  test('broad historical question returns typed unsupported without a card', async ({ page }) => {
     await page.goto('/')
-    await page.getByLabel('继续向 Tennix 提问').fill('昨天 Sinner 赢了吗？')
+    await page.getByLabel('继续向 Tennix 提问').fill('Sinner 的全部历史战绩')
     await page.getByLabel('继续向 Tennix 提问').press('Enter')
 
-    await expect(page.getByText('P1 暂不支持历史比赛结果查询。')).toBeVisible()
+    await expect(page.getByText('P2 暂不支持大范围历史查询。')).toBeVisible()
     await expect(page.getByRole('link', { name: /打开比赛：/ }).first()).toBeHidden()
   })
 

@@ -42,6 +42,7 @@ type AssistantPanelProps = {
   preview: boolean
   chat: ChatViewState | null
   onSubmit: (value: string) => void
+  currentStateVersion?: number | null
 }
 
 const productionPromptsByStatus: Record<MatchViewModel['visualStatus'], string[]> = {
@@ -58,7 +59,13 @@ const productionContextDescriptions: Record<MatchViewModel['visualStatus'], stri
   unavailable: '比赛状态待确认',
 }
 
-function AssistantPanel({ match, preview, chat, onSubmit }: AssistantPanelProps) {
+function AssistantPanel({
+  match,
+  preview,
+  chat,
+  onSubmit,
+  currentStateVersion,
+}: AssistantPanelProps) {
   const [prompt, setPrompt] = useState('')
   const [previewAnswer, setPreviewAnswer] = useState<PreviewAnswer | null>(null)
 
@@ -94,6 +101,12 @@ function AssistantPanel({ match, preview, chat, onSubmit }: AssistantPanelProps)
   const busy = !preview && (chat?.phase === 'loading' || chat?.phase === 'streaming')
   const chatHasContent =
     !preview && chat !== null && (Boolean(chat.data) || Boolean(chat.text) || Boolean(chat.error))
+  const answerIsOutdated = Boolean(
+    chat?.answerContext &&
+      currentStateVersion !== null &&
+      currentStateVersion !== undefined &&
+      currentStateVersion > chat.answerContext.state_version,
+  )
 
   return (
     <Card id="assistant" data-tone="assistant" className="scroll-mt-24">
@@ -160,10 +173,17 @@ function AssistantPanel({ match, preview, chat, onSubmit }: AssistantPanelProps)
                   ? '查询未完成'
                   : chat.data?.kind === 'unsupported'
                     ? '暂不支持'
+                    : chat.data?.kind === 'intelligence'
+                      ? '本场比赛主题数据'
                     : '本场比赛结构化结果'}
               </div>
               <p className="mt-3 break-words text-sm font-medium">“{chat.question}”</p>
               <MarkdownAnswer content={chat.text || (chat.error ? `查询失败（${chat.error.code}），请重试。` : '')} />
+              {answerIsOutdated ? (
+                <p className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200" role="status">
+                  比赛已更新；以上回答基于版本 {chat.answerContext?.state_version}，当前为版本 {currentStateVersion}。请重新提问以获取最新事实。
+                </p>
+              ) : null}
               {chat.phase === 'loading' || chat.phase === 'streaming' ? (
                 <p className="mt-2 text-xs text-muted-foreground">正在查询…</p>
               ) : null}
@@ -319,7 +339,13 @@ export function MatchSidebar(props: AssistantPanelProps & { keyFactsPreview?: bo
   const { match, preview } = props
   return (
     <aside className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-20 lg:col-start-2 lg:row-start-1 lg:self-start" aria-label="比赛助手与关键事实">
-      <AssistantPanel match={match} preview={preview} chat={props.chat} onSubmit={props.onSubmit} />
+      <AssistantPanel
+        match={match}
+        preview={preview}
+        chat={props.chat}
+        onSubmit={props.onSubmit}
+        currentStateVersion={props.currentStateVersion}
+      />
       <KeyFactsCard match={match} preview={preview} />
       <MarketCard />
     </aside>

@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { streamChat } from '@/lib/api/client'
-import type { StructuredData } from '@/lib/api/types'
+import type { AnswerContextDto, StructuredData } from '@/lib/api/types'
 
 export type ChatViewState = {
   phase: 'idle' | 'loading' | 'streaming' | 'success' | 'error'
   question: string
   text: string
   data: StructuredData | null
+  answerContext: AnswerContextDto | null
   error: { code: string; message: string; details: Record<string, unknown> } | null
 }
 
@@ -22,6 +23,7 @@ const IDLE_STATE: ChatViewState = {
   question: '',
   text: '',
   data: null,
+  answerContext: null,
   error: null,
 }
 
@@ -64,7 +66,14 @@ export function useChatStream(scope: 'global' | 'match', matchId?: string): {
         ...historyRef.current,
         { role: 'user' as const, content: prompt },
       ].slice(-MAX_HISTORY)
-      setState({ phase: 'loading', question: prompt, text: '', data: null, error: null })
+      setState({
+        phase: 'loading',
+        question: prompt,
+        text: '',
+        data: null,
+        answerContext: null,
+        error: null,
+      })
 
       let text = ''
       let terminated = false
@@ -80,7 +89,12 @@ export function useChatStream(scope: 'global' | 'match', matchId?: string): {
             case 'status':
               break
             case 'data':
-              setState((current) => ({ ...current, phase: 'streaming', data: event.payload }))
+              setState((current) => ({
+                ...current,
+                phase: 'streaming',
+                data: event.payload,
+                answerContext: current.answerContext ?? event.payload.answer_context ?? null,
+              }))
               break
             case 'text_delta':
               text += event.payload.delta

@@ -68,6 +68,41 @@ const dataEvent: ChatEvent = {
   },
 }
 
+const intelligenceDataEvent: ChatEvent = {
+  type: 'data',
+  payload: {
+    kind: 'intelligence',
+    matches: [],
+    packet: {
+      topic: 'momentum',
+      match_id: 'mat_42',
+      state_version: 7,
+      as_of: '2026-09-10T10:00:00Z',
+      status: 'live',
+      players: ['Jannik Sinner', 'Carlos Alcaraz'],
+      tournament: 'ATP Finals',
+      round: 'Semifinal',
+      scheduled_at: null,
+      surface: 'hard',
+      indoor: true,
+      format: 'BO3',
+      winner: null,
+      score: null,
+      server: 'Jannik Sinner',
+      statistics: [],
+      recent_points: [],
+      momentum: [],
+      key_points: [],
+      quality: [],
+    },
+    answer_context: {
+      match_id: 'mat_42',
+      state_version: 7,
+      as_of: '2026-09-10T10:00:00Z',
+    },
+  },
+}
+
 beforeEach(() => {
   streamChatMock.mockReset()
 })
@@ -112,6 +147,57 @@ describe('useChatStream', () => {
     expect(request.scope).toBe('match')
     expect(request.match_id).toBe('mat_42')
     expect(request.messages).toEqual([{ role: 'user', content: '谁在发球？' }])
+  })
+
+  it('stores immutable answer context from structured data', async () => {
+    streamChatMock.mockImplementation(
+      scriptedStream([
+        intelligenceDataEvent,
+        { type: 'text_delta', payload: { delta: '当前走势已获取。' } },
+        { type: 'done', payload: { ok: true } },
+      ]),
+    )
+
+    const { result } = renderHook(() => useChatStream('match', 'mat_42'))
+
+    await act(async () => {
+      await result.current.send('最近走势如何？')
+    })
+
+    expect(result.current.state.answerContext).toEqual(
+      intelligenceDataEvent.payload.answer_context,
+    )
+  })
+
+  it('keeps the first answer context when a stream emits more than one data event', async () => {
+    const laterDataEvent: ChatEvent = {
+      ...intelligenceDataEvent,
+      payload: {
+        ...intelligenceDataEvent.payload,
+        answer_context: {
+          match_id: 'mat_42',
+          state_version: 8,
+          as_of: '2026-09-10T10:01:00Z',
+        },
+      },
+    }
+    streamChatMock.mockImplementation(
+      scriptedStream([
+        intelligenceDataEvent,
+        laterDataEvent,
+        { type: 'done', payload: { ok: true } },
+      ]),
+    )
+
+    const { result } = renderHook(() => useChatStream('match', 'mat_42'))
+
+    await act(async () => {
+      await result.current.send('最近走势如何？')
+    })
+
+    expect(result.current.state.answerContext).toEqual(
+      intelligenceDataEvent.payload.answer_context,
+    )
   })
 
   it('keeps structured data when the terminal error event arrives', async () => {
@@ -235,6 +321,7 @@ describe('useChatStream', () => {
       question: '',
       text: '',
       data: null,
+      answerContext: null,
       error: null,
     })
   })

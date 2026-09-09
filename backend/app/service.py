@@ -27,6 +27,7 @@ from app.domain import (
     Player,
 )
 from app.errors import AppError
+from app.intelligence import IntelligencePacket, IntelligenceTopic, build_intelligence_packet
 from app.providers.base import TennisDataProvider
 from app.realtime.reducer import reduce_live_snapshot
 
@@ -314,6 +315,12 @@ class TennisService:
             }),
         })
 
+    async def get_match_intelligence(
+        self, match_id: str, topic: IntelligenceTopic | str
+    ) -> IntelligencePacket:
+        snapshot = await self.resolve_match_snapshot(match_id)
+        return build_intelligence_packet(snapshot, topic=topic)
+
     # ------------------------------------------------------------- P2 catalog
 
     async def list_catalog(
@@ -470,6 +477,13 @@ class TennisService:
             matches=tuple(matches[:limit]),
         )
 
+    async def get_player_results_by_name(
+        self, player_name: str, scope: PlayerResultsScope | str, limit: int
+    ) -> PlayerResults:
+        player = await self._resolve_player(player_name)
+        scope_value = scope.value if isinstance(scope, PlayerResultsScope) else scope
+        return await self.get_player_results(player.id, scope_value, limit)
+
     async def _fetch_head_to_head(self, first_player_id: str, second_player_id: str) -> object:
         async def load() -> object:
             try:
@@ -558,3 +572,12 @@ class TennisService:
             availability=availability,
             head_to_head=bounded,
         )
+
+    async def get_head_to_head_by_name(
+        self, first_player_name: str, second_player_name: str, limit: int
+    ) -> HeadToHeadResult:
+        first_player, second_player = await asyncio.gather(
+            self._resolve_player(first_player_name),
+            self._resolve_player(second_player_name),
+        )
+        return await self.get_head_to_head(first_player.id, second_player.id, limit)

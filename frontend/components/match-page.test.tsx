@@ -38,14 +38,14 @@ vi.mock('next/navigation', () => ({
 
 let nextMatch: MatchDto | null = null
 
-function wrapSnapshot(match: MatchDto): MatchSnapshotDto {
+function wrapSnapshot(match: MatchDto, stateVersion = 1): MatchSnapshotDto {
   return {
     match,
     points: [],
     statistics: [],
     momentum: [],
     quality: [],
-    state_version: 1,
+    state_version: stateVersion,
     as_of: match.freshness.observed_at,
   }
 }
@@ -326,6 +326,32 @@ describe('production match page', () => {
     await userEvent.keyboard('{Enter}')
 
     expect(await screen.findByText('Sinner 正在发球。')).toBeVisible()
+  })
+
+  it('keeps completed prose immutable and marks it stale after a newer snapshot', async () => {
+    const live = makeMatch()
+    getMatchSnapshotMock.mockImplementation(async () => wrapSnapshot(live, 2))
+    mockStream({
+      data: {
+        kind: 'match',
+        matches: [live],
+        answer_context: {
+          match_id: 'mat_1',
+          state_version: 1,
+          as_of: '2026-09-08T10:00:00Z',
+        },
+      },
+      text: '回答基于版本 1。',
+    })
+
+    render(<MatchPage matchId="mat_1" />)
+    await screen.findByText('Jannik Sinner')
+
+    await userEvent.type(screen.getByLabelText('向 Tennix 询问本场比赛'), '当前比分是多少？')
+    await userEvent.keyboard('{Enter}')
+
+    expect(await screen.findByText('回答基于版本 1。')).toBeVisible()
+    expect(screen.getByText(/比赛已更新/)).toBeVisible()
   })
 
   it('renders contextual markdown instead of showing raw markers', async () => {

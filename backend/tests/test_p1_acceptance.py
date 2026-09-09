@@ -100,6 +100,20 @@ class CountingProviderWrapper:
         self.calls += 1
         return await self.inner.get_score(match_id)
 
+    async def get_match_snapshot(self, match_id: str):
+        self.calls += 1
+        return await self.inner.get_match_snapshot(match_id)
+
+    async def get_recent_results(self, player_id: str, *, limit: int):
+        self.calls += 1
+        return await self.inner.get_recent_results(player_id, limit=limit)
+
+    async def get_head_to_head(self, first_player_id: str, second_player_id: str, *, limit: int):
+        self.calls += 1
+        return await self.inner.get_head_to_head(
+            first_player_id, second_player_id, limit=limit
+        )
+
 
 class AcceptanceHarness:
     def __init__(
@@ -147,12 +161,12 @@ async def acceptance_harness() -> AcceptanceHarness:
         ("global", "今晚 Sinner 几点打？", "find_player_matches"),
         ("global", "Alcaraz 今天有比赛吗？", "find_player_matches"),
         ("global", "Djokovic 下一场对谁？", "find_player_matches"),
-        ("match", "这是什么赛事？", "get_match"),
-        ("match", "第几轮？", "get_match"),
-        ("match", "什么场地？", "get_match"),
-        ("match", "比赛开始了吗？", "get_match"),
-        ("match", "现在比分多少？", "get_match"),
-        ("match", "谁在发球？", "get_match"),
+        ("match", "这是什么赛事？", "get_match_intelligence"),
+        ("match", "第几轮？", "get_match_intelligence"),
+        ("match", "什么场地？", "get_match_intelligence"),
+        ("match", "比赛开始了吗？", "get_match_intelligence"),
+        ("match", "现在比分多少？", "get_match_intelligence"),
+        ("match", "谁在发球？", "get_match_intelligence"),
     ],
 )
 @pytest.mark.asyncio
@@ -168,18 +182,23 @@ async def test_supported_acceptance_intents(
         match_id=acceptance_harness.live_match_id if scope == "match" else None,
     )
     assert result.executed_tool_names == [expected_tool]
-    assert result.data_events[0]["matches"]
+    if expected_tool == "get_match_intelligence":
+        assert result.data_events[0]["kind"] == "intelligence"
+        assert result.data_events[0]["packet"]["match_id"] == acceptance_harness.live_match_id
+    else:
+        assert result.data_events[0]["matches"]
     assert result.terminal_event == "done"
 
 
 @pytest.mark.asyncio
-async def test_historical_question_is_typed_unsupported_without_calls(
+async def test_yesterday_question_uses_bounded_history_tool(
     acceptance_harness: AcceptanceHarness,
 ) -> None:
     result = await acceptance_harness.ask("昨天 Sinner 赢了吗？", scope="global", match_id=None)
 
-    assert result.data_events[0]["kind"] == "unsupported"
-    assert result.executed_tool_names == []
-    assert acceptance_harness.provider_calls.calls == 0
-    assert acceptance_harness.model.choose_calls == []
+    assert result.data_events[0]["kind"] == "matches"
+    assert result.data_events[0]["metadata"]["scope"] == "yesterday"
+    assert result.executed_tool_names == ["get_player_results"]
+    assert acceptance_harness.provider_calls.calls > 0
+    assert acceptance_harness.model.choose_calls
     assert result.terminal_event == "done"
