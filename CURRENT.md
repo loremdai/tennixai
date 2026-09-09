@@ -3,13 +3,13 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-09 17:07 CST
+**最后更新：** 2026-09-09 17:22 CST
 
-**当前任务：** 无（T20 已完成；T21 已 ready，尚未领取）
+**当前任务：** M01 — Unify Root Environment Entry
 
-**任务状态：** `idle`
+**任务状态：** `in_progress`
 
-**当前执行者 / ADE：** —
+**当前执行者 / ADE：** Codex
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
@@ -17,7 +17,7 @@
 
 **最后验证的产品提交：** `fdb0131`
 
-**T20 起始提交：** `17f4d89`
+**M01 起始提交：** `aece736`
 
 **远程：** `origin` → `https://github.com/loremdai/tennixai.git`
 
@@ -37,22 +37,23 @@
 - P2（Live Match Intelligence）设计已逐项批准：API-Tennis REST/WebSocket、FastAPI + 独立 worker、PostgreSQL + Redis、snapshot + versioned SSE、Home facets、PBP/statistics、Recent Control、轻量 history/H2H 和 Replay 测试。
 - P2 详细规格已写入 [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md)，T21–T32 的逐任务文件、接口、TDD 步骤和验收命令见 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md)。
 - T20 已完成且未实现 P2 产品代码；下一任务是 T21 canonical domain/provider contracts，必须按启动入口另行领取。
+- M01 正在把本地配置统一迁移到根目录 `.env`；不改变 P2 范围、任务顺序或产品架构，T21 仍是迁移完成后的下一任务。
 - 已知非 T17 限制：LiveTennisAPI 的 `/players?search` 当前不能把中文显示名“郑钦文”直接映射到 `Qinwen Zheng`；canonical English name 查询已通过，中文别名/名称归一化需另立任务批准。
 - 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`（任务外）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`（next dev 自动生成）、`frontend/next-env.d.ts`（Next 工具链生成）；保留原样。
 
 ## 当前任务
 
-### T20 — Freeze P2 Live Match Intelligence Design and Roadmap
+### M01 — Unify Root Environment Entry
 
-- **状态：** `done`
+- **状态：** `in_progress`
 - **执行者 / ADE：** Codex
 - **分支：** `main`
-- **起始提交：** `17f4d89`
-- **领取时间：** 2026-09-09 16:28 CST
-- **完成提交：** `b7921c0`
-- **范围：** 把用户逐项批准的 P2 产品边界、API-Tennis 能力、实时架构、canonical model、PostgreSQL/Redis 职责、Home 筛选、Match 体验、Chat、近期控制指数和测试策略写成权威规格与可执行路线。
-- **完成事实：** 已完成设计访谈、API-Tennis 官方文档/真实 Trial 能力核查和 Momentum 原始研究复核；P2 规格与 T21–T32 实施计划已提交，未实现 P2 产品代码。
-- **验证门：** 设计规格 702 行、实施计划 1055 行；12 个实施任务均有 files/interfaces/五步 TDD 与 commit gate；占位符和 64 位敏感模式扫描无命中；本地链接存在；tracked/new-file whitespace 检查与 `git diff --check` 通过。
+- **起始提交：** `aece736`
+- **领取时间：** 2026-09-09 17:22 CST
+- **完成提交：** —
+- **范围：** 把 backend、frontend 和真实测试使用的本地配置统一到仓库根目录 `.env`；迁移现有值但不提交凭据，并同步唯一 `.env.example`、启动入口、运行文档和 P2 计划中的配置路径。
+- **完成事实：** 已完成配置读写者盘点，迁移与验证进行中。
+- **验证门：** 根目录 `.env` 无损包含原有配置且受 Git 忽略；子目录环境文件不再使用；FastAPI、Next.js、Playwright 与真实测试均从统一入口取得配置；确定性回归、构建和泄漏检查通过。
 - **阻塞：** 无。
 
 ## 最近验证
@@ -72,9 +73,9 @@
 
 ## 最近交接
 
-**状态：** T20 已由 Codex 于 2026-09-09 在 `main` 完成，规格/计划提交 `b7921c0`；当前无领取中的任务，T21 已 ready。
+**状态：** M01 已由 Codex 于 2026-09-09 在 `main` 领取，起始提交 `aece736`；T21 保持 ready，等待配置迁移完成。
 
-**交接说明：** 接手 T21 前完整阅读 [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) 和 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t21-extend-the-canonical-domain-and-provider-contracts)。用户提供的 API-Tennis 凭据只允许保留在被忽略的本地环境文件中，不得写入文档、测试 fixture、日志或提交。P1 运行方式仍见 [docs/runbooks/p1-local.md](./docs/runbooks/p1-local.md)。
+**交接说明：** 当前只迁移本地配置入口，不实现 T21 或其他 P2 产品代码。用户提供的 API-Tennis 凭据只能存在于被忽略的根目录 `.env`，不得写入文档、测试 fixture、日志或提交。
 
 **已知本地状态：** 未跟踪的 `.codex/skills/ui-ux-pro-max/SKILL.md`、`frontend/AGENTS.md`、`frontend/CLAUDE.md`（next dev 生成）、`frontend/next-env.d.ts`（Next 工具链生成），保留原样。
 
@@ -84,11 +85,11 @@
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-09 | 领取 M01：本地配置统一迁移到根目录 `.env` | `aece736` 起始 |
 | 2026-09-09 | T20 完成：P2 设计规格、T21–T32 实施计划与三份总控落盘 | `b7921c0` |
 | 2026-09-09 | 领取 T20：冻结 P2 Live Match Intelligence 设计与实施路线 | `17f4d89` 起始 |
 | 2026-09-09 | T19 完成：Markdown 回答完成后保持结构化比赛卡片可见 | `fdb0131` |
 | 2026-09-09 | 领取 T19：Markdown 回答完成后保持结构化比赛卡片可见 | `b1108ba` 起始 |
-| 2026-09-09 | T18 完成：Home/Match 问答 Markdown 安全渲染与浏览器验收 | `5572960` |
 
 ## 接手与更新规则
 
