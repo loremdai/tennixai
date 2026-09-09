@@ -3,19 +3,19 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-09 10:43 CST
+**最后更新：** 2026-09-09 10:49 CST
 
-**当前任务：** T19 — Keep Structured Match Cards Visible After Markdown Answers
+**当前任务：** 无（T19 已完成；等待下一阶段明确批准）
 
-**任务状态：** `in_progress`
+**任务状态：** `idle`
 
-**当前执行者 / ADE：** Codex
+**当前执行者 / ADE：** —
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**最近完成任务提交：** `5572960`
+**最近完成任务提交：** `fdb0131`
 
-**最后验证的产品提交：** `5572960`
+**最后验证的产品提交：** `fdb0131`
 
 **T19 起始提交：** `b1108ba`
 
@@ -26,7 +26,7 @@
 - P1/T16 已于 2026-09-08 完成并推送：fake 模式全链路确定性地跑通；真实 LiveTennisAPI provider、真实 Qwen 单项与组合 chat、Next 同源代理浏览器门均通过。
 - T17 已于 2026-09-08 完成并推送：upcoming 改用当前 `/matches?status=upcoming` canonical 映射，指定球员使用供应商过滤，Home 的 live/upcoming 支持单侧失败降级，429 保留重试提示；实现提交为 `69c8238`。
 - T18 已于 2026-09-09 完成并推送：Home 与 Match 的问答 prose 统一使用安全 Markdown 渲染，粗体、无序列表和段落不再显示原始标记；实现提交为 `5572960`。
-- T19 已于 2026-09-09 领取：Markdown 列表使回答区域变高，结构化比赛卡片被推到视口下方；本任务只修复完成回答后的结果可见性，不改变原型视觉结构或数据契约。
+- T19 已于 2026-09-09 完成并推送：回答结束且结构化卡片不在视口内时，Home 会将结果区域滚动到粘性导航下方；尊重 reduced-motion，不改变卡片数据来源或原型视觉结构；实现提交为 `fdb0131`。
 - T16 已确认的事实：真实 provider 可返回 50 场 live matches；完整 `data` SSE 仍保留全部 canonical matches；LLM 只接收最多 12 条摘要并有持久化的 45 秒总时限；真实 Djokovic 查询不再因重复实名/组合名报歧义，空赛程会诚实返回并以 `done` 结束。
 - 最终验证：backend `pytest -m "not llm_live and not provider_live and not end_to_end_live"` 126 passed；frontend `pnpm test` 69/69、`pnpm typecheck`、`pnpm build` 通过；隔离 fake 服务下完整 Playwright `32 passed + 4 skipped`。
 - T18 验证：前端 `pnpm test` 71/71、`pnpm typecheck`、`pnpm build` 通过；隔离服务下 P1 Playwright 10/10；真实浏览器回答区检测到 `strong=10`、`ul=1`、原始 `**` 不存在。
@@ -42,20 +42,22 @@
 
 ### T19 — Keep Structured Match Cards Visible After Markdown Answers
 
-- **状态：** `in_progress`
+- **状态：** `done`
 - **执行者 / ADE：** Codex
 - **分支：** `main`
 - **起始提交：** `b1108ba`
 - **领取时间：** 2026-09-09 10:43 CST
+- **完成提交：** `fdb0131`
 - **范围：** Home 全局问答的结构化比赛卡片；复现 Markdown 回答变高后卡片被推到视口外的问题。
-- **实施计划：** 增加流式回答完成后的结果定位/滚动回归测试；在不改变卡片数据来源和原型视觉的前提下，让结构化结果区域在最终回答完成后保持可见；覆盖桌面与移动浏览器验收。
-- **验证门：** 前端单元测试、typecheck、build、Playwright P1 flow（桌面/移动）和真实浏览器查询；完成时记录实际命令、结果与提交。
+- **完成事实：** 新增结构化结果区域 ref 与视口检测；回答进入 `success/error` 且卡片存在时，必要时滚动至 `scroll-mt-24` 结果区域；reduced-motion 使用非动画滚动。
+- **验证门：** Home 单元全套 `72/72`、`pnpm typecheck`、`pnpm build`；新增长 Markdown P1 flow 桌面/移动 `12/12`；完整 Playwright `34 passed + 4 skipped`，视觉基线全部通过。
 - **阻塞：** 无。
 
 ## 最近验证
 
 | 日期 | 提交 | 验证 | 结果 |
 |---|---|---|---|
+| 2026-09-09 | `fdb0131` | Home 单元 72/72；typecheck/build；长 Markdown 结构化卡片视口回归桌面/移动 12/12；完整 Playwright 34 passed/4 skipped，视觉基线通过 | T19 完成；回答完成后结构化比赛卡片保持可见 |
 | 2026-09-09 | `5572960` | TDD 先行测试验证两处原文显示失败；修复后 frontend 71/71 + typecheck + build；隔离服务 Playwright 10/10；真实浏览器 `strong=10`、`ul=1`、无 `**` | T18 完成；Home/Match 问答 Markdown 展示通过 |
 | 2026-09-08 | `69c8238` | backend 确定性 126 passed；frontend 69/69 + typecheck + build；隔离 fake 服务的 Playwright 32 passed/4 skipped；真实 REST upcoming 50 场与 Qinwen Zheng 指定球员查询；真实浏览器 Home→Match→上下文问答 | T17 完成；P1 当前实现门通过 |
 | 2026-09-08 | `5dcaa6a` | backend 确定性 124 passed；frontend 66/66 + typecheck + build + E2E 32 passed/4 skipped；provider_live 1/1；llm_live 4/4；end_to_end_live 1/1；真实浏览器 end-to-end 2/2；手动 Djokovic SSE 完整结束 | T16 与 P1 真实运行时验收通过 |
@@ -67,9 +69,9 @@
 
 ## 最近交接
 
-**状态：** T19 已由 Codex 于 2026-09-09 在 `main` 领取，起始提交 `b1108ba`；当前任务正在执行。
+**状态：** T19 已由 Codex 于 2026-09-09 在 `main` 完成，实现提交 `fdb0131`；当前无领取中的任务。
 
-**交接说明：** 本地持久配置位于被忽略的 `backend/.env` 与 `frontend/.env.local`，未入库；`backend/.env` 含 `TENNIX_LLM_TIMEOUT_SECONDS=45` 与当前可用的 LiveTennisAPI key。T17 已完成真实 provider、真实 LLM 与浏览器验收；服务可按 [docs/runbooks/p1-local.md](./docs/runbooks/p1-local.md) 启动。已知视觉/StrictMode 说明保留在 T15 证据中。
+**交接说明：** 本地持久配置位于被忽略的 `backend/.env` 与 `frontend/.env.local`，未入库；`backend/.env` 含 `TENNIX_LLM_TIMEOUT_SECONDS=45` 与当前可用的 LiveTennisAPI key。T17 已完成真实 provider、真实 LLM 与浏览器验收；T19 已验证长 Markdown 回答后的结构化卡片视口可见性。服务可按 [docs/runbooks/p1-local.md](./docs/runbooks/p1-local.md) 启动。已知视觉/StrictMode 说明保留在 T15 证据中。
 
 **已知本地状态：** 未跟踪的 `.codex/skills/ui-ux-pro-max/SKILL.md`、`frontend/AGENTS.md`、`frontend/CLAUDE.md`（next dev 生成）、`frontend/next-env.d.ts`（Next 工具链生成），保留原样。
 
@@ -79,6 +81,7 @@
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-09 | T19 完成：Markdown 回答完成后保持结构化比赛卡片可见 | `fdb0131` |
 | 2026-09-09 | 领取 T19：Markdown 回答完成后保持结构化比赛卡片可见 | `b1108ba` 起始 |
 | 2026-09-09 | T18 完成：Home/Match 问答 Markdown 安全渲染与浏览器验收 | `5572960` |
 | 2026-09-09 | 领取 T18：问答 Markdown 原文显示修复 | `c6e4120` 起始 |

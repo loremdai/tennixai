@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-09 10:43 CST
+**最后更新：** 2026-09-09 10:49 CST
 
 **总体状态：** `in_progress`（P1 已完成；P2 保持 planned，等待明确启动）
 
 **当前里程碑：** P1 — 比赛信息查询助手（`done`；下一里程碑 P2 尚未启动）
 
-**当前阶段：** P1.6 — Acceptance and hardening（`in_progress`；T19 进行中）
+**当前阶段：** P1.6 — Acceptance and hardening（`done`）
 
 ## 状态说明
 
@@ -28,7 +28,7 @@
 
 | 里程碑 | 状态 | 目标 | 进入/完成条件 |
 |---|---|---|---|
-| P1 — Match Information Assistant | `done` | 跑通真实结构化比赛查询、卡片、Match Page 与上下文 Chat | T17/T18 均已完成（`69c8238`、`5572960`）；P1 关闭，P2 保持 planned |
+| P1 — Match Information Assistant | `done` | 跑通真实结构化比赛查询、卡片、Match Page 与上下文 Chat | T17/T18/T19 均已完成（`69c8238`、`5572960`、`fdb0131`）；P1 关闭，P2 保持 planned |
 | P2 — Live Match Intelligence | `planned` | 技术统计、PBP、Momentum、持久化和多进程实时协调 | P1 全部门通过；API-Tennis 能力与迁移设计另行批准 |
 | P3 — Market & Decision Support | `planned` | 市场状态、预测、edge、confidence 和 paper trading | P2 数据可信；映射、模型评估和风控设计另行批准 |
 | Optional — Automated Execution | `deferred` | 在满足法律、风控、安全和可审计条件后考虑自动下单 | 不属于 P3 默认范围，必须单独批准 |
@@ -43,7 +43,7 @@
 | P1.3 — Service and REST | `done` | TennisService、时间语义、缓存、确定性 REST | 已完成：T07（`000ca1a`）+ T08（`039d144`）——事实问题不经 LLM 可答；时区/歧义/不可用字段/stale/429 均有确定性测试 |
 | P1.4 — Real frontend data | `done` | typed client、Home、动态 Match Page、加载/错误/刷新状态 | 已完成：T09/T12/T13/T14；Home→Match 内部 ID 链路经单元与视觉门验证，预览路由像素稳定 |
 | P1.5 — Conversational path | `done` | 三个业务工具、Qwen tool loop、SSE、全局与比赛 Chat | 已完成：T10/T11 + 前端消费（T12–T14）；chat 与 REST 同一事实、LLM/供应商失败不产生虚构结果经 orchestrator 测试与 E2E 验证 |
-| P1.6 — Acceptance and hardening | `in_progress` | 验收集、真实服务 opt-in 测试、Playwright、真实运行时边界与修复 | T16/T17/T18 已完成；T19 正在修复 Markdown 回答变高后结构化比赛卡片被推到视口外的问题 |
+| P1.6 — Acceptance and hardening | `done` | 验收集、真实服务 opt-in 测试、Playwright、真实运行时边界与修复 | T16/T17/T18/T19 已完成；确定性、真实 provider/LLM、浏览器、降级、Markdown 展示和结果卡片可见性均有证据 |
 
 详细阶段设计见 [产品路线设计 §12](./docs/superpowers/specs/2026-09-08-tennixai-product-roadmap-design.md#12-p1-execution-roadmap)。
 
@@ -71,7 +71,7 @@
 | T16 | P1.6 | Harden the Real Live Runtime | `done` | `5dcaa6a` | `pytest -m "not llm_live and not provider_live and not end_to_end_live"` 124 passed；frontend `pnpm test` 66/66、typecheck、build、全 E2E 32 passed + 4 skipped；真实 `provider_live` 1/1、`llm_live` 4/4、`end_to_end_live` 1/1；真实浏览器 `end-to-end-live.spec.ts` desktop/mobile 2/2；手动 Djokovic 返回 `status → data(empty) → text_delta → done`；完整 SSE data 保留，LLM tool context 限 12 条摘要，超时降级保留结构化数据；配置与 runbook 已更新，计划见 [T16 计划](./docs/superpowers/plans/2026-09-08-tennixai-t16-real-runtime-hardening.md) |
 | T17 | P1.6 | Repair Real Upcoming Provider and Partial Failure Handling | `done` | `69c8238` | `/matches?status=upcoming` 使用当前 nested payload 并映射 canonical ID；指定球员查询使用 provider external ID 过滤；全局列表只读供应商一页，不做无界分页；Home live/upcoming 单侧失败独立降级；429 保留 `Retry-After` 并显示友好重试文案。backend 确定性 126 passed、frontend 69/69、typecheck/build 通过，Playwright 32 passed + 4 skipped；真实 REST 返回 50 场 upcoming，Qinwen Zheng 指定查询与真实浏览器 Home→Match→上下文问答通过 |
 | T18 | P1.6 | Render Markdown in Conversational Answers | `done` | `5572960` | 根因是 Home/Match 使用普通 `<p>` 输出 Markdown 字符串；新增共享 `MarkdownAnswer`，默认跳过原始 HTML，统一渲染粗体、列表和段落。TDD 回归测试先失败后通过；frontend 71/71、typecheck/build、隔离服务 Playwright 10/10；真实浏览器确认 `strong=10`、`ul=1`、无原始 `**` |
-| T19 | P1.6 | Keep Structured Match Cards Visible After Markdown Answers | `in_progress` | — | Markdown 列表使回答区域变高，结构化卡片被推到当前视口下方；计划在回答完成后定位结果区域，保持结构化卡片可见，并用单元、构建、Playwright 桌面/移动和真实浏览器验证 |
+| T19 | P1.6 | Keep Structured Match Cards Visible After Markdown Answers | `done` | `fdb0131` | 新增结果区域 ref、视口检测和 `scroll-mt-24`；回答完成且结果不在视口时滚动到卡片，尊重 reduced-motion。Home 单元 72/72、typecheck/build、长 Markdown P1 flow 桌面/移动 12/12；完整 Playwright 34 passed + 4 skipped，视觉基线通过 |
 
 > T17 的已知非范围限制：LiveTennisAPI 的 `/players?search` 尚不能直接解析中文显示名“郑钦文”；canonical English name `Qinwen Zheng` 的真实查询已通过。中文别名/名称归一化需另立任务，不影响 T17 的 provider 修复验收。
 
