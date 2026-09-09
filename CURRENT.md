@@ -3,21 +3,21 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-09 20:32 CST
+**最后更新：** 2026-09-09 20:45 CST
 
-**当前任务：** T26 — Build the Canonical Live Reducer and Transactional Persistence
+**当前任务：** 无（T26 已完成；T27 已 ready，尚未领取）
 
-**任务状态：** `in_progress`
+**任务状态：** `idle`
 
-**当前执行者 / ADE：** Claude Code / Claude Code
+**当前执行者 / ADE：** —
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**最近完成任务提交：** `e904485`
+**最近完成任务提交：** `98a1a22`
 
-**最后验证的产品提交：** `e904485`
+**最后验证的产品提交：** `98a1a22`
 
-**T26 起始提交：** `8a21c12`
+**T27 起始提交：** 待领取时填写
 
 **远程：** `origin` → `https://github.com/loremdai/tennixai.git`
 
@@ -48,23 +48,32 @@
 - T24 已确认的事实：默认 facet=ATP+WTA/全部性别/单打，空组=全部；排序 tier→live→开赛时间→id；facet counts 尊重另外两组且保留 0 值；Featured=排序后首项；recent fetch 满 10 条→PARTIAL；unsupported→UNAVAILABLE 且 matches 为空；全套确定性 backend 241 passed/7 deselected。
 - T25 已于 2026-09-09 完成并推送：Home 叠加筛选（chip 组 + 计数 + 零计数禁用 + 恢复默认）、catalog 消费（`/api/matches/catalog` Next 代理）、Featured 取 `featured_match_id`、双视口 e2e；实现提交为 `e904485`。
 - T25 已确认的事实：前端筛选语义与后端一致（空组=全部、默认 ATP+WTA/全部性别/单打）；facet counts 为 live+upcoming 合并；筛选为空只显空态、不放宽；P1 failure 注入 glob 已修正为 `**/api/matches**`；视觉 spec 已加滚动稳定化；4 张 Home 基线经审阅有意更新，match 页零变化。
-- 下一任务是 T26（canonical live reducer 与事务化持久化），必须按启动入口另行领取；需要 compose PostgreSQL 在位运行 integration 门。
+- T26 已于 2026-09-09 完成并推送：canonical live reducer（去重/append/correction/尾段重建/版本语义）与事务化 `save_reduction`（migration `0002` 增 quality 列）；实现提交为 `98a1a22`。
+- T26 已确认的事实：相同 supplier snapshot 不进版本不发事件；纠错 revision+1 且 `recompute_from_sequence` 指向变化序列；删除尾段自首个差异重建连续序列；仅 freshness 差异不算状态变化；重复保存幂等、失败回滚旧版本可读；全套确定性 256 passed/7 deselected。
+- 下一任务是 T27（WebSocket feed、Redis leases 与 realtime worker），必须按启动入口另行领取；需要 compose Redis 在位（当前 healthy）。
 - 已知非 T17 限制：LiveTennisAPI 的 `/players?search` 当前不能把中文显示名“郑钦文”直接映射到 `Qinwen Zheng`；canonical English name 查询已通过，中文别名/名称归一化需另立任务批准。
 - 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`（任务外）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`（next dev 自动生成）、`frontend/next-env.d.ts`（Next 工具链生成）；保留原样。
 
 ## 当前任务
 
-### T26 — Build the Canonical Live Reducer and Transactional Persistence
-
-- **状态：** `in_progress`
-- **执行者 / ADE：** Claude Code / Claude Code
-- **分支：** `main`
-- **起始提交：** `8a21c12`
-- **领取时间：** 2026-09-09 20:32 CST
-- **范围：** 按 [P2 实施计划 T26](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t26-build-the-canonical-live-reducer-and-transactional-persistence)：`app/realtime/models.py`（LiveReduction/PointRevision/typed changes）、`reducer.py`（full-snapshot diff、point append/correction、版本推进）、repositories 的原子 `save_reduction`（含 quality 存储 migration）、纯测试与 PostgreSQL integration 门。
-- **阻塞：** 无。
+无。T26 已完成；T27（Add WebSocket Feed, Redis Leases, and the Realtime Worker）已 ready，接手前须按启动入口另行领取。
 
 ## 最近完成任务
+
+### T26 — Build the Canonical Live Reducer and Transactional Persistence
+
+- **状态：** `done`
+- **执行者 / ADE：** Claude Code / Claude Code
+- **分支：** `main`
+- **起始提交：** `8a21c12`（领取记录 `daed5ea`）
+- **领取时间：** 2026-09-09 20:32 CST
+- **完成提交：** `98a1a22`
+- **范围：** 按 [P2 实施计划 T26](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t26-build-the-canonical-live-reducer-and-transactional-persistence)：`app/realtime/`（models/reducer）、repositories 原子 `save_reduction`、migration `0002`（snapshot quality 列）。
+- **完成事实：** TDD 先行：reducer 单元 11 项与 integration 4 项先失败（模块不存在）后实现。reducer 以 (set,game,point) 为 point identity、fingerprint 判变：相同 supplier snapshot `changed=False` 且零事件；append 从 prev max+1 续号；旧分变化生成 `PointRevision`（revision+1，before/after 全量）并把 `recompute_from_sequence` 设为该 sequence；被删除/重排的尾段自首个差异重建连续序列；状态/比分/连接/统计/质量差异分别映射 §11 typed changes（固定顺序）；版本仅语义变化 +1；仅 freshness/as_of 差异不算变化。`save_reduction` 单事务 upsert snapshot(+quality)/points(on conflict 更新以应用纠错)/revisions(conflict 忽略)/statistics；重复保存幂等；FK 失败的保存回滚后旧版本仍可读。
+- **验证门：** `uv run pytest tests/test_live_reducer.py` 11 passed；`uv run pytest -m infrastructure tests/integration/` 11 passed（T22 7 + T26 4）；`alembic downgrade base` → `upgrade head` 往返 exit 0；全套确定性 256 passed/7 deselected；`git diff --check` 通过。
+- **阻塞：** 无。
+
+（T25 详情见 ROADMAP 登记表与提交 `e904485`。）
 
 ### T25 — Add Stackable Home Facets and Priority Presentation
 
@@ -102,6 +111,7 @@
 
 | 日期 | 提交 | 验证 | 结果 |
 |---|---|---|---|
+| 2026-09-09 | `98a1a22` | TDD：reducer 11 项 + integration 4 项先失败后通过；infrastructure 11 passed；alembic base↔head 往返 exit 0；全套确定性 256 passed/7 deselected；`git diff --check` 通过 | T26 完成；canonical reducer 与事务化持久化就绪，T27 ready |
 | 2026-09-09 | `e904485` | TDD：match-filters 单元 13 + 组件 9 先失败后通过；`pnpm test` 98 passed；typecheck/build exit 0；e2e P2 Home filters 6/6 双视口；4 张 Home 基线审阅后更新、match 页零变化；完整 e2e 连续两轮 40 passed/4 skipped；后端 241 passed/7 deselected | T25 完成；Home 叠加筛选与优先级展示就绪，T26 ready |
 | 2026-09-09 | `dddb734` | TDD：p2_service 17 项 + p2_api 10 项先失败后通过；service/API/P1 acceptance 门 74 passed；全套确定性 241 passed/7 deselected；`git diff --check` 通过 | T24 完成；catalog/history/H2H 服务与 REST 就绪，T25 ready |
 | 2026-09-09 | `015ff7f` | TDD：40 项契约测试先失败后通过；adapter+contract 53 passed；全套确定性 214 passed/7 deselected；真实 opt-in REST smoke 1 passed（认证、live canonical、snapshot、零泄漏）；`git diff --check` 通过 | T23 完成；API-Tennis REST adapter 就绪，T24 ready |
@@ -111,15 +121,15 @@
 | 2026-09-09 | `b7921c0` | P2 规格/计划覆盖审查；12 个任务和 60 个步骤结构核对；占位符/敏感模式扫描无命中；本地链接存在；whitespace 与 diff check 通过 | T20 完成；P2.0 关闭，T21 ready |
 | 2026-09-09 | `fdb0131` | Home 单元 72/72；typecheck/build；长 Markdown 结构化卡片视口回归桌面/移动 12/12；完整 Playwright 34 passed/4 skipped，视觉基线通过 | T19 完成；回答完成后结构化比赛卡片保持可见 |
 | 2026-09-09 | `5572960` | TDD 先行测试验证两处原文显示失败；修复后 frontend 71/71 + typecheck + build；隔离服务 Playwright 10/10；真实浏览器 `strong=10`、`ul=1`、无 `**` | T18 完成；Home/Match 问答 Markdown 展示通过 |
-| 2026-09-08 | `69c8238` | backend 确定性 126 passed；frontend 69/69 + typecheck + build；隔离 fake 服务的 Playwright 32 passed/4 skipped；真实 REST upcoming 50 场与 Qinwen Zheng 指定球员查询；真实浏览器 Home→Match→上下文问答 | T17 完成；P1 当前实现门通过 |
+| 2026-09-08 | `5dcaa6a` | backend 确定性 124 passed；frontend 66/66 + typecheck + build + E2E 32 passed/4 skipped；provider_live 1/1；llm_live 4/4；end_to_end_live 1/1；真实浏览器 end-to-end 2/2；手动 Djokovic SSE 完整结束 | T16 与 P1 真实运行时验收通过 |
 
 任务完成前必须把实际运行的命令、结果和对应提交补充到这里。未运行或失败的验收不能写成通过。
 
 ## 最近交接
 
-**状态：** T25 已由 Claude Code 于 2026-09-09 在 `main` 完成，实现提交 `e904485`；当前无领取中的任务，T26 保持 ready。
+**状态：** T26 已由 Claude Code 于 2026-09-09 在 `main` 完成，实现提交 `98a1a22`；当前无领取中的任务，T27 保持 ready。
 
-**交接说明：** 接手 T26 前完整阅读 [P2 设计规格 §10](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) 和 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t26-build-the-canonical-live-reducer-and-transactional-persistence)。所有 ADE 只使用根目录 `.env`；API-Tennis 凭据变量为 `TENNIX_API_TENNIS_API_KEY`，不得写入代码、文档、fixture、日志、提交或聊天输出。T25 起前端消费 `/api/matches/catalog`（筛选参数 circuit/gender/discipline 重复传值，空组省略）；视觉 spec 依赖“滚动稳定化”步骤，勿删除；共享后端测试 fake 在 `tests/p2_fakes.py`（CatalogFakeProvider）。用户已追加要求：P2 收尾时用真实浏览器按业务流程逐项人工验收直到无 bug。
+**交接说明：** 接手 T27 前完整阅读 [P2 设计规格 §8–§12](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) 和 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t27-add-websocket-feed-redis-leases-and-the-realtime-worker)。所有 ADE 只使用根目录 `.env`；API-Tennis 凭据变量为 `TENNIX_API_TENNIS_API_KEY`，不得写入代码、文档、fixture、日志、提交或聊天输出。T26 起 reducer 契约为 `reduce_live_snapshot(previous: MatchSnapshot | None, candidate: MatchSnapshot) -> LiveReduction`，持久化为 `MatchSnapshotRepository.save_reduction(reduction)`（单事务、幂等）；`PointRevision.revision` 与 `LiveReduction.recompute_from_sequence` 供 T30 重算 momentum。用户已追加要求：P2 收尾时用真实浏览器按业务流程逐项人工验收直到无 bug。
 
 **已知本地状态：** 未跟踪的 `.codex/skills/ui-ux-pro-max/SKILL.md`、`frontend/AGENTS.md`、`frontend/CLAUDE.md`（next dev 生成）、`frontend/next-env.d.ts`（Next 工具链生成），保留原样。
 
@@ -129,11 +139,11 @@
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-09 | T26 完成：canonical live reducer 与事务化持久化 | `98a1a22` |
 | 2026-09-09 | 领取 T26：canonical live reducer 与事务化持久化 | `8a21c12` 起始 |
 | 2026-09-09 | T25 完成：Home 叠加筛选、catalog 消费与优先级展示 | `e904485` |
 | 2026-09-09 | 领取 T25：Home 叠加筛选与优先级展示 | `13a545f` 起始 |
 | 2026-09-09 | T24 完成：catalog 筛选/排序/facet counts、history/H2H 服务与 REST 路由 | `dddb734` |
-| 2026-09-09 | 领取 T24：catalog 筛选、history/H2H 服务与 P2 REST APIs | `85dd65d` 起始 |
 
 ## 接手与更新规则
 
