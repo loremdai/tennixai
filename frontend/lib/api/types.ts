@@ -209,10 +209,11 @@ export type MatchStreamFrame =
       id: string | null
       payload: {
         match_id: string
-        state_version: number
+        state_version: number | null
         as_of: string
         changes: string[]
-        snapshot: MatchSnapshotDto
+        snapshot?: MatchSnapshotDto
+        connection_status?: ConnectionStatus
       }
     }
   | {

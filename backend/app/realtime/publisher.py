@@ -32,6 +32,7 @@ class RealtimePublisher:
             "state_version": snapshot.state_version,
             "as_of": snapshot.as_of.isoformat(),
             "changes": [change.value for change in reduction.events],
+            "snapshot": json.loads(snapshot.model_dump_json()),
         }
         await self._redis.set(hot_key(reduction.match_id), snapshot.model_dump_json())
         await self._redis.publish(match_channel(reduction.match_id), json.dumps(event))

@@ -13,13 +13,16 @@ class Settings(BaseSettings):
         env_prefix="TENNIX_", env_file=ROOT_ENV_FILE, extra="ignore"
     )
 
-    provider_mode: Literal["fake", "live", "livetennis", "api_tennis"] = "fake"
+    provider_mode: Literal["fake", "live", "livetennis", "api_tennis", "replay"] = "fake"
     livetennis_api_key: SecretStr | None = None
     livetennis_base_url: str = "https://api.livetennisapi.com/api/public/v1"
     api_tennis_api_key: SecretStr | None = None
     api_tennis_base_url: str = "https://api.api-tennis.com/tennis/"
     api_tennis_ws_url: str = "wss://wss.api-tennis.com/live"
     api_tennis_ws_url: str = "wss://wss.api-tennis.com/live"
+    replay_fixture_path: str = "tests/fixtures/replay/live_match.jsonl"
+    replay_speed: float = Field(default=20.0, gt=0, le=10_000)
+    replay_identity_namespace: str = "replay"
     llm_mode: Literal["fake", "openai_compatible"] = "fake"
     llm_api_key: SecretStr | None = None
     llm_base_url: str | None = None

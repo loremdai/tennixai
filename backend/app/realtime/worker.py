@@ -38,6 +38,9 @@ class Subscription:
     async def _read(self) -> None:
         try:
             async for envelope in self._stream:
+                if envelope.kind == "disconnect":
+                    self.disconnect_detected = True
+                    return
                 await self.queue.put(envelope)
         except asyncio.CancelledError:
             raise
@@ -76,6 +79,7 @@ class RealtimeWorker:
         raw,
         now: Callable[[], datetime],
         max_live_subscriptions: int,
+        provider_name: str = PROVIDER_NAME,
     ) -> None:
         self._identity = identity
         self._snapshots = snapshots
@@ -86,6 +90,7 @@ class RealtimeWorker:
         self._raw = raw
         self._now = now
         self._max = max_live_subscriptions
+        self._provider_name = provider_name
         self._subs: dict[str, Subscription] = {}
         self._capacity_blocked: set[str] = set()
         self._current: dict[str, MatchSnapshot] = {}
@@ -122,14 +127,14 @@ class RealtimeWorker:
                 continue
             self._capacity_blocked.discard(match_id)
             external_id = await self._identity.external_id(
-                "match", PROVIDER_NAME, match_id
+                "match", self._provider_name, match_id
             )
             if external_id is None:
                 continue
             sub = Subscription(match_id, external_id, self._feed)
             self._subs[match_id] = sub
             # REST snapshot first: the stream only ever carries deltas onto it.
-            await self._rest_reconcile(match_id)
+            await self._rest_reconcile(match_id, recovery=False)
             await sub.start_reader()
             active += 1
 
@@ -139,11 +144,15 @@ class RealtimeWorker:
             if sub.disconnect_detected:
                 sub.disconnect_detected = False
                 sub.state = "reconnecting"
+                await self._publisher.publish_connection(
+                    match_id, "reconnecting", self._now()
+                )
                 while not sub.queue.empty():
                     sub.queue.get_nowait()
-                await self._rest_reconcile(match_id)
+                await self._rest_reconcile(match_id, recovery=True)
                 await sub.restart_reader()
                 sub.state = "live"
+                await self._publisher.publish_connection(match_id, "live", self._now())
                 continue
             while not sub.queue.empty():
                 envelope = sub.queue.get_nowait()
@@ -170,8 +179,18 @@ class RealtimeWorker:
         await self._publisher.publish_delta(reduction)
         return reduction
 
-    async def _rest_reconcile(self, match_id: str) -> None:
-        candidate = await self._rest.get_match_snapshot(match_id)
+    async def _rest_reconcile(self, match_id: str, *, recovery: bool) -> None:
+        if match_id not in self._current:
+            loader = getattr(self._snapshots, "load_snapshot", None)
+            if loader is not None:
+                persisted = await loader(match_id)
+                if persisted is not None:
+                    self._current[match_id] = persisted
+        reconcile = getattr(self._rest, "reconcile_match_snapshot", None)
+        if reconcile is not None:
+            candidate = await reconcile(match_id, recovery=recovery)
+        else:
+            candidate = await self._rest.get_match_snapshot(match_id)
         await self._apply(match_id, candidate)
 
     async def _close(self, match_id: str) -> None:
@@ -186,3 +205,10 @@ class RealtimeWorker:
     async def stop(self) -> None:
         for match_id in list(self._subs):
             await self._close(match_id)
+
+    async def run_forever(self, *, interval_seconds: float = 0.1) -> None:
+        """Run demand reconciliation until the host process cancels the task."""
+
+        while True:
+            await self.reconcile_demand_once()
+            await asyncio.sleep(interval_seconds)

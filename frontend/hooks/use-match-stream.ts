@@ -8,6 +8,7 @@ export type MatchStreamPhase = 'loading' | 'live' | 'reconnecting' | 'stale' | '
 export type MatchStreamState = {
   snapshot: MatchSnapshotDto | null
   phase: MatchStreamPhase
+  connectionNotice: 'reconnecting' | 'restored' | null
   errorCode: string | null
   refresh: () => Promise<void>
 }
@@ -31,12 +32,14 @@ function isAbort(error: unknown): boolean {
 export function useMatchStream(matchId: string | undefined): MatchStreamState {
   const [snapshot, setSnapshot] = useState<MatchSnapshotDto | null>(null)
   const [phase, setPhase] = useState<MatchStreamPhase>('loading')
+  const [connectionNotice, setConnectionNotice] = useState<'reconnecting' | 'restored' | null>(null)
   const [errorCode, setErrorCode] = useState<string | null>(null)
 
   const versionRef = useRef(0)
   const abortRef = useRef<AbortController | null>(null)
   const retryRef = useRef<number | null>(null)
   const hiddenTimerRef = useRef<number | null>(null)
+  const connectionNoticeTimerRef = useRef<number | null>(null)
   const endedRef = useRef(false)
   const hasSnapshotRef = useRef(false)
   const openStreamRef = useRef<() => Promise<void>>(async () => {})
@@ -78,6 +81,22 @@ export function useMatchStream(matchId: string | undefined): MatchStreamState {
           applySnapshot(frame.payload.snapshot)
         } else if (frame.type === 'match_delta') {
           const version = frame.payload.state_version
+          if (version === null) {
+            if (frame.payload.connection_status === 'reconnecting' || frame.payload.connection_status === 'stale') {
+              setConnectionNotice('reconnecting')
+              setPhase(frame.payload.connection_status)
+            } else if (frame.payload.connection_status === 'live') {
+              setConnectionNotice('restored')
+              setPhase('live')
+              if (connectionNoticeTimerRef.current !== null) window.clearTimeout(connectionNoticeTimerRef.current)
+              connectionNoticeTimerRef.current = window.setTimeout(() => {
+                connectionNoticeTimerRef.current = null
+                setConnectionNotice(null)
+              }, 2_000)
+            }
+            continue
+          }
+          if (!frame.payload.snapshot) continue
           if (version <= versionRef.current) continue
           if (version === versionRef.current + 1) {
             applySnapshot(frame.payload.snapshot)
@@ -135,6 +154,7 @@ export function useMatchStream(matchId: string | undefined): MatchStreamState {
     endedRef.current = false
     hasSnapshotRef.current = false
     setSnapshot(null)
+    setConnectionNotice(null)
     setErrorCode(null)
     setPhase('loading')
 
@@ -162,6 +182,10 @@ export function useMatchStream(matchId: string | undefined): MatchStreamState {
       if (hiddenTimerRef.current !== null) {
         window.clearTimeout(hiddenTimerRef.current)
         hiddenTimerRef.current = null
+      }
+      if (connectionNoticeTimerRef.current !== null) {
+        window.clearTimeout(connectionNoticeTimerRef.current)
+        connectionNoticeTimerRef.current = null
       }
       if (cancelled || endedRef.current) return
       void (async () => {
@@ -194,5 +218,5 @@ export function useMatchStream(matchId: string | undefined): MatchStreamState {
     }
   }, [matchId, loadSnapshot, openStream, scheduleRetry])
 
-  return { snapshot, phase, errorCode, refresh }
+  return { snapshot, phase, connectionNotice, errorCode, refresh }
 }

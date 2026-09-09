@@ -214,6 +214,19 @@ export function MatchPage({ matchId, previewMatch, preview = false }: MatchPageP
           </div>
         ) : activeViewModel ? (
           <>
+            {stream.phase === 'reconnecting' || stream.connectionNotice === 'reconnecting' ? (
+              <p role="status" className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                实时连接恢复中，页面保留最后可信状态。
+              </p>
+            ) : stream.connectionNotice === 'restored' ? (
+              <p role="status" className="rounded-lg border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-primary">
+                实时连接已恢复，状态已同步。
+              </p>
+            ) : stream.phase === 'stale' ? (
+              <p role="status" className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                页面暂时离开直播，数据可能较旧；返回页面后将自动恢复。
+              </p>
+            ) : null}
             <div className="match-reveal">
               <MatchHero
                 match={activeViewModel}

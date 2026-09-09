@@ -11,6 +11,10 @@ try {
   if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error
 }
 const configuredEnvironment = { ...rootEnvironment, ...process.env }
+const replayEnabled = configuredEnvironment.TENNIX_E2E_REPLAY === '1'
+const replayIdentityNamespace =
+  configuredEnvironment.TENNIX_REPLAY_IDENTITY_NAMESPACE ??
+  (replayEnabled ? `replay-e2e-${Date.now()}` : 'replay')
 
 export default defineConfig({
   testDir: './e2e',
@@ -43,12 +47,20 @@ export default defineConfig({
           Boolean(configuredEnvironment.TENNIX_LLM_BASE_URL)
         return {
           ...configuredEnvironment,
-          TENNIX_PROVIDER_MODE: realProvider ? 'live' : 'fake',
+          TENNIX_PROVIDER_MODE: replayEnabled ? 'replay' : realProvider ? 'live' : 'fake',
           TENNIX_LLM_MODE: realLlm ? 'openai_compatible' : 'fake',
+          ...(replayEnabled
+            ? {
+                TENNIX_REPLAY_SPEED: configuredEnvironment.TENNIX_REPLAY_SPEED ?? '1',
+                TENNIX_REPLAY_IDENTITY_NAMESPACE: replayIdentityNamespace,
+                TENNIX_REDIS_URL:
+                  configuredEnvironment.TENNIX_E2E_REDIS_URL ?? 'redis://127.0.0.1:6379/10',
+              }
+            : {}),
           ...(realProvider ? {} : { TENNIX_FIXED_NOW: '2026-09-08T10:00:00Z' }),
         }
       })(),
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: !process.env.CI && !replayEnabled,
     },
     {
       command: 'pnpm dev --hostname 127.0.0.1 --port 3100',
