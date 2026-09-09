@@ -35,6 +35,11 @@ CHANGE_ORDER: tuple[ReductionChange, ...] = (
 )
 
 
+class FeedDisconnected(Exception):
+    """Transport-level loss of a live feed. The reason never contains
+    credentials or connection URIs."""
+
+
 class PointRevision(FrozenModel):
     point_id: str
     sequence: int
