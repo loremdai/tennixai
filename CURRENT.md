@@ -3,19 +3,19 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-10 07:43 CST
+**最后更新：** 2026-09-10 07:47 CST
 
-**当前任务：** P2 post-close UX patch — 隐藏无数据的“未知”筛选项
+**当前任务：** 空闲（P2 已关闭；下一阶段需显式批准）
 
-**任务状态：** `in_progress`
+**任务状态：** `idle`
 
-**当前执行者 / ADE：** Codex / Codex
+**当前执行者 / ADE：** —
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**最近完成任务提交：** `5c504b7`
+**最近完成任务提交：** `525d701`
 
-**最后验证的产品提交：** `5c504b7`
+**最后验证的产品提交：** `525d701`
 
 **本次任务起始提交：** `5c504b7`
 
@@ -68,11 +68,22 @@
 - T29 已确认的事实：preview 原型与卡片顺序零变化；fake 模式统计/逐分为空时显示诚实缺失文案；`p1-match-live` 生产视觉基线经审阅有意重生成（desktop+mobile）；另以 `6c1b448` 修复 T27 提交遗漏的 `api_tennis.py`/`realtime/models.py`（HEAD 曾无法 import live feed）。
 - T31 已于 2026-09-10 完成并推送：compact intelligence packet、三项 P2 Chat 工具、有限历史/H2H 能力路由和不可变 `answer_context`；实现提交为 `128518f`。
 - T31 验证事实：focused backend 56 passed；全确定性 backend 322 passed/11 deselected；frontend 127 passed、typecheck/build；完整 Playwright 40 passed/4 skipped；真实 LLM opt-in 运行结果为 7 failed，根因是 endpoint 对配置模型返回 403 `AccessDenied.Unpurchased`，不能作为通过证据。
-- T32 已完成并推送产品提交 `ac9c6e5`；P2 已关闭。本次用户明确提出的 UX 修复只处理空 facet 的可见性，不改变 canonical `unknown` 数据语义。
+- T32 已完成并推送产品提交 `ac9c6e5`；P2 已关闭。本次用户明确提出的 UX 修复已在 `525d701` 完成：仅隐藏计数为 0 且未激活的 `unknown` facet，不改变 canonical `unknown` 数据语义。
 - 已知非 T17 限制：LiveTennisAPI 的 `/players?search` 当前不能把中文显示名“郑钦文”直接映射到 `Qinwen Zheng`；canonical English name 查询已通过，中文别名/名称归一化需另立任务批准。
 - 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`（任务外）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`（next dev 自动生成）、`frontend/next-env.d.ts`（Next 工具链生成）；保留原样。
 
 ## 当前任务
+
+### P2 post-close UX patch — 隐藏无数据的“未知”筛选项
+
+- **状态：** `done`
+- **执行者 / ADE：** Codex / Codex
+- **分支：** `main`
+- **起始提交：** `5c504b7`（领取记录 `932ceb0`）
+- **完成提交：** `525d701`
+- **完成事实：** Home 筛选栏仅在 `unknown` 计数为 0 且未激活时隐藏；若存在真实未知数据，仍保留该筛选项；其他 0 计数 facet 行为不变；新增组件回归测试。
+- **验证门：** TDD focused 用例先红后绿；frontend `pnpm test` 128 passed；`pnpm typecheck` 通过；本地浏览器数据加载后的真实页面复核通过；`git diff --check` 通过。
+- **阻塞：** 无。
 
 ### T32 — Add Replay E2E, Fault Recovery, Runbook, and Final P2 Gate
 
@@ -212,6 +223,7 @@
 
 | 日期 | 提交 | 验证 | 结果 |
 |---|---|---|---|
+| 2026-09-10 | `525d701` | TDD focused 用例先失败后通过；frontend `pnpm test` 128 passed；`pnpm typecheck` 通过；本地浏览器数据加载后的真实页面复核通过；`git diff --check` 通过 | 空 facet 的“未知”筛选项隐藏；canonical `unknown` 语义保留；任务完成，CURRENT 回到 idle |
 | 2026-09-10 | `ac9c6e5` | T32 focused replay/recovery 3 passed；确定性 backend 325 passed/11 deselected；infrastructure 13 passed/323 deselected；frontend 127 passed + typecheck + build；默认 Playwright 40 passed/10 skipped；Replay 功能 2 passed、视觉 4 passed（双视口）；真实 API-Tennis REST 1 passed、WebSocket 1 passed；真实浏览器手动流程至完赛；范围审计与 `git diff --check` 通过；真实 LLM 7 failed（403 `AccessDenied.Unpurchased`） | T32 产品完成；P2 已关闭；LLM entitlement 缺口按 runbook 保留重跑命令 |
 | 2026-09-10 | `128518f` | T31 focused backend 56 passed；全确定性 backend 322 passed/11 deselected；frontend 127 passed + typecheck + build；完整 Playwright 40 passed/4 skipped；`git diff --check` 通过；真实 LLM opt-in 7 failed（endpoint 403 `AccessDenied.Unpurchased`） | T31 产品完成并推送；T32 已领取，真实 LLM 门待 entitlement 后重跑 |
 | 2026-09-10 | `8c9e161` | T30 focused backend 33 passed；infrastructure 6 passed；全确定性 backend 309 passed/8 deselected；frontend 124 passed + typecheck + build；完整 Playwright 40 passed/4 skipped，prototype 10/10、P1 visual 12/12；CLI `--help` 无 import warning，`git diff --check` 通过 | T30 完成；Recent Control v1、聚合校准、reducer/persistence 与控制图就绪，T31 进行中 |
