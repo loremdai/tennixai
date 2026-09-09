@@ -3,13 +3,13 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-09 10:49 CST
+**最后更新：** 2026-09-09 16:28 CST
 
-**当前任务：** 无（T19 已完成；等待下一阶段明确批准）
+**当前任务：** T20 — Freeze P2 Live Match Intelligence Design and Roadmap
 
-**任务状态：** `idle`
+**任务状态：** `in_progress`
 
-**当前执行者 / ADE：** —
+**当前执行者 / ADE：** Codex
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
@@ -17,7 +17,7 @@
 
 **最后验证的产品提交：** `fdb0131`
 
-**T19 起始提交：** `b1108ba`
+**T20 起始提交：** `17f4d89`
 
 **远程：** `origin` → `https://github.com/loremdai/tennixai.git`
 
@@ -34,23 +34,23 @@
 - 视觉：prototype 10 张基线（home 4 张经 T13/T15 审阅更新，match 6 张自 T01 起零变化）+ p1.visual 12 张新基线（逐张审阅入库）。
 - Final P1 Completion Gate 八条已人工核对（凭据仅服务端、无自动轮询、无超范围实现、结构化事实来源、供应商/LLM 失败降级、预览与生产路由分离、双视口视觉一致、泄漏检查业务代码零命中）；T16/T17 额外通过真实 provider、LLM、组合及浏览器门。
 - 本地运行与 opt-in 真实门命令见 [docs/runbooks/p1-local.md](./docs/runbooks/p1-local.md)。
-- P2（Live Match Intelligence）保持 `planned`：需要 PostgreSQL/Redis/API-Tennis 等另行批准的设计；当前没有领取中的任务。
+- P2（Live Match Intelligence）设计已获用户批准进入落盘阶段；T20 负责规格、实施计划与三份总控，不实现产品代码。
 - 已知非 T17 限制：LiveTennisAPI 的 `/players?search` 当前不能把中文显示名“郑钦文”直接映射到 `Qinwen Zheng`；canonical English name 查询已通过，中文别名/名称归一化需另立任务批准。
 - 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`（任务外）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`（next dev 自动生成）、`frontend/next-env.d.ts`（Next 工具链生成）；保留原样。
 
 ## 当前任务
 
-### T19 — Keep Structured Match Cards Visible After Markdown Answers
+### T20 — Freeze P2 Live Match Intelligence Design and Roadmap
 
-- **状态：** `done`
+- **状态：** `in_progress`
 - **执行者 / ADE：** Codex
 - **分支：** `main`
-- **起始提交：** `b1108ba`
-- **领取时间：** 2026-09-09 10:43 CST
-- **完成提交：** `fdb0131`
-- **范围：** Home 全局问答的结构化比赛卡片；复现 Markdown 回答变高后卡片被推到视口外的问题。
-- **完成事实：** 新增结构化结果区域 ref 与视口检测；回答进入 `success/error` 且卡片存在时，必要时滚动至 `scroll-mt-24` 结果区域；reduced-motion 使用非动画滚动。
-- **验证门：** Home 单元全套 `72/72`、`pnpm typecheck`、`pnpm build`；新增长 Markdown P1 flow 桌面/移动 `12/12`；完整 Playwright `34 passed + 4 skipped`，视觉基线全部通过。
+- **起始提交：** `17f4d89`
+- **领取时间：** 2026-09-09 16:28 CST
+- **完成提交：** —
+- **范围：** 把用户逐项批准的 P2 产品边界、API-Tennis 能力、实时架构、canonical model、PostgreSQL/Redis 职责、Home 筛选、Match 体验、Chat、近期控制指数和测试策略写成权威规格与可执行路线。
+- **完成事实：** 已完成设计访谈与关键研究；正在落盘，不实现 P2 产品代码。
+- **验证门：** 规格与计划无占位符；所有批准事项均有任务归属和验收门；三份总控状态一致；文档链接与 Git diff 经核对。
 - **阻塞：** 无。
 
 ## 最近验证
@@ -69,9 +69,9 @@
 
 ## 最近交接
 
-**状态：** T19 已由 Codex 于 2026-09-09 在 `main` 完成，实现提交 `fdb0131`；当前无领取中的任务。
+**状态：** T20 已由 Codex 于 2026-09-09 在 `main` 领取，起始提交 `17f4d89`；P2 设计冻结进行中。
 
-**交接说明：** 本地持久配置位于被忽略的 `backend/.env` 与 `frontend/.env.local`，未入库；`backend/.env` 含 `TENNIX_LLM_TIMEOUT_SECONDS=45` 与当前可用的 LiveTennisAPI key。T17 已完成真实 provider、真实 LLM 与浏览器验收；T19 已验证长 Markdown 回答后的结构化卡片视口可见性。服务可按 [docs/runbooks/p1-local.md](./docs/runbooks/p1-local.md) 启动。已知视觉/StrictMode 说明保留在 T15 证据中。
+**交接说明：** 当前只编写 P2 规格、实施计划和三份总控，不实现代码。用户提供的 API-Tennis 凭据只允许保留在被忽略的本地环境文件中，不得写入文档、测试 fixture、日志或提交。P1 运行方式仍见 [docs/runbooks/p1-local.md](./docs/runbooks/p1-local.md)。
 
 **已知本地状态：** 未跟踪的 `.codex/skills/ui-ux-pro-max/SKILL.md`、`frontend/AGENTS.md`、`frontend/CLAUDE.md`（next dev 生成）、`frontend/next-env.d.ts`（Next 工具链生成），保留原样。
 
@@ -81,12 +81,11 @@
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-09 | 领取 T20：冻结 P2 Live Match Intelligence 设计与实施路线 | `17f4d89` 起始 |
 | 2026-09-09 | T19 完成：Markdown 回答完成后保持结构化比赛卡片可见 | `fdb0131` |
 | 2026-09-09 | 领取 T19：Markdown 回答完成后保持结构化比赛卡片可见 | `b1108ba` 起始 |
 | 2026-09-09 | T18 完成：Home/Match 问答 Markdown 安全渲染与浏览器验收 | `5572960` |
 | 2026-09-09 | 领取 T18：问答 Markdown 原文显示修复 | `c6e4120` 起始 |
-| 2026-09-08 | T17 完成：真实 upcoming provider、指定球员过滤、局部失败与 429 友好降级 | `69c8238` |
-| 2026-09-08 | 领取并规划 T17 | `ef85ea3` / `da27574` |
 
 ## 接手与更新规则
 

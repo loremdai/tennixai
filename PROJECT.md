@@ -3,9 +3,9 @@
 > 本文件回答“这个项目是什么、为什么做、哪些原则不能被破坏”。
 > 全局进度见 [ROADMAP.md](./ROADMAP.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-08 18:59 CST
+**最后更新：** 2026-09-09 16:28 CST
 
-**产品阶段：** P1 — 比赛信息查询助手（已完成，2026-09-08）；P2 保持 planned，等待用户决定是否启动
+**产品阶段：** P1 — 比赛信息查询助手（已完成，2026-09-08）；P2 — Live Match Intelligence（设计冻结进行中）
 
 **详细基线：** [产品与架构上下文](./docs/product-context.md) · [产品路线设计](./docs/superpowers/specs/2026-09-08-tennixai-product-roadmap-design.md) · [P1 实施计划](./docs/superpowers/plans/2026-09-08-tennixai-p1-implementation.md) · [T16 真实运行时硬化计划](./docs/superpowers/plans/2026-09-08-tennixai-t16-real-runtime-hardening.md)
 
@@ -15,7 +15,7 @@
 - Home 负责全局发现、搜索和赛程入口；Match Page 负责单场比赛的事实、上下文问答和后续智能能力。
 - P1 已完成：fake 模式全链路确定性地跑通；真实 LiveTennisAPI provider、真实 Qwen 单项与组合门均通过；真实 live 列表现在只把有限摘要交给 LLM，完整结构化数据仍通过 SSE 交给 UI，LLM 请求有 45 秒可配置总时限，真实 Djokovic 查询的重复实名/组合名也已稳定处理。
 - P1 只处理当前、即将开始和正在进行的比赛；任意历史结果查询明确返回 `unsupported`。
-- 当前不引入 PostgreSQL、Redis、自动轮询、认证、LangGraph、实时技术统计或 Polymarket。
+- P2 已明确启动设计冻结：目标是 API-Tennis 驱动的实时技术统计、PBP、近期控制指数和比赛上下文问答；设计落盘前不开始实现。
 - 不要从本文件猜当前做到哪里；以 [ROADMAP.md](./ROADMAP.md) 和 [CURRENT.md](./CURRENT.md) 为准。
 
 ## 产品定位

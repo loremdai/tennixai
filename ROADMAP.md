@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-09 10:49 CST
+**最后更新：** 2026-09-09 16:28 CST
 
-**总体状态：** `in_progress`（P1 已完成；P2 保持 planned，等待明确启动）
+**总体状态：** `in_progress`（P1 已完成；P2 设计冻结进行中）
 
-**当前里程碑：** P1 — 比赛信息查询助手（`done`；下一里程碑 P2 尚未启动）
+**当前里程碑：** P2 — Live Match Intelligence（`in_progress`）
 
-**当前阶段：** P1.6 — Acceptance and hardening（`done`）
+**当前阶段：** P2.0 — Design freeze（`in_progress`）
 
 ## 状态说明
 
@@ -28,8 +28,8 @@
 
 | 里程碑 | 状态 | 目标 | 进入/完成条件 |
 |---|---|---|---|
-| P1 — Match Information Assistant | `done` | 跑通真实结构化比赛查询、卡片、Match Page 与上下文 Chat | T17/T18/T19 均已完成（`69c8238`、`5572960`、`fdb0131`）；P1 关闭，P2 保持 planned |
-| P2 — Live Match Intelligence | `planned` | 技术统计、PBP、Momentum、持久化和多进程实时协调 | P1 全部门通过；API-Tennis 能力与迁移设计另行批准 |
+| P1 — Match Information Assistant | `done` | 跑通真实结构化比赛查询、卡片、Match Page 与上下文 Chat | T17/T18/T19 均已完成（`69c8238`、`5572960`、`fdb0131`）；P1 已关闭 |
+| P2 — Live Match Intelligence | `in_progress` | 技术统计、PBP、近期控制指数、持久化和多进程实时协调 | T20 正在冻结已批准的 API-Tennis 能力、架构、范围与实施路线 |
 | P3 — Market & Decision Support | `planned` | 市场状态、预测、edge、confidence 和 paper trading | P2 数据可信；映射、模型评估和风控设计另行批准 |
 | Optional — Automated Execution | `deferred` | 在满足法律、风控、安全和可审计条件后考虑自动下单 | 不属于 P3 默认范围，必须单独批准 |
 
@@ -46,6 +46,18 @@
 | P1.6 — Acceptance and hardening | `done` | 验收集、真实服务 opt-in 测试、Playwright、真实运行时边界与修复 | T16/T17/T18/T19 已完成；确定性、真实 provider/LLM、浏览器、降级、Markdown 展示和结果卡片可见性均有证据 |
 
 详细阶段设计见 [产品路线设计 §12](./docs/superpowers/specs/2026-09-08-tennixai-product-roadmap-design.md#12-p1-execution-roadmap)。
+
+## P2 阶段状态
+
+| 阶段 | 状态 | 核心交付 | Exit gate / 当前缺口 |
+|---|---|---|---|
+| P2.0 — Design freeze | `in_progress` | API-Tennis 能力边界、实时架构、领域模型、存储、UI、Chat、测试与任务路线 | T20 正在把已批准决策写入规格、实施计划与三份总控；尚未授权实现代码 |
+
+## P2 任务登记表
+
+| ID | 主要阶段 | 任务 | 状态 | 完成提交 | 验收证据 |
+|---|---|---|---|---|---|
+| T20 | P2.0 | Freeze P2 Live Match Intelligence Design and Roadmap | `in_progress` | — | 规格、实施计划与三份总控待落盘并完成一致性审查 |
 
 ## P1 任务登记表
 
