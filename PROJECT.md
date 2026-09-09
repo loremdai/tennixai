@@ -3,9 +3,9 @@
 > 本文件回答“这个项目是什么、为什么做、哪些原则不能被破坏”。
 > 全局进度见 [ROADMAP.md](./ROADMAP.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-10 00:50 CST
+**最后更新：** 2026-09-10 01:30 CST
 
-**产品阶段：** P1 — 比赛信息查询助手（已完成，2026-09-08）；P2 — Live Match Intelligence（实施中，P2.4 已完成：PBP、22 项统计、近期控制指数与版本化 Chat 已接入；P2.5 验收中）
+**产品阶段：** P1 — 比赛信息查询助手（已完成，2026-09-08）；P2 — Live Match Intelligence（已完成，2026-09-10：PBP、22 项统计、近期控制指数、版本化 Chat、Replay 恢复门与双视口验收均已闭环；真实 LLM smoke 因 endpoint entitlement 留有诚实的重跑缺口）
 
 **详细基线：** [产品与架构上下文](./docs/product-context.md) · [产品路线设计](./docs/superpowers/specs/2026-09-08-tennixai-product-roadmap-design.md) · [P1 实施计划](./docs/superpowers/plans/2026-09-08-tennixai-p1-implementation.md) · [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) · [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md)
 
