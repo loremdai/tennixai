@@ -3,13 +3,13 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-09 22:38 CST
+**最后更新：** 2026-09-09 22:45 CST
 
-**当前任务：** 无（T28 已完成；T29 已 ready，尚未领取）
+**当前任务：** T29 — Render Full PBP and Available Match Statistics
 
-**任务状态：** `idle`
+**任务状态：** `in_progress`
 
-**当前执行者 / ADE：** —
+**当前执行者 / ADE：** Claude Code / Claude Code
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
@@ -17,7 +17,7 @@
 
 **最后验证的产品提交：** `f03985b`
 
-**T29 起始提交：** 待领取时填写
+**T29 起始提交：** `117fece`
 
 **远程：** `origin` → `https://github.com/loremdai/tennixai.git`
 
@@ -60,7 +60,15 @@
 
 ## 当前任务
 
-无。T28 已完成；T29（Render Full PBP and Available Match Statistics）已 ready，接手前须按启动入口另行领取。
+### T29 — Render Full PBP and Available Match Statistics
+
+- **状态：** `in_progress`
+- **执行者 / ADE：** Claude Code / Claude Code
+- **分支：** `main`
+- **起始提交：** `117fece`
+- **领取时间：** 2026-09-09 22:45 CST
+- **范围：** 按 [P2 实施计划 T29](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t29-render-full-pbp-and-available-match-statistics)：`match-statistics.tsx`（22 项中文标签/单位、分组、available-only、partial 徽章）、`match-points.tsx`（Set→Game→Point、关键分标记、当前组展开/旧组折叠、纠错提示、近底部自动跟随否则“有新分”）、view-models 映射、match-main 接线；preview 不动。
+- **阻塞：** 无。
 
 ## 最近完成任务
 
@@ -178,6 +186,7 @@
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-09 | 领取 T29：完整 PBP 与 22 项统计渲染 | `117fece` 起始 |
 | 2026-09-09 | T28 完成：snapshot REST、版本化 SSE、useMatchStream 与 MatchPage 接入 | `f03985b` |
 | 2026-09-09 | 领取 T28：Match snapshot 与版本化 SSE | `fe1d48b` 起始 |
 | 2026-09-09 | T27 完成：WS feed、Redis leases 与 realtime worker | `d354aba` |
