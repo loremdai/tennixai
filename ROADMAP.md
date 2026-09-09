@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-09 19:51 CST
+**最后更新：** 2026-09-09 20:28 CST
 
 **总体状态：** `in_progress`（P1 已完成；P2 实施中）
 
 **当前里程碑：** P2 — Live Match Intelligence（`in_progress`）
 
-**当前阶段：** P2.2 — Unified data and discovery（`in_progress`）
+**当前阶段：** P2.3 — Realtime pipeline（`ready`）
 
 ## 状态说明
 
@@ -29,7 +29,7 @@
 | 里程碑 | 状态 | 目标 | 进入/完成条件 |
 |---|---|---|---|
 | P1 — Match Information Assistant | `done` | 跑通真实结构化比赛查询、卡片、Match Page 与上下文 Chat | T17/T18/T19 均已完成（`69c8238`、`5572960`、`fdb0131`）；P1 已关闭 |
-| P2 — Live Match Intelligence | `in_progress` | 技术统计、PBP、近期控制指数、持久化和多进程实时协调 | T20–T24 已完成（`b7921c0`、`5b479fc`、`20dac5f`、`015ff7f`、`dddb734`）；T25 是下一可领取任务 |
+| P2 — Live Match Intelligence | `in_progress` | 技术统计、PBP、近期控制指数、持久化和多进程实时协调 | T20–T25 已完成（`b7921c0`、`5b479fc`、`20dac5f`、`015ff7f`、`dddb734`、`e904485`）；T26 是下一可领取任务 |
 | P3 — Market & Decision Support | `planned` | 市场状态、预测、edge、confidence 和 paper trading | P2 数据可信；映射、模型评估和风控设计另行批准 |
 | Optional — Automated Execution | `deferred` | 在满足法律、风控、安全和可审计条件后考虑自动下单 | 不属于 P3 默认范围，必须单独批准 |
 
@@ -53,8 +53,8 @@
 |---|---|---|---|
 | P2.0 — Design freeze | `done` | API-Tennis 能力边界、实时架构、领域模型、存储、UI、Chat、测试与任务路线 | T20 完成提交 `b7921c0`；规格、计划、总控一致性审查通过 |
 | P2.1 — Durable foundations | `done` | P2 canonical domain、provider contracts、PostgreSQL、Redis、稳定 identity | T21（`5b479fc`）与 T22（`20dac5f`）完成；P2.2 可开始 |
-| P2.2 — Unified data and discovery | `in_progress` | API-Tennis REST、历史/H2H、赛事分类和 Home 叠加筛选 | T23（`015ff7f`）、T24（`dddb734`）完成；T25 可领取 |
-| P2.3 — Realtime pipeline | `planned` | Reducer、WebSocket worker、租约、持久化、snapshot + SSE | T26–T28；等待 P2.2 |
+| P2.2 — Unified data and discovery | `done` | API-Tennis REST、历史/H2H、赛事分类和 Home 叠加筛选 | T23–T25 完成（`015ff7f`、`dddb734`、`e904485`）；P2.3 可开始 |
+| P2.3 — Realtime pipeline | `ready` | Reducer、WebSocket worker、租约、持久化、snapshot + SSE | T26 可领取；T27–T28 顺序跟进 |
 | P2.4 — Match intelligence | `planned` | 完整 PBP、22 项统计、近期控制指数、版本化上下文 Chat | T29–T31；等待 P2.3 |
 | P2.5 — Acceptance and hardening | `planned` | Replay、恢复门、真实 smoke、双视口视觉和本地 runbook | T32；等待 P2.4 |
 
@@ -70,8 +70,8 @@
 | T22 | P2.1 | Add PostgreSQL, Redis, Migrations, and Durable Identity | `done` | `20dac5f` | compose（postgres:16+redis:7，127.0.0.1、healthchecks、无凭据）healthy；P2 core schema 13 表 migration `0001`，alembic upgrade→downgrade base→upgrade 均 exit 0；`PostgresIdentityRepository` insert-on-conflict+读重试，20 路并发收敛同一 ID、跨实例稳定；`(match_id,sequence)`/`(point_event_id,revision)` 唯一约束生效；snapshot 单行 upsert；`purge_raw_events` 严格 `< before` 且 canonical 不受影响；单元 17 passed + infrastructure integration 7 passed；全套确定性 174 passed/6 deselected；typed settings（14 天/8 订阅/45s lease/60s grace）边界校验 |
 | T23 | P2.2 | Implement the API-Tennis REST Adapter | `done` | `015ff7f` | permissive vendor DTO + 广谱 event 分类（15 参数化用例含 unknown→other/unknown/unknown）；`ApiTennisProvider` 实现 live/fixtures/search/player/match/snapshot/recent/H2H/score，全部 canonical-only 输出；22-stat 目录映射（`Last 10 balls` 与未知 stat 丢弃）、PBP sequence/flags/winner 推导（不可判定→PARTIAL `winner_indeterminate`）、GMT→UTC、bounded 窗口（upcoming 7d、search 3d、recent 30d、limit≤10）；success=0/error payload/HTTP 404/429/403/500/网络失败/坏 JSON 全部 typed 翻译且消息不含 key/URL；fixture 契约测试 40 passed + provider contract 13 passed；全套确定性 214 passed/7 deselected；真实 opt-in smoke `TENNIX_RUN_API_TENNIS_LIVE=1` 1 passed（真实认证、live+snapshot、零 vendor/key 泄漏） |
 | T24 | P2.2 | Add Match Catalog Filters, History, H2H, and P2 REST APIs | `done` | `dddb734` | `MatchFilters.default()`=ATP+WTA/全部性别/单打、空组=全部；`catalog_sort_key`=tier→live→开赛时间→id；facet counts 尊重另外两组且保留 0 值；Featured=排序首项；昨天按 Asia/Macau 日历、recent 降序、fetch 满 10 条→PARTIAL、unsupported→UNAVAILABLE 非零值、成功 10min/空 60s 缓存（provider 调用计数证明）；新路由 `GET /matches/catalog`（注册在 `/matches/{id}` 之前）、`GET /players/{id}/results?scope&limit=1..10`、`GET /head-to-head?limit=1..10`；P1 `/matches` 形状与 Chat 历史 guard 保持不变（tools/main 未动，guard 留待 T31）；service/API 门 74 passed；全套确定性 241 passed/7 deselected |
-| T25 | P2.2 | Add Stackable Home Facets and Priority Presentation | `ready` | — | ATP+WTA/all/singles 默认；三类叠加筛选和双视口门 |
-| T26 | P2.3 | Build the Canonical Live Reducer and Transactional Persistence | `planned` | — | full snapshot 去重、point append/correction、版本与原子持久化 |
+| T25 | P2.2 | Add Stackable Home Facets and Priority Presentation | `done` | `e904485` | `lib/match-filters.ts`（默认 ATP+WTA/全部性别/单打、空组=全部、tier→live→时间→id 排序、toggle 不可自动补选）+ 可访问 chip 组（aria-pressed/计数/零计数禁用/恢复默认）；Home 改消费 `GET /api/matches/catalog`（新 Next 代理路由），Featured 取 `featured_match_id`，Live/Upcoming/Featured 共用同一筛选状态；单元/组件 26 项新测试；`pnpm test` 98 passed、typecheck、build 通过；e2e `P2 Home filters` 6/6 双视口（默认 top-tier、stacked ITF women doubles、恢复默认）；4 张 Home 视觉基线经逐张 diff 审阅后有意更新（仅新增筛选栏与整体下移），match 页基线零变化；P1 failure 拦截 glob 修正为 `**/api/matches**` 并加滚动稳定化；完整 e2e 连续两轮 40 passed/4 skipped |
+| T26 | P2.3 | Build the Canonical Live Reducer and Transactional Persistence | `ready` | — | full snapshot 去重、point append/correction、版本与原子持久化 |
 | T27 | P2.3 | Add WebSocket Feed, Redis Leases, and the Realtime Worker | `planned` | — | shared upstream、lease/grace、reconnect/reconcile/fallback 与 retention |
 | T28 | P2.3 | Expose Match Snapshots and Versioned SSE to the Browser | `planned` | — | snapshot + typed delta + gap reconcile + visibility lifecycle |
 | T29 | P2.4 | Render Full PBP and Available Match Statistics | `planned` | — | Set→Game→Point、关键分、partial/unavailable 和 22-stat UI |

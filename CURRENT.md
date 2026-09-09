@@ -3,21 +3,21 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-09 19:55 CST
+**最后更新：** 2026-09-09 20:28 CST
 
-**当前任务：** T25 — Add Stackable Home Facets and Priority Presentation
+**当前任务：** 无（T25 已完成；T26 已 ready，尚未领取）
 
-**任务状态：** `in_progress`
+**任务状态：** `idle`
 
-**当前执行者 / ADE：** Claude Code / Claude Code
+**当前执行者 / ADE：** —
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**最近完成任务提交：** `dddb734`
+**最近完成任务提交：** `e904485`
 
-**最后验证的产品提交：** `dddb734`
+**最后验证的产品提交：** `e904485`
 
-**T25 起始提交：** `13a545f`
+**T26 起始提交：** 待领取时填写
 
 **远程：** `origin` → `https://github.com/loremdai/tennixai.git`
 
@@ -46,23 +46,32 @@
 - T23 已确认的事实：`get_players` 无名称搜索，`search_players` 在 livescore + 3 天 fixtures 窗口做有界扫描；upcoming 窗口 7 天且只保留 SCHEDULED；recent 30 天 + FINISHED + limit≤10；scheduled 且无真实比分不构造 live_state；PBP winner 由比分推进推导、不可判定→PARTIAL；`Last 10 balls` 与未知 stat 丢弃；错误翻译零 key/URL 泄漏；真实 smoke（Trial key）通过：get_events 认证、72 场 live canonical 映射、snapshot 版本一致。
 - T24 已于 2026-09-09 完成并推送：catalog 筛选/排序/facet counts、昨天（Asia/Macau）/近期/H2H 服务方法（10min/60s TTL、PARTIAL/UNAVAILABLE 语义）、新 REST 路由 `GET /api/v1/matches/catalog`、`GET /api/v1/players/{id}/results`、`GET /api/v1/head-to-head`；P1 `/matches` 与 Chat 历史 guard 未动；实现提交为 `dddb734`。
 - T24 已确认的事实：默认 facet=ATP+WTA/全部性别/单打，空组=全部；排序 tier→live→开赛时间→id；facet counts 尊重另外两组且保留 0 值；Featured=排序后首项；recent fetch 满 10 条→PARTIAL；unsupported→UNAVAILABLE 且 matches 为空；全套确定性 backend 241 passed/7 deselected。
-- 下一任务是 T25（前端 Home 叠加筛选与优先级展示），必须按启动入口另行领取；前端消费 `/api/v1/matches/catalog`。
+- T25 已于 2026-09-09 完成并推送：Home 叠加筛选（chip 组 + 计数 + 零计数禁用 + 恢复默认）、catalog 消费（`/api/matches/catalog` Next 代理）、Featured 取 `featured_match_id`、双视口 e2e；实现提交为 `e904485`。
+- T25 已确认的事实：前端筛选语义与后端一致（空组=全部、默认 ATP+WTA/全部性别/单打）；facet counts 为 live+upcoming 合并；筛选为空只显空态、不放宽；P1 failure 注入 glob 已修正为 `**/api/matches**`；视觉 spec 已加滚动稳定化；4 张 Home 基线经审阅有意更新，match 页零变化。
+- 下一任务是 T26（canonical live reducer 与事务化持久化），必须按启动入口另行领取；需要 compose PostgreSQL 在位运行 integration 门。
 - 已知非 T17 限制：LiveTennisAPI 的 `/players?search` 当前不能把中文显示名“郑钦文”直接映射到 `Qinwen Zheng`；canonical English name 查询已通过，中文别名/名称归一化需另立任务批准。
 - 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`（任务外）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`（next dev 自动生成）、`frontend/next-env.d.ts`（Next 工具链生成）；保留原样。
 
 ## 当前任务
 
-### T25 — Add Stackable Home Facets and Priority Presentation
-
-- **状态：** `in_progress`
-- **执行者 / ADE：** Claude Code / Claude Code
-- **分支：** `main`
-- **起始提交：** `13a545f`
-- **领取时间：** 2026-09-09 19:55 CST
-- **范围：** 按 [P2 实施计划 T25](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t25-add-stackable-home-facets-and-priority-presentation)：`lib/match-filters.ts` 状态/计数/兼容/排序、`components/home/match-filters.tsx` 可访问叠加筛选控件、Home Featured/Live/Upcoming 共用同一筛选状态并消费 catalog `featured_match_id`、typed client/types 扩展、`e2e/p2-home-filters.spec.ts` 双视口验证；不重设计现有 v0 Home。
-- **阻塞：** 无。
+无。T25 已完成；T26（Build the Canonical Live Reducer and Transactional Persistence）已 ready，接手前须按启动入口另行领取。
 
 ## 最近完成任务
+
+### T25 — Add Stackable Home Facets and Priority Presentation
+
+- **状态：** `done`
+- **执行者 / ADE：** Claude Code / Claude Code
+- **分支：** `main`
+- **起始提交：** `13a545f`（领取记录 `f3cb4e2`）
+- **领取时间：** 2026-09-09 19:55 CST
+- **完成提交：** `e904485`
+- **范围：** 按 [P2 实施计划 T25](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t25-add-stackable-home-facets-and-priority-presentation)：Home 叠加筛选（circuit/gender/discipline）、优先级展示与 catalog 消费、typed client、双视口 e2e。
+- **完成事实：** TDD 先行：`lib/match-filters.test.ts`（13 项）与 `components/home/match-filters.test.tsx`（9 项）先失败后实现。默认 facet=ATP+WTA/全部性别/单打；空组=全部；toggle 不可自动补选（取消唯一值→空=全部）；排序 tier→live→开赛时间→id 与后端一致；chip 组 role=group+aria-label、aria-pressed、计数进 accessible name、零计数且未激活禁用、激活零计数仍可取消、`恢复默认` 仅非默认时出现；Home 改用 `getMatchCatalog`（新 Next 代理路由 `app/api/matches/catalog`），Featured 取 `featured_match_id`（非数组首项），Live/Upcoming/Featured 共用同一筛选状态，facet counts 为 live+upcoming 合并；筛选后为空只显示空态、不放宽筛选。P1 失败注入 glob 由 `**/api/matches*` 修正为 `**/api/matches**`（原 glob 的 `*` 不跨 `/`，catalog 请求未被拦截）；视觉 spec 增加“等待平滑滚动结束 + instant 回顶”稳定化。
+- **验证门：** `pnpm test` 98 passed（含 26 项新测试）；`pnpm typecheck`、`pnpm build` exit 0；`pnpm test:e2e --grep "P2 Home filters|prototype"`：P2 Home filters 6/6 双视口、prototype match 页 10/10 零变化；4 张 Home 视觉基线（desktop/mobile × prototype home-initial/home-answer、p1-home-initial/p1-home-result）逐张 diff 审阅后有意更新（差异仅为新增筛选栏与整体下移，无布局回归）；完整 `pnpm test:e2e` 连续两轮 40 passed/4 skipped（live specs 无 flags 如实 skip；首轮 1 次 sticky-header 2px 抖动在滚动稳定化后未再复现）；后端回归 241 passed/7 deselected。
+- **阻塞：** 无。
+
+（T24 详情见 ROADMAP 登记表与提交 `dddb734`。）
 
 ### T24 — Add Match Catalog Filters, History, H2H, and P2 REST APIs
 
@@ -85,6 +94,7 @@
 
 | 日期 | 提交 | 验证 | 结果 |
 |---|---|---|---|
+| 2026-09-09 | `e904485` | TDD：match-filters 单元 13 + 组件 9 先失败后通过；`pnpm test` 98 passed；typecheck/build exit 0；e2e P2 Home filters 6/6 双视口；4 张 Home 基线审阅后更新、match 页零变化；完整 e2e 连续两轮 40 passed/4 skipped；后端 241 passed/7 deselected | T25 完成；Home 叠加筛选与优先级展示就绪，T26 ready |
 | 2026-09-09 | `dddb734` | TDD：p2_service 17 项 + p2_api 10 项先失败后通过；service/API/P1 acceptance 门 74 passed；全套确定性 241 passed/7 deselected；`git diff --check` 通过 | T24 完成；catalog/history/H2H 服务与 REST 就绪，T25 ready |
 | 2026-09-09 | `015ff7f` | TDD：40 项契约测试先失败后通过；adapter+contract 53 passed；全套确定性 214 passed/7 deselected；真实 opt-in REST smoke 1 passed（认证、live canonical、snapshot、零泄漏）；`git diff --check` 通过 | T23 完成；API-Tennis REST adapter 就绪，T24 ready |
 | 2026-09-09 | `20dac5f` | TDD：persistence 单元 17 项 + integration 7 项先失败后通过；compose postgres/redis healthy；alembic upgrade→downgrade base→upgrade exit 0；全套确定性 174 passed/6 deselected；redis PONG、pg_isready；敏感模式/whitespace 扫描无命中 | T22 完成；P2 持久化地基就绪，T23 ready |
@@ -94,15 +104,14 @@
 | 2026-09-09 | `fdb0131` | Home 单元 72/72；typecheck/build；长 Markdown 结构化卡片视口回归桌面/移动 12/12；完整 Playwright 34 passed/4 skipped，视觉基线通过 | T19 完成；回答完成后结构化比赛卡片保持可见 |
 | 2026-09-09 | `5572960` | TDD 先行测试验证两处原文显示失败；修复后 frontend 71/71 + typecheck + build；隔离服务 Playwright 10/10；真实浏览器 `strong=10`、`ul=1`、无 `**` | T18 完成；Home/Match 问答 Markdown 展示通过 |
 | 2026-09-08 | `69c8238` | backend 确定性 126 passed；frontend 69/69 + typecheck + build；隔离 fake 服务的 Playwright 32 passed/4 skipped；真实 REST upcoming 50 场与 Qinwen Zheng 指定球员查询；真实浏览器 Home→Match→上下文问答 | T17 完成；P1 当前实现门通过 |
-| 2026-09-08 | `5dcaa6a` | backend 确定性 124 passed；frontend 66/66 + typecheck + build + E2E 32 passed/4 skipped；provider_live 1/1；llm_live 4/4；end_to_end_live 1/1；真实浏览器 end-to-end 2/2；手动 Djokovic SSE 完整结束 | T16 与 P1 真实运行时验收通过 |
 
 任务完成前必须把实际运行的命令、结果和对应提交补充到这里。未运行或失败的验收不能写成通过。
 
 ## 最近交接
 
-**状态：** T24 已由 Claude Code 于 2026-09-09 在 `main` 完成，实现提交 `dddb734`；当前无领取中的任务，T25 保持 ready。
+**状态：** T25 已由 Claude Code 于 2026-09-09 在 `main` 完成，实现提交 `e904485`；当前无领取中的任务，T26 保持 ready。
 
-**交接说明：** 接手 T25 前完整阅读 [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) 和 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t25-add-stackable-home-facets-and-priority-presentation)。所有 ADE 只使用根目录 `.env`；API-Tennis 凭据变量为 `TENNIX_API_TENNIS_API_KEY`，不得写入代码、文档、fixture、日志、提交或聊天输出。T24 起后端 catalog 契约为 `GET /api/v1/matches/catalog?status=live|upcoming&circuit=&gender=&discipline=`（多值重复参数；未传 facet 参数=默认 ATP+WTA/全部性别/单打），响应 `data:{status,matches,filters,facet_counts,featured_match_id}`；history 契约为 `/players/{id}/results` 与 `/head-to-head`。共享后端测试 fake 在 `tests/p2_fakes.py`。用户已追加要求：P2 收尾时用真实浏览器按业务流程逐项人工验收直到无 bug。
+**交接说明：** 接手 T26 前完整阅读 [P2 设计规格 §10](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) 和 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t26-build-the-canonical-live-reducer-and-transactional-persistence)。所有 ADE 只使用根目录 `.env`；API-Tennis 凭据变量为 `TENNIX_API_TENNIS_API_KEY`，不得写入代码、文档、fixture、日志、提交或聊天输出。T25 起前端消费 `/api/matches/catalog`（筛选参数 circuit/gender/discipline 重复传值，空组省略）；视觉 spec 依赖“滚动稳定化”步骤，勿删除；共享后端测试 fake 在 `tests/p2_fakes.py`（CatalogFakeProvider）。用户已追加要求：P2 收尾时用真实浏览器按业务流程逐项人工验收直到无 bug。
 
 **已知本地状态：** 未跟踪的 `.codex/skills/ui-ux-pro-max/SKILL.md`、`frontend/AGENTS.md`、`frontend/CLAUDE.md`（next dev 生成）、`frontend/next-env.d.ts`（Next 工具链生成），保留原样。
 
@@ -112,11 +121,11 @@
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-09 | T25 完成：Home 叠加筛选、catalog 消费与优先级展示 | `e904485` |
 | 2026-09-09 | 领取 T25：Home 叠加筛选与优先级展示 | `13a545f` 起始 |
 | 2026-09-09 | T24 完成：catalog 筛选/排序/facet counts、history/H2H 服务与 REST 路由 | `dddb734` |
 | 2026-09-09 | 领取 T24：catalog 筛选、history/H2H 服务与 P2 REST APIs | `85dd65d` 起始 |
 | 2026-09-09 | T23 完成：API-Tennis REST adapter、分类映射与 provider mode 接线 | `015ff7f` |
-| 2026-09-09 | 领取 T23：实现 API-Tennis REST adapter | `103ecff` 起始 |
 
 ## 接手与更新规则
 
