@@ -3,9 +3,9 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-09 22:45 CST
+**最后更新：** 2026-09-09 23:32 CST
 
-**当前任务：** T29 — Render Full PBP and Available Match Statistics
+**当前任务：** T30 — Calibrate and Implement Recent Control Index v1
 
 **任务状态：** `in_progress`
 
@@ -13,11 +13,11 @@
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**最近完成任务提交：** `f03985b`
+**最近完成任务提交：** `ecd916b`
 
-**最后验证的产品提交：** `f03985b`
+**最后验证的产品提交：** `ecd916b`
 
-**T29 起始提交：** `117fece`
+**T30 起始提交：** `ecd916b`
 
 **远程：** `origin` → `https://github.com/loremdai/tennixai.git`
 
@@ -54,23 +54,38 @@
 - T27 已确认的事实：vendor WS 每帧为约 10 场全量对象数组，需客户端按 `event_key` 过滤；断线前积压帧在 reconnect 时丢弃；lease 同刻 acquire 的容量优先用 1e-6 arrival stamp 保证确定序；全套确定性 276 passed/8 deselected，真实 WS/REST smoke 各 1 passed。
 - T28 已于 2026-09-09 完成并推送：snapshot REST（hot→PG→provider 回存）、版本化 SSE（ready/delta/ended/heartbeat、lease 生命周期）、Next 代理与 `useMatchStream`；实现提交为 `f03985b`。
 - T28 已确认的事实：SSE 每版本仅一帧且 id=state_version；gap 只转发不造事件；隐藏 60s abort 释放 lease；httpx ASGITransport 缓冲响应，SSE 测试须用进程内 uvicorn；全套确定性 286 passed/8 deselected、infrastructure 12、frontend 106、e2e 40/4 skipped 且视觉零变化。
-- 下一任务是 T29（完整 PBP 与 22 项统计的前端渲染），必须按启动入口另行领取。
+- T29 已于 2026-09-09 完成并推送：生产 Match 页渲染 canonical snapshot 的 22 项技术统计（分组/单位/partial/缺失不猜测）与 Set→Game→Point 时间线（关键分徽章、纠错提示、近底自动跟随）；实现提交为 `ecd916b`。
+- T29 已确认的事实：preview 原型与卡片顺序零变化；fake 模式统计/逐分为空时显示诚实缺失文案；`p1-match-live` 生产视觉基线经审阅有意重生成（desktop+mobile）；另以 `6c1b448` 修复 T27 提交遗漏的 `api_tennis.py`/`realtime/models.py`（HEAD 曾无法 import live feed）。
+- 下一任务是 T30（Recent Control Index v1 校准与实现），必须按启动入口另行领取。
 - 已知非 T17 限制：LiveTennisAPI 的 `/players?search` 当前不能把中文显示名“郑钦文”直接映射到 `Qinwen Zheng`；canonical English name 查询已通过，中文别名/名称归一化需另立任务批准。
 - 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`（任务外）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`（next dev 自动生成）、`frontend/next-env.d.ts`（Next 工具链生成）；保留原样。
 
 ## 当前任务
 
-### T29 — Render Full PBP and Available Match Statistics
+### T30 — Calibrate and Implement Recent Control Index v1
 
 - **状态：** `in_progress`
 - **执行者 / ADE：** Claude Code / Claude Code
 - **分支：** `main`
-- **起始提交：** `117fece`
-- **领取时间：** 2026-09-09 22:45 CST
-- **范围：** 按 [P2 实施计划 T29](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t29-render-full-pbp-and-available-match-statistics)：`match-statistics.tsx`（22 项中文标签/单位、分组、available-only、partial 徽章）、`match-points.tsx`（Set→Game→Point、关键分标记、当前组展开/旧组折叠、纠错提示、近底部自动跟随否则“有新分”）、view-models 映射、match-main 接线；preview 不动。
+- **起始提交：** `ecd916b`
+- **领取时间：** 2026-09-09 23:32 CST
+- **范围：** 按 [P2 实施计划 T30](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t30-calibrate-and-implement-recent-control-index-v1)：`backend/app/momentum/`（engine、calibration 命令、`calibration.v1.json` 聚合文件）、reducer/repositories 集成 momentum 观测、前端 `match-momentum.tsx` 控制图；无固定关键分倍率、无未来泄漏、不确定分不更新。
 - **阻塞：** 无。
 
 ## 最近完成任务
+
+### T29 — Render Full PBP and Available Match Statistics
+
+- **状态：** `done`
+- **执行者 / ADE：** Claude Code / Claude Code
+- **分支：** `main`
+- **起始提交：** `117fece`（领取记录 `a42a9c2`）
+- **领取时间：** 2026-09-09 22:45 CST
+- **完成提交：** `ecd916b`
+- **范围：** 按 [P2 实施计划 T29](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t29-render-full-pbp-and-available-match-statistics)：`match-statistics.tsx`、`match-points.tsx`、view-models 映射与 `formatAsOf`、match-main/match-page 接线、e2e 文案与基线更新；preview 不动。
+- **完成事实：** TDD 先行：统计 5 项 + 逐分 6 项 + 映射测试先失败后实现。STAT_META 22 项中文标签/单位按发球/接发/关键分/制胜与失误/体能/总计分组；`formatStatValue` null→“暂未提供”；MatchStatisticsCard 只渲染 available 指标、partial 徽章、有数据组内声明缺失、最近 10 分仅由 determinate points 派生、as_of 以澳门时间展示；MatchPointsTimeline Set→Game→Point disclosure（当前盘/局默认展开、旧组折叠）、破发/盘/赛点徽章、revision>1 的 role=status 校准提示、近底部自动跟随否则“有新分 ↓”、空态诚实；生产 StatsCard/MomentumCard 分支改为消费 snapshot（徽章 P2 实时），upcoming 与 preview 行为不变；match-page 将 `stream.snapshot` 传入主列；仓库无 vitest globals，新测试按既有模式显式 `afterEach(cleanup)`；`6c1b448` 修复 T27 提交遗漏的两个后端文件。
+- **验证门：** frontend `pnpm test` 121 passed、typecheck 与 build exit 0；prototype e2e 20 passed；`p1-match-live` desktop+mobile 基线经审阅有意重生成；完整 e2e 40 passed/4 skipped（首轮 1 例 mobile prototype 抖动复跑通过）；backend 确定性 286 passed/8 deselected（HEAD 修复后）；`git diff --check` 通过。
+- **阻塞：** 无。
 
 ### T28 — Expose Match Snapshots and Versioned SSE to the Browser
 
@@ -155,6 +170,7 @@
 
 | 日期 | 提交 | 验证 | 结果 |
 |---|---|---|---|
+| 2026-09-09 | `ecd916b` | TDD：统计 5 + 逐分 6 + 映射测试先失败后通过；frontend 121 passed + typecheck + build；prototype e2e 20 passed；完整 e2e 40 passed/4 skipped，p1-match-live 基线审阅后重生成；backend 286 passed/8 deselected（含 `6c1b448` HEAD 修复） | T29 完成；PBP 与统计 UI 就绪，T30 ready |
 | 2026-09-09 | `f03985b` | TDD：stream 9 + hook 8 先失败后通过；backend 286 passed/8 deselected、infrastructure 12；frontend 106 + typecheck + build；完整 e2e 40 passed/4 skipped 视觉零变化 | T28 完成；snapshot + 版本化 SSE 就绪，T29 ready |
 | 2026-09-09 | `d354aba` | TDD：leases 6 + worker 8 + feed 6 先失败后通过；20/20 轮 stress 全绿；全套确定性 276 passed/8 deselected；infrastructure 11 passed；真实 WS smoke 1 passed、REST smoke 1 passed | T27 完成；WS feed/leases/worker 就绪，T28 ready |
 | 2026-09-09 | `98a1a22` | TDD：reducer 11 项 + integration 4 项先失败后通过；infrastructure 11 passed；alembic base↔head 往返 exit 0；全套确定性 256 passed/7 deselected；`git diff --check` 通过 | T26 完成；canonical reducer 与事务化持久化就绪，T27 ready |
@@ -172,9 +188,11 @@
 
 ## 最近交接
 
-**状态：** T28 已由 Claude Code 于 2026-09-09 在 `main` 完成，实现提交 `f03985b`；当前无领取中的任务，T29 保持 ready。
+**状态：** T29 已由 Claude Code 于 2026-09-09 在 `main` 完成，实现提交 `ecd916b`；T30 已于 23:32 CST 领取，`in_progress`。
 
-**交接说明：** 接手 T29 前完整阅读 [P2 设计规格 §14](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) 和 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t29-render-full-pbp-and-available-match-statistics)。所有 ADE 只使用根目录 `.env`；API-Tennis 凭据变量为 `TENNIX_API_TENNIS_API_KEY`，不得写入代码、文档、fixture、日志、提交或聊天输出。T28 起 MatchPage 经 `useMatchStream` 消费 `/api/matches/{id}` + `/stream`（snapshot 含 points/statistics/quality/state_version）；SSE 测试用进程内 uvicorn（ASGITransport 缓冲）；用户已追加要求：P2 收尾时用真实浏览器按业务流程逐项人工验收直到无 bug。
+**交接说明：** 接手 T30 前完整阅读 [P2 设计规格 §13](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) 和 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t30-calibrate-and-implement-recent-control-index-v1)。所有 ADE 只使用根目录 `.env`；API-Tennis 凭据变量为 `TENNIX_API_TENNIS_API_KEY`，不得写入代码、文档、fixture、日志、提交或聊天输出。T29 起生产 Match 页经 `stream.snapshot` 渲染统计与逐分（fake 模式为空时显示诚实缺失文案）；calibration 命令只允许写聚合 JSON（schema 版本、样本数、先验均值/强度、alpha、scale），不得含原始 vendor 行或 ID；用户已追加要求：P2 收尾时用真实浏览器按业务流程逐项人工验收直到无 bug。
+
+**旧交接（T29）：** 接手 T29 前完整阅读 [P2 设计规格 §14](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) 和 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t29-render-full-pbp-and-available-match-statistics)。所有 ADE 只使用根目录 `.env`；API-Tennis 凭据变量为 `TENNIX_API_TENNIS_API_KEY`，不得写入代码、文档、fixture、日志、提交或聊天输出。T28 起 MatchPage 经 `useMatchStream` 消费 `/api/matches/{id}` + `/stream`（snapshot 含 points/statistics/quality/state_version）；SSE 测试用进程内 uvicorn（ASGITransport 缓冲）；用户已追加要求：P2 收尾时用真实浏览器按业务流程逐项人工验收直到无 bug。
 
 **旧交接（T27）：** 接手 T28 前完整阅读 [P2 设计规格 §9–§11](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) 和 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t28-expose-match-snapshots-and-versioned-sse-to-the-browser)。所有 ADE 只使用根目录 `.env`；API-Tennis 凭据变量为 `TENNIX_API_TENNIS_API_KEY`，不得写入代码、文档、fixture、日志、提交或聊天输出。T27 起实时链路为：leases（`tnx:lease:*`/`tnx:demand*`）→ worker（REST 先行 + WS 增量 + reducer + save_reduction + publisher）→ Redis（`tnx:hot:*` + `tnx:match:*` pub/sub）；SSE 尚未接线（T28）。vendor WS 为数组批次帧，adapter 客户端过滤。用户已追加要求：P2 收尾时用真实浏览器按业务流程逐项人工验收直到无 bug。
 
@@ -186,6 +204,9 @@
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-09 | 领取 T30：Recent Control Index v1 校准与实现 | `ecd916b` 起始 |
+| 2026-09-09 | T29 完成：完整 PBP 与 22 项统计渲染 | `ecd916b` |
+| 2026-09-09 | 修复 T27 遗漏提交：mapping helpers 与 FeedDisconnected | `6c1b448` |
 | 2026-09-09 | 领取 T29：完整 PBP 与 22 项统计渲染 | `117fece` 起始 |
 | 2026-09-09 | T28 完成：snapshot REST、版本化 SSE、useMatchStream 与 MatchPage 接入 | `f03985b` |
 | 2026-09-09 | 领取 T28：Match snapshot 与版本化 SSE | `fe1d48b` 起始 |
