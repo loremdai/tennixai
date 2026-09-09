@@ -3,17 +3,17 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-09 16:58 CST
+**最后更新：** 2026-09-09 17:07 CST
 
-**当前任务：** T20 — Freeze P2 Live Match Intelligence Design and Roadmap
+**当前任务：** 无（T20 已完成；T21 已 ready，尚未领取）
 
-**任务状态：** `in_progress`
+**任务状态：** `idle`
 
-**当前执行者 / ADE：** Codex
+**当前执行者 / ADE：** —
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**最近完成任务提交：** `fdb0131`
+**最近完成任务提交：** `b7921c0`
 
 **最后验证的产品提交：** `fdb0131`
 
@@ -36,7 +36,7 @@
 - 本地运行与 opt-in 真实门命令见 [docs/runbooks/p1-local.md](./docs/runbooks/p1-local.md)。
 - P2（Live Match Intelligence）设计已逐项批准：API-Tennis REST/WebSocket、FastAPI + 独立 worker、PostgreSQL + Redis、snapshot + versioned SSE、Home facets、PBP/statistics、Recent Control、轻量 history/H2H 和 Replay 测试。
 - P2 详细规格已写入 [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md)，T21–T32 的逐任务文件、接口、TDD 步骤和验收命令见 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md)。
-- T20 只负责设计与路线落盘，不实现 P2 产品代码；下一任务将是 T21 canonical domain/provider contracts，必须另行领取。
+- T20 已完成且未实现 P2 产品代码；下一任务是 T21 canonical domain/provider contracts，必须按启动入口另行领取。
 - 已知非 T17 限制：LiveTennisAPI 的 `/players?search` 当前不能把中文显示名“郑钦文”直接映射到 `Qinwen Zheng`；canonical English name 查询已通过，中文别名/名称归一化需另立任务批准。
 - 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`（任务外）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`（next dev 自动生成）、`frontend/next-env.d.ts`（Next 工具链生成）；保留原样。
 
@@ -44,21 +44,22 @@
 
 ### T20 — Freeze P2 Live Match Intelligence Design and Roadmap
 
-- **状态：** `in_progress`
+- **状态：** `done`
 - **执行者 / ADE：** Codex
 - **分支：** `main`
 - **起始提交：** `17f4d89`
 - **领取时间：** 2026-09-09 16:28 CST
-- **完成提交：** —
+- **完成提交：** `b7921c0`
 - **范围：** 把用户逐项批准的 P2 产品边界、API-Tennis 能力、实时架构、canonical model、PostgreSQL/Redis 职责、Home 筛选、Match 体验、Chat、近期控制指数和测试策略写成权威规格与可执行路线。
-- **完成事实：** 已完成设计访谈、API-Tennis 官方文档/真实 Trial 能力核查和 Momentum 原始研究复核；P2 规格与 T21–T32 实施计划已形成，正在做最终一致性审查，不实现 P2 产品代码。
-- **验证门：** 规格与计划无占位符；所有批准事项均有任务归属和验收门；三份总控状态一致；文档链接与 Git diff 经核对。
+- **完成事实：** 已完成设计访谈、API-Tennis 官方文档/真实 Trial 能力核查和 Momentum 原始研究复核；P2 规格与 T21–T32 实施计划已提交，未实现 P2 产品代码。
+- **验证门：** 设计规格 702 行、实施计划 1055 行；12 个实施任务均有 files/interfaces/五步 TDD 与 commit gate；占位符和 64 位敏感模式扫描无命中；本地链接存在；tracked/new-file whitespace 检查与 `git diff --check` 通过。
 - **阻塞：** 无。
 
 ## 最近验证
 
 | 日期 | 提交 | 验证 | 结果 |
 |---|---|---|---|
+| 2026-09-09 | `b7921c0` | P2 规格/计划覆盖审查；12 个任务和 60 个步骤结构核对；占位符/敏感模式扫描无命中；本地链接存在；whitespace 与 diff check 通过 | T20 完成；P2.0 关闭，T21 ready |
 | 2026-09-09 | `fdb0131` | Home 单元 72/72；typecheck/build；长 Markdown 结构化卡片视口回归桌面/移动 12/12；完整 Playwright 34 passed/4 skipped，视觉基线通过 | T19 完成；回答完成后结构化比赛卡片保持可见 |
 | 2026-09-09 | `5572960` | TDD 先行测试验证两处原文显示失败；修复后 frontend 71/71 + typecheck + build；隔离服务 Playwright 10/10；真实浏览器 `strong=10`、`ul=1`、无 `**` | T18 完成；Home/Match 问答 Markdown 展示通过 |
 | 2026-09-08 | `69c8238` | backend 确定性 126 passed；frontend 69/69 + typecheck + build；隔离 fake 服务的 Playwright 32 passed/4 skipped；真实 REST upcoming 50 场与 Qinwen Zheng 指定球员查询；真实浏览器 Home→Match→上下文问答 | T17 完成；P1 当前实现门通过 |
@@ -71,9 +72,9 @@
 
 ## 最近交接
 
-**状态：** T20 已由 Codex 于 2026-09-09 在 `main` 领取，起始提交 `17f4d89`；P2 设计冻结进行中。
+**状态：** T20 已由 Codex 于 2026-09-09 在 `main` 完成，规格/计划提交 `b7921c0`；当前无领取中的任务，T21 已 ready。
 
-**交接说明：** 当前只编写 P2 规格、实施计划和三份总控，不实现代码。用户提供的 API-Tennis 凭据只允许保留在被忽略的本地环境文件中，不得写入文档、测试 fixture、日志或提交。P1 运行方式仍见 [docs/runbooks/p1-local.md](./docs/runbooks/p1-local.md)。
+**交接说明：** 接手 T21 前完整阅读 [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) 和 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t21-extend-the-canonical-domain-and-provider-contracts)。用户提供的 API-Tennis 凭据只允许保留在被忽略的本地环境文件中，不得写入文档、测试 fixture、日志或提交。P1 运行方式仍见 [docs/runbooks/p1-local.md](./docs/runbooks/p1-local.md)。
 
 **已知本地状态：** 未跟踪的 `.codex/skills/ui-ux-pro-max/SKILL.md`、`frontend/AGENTS.md`、`frontend/CLAUDE.md`（next dev 生成）、`frontend/next-env.d.ts`（Next 工具链生成），保留原样。
 
@@ -83,11 +84,11 @@
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-09 | T20 完成：P2 设计规格、T21–T32 实施计划与三份总控落盘 | `b7921c0` |
 | 2026-09-09 | 领取 T20：冻结 P2 Live Match Intelligence 设计与实施路线 | `17f4d89` 起始 |
 | 2026-09-09 | T19 完成：Markdown 回答完成后保持结构化比赛卡片可见 | `fdb0131` |
 | 2026-09-09 | 领取 T19：Markdown 回答完成后保持结构化比赛卡片可见 | `b1108ba` 起始 |
 | 2026-09-09 | T18 完成：Home/Match 问答 Markdown 安全渲染与浏览器验收 | `5572960` |
-| 2026-09-09 | 领取 T18：问答 Markdown 原文显示修复 | `c6e4120` 起始 |
 
 ## 接手与更新规则
 
