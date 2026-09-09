@@ -3,9 +3,9 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-10 00:10 CST
+**最后更新：** 2026-09-10 00:25 CST
 
-**当前任务：** T30 — Calibrate and Implement Recent Control Index v1
+**当前任务：** T31 — Add P2 Intelligence Tools and Versioned Chat Answers
 
 **任务状态：** `in_progress`
 
@@ -13,15 +13,15 @@
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**最近完成任务提交：** `ecd916b`
+**最近完成任务提交：** `8c9e161`
 
-**最后验证的产品提交：** `ecd916b`
+**最后验证的产品提交：** `8c9e161`
 
-**T30 起始提交：** `ecd916b`
+**T30 完成提交：** `8c9e161`
 
-**T30 接管提交：** `577af46`
+**T31 起始提交：** `8c9e161`
 
-**T30 接管时间：** 2026-09-10 00:10 CST
+**T31 领取时间：** 2026-09-10 00:25 CST
 
 **远程：** `origin` → `https://github.com/loremdai/tennixai.git`
 
@@ -60,22 +60,34 @@
 - T28 已确认的事实：SSE 每版本仅一帧且 id=state_version；gap 只转发不造事件；隐藏 60s abort 释放 lease；httpx ASGITransport 缓冲响应，SSE 测试须用进程内 uvicorn；全套确定性 286 passed/8 deselected、infrastructure 12、frontend 106、e2e 40/4 skipped 且视觉零变化。
 - T29 已于 2026-09-09 完成并推送：生产 Match 页渲染 canonical snapshot 的 22 项技术统计（分组/单位/partial/缺失不猜测）与 Set→Game→Point 时间线（关键分徽章、纠错提示、近底自动跟随）；实现提交为 `ecd916b`。
 - T29 已确认的事实：preview 原型与卡片顺序零变化；fake 模式统计/逐分为空时显示诚实缺失文案；`p1-match-live` 生产视觉基线经审阅有意重生成（desktop+mobile）；另以 `6c1b448` 修复 T27 提交遗漏的 `api_tennis.py`/`realtime/models.py`（HEAD 曾无法 import live feed）。
-- 下一任务是 T30（Recent Control Index v1 校准与实现），必须按启动入口另行领取。
+- 当前唯一任务是 T31（版本化 P2 Intelligence tools 与 Chat），必须按启动入口继续；T30 已完成。
 - 已知非 T17 限制：LiveTennisAPI 的 `/players?search` 当前不能把中文显示名“郑钦文”直接映射到 `Qinwen Zheng`；canonical English name 查询已通过，中文别名/名称归一化需另立任务批准。
 - 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`（任务外）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`（next dev 自动生成）、`frontend/next-env.d.ts`（Next 工具链生成）；保留原样。
 
 ## 当前任务
 
-### T30 — Calibrate and Implement Recent Control Index v1
+### T31 — Add P2 Intelligence Tools and Versioned Chat Answers
 
 - **状态：** `in_progress`
 - **执行者 / ADE：** Codex / Codex
 - **分支：** `main`
+- **起始提交：** `8c9e161`
+- **领取时间：** 2026-09-10 00:25 CST
+- **前置完成：** T30 已以 `8c9e161` 完成并通过验证；本次领取从该产品提交开始，未创建分支。
+- **范围：** 按 [P2 实施计划 T31](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t31-add-p2-intelligence-tools-and-versioned-chat-answers)：compact fact packet、history/H2H/tools、版本化上下文 Chat；不引入预测、odds、market 或交易能力。
+- **阻塞：** 无。
+
+### T30 — Calibrate and Implement Recent Control Index v1
+
+- **状态：** `done`
+- **执行者 / ADE：** Codex / Codex
+- **分支：** `main`
 - **起始提交：** `ecd916b`
 - **领取时间：** 2026-09-10 00:10 CST（异常接管）
-- **接管事实：** 原执行者因额度耗尽中断；项目所有者已明确批准本次接管。接管 HEAD 为 `577af46`。现场存在以下 5 个未提交 T30 草稿文件，均保留并逐项审阅：`backend/app/momentum/__init__.py`、`backend/app/momentum/engine.py`、`backend/app/momentum/calibration.py`、`backend/tests/test_momentum_engine.py`、`backend/tests/test_momentum_calibration.py`。
-- **接管基线：** 直接运行 `cd backend && uv run pytest tests/test_momentum_engine.py tests/test_momentum_calibration.py -v` 被宿主异常 `NO_PROXY/no_proxy`（`httpx.InvalidURL: Invalid port: ':1'`）拦截；临时移除这两个变量后为 18 collected、12 passed、6 failed。失败均已记录为草稿 helper/fixture、调用语义、校准样本和缺失聚合文件问题，待按设计修复。
-- **范围：** 按 [P2 实施计划 T30](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t30-calibrate-and-implement-recent-control-index-v1)：`backend/app/momentum/`（engine、calibration 命令、`calibration.v1.json` 聚合文件）、reducer/repositories 集成 momentum 观测、前端 `match-momentum.tsx` 控制图；无固定关键分倍率、无未来泄漏、不确定分不更新。
+- **完成提交：** `8c9e161`
+- **接管事实：** 原执行者因额度耗尽中断；项目所有者明确批准接管。接管 HEAD 为 `577af46`，5 个未提交 T30 草稿均保留并逐项审阅。
+- **完成事实：** 版本化 aggregate calibration（schema、样本计数、cohort prior/strength、alpha、scale、global fallback；无 vendor raw/ID）；Recent Control v1 使用分前发球校正残差 + EWMA，不确定 winner 跳过、关键分只作 annotation、少于 6 个确定分标记 provisional、纠错从受影响分重算；reducer 与 PostgreSQL observation persistence 接线；前端控制图展示最近 20 条、零线、leader/value、provisional、`as_of` 和关键分标记；CLI 小配额探测在无可用样本时不写文件，`--help` 无 import warning。
+- **验证门：** TDD 先失败后通过；focused backend 33 passed，infrastructure 6 passed，全确定性 backend 309 passed/8 deselected；frontend 124 passed、typecheck/build 通过；完整 Playwright 40 passed/4 skipped，prototype 10/10、P1 visual 12/12；`git diff --check` 通过。
 - **阻塞：** 无。
 
 ## 最近完成任务
@@ -176,6 +188,7 @@
 
 | 日期 | 提交 | 验证 | 结果 |
 |---|---|---|---|
+| 2026-09-10 | `8c9e161` | T30 focused backend 33 passed；infrastructure 6 passed；全确定性 backend 309 passed/8 deselected；frontend 124 passed + typecheck + build；完整 Playwright 40 passed/4 skipped，prototype 10/10、P1 visual 12/12；CLI `--help` 无 import warning，`git diff --check` 通过 | T30 完成；Recent Control v1、聚合校准、reducer/persistence 与控制图就绪，T31 进行中 |
 | 2026-09-09 | `ecd916b` | TDD：统计 5 + 逐分 6 + 映射测试先失败后通过；frontend 121 passed + typecheck + build；prototype e2e 20 passed；完整 e2e 40 passed/4 skipped，p1-match-live 基线审阅后重生成；backend 286 passed/8 deselected（含 `6c1b448` HEAD 修复） | T29 完成；PBP 与统计 UI 就绪，T30 ready |
 | 2026-09-09 | `f03985b` | TDD：stream 9 + hook 8 先失败后通过；backend 286 passed/8 deselected、infrastructure 12；frontend 106 + typecheck + build；完整 e2e 40 passed/4 skipped 视觉零变化 | T28 完成；snapshot + 版本化 SSE 就绪，T29 ready |
 | 2026-09-09 | `d354aba` | TDD：leases 6 + worker 8 + feed 6 先失败后通过；20/20 轮 stress 全绿；全套确定性 276 passed/8 deselected；infrastructure 11 passed；真实 WS smoke 1 passed、REST smoke 1 passed | T27 完成；WS feed/leases/worker 就绪，T28 ready |
@@ -194,9 +207,9 @@
 
 ## 最近交接
 
-**状态：** T29 已由 Claude Code 于 2026-09-09 在 `main` 完成，实现提交 `ecd916b`；T30 已于 23:32 CST 领取，`in_progress`。
+**状态：** T30 已由 Codex 于 2026-09-10 在 `main` 完成，实现提交 `8c9e161`；T31 已从该提交领取，`in_progress`。
 
-**交接说明：** 接手 T30 前完整阅读 [P2 设计规格 §15](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md#15-recent-control-index-v1) 和 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t30-calibrate-and-implement-recent-control-index-v1)。原执行者因额度耗尽中断，项目所有者已明确批准 Codex 接管；接管时 HEAD 为 `577af46`，T30 定向基线为宿主 `NO_PROXY/no_proxy` 异常后临时移除变量的 18 collected、12 passed、6 failed。所有 ADE 只使用根目录 `.env`；API-Tennis 凭据变量为 `TENNIX_API_TENNIS_API_KEY`，不得写入代码、文档、fixture、日志、提交或聊天输出。T29 起生产 Match 页经 `stream.snapshot` 渲染统计与逐分（fake 模式为空时显示诚实缺失文案）；calibration 命令只允许写聚合 JSON（schema 版本、样本数、先验均值/强度、alpha、scale），不得含原始 vendor 行或 ID；用户已追加要求：P2 收尾时用真实浏览器按业务流程逐项人工验收直到无 bug。
+**交接说明：** T30 接管时原执行者因额度耗尽中断，项目所有者明确批准 Codex 接管；接管 HEAD 为 `577af46`，基线为移除异常 `NO_PROXY/no_proxy` 后的 18 collected、12 passed、6 failed。T30 已按 [P2 设计规格 §15](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md#15-recent-control-index-v1) 与 [P2 实施计划 T30](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t30-calibrate-and-implement-recent-control-index-v1) 完成；当前 T31 按 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t31-add-p2-intelligence-tools-and-versioned-chat-answers) 继续。所有 ADE 只使用根目录 `.env`；API-Tennis 凭据变量为 `TENNIX_API_TENNIS_API_KEY`，不得写入代码、文档、fixture、日志、提交或聊天输出；用户要求 P2 收尾时用真实浏览器按业务流程逐项人工验收直到无 bug。
 
 **旧交接（T29）：** 接手 T29 前完整阅读 [P2 设计规格 §14](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) 和 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t29-render-full-pbp-and-available-match-statistics)。所有 ADE 只使用根目录 `.env`；API-Tennis 凭据变量为 `TENNIX_API_TENNIS_API_KEY`，不得写入代码、文档、fixture、日志、提交或聊天输出。T28 起 MatchPage 经 `useMatchStream` 消费 `/api/matches/{id}` + `/stream`（snapshot 含 points/statistics/quality/state_version）；SSE 测试用进程内 uvicorn（ASGITransport 缓冲）；用户已追加要求：P2 收尾时用真实浏览器按业务流程逐项人工验收直到无 bug。
 
@@ -210,17 +223,11 @@
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
-| 2026-09-09 | 领取 T30：Recent Control Index v1 校准与实现 | `ecd916b` 起始 |
+| 2026-09-10 | 领取 T31：P2 Intelligence tools 与版本化 Chat | `8c9e161` 起始 |
+| 2026-09-10 | T30 完成：Recent Control v1 校准、reducer/persistence 与控制图 | `8c9e161` |
+| 2026-09-10 | T30 接管记录 | `60fa62e` |
 | 2026-09-09 | T29 完成：完整 PBP 与 22 项统计渲染 | `ecd916b` |
 | 2026-09-09 | 修复 T27 遗漏提交：mapping helpers 与 FeedDisconnected | `6c1b448` |
-| 2026-09-09 | 领取 T29：完整 PBP 与 22 项统计渲染 | `117fece` 起始 |
-| 2026-09-09 | T28 完成：snapshot REST、版本化 SSE、useMatchStream 与 MatchPage 接入 | `f03985b` |
-| 2026-09-09 | 领取 T28：Match snapshot 与版本化 SSE | `fe1d48b` 起始 |
-| 2026-09-09 | T27 完成：WS feed、Redis leases 与 realtime worker | `d354aba` |
-| 2026-09-09 | 领取 T27：WebSocket feed、Redis leases 与 realtime worker | `1d5d3cf` 起始 |
-| 2026-09-09 | T26 完成：canonical live reducer 与事务化持久化 | `98a1a22` |
-| 2026-09-09 | 领取 T26：canonical live reducer 与事务化持久化 | `8a21c12` 起始 |
-| 2026-09-09 | T25 完成：Home 叠加筛选、catalog 消费与优先级展示 | `e904485` |
 
 ## 接手与更新规则
 

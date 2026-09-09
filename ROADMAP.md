@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-10 00:10 CST
+**最后更新：** 2026-09-10 00:25 CST
 
 **总体状态：** `in_progress`（P1 已完成；P2 实施中）
 
 **当前里程碑：** P2 — Live Match Intelligence（`in_progress`）
 
-**当前阶段：** P2.3 — Realtime pipeline（`ready`）
+**当前阶段：** P2.4 — Match intelligence（`in_progress`）
 
 ## 状态说明
 
@@ -29,7 +29,7 @@
 | 里程碑 | 状态 | 目标 | 进入/完成条件 |
 |---|---|---|---|
 | P1 — Match Information Assistant | `done` | 跑通真实结构化比赛查询、卡片、Match Page 与上下文 Chat | T17/T18/T19 均已完成（`69c8238`、`5572960`、`fdb0131`）；P1 已关闭 |
-| P2 — Live Match Intelligence | `in_progress` | 技术统计、PBP、近期控制指数、持久化和多进程实时协调 | T20–T29 已完成（`b7921c0`、`5b479fc`、`20dac5f`、`015ff7f`、`dddb734`、`e904485`、`98a1a22`、`d354aba`、`f03985b`、`ecd916b`）；T30 已领取 |
+| P2 — Live Match Intelligence | `in_progress` | 技术统计、PBP、近期控制指数、持久化和多进程实时协调 | T20–T30 已完成（`b7921c0`、`5b479fc`、`20dac5f`、`015ff7f`、`dddb734`、`e904485`、`98a1a22`、`d354aba`、`f03985b`、`ecd916b`、`8c9e161`）；T31 进行中 |
 | P3 — Market & Decision Support | `planned` | 市场状态、预测、edge、confidence 和 paper trading | P2 数据可信；映射、模型评估和风控设计另行批准 |
 | Optional — Automated Execution | `deferred` | 在满足法律、风控、安全和可审计条件后考虑自动下单 | 不属于 P3 默认范围，必须单独批准 |
 
@@ -54,8 +54,8 @@
 | P2.0 — Design freeze | `done` | API-Tennis 能力边界、实时架构、领域模型、存储、UI、Chat、测试与任务路线 | T20 完成提交 `b7921c0`；规格、计划、总控一致性审查通过 |
 | P2.1 — Durable foundations | `done` | P2 canonical domain、provider contracts、PostgreSQL、Redis、稳定 identity | T21（`5b479fc`）与 T22（`20dac5f`）完成；P2.2 可开始 |
 | P2.2 — Unified data and discovery | `done` | API-Tennis REST、历史/H2H、赛事分类和 Home 叠加筛选 | T23–T25 完成（`015ff7f`、`dddb734`、`e904485`）；P2.3 可开始 |
-| P2.3 — Realtime pipeline | `in_progress` | Reducer、WebSocket worker、租约、持久化、snapshot + SSE | T26–T28 完成（`98a1a22`、`d354aba`、`f03985b`）；T29 可领取 |
-| P2.4 — Match intelligence | `in_progress` | 完整 PBP、22 项统计、近期控制指数、版本化上下文 Chat | T29 完成（`ecd916b`）；T30 in_progress、T31 待领取 |
+| P2.3 — Realtime pipeline | `done` | Reducer、WebSocket worker、租约、持久化、snapshot + SSE | T26–T28 完成（`98a1a22`、`d354aba`、`f03985b`）；T29/T30 已在 P2.4 完成 |
+| P2.4 — Match intelligence | `in_progress` | 完整 PBP、22 项统计、近期控制指数、版本化上下文 Chat | T29（`ecd916b`）与 T30（`8c9e161`）完成；T31 进行中 |
 | P2.5 — Acceptance and hardening | `planned` | Replay、恢复门、真实 smoke、双视口视觉和本地 runbook | T32；等待 P2.4 |
 
 详细产品、架构和数据语义见 [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md)，逐任务实施步骤见 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md)。
@@ -75,8 +75,8 @@
 | T27 | P2.3 | Add WebSocket Feed, Redis Leases, and the Realtime Worker | `done` | `d354aba` | `ApiTennisLiveFeedProvider`（batch 帧解析 + 客户端 `event_key` 过滤、secret-safe断线信号）；`ViewerLeaseStore`（lease TTL/renew/grace/demand index、arrival-order 容量优先）；`RealtimePublisher`（hot snapshot + pub/sub）；`RealtimeWorker`（一 match 一上游、REST 先行、断线丢弃旧帧后 REST reconcile 再继续、terminal 立即关闭、capacity_limited、14 天 raw cleanup）；lease 6 + worker 8 + feed 6 共 20 项确定性测试（20 轮 stress 全绿）；真实 opt-in WS smoke 1 passed（认证、收到真实 push、canonical 映射零泄漏）；REST smoke 1 passed；infrastructure 11 passed；全套确定性 276 passed/8 deselected |
 | T28 | P2.3 | Expose Match Snapshots and Versioned SSE to the Browser | `done` | `f03985b` | `GET /matches/{id}` 全量 MatchSnapshot（hot→PG→provider 并回存）；`GET /matches/{id}/stream` 版本化 SSE（ready/match_delta(id=version)/match_ended/heartbeat、lease acquire+20s renew+断开 release、gap 只转发不造事件）；Next 薄代理转发 Accept/Last-Event-ID；`useMatchStream`（REST 先行、delta=local+1 原子替换、重复忽略、跳号重取、错误保留数据重连、隐藏 60s 释放、恢复先 snapshot 再 SSE、unmount abort）；stream 9 项 + hook 8 项新测试；backend 286 passed/8 deselected、infrastructure 12 passed；frontend 106 passed + typecheck + build；完整 e2e 40 passed/4 skipped 且 P1 视觉基线零变化 |
 | T29 | P2.4 | Render Full PBP and Available Match Statistics | `done` | `ecd916b` | Set→Game→Point、关键分、partial/unavailable 和 22-stat UI |
-| T30 | P2.4 | Calibrate and Implement Recent Control Index v1 | `in_progress` | — | aggregate calibration、发球校正、EWMA、无固定关键分倍率 |
-| T31 | P2.4 | Add P2 Intelligence Tools and Versioned Chat Answers | `planned` | — | compact fact packet、history/H2H/tools、answer version/as_of |
+| T30 | P2.4 | Calibrate and Implement Recent Control Index v1 | `done` | `8c9e161` | versioned aggregate calibration（schema/先验强度/alpha/scale/fallback，无 vendor raw/ID）；Recent Control v1 使用分前发球校正残差 + EWMA，不确定 winner 跳过、关键分只作 annotation、纠错从受影响分重算；reducer/Snapshot persistence 接线；前端最近 20 条控制图、zero line、leader/value、provisional、as_of、关键分标记；focused 33 passed、infrastructure 6 passed、全确定性 backend 309 passed/8 deselected；frontend 124 passed + typecheck/build；Playwright 40 passed/4 skipped，prototype 10/10、P1 visual 12/12 |
+| T31 | P2.4 | Add P2 Intelligence Tools and Versioned Chat Answers | `in_progress` | — | compact fact packet、history/H2H/tools、answer version/as_of |
 | T32 | P2.5 | Add Replay E2E, Fault Recovery, Runbook, and Final P2 Gate | `planned` | — | deterministic replay、重启/纠错/断线、真实 smoke 与完整验收 |
 
 ## P2 完成门摘要
