@@ -3,13 +3,13 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-09 17:40 CST
+**最后更新：** 2026-09-09 17:46 CST
 
-**当前任务：** 无（M01 已完成；T21 已 ready，尚未领取）
+**当前任务：** T21 — Extend the Canonical Domain and Provider Contracts
 
-**任务状态：** `idle`
+**任务状态：** `in_progress`
 
-**当前执行者 / ADE：** —
+**当前执行者 / ADE：** Claude Code / Claude Code
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
@@ -17,7 +17,7 @@
 
 **最后验证的产品提交：** `fdb0131`
 
-**M01 起始提交：** `aece736`
+**T21 起始提交：** `f574b1a`
 
 **远程：** `origin` → `https://github.com/loremdai/tennixai.git`
 
@@ -42,6 +42,18 @@
 - 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`（任务外）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`（next dev 自动生成）、`frontend/next-env.d.ts`（Next 工具链生成）；保留原样。
 
 ## 当前任务
+
+### T21 — Extend the Canonical Domain and Provider Contracts
+
+- **状态：** `in_progress`
+- **执行者 / ADE：** Claude Code / Claude Code
+- **分支：** `main`
+- **起始提交：** `f574b1a`
+- **领取时间：** 2026-09-09 17:46 CST
+- **范围：** 按 [P2 实施计划 T21](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t21-extend-the-canonical-domain-and-provider-contracts)：新增 P2 canonical enums 与模型（CircuitTier/Gender/Discipline/ConnectionStatus/CapabilityStatus/PointEvent/MatchStatistic/MomentumObservation/DataQuality/HeadToHead/MatchSnapshot/ProviderLiveEnvelope），identity 契约改为 async，扩展查询 provider 与 live-feed 协议，并保持 P1 provider 回归门通过。
+- **阻塞：** 无。
+
+## 最近完成任务
 
 ### M01 — Unify Root Environment Entry
 
@@ -74,7 +86,7 @@
 
 ## 最近交接
 
-**状态：** M01 已由 Codex 于 2026-09-09 在 `main` 完成，实现提交 `969c7ec`；当前无领取中的任务，T21 保持 ready。
+**状态：** M01 已由 Codex 于 2026-09-09 在 `main` 完成，实现提交 `969c7ec`；T21 已于 2026-09-09 17:46 CST 由 Claude Code 在 `main` 领取，起始提交 `f574b1a`。
 
 **交接说明：** 接手 T21 前完整阅读 [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) 和 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t21-extend-the-canonical-domain-and-provider-contracts)。所有 ADE 只使用根目录 `.env`；API-Tennis 凭据变量为 `TENNIX_API_TENNIS_API_KEY`，不得写入代码、文档、fixture、日志、提交或聊天输出。
 
@@ -86,11 +98,11 @@
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-09 | 领取 T21：扩展 canonical domain 与 provider contracts | `f574b1a` 起始 |
 | 2026-09-09 | M01 完成：backend/frontend/Playwright/真实测试统一使用根目录 `.env` | `969c7ec` |
 | 2026-09-09 | 领取 M01：本地配置统一迁移到根目录 `.env` | `aece736` 起始 |
 | 2026-09-09 | T20 完成：P2 设计规格、T21–T32 实施计划与三份总控落盘 | `b7921c0` |
 | 2026-09-09 | 领取 T20：冻结 P2 Live Match Intelligence 设计与实施路线 | `17f4d89` 起始 |
-| 2026-09-09 | T19 完成：Markdown 回答完成后保持结构化比赛卡片可见 | `fdb0131` |
 
 ## 接手与更新规则
 
