@@ -1,5 +1,7 @@
 # T16 Real Runtime Hardening Implementation Plan
 
+> **Configuration path superseded on 2026-09-09:** M01 made the repository-root `.env` / `.env.example` the only current configuration entry. Any `backend/.env` reference below is historical and must not be followed.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make the P1 real LiveTennisAPI → business tools → OpenAI-compatible LLM → SSE path bounded and usable without changing the approved product scope.

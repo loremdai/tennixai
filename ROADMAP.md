@@ -64,6 +64,7 @@
 
 | ID | 主要阶段 | 任务 | 状态 | 完成提交 | 验收证据 |
 |---|---|---|---|---|---|
+| M01 | P2 preflight | Unify Root Environment Entry | `in_progress` | — | 根目录 `.env` 成为 backend/frontend/Playwright/真实测试唯一入口；迁移后回归与泄漏门 |
 | T20 | P2.0 | Freeze P2 Live Match Intelligence Design and Roadmap | `done` | `b7921c0` | 702 行设计规格 + 1055 行实施计划；T21–T32 均有 files/interfaces/TDD/commit gate；占位符/敏感模式扫描无命中、文档链接存在、`git diff --check` 通过 |
 | T21 | P2.1 | Extend the Canonical Domain and Provider Contracts | `ready` | — | P2 models、async identity 和 query/live contracts；P1 provider 回归门 |
 | T22 | P2.1 | Add PostgreSQL, Redis, Migrations, and Durable Identity | `planned` | — | Compose health、Alembic up/down/up、并发 identity 与 repository integration |

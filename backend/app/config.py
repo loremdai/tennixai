@@ -1,11 +1,17 @@
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+ROOT_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="TENNIX_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="TENNIX_", env_file=ROOT_ENV_FILE, extra="ignore"
+    )
 
     provider_mode: Literal["fake", "live"] = "fake"
     livetennis_api_key: SecretStr | None = None

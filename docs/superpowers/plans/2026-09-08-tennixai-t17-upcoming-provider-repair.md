@@ -1,5 +1,7 @@
 # T17 Real Upcoming Provider and Partial Failure Handling Implementation Plan
 
+> **Configuration path superseded on 2026-09-09:** M01 made the repository-root `.env` / `.env.example` the only current configuration entry. Any `backend/.env` reference below is historical and must not be followed.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or **superpowers:executing-plans** to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Repair the P1 real upcoming-match path so current LiveTennisAPI data reaches the canonical model, player-specific upcoming queries use the provider's filter without unbounded pagination, and a single live/upcoming failure no longer hides healthy Home content.
@@ -209,4 +211,3 @@
 - [ ] **Step 4: Commit and push only task-owned changes**
 
   Keep `.codex/`, generated frontend instruction files, and local `.env` files untracked/ignored. Commit source, tests, plan, runbook, and control-file updates, then push the T17 implementation to `origin/main`. Verify the final branch, HEAD, worktree status, and remote commit before reporting completion.
-

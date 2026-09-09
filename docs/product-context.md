@@ -472,7 +472,7 @@ TennixAI owns its configuration and does not read another project's environment 
 - `TENNIX_LLM_MODEL`
 - `TENNIX_BACKEND_URL` for the Next.js server-side proxy
 
-Only safe variable names and descriptions belong in `.env.example`; secret values are never committed. P1 does not require a vision model or LangGraph.
+The repository-root `.env` is the only local configuration source for FastAPI, Next.js, Playwright, and opt-in live tests. Only safe variable names and descriptions belong in the repository-root `.env.example`; secret values are never committed. Subdirectory environment files are not used. P1 does not require a vision model or LangGraph.
 
 Chat is stateless on the server. The browser keeps recent messages in React state and submits them with each request. Home requests use global scope; Match Page requests use match scope plus the internal `match_id`. Refreshing or closing the browser may discard the conversation, which is accepted in P1.
 

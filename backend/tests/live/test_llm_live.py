@@ -1,10 +1,9 @@
 """Opt-in live LLM gate: real Qwen against deterministic fake tennis data.
 
 Run with: uv run pytest -m llm_live
-Requires TENNIX_LLM_API_KEY and TENNIX_LLM_BASE_URL in the environment.
+Reads TENNIX_LLM_API_KEY and TENNIX_LLM_BASE_URL from the repository-root .env.
 """
 
-import os
 from datetime import datetime, timezone
 
 import pytest
@@ -14,6 +13,7 @@ from app.chat.client import OpenAICompatibleChatModel
 from app.chat.models import ChatEventType, ChatMessage, ChatRequest
 from app.chat.orchestrator import ChatOrchestrator
 from app.chat.tools import BusinessTools
+from app.config import Settings
 from app.domain import DataFreshness, Match, MatchStatus, Tournament
 from app.identity import MemoryIdentityRepository
 from app.providers.fake import FakeTennisProvider
@@ -60,16 +60,17 @@ class RecordingBusinessTools(BusinessTools):
         return await super().execute(name, arguments, context)
 
 
-def _require_credentials() -> tuple[str, str]:
-    api_key = os.environ.get("TENNIX_LLM_API_KEY", "")
-    base_url = os.environ.get("TENNIX_LLM_BASE_URL", "")
-    if not api_key.strip() or not base_url.strip():
+def _require_credentials() -> tuple[str, str, str]:
+    settings = Settings(provider_mode="fake", llm_mode="fake")
+    api_key = settings.llm_api_key
+    base_url = settings.llm_base_url
+    if api_key is None or not api_key.get_secret_value().strip() or not base_url:
         pytest.skip("TENNIX_LLM_API_KEY / TENNIX_LLM_BASE_URL not configured")
-    return api_key, base_url
+    return api_key.get_secret_value(), base_url, settings.llm_model
 
 
 def _build() -> tuple[ChatOrchestrator, RecordingBusinessTools]:
-    api_key, base_url = _require_credentials()
+    api_key, base_url, model_name = _require_credentials()
     provider = LiveGateFakeProvider(now=lambda: NOW)
     cache: AsyncTTLCache[str, object] = AsyncTTLCache(max_entries=256)
     service = TennisService(provider, cache, now=lambda: NOW, timezone="Asia/Macau")
@@ -77,7 +78,7 @@ def _build() -> tuple[ChatOrchestrator, RecordingBusinessTools]:
     model = OpenAICompatibleChatModel(
         api_key=api_key,
         base_url=base_url,
-        model=os.environ.get("TENNIX_LLM_MODEL", "qwen3.8-max-0902"),
+        model=model_name,
     )
     return ChatOrchestrator(tools, model), tools
 

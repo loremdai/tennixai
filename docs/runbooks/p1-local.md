@@ -6,13 +6,12 @@
 ## 1. 启动本地栈
 
 ```bash
-cd backend && cp .env.example .env
+cp .env.example .env
 cd backend && uv run uvicorn app.main:app --reload --port 8000
-cd frontend && cp .env.example .env.local
 cd frontend && pnpm dev --port 3100
 ```
 
-- `backend/.env` 只存在于本地，绝不提交；变量名前缀 `TENNIX_`。
+- 根目录 `.env` 是 backend、frontend、Playwright 和真实测试的唯一配置入口，只存在于本地且绝不提交；不要创建子目录 `.env`/`.env.local`。变量名前缀为 `TENNIX_`。
 - `TENNIX_PROVIDER_MODE=fake|live`：fake 使用确定性 `FakeTennisProvider`；live 需要 `TENNIX_LIVETENNIS_API_KEY`。
 - `TENNIX_LLM_MODE=fake|openai_compatible`：openai_compatible 需要 `TENNIX_LLM_API_KEY` 与 `TENNIX_LLM_BASE_URL`（模型默认 `qwen3.8-max-0902`）。`TENNIX_LLM_TIMEOUT_SECONDS` 默认为 45 秒，限制单次工具选择或流式说明的总时长，超时会保留结构化数据并返回固定降级说明。
 - `TENNIX_FIXED_NOW`（可选，ISO8601 带时区）：冻结服务时钟，用于可重复的演示与视觉测试。
@@ -49,7 +48,7 @@ cd frontend && TENNIX_E2E_REAL_PROVIDER=1 TENNIX_E2E_REAL_LLM=1 pnpm test:e2e en
 | `llm-live.spec.ts`（浏览器） | fake | 真实 Qwen | test.skip（需 `TENNIX_E2E_REAL_LLM=1`） |
 | `end-to-end-live.spec.ts`（浏览器） | 真实 | 真实 | test.skip（需两个标志） |
 
-- 运行前在 shell 中导出 `TENNIX_LLM_API_KEY` / `TENNIX_LLM_BASE_URL`（以及 provider 门需要的 `TENNIX_LIVETENNIS_API_KEY`）；Playwright 的 backend webServer 会继承这些变量；未设置真实凭据时 webServer 自动回退 fake 模式，不会启动失败。
+- pytest 真实门与 Playwright 都会读取根目录 `.env`；浏览器真实门仍需通过命令行设置对应的 `TENNIX_E2E_REAL_*` opt-in 标志。未设置真实凭据时会如实 skip 或回退 fake 模式，不会泄漏凭据。
 - 真实 provider 受 Free 配额限制（100 请求/日、30 请求/分钟）；upcoming 使用 `/matches?status=upcoming`，Home 未指定球员时只读取供应商第一页，指定球员时使用供应商 `player` 过滤，不会无界分页；P1 无自动轮询，读取仅来自初始加载、手动刷新与提问。
 - provider 返回 429 时，后端保留 `Retry-After`，前端显示配额暂时用完及重试间隔；重试必须由用户手动触发。
 

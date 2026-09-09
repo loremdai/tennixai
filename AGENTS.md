@@ -19,6 +19,12 @@
 - 产品目标与优先级以 `PROJECT.md`、`ROADMAP.md` 为准；实现事实以代码、测试和 Git HEAD 为准。
 - 不得把供应商、LLM、数据库、缓存或其他未来能力提前带入当前阶段。
 
+## 本地环境配置
+
+- 仓库根目录 `.env` 是 backend、frontend、Playwright 和真实集成测试的唯一人工维护入口；从根目录 `.env.example` 创建。
+- 不得创建或使用 `backend/.env`、`frontend/.env` 或 `frontend/.env.local`。
+- `.env` 只保存在本地且受 Git 忽略。任何 API key、LLM key 或其他凭据都不得进入代码、文档、fixture、日志、提交或聊天输出。
+
 ## 更新与交接
 
 - 产品边界或稳定架构改变：更新 `PROJECT.md`。

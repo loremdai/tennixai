@@ -1,5 +1,7 @@
 # TennixAI P1 Implementation Plan
 
+> **Configuration path superseded on 2026-09-09:** M01 made the repository-root `.env` / `.env.example` the only current configuration entry. Subdirectory env paths below are retained only as historical execution steps and must not be recreated.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build the local single-user P1 path from real LiveTennisAPI current/upcoming data through FastAPI and trusted structured responses to the existing Next.js Home and Match experiences with Qwen tool calling.

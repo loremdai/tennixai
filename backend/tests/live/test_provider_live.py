@@ -1,15 +1,15 @@
 """Opt-in live provider gate: real LiveTennisAPI with fake LLM-free assertions.
 
 Run with: uv run pytest -m provider_live
-Requires TENNIX_LIVETENNIS_API_KEY in the environment.
+Reads TENNIX_LIVETENNIS_API_KEY from the repository-root .env.
 """
 
-import os
 from datetime import datetime, timezone
 
 import httpx
 import pytest
 
+from app.config import Settings
 from app.identity import MemoryIdentityRepository
 from app.providers.livetennis import LiveTennisProvider
 
@@ -17,19 +17,18 @@ pytestmark = pytest.mark.provider_live
 
 
 def _build_provider() -> LiveTennisProvider:
-    api_key = os.environ.get("TENNIX_LIVETENNIS_API_KEY", "")
-    if not api_key.strip():
+    settings = Settings(provider_mode="fake", llm_mode="fake")
+    api_key = settings.livetennis_api_key
+    if api_key is None or not api_key.get_secret_value().strip():
         pytest.skip("TENNIX_LIVETENNIS_API_KEY not configured")
     client = httpx.AsyncClient(
-        base_url=os.environ.get(
-            "TENNIX_LIVETENNIS_BASE_URL", "https://api.livetennisapi.com/api/public/v1"
-        ),
+        base_url=settings.livetennis_base_url,
         timeout=10.0,
     )
     return LiveTennisProvider(
         client=client,
         identities=MemoryIdentityRepository(),
-        api_key=api_key,
+        api_key=api_key.get_secret_value(),
         now=lambda: datetime.now(timezone.utc),
     )
 

@@ -618,6 +618,8 @@ Replay 只在 fake/test mode 使用，不进入真实 provider 路径。
 
 ## 19. 本地运行与资源控制
 
+仓库根目录 `.env` 是 FastAPI、Next.js、Realtime Worker、Playwright 和 opt-in 真实测试的唯一人工维护配置入口；模板为根目录 `.env.example`。子目录环境文件不再使用，所有凭据只存在于被 Git 忽略的根目录 `.env`。
+
 本地运行最少包括：
 
 ```text

@@ -1,3 +1,15 @@
+import { readFileSync } from 'node:fs'
+import { parseEnv } from 'node:util'
+import { fileURLToPath } from 'node:url'
+
+const rootEnvironmentFile = fileURLToPath(new URL('../.env', import.meta.url))
+try {
+  const rootEnvironment = parseEnv(readFileSync(rootEnvironmentFile, 'utf8'))
+  process.env.TENNIX_BACKEND_URL ??= rootEnvironment.TENNIX_BACKEND_URL
+} catch (error) {
+  if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error
+}
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   async headers() {

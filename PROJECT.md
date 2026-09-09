@@ -112,6 +112,7 @@ Next.js structured UI + Chat
 - 统计：支持 22 个语义明确的 canonical 指标；未知、缺失、partial 不猜测、不当作零。
 - 走势：Recent Control v1 使用发球校正残差、校准参数和 EWMA；最近 20 分只是展示窗口，关键分不使用固定倍率。
 - 测试：确定性 Replay 为主要实时门；真实 API-Tennis REST/WebSocket 和真实 LLM 为 opt-in smoke；Playwright 覆盖功能与双视口视觉。
+- 配置：仓库根目录 `.env` 是 FastAPI、Next.js、Playwright 和真实测试的唯一本地配置入口；安全变量模板只保留根目录 `.env.example`。
 
 ## P1 成功标准
 

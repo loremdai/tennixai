@@ -68,7 +68,7 @@
 ### Local runtime
 
 - `compose.yaml`: PostgreSQL and Redis only。
-- `backend/.env.example`, `frontend/.env.example`: safe variable names。
+- `.env.example`: backend、frontend、Playwright 与真实测试共享的安全变量名；根目录 `.env` 是唯一未提交本地配置入口。
 - `docs/runbooks/p2-local.md`: migrations、five-part startup、test and recovery commands。
 
 ### Frontend
@@ -195,7 +195,7 @@ git push origin main
 - Create: `compose.yaml`
 - Modify: `backend/pyproject.toml`
 - Modify: `backend/uv.lock`
-- Modify: `backend/.env.example`
+- Modify: `.env.example`
 - Modify: `backend/app/config.py`
 - Create: `backend/alembic.ini`
 - Create: `backend/migrations/env.py`
@@ -263,7 +263,7 @@ Expected: repository tests PASS and downgrade/upgrade both exit 0 without touchi
 - [ ] **Step 5: Commit and push**
 
 ```bash
-git add compose.yaml backend/pyproject.toml backend/uv.lock backend/.env.example backend/app/config.py backend/alembic.ini backend/migrations backend/app/persistence backend/tests/test_persistence_models.py backend/tests/integration/test_postgres_repositories.py PROJECT.md ROADMAP.md CURRENT.md
+git add compose.yaml backend/pyproject.toml backend/uv.lock .env.example backend/app/config.py backend/alembic.ini backend/migrations backend/app/persistence backend/tests/test_persistence_models.py backend/tests/integration/test_postgres_repositories.py PROJECT.md ROADMAP.md CURRENT.md
 git commit -m "feat: add P2 persistence foundations"
 git push origin main
 ```
@@ -277,7 +277,7 @@ git push origin main
 - Modify: `backend/app/providers/__init__.py`
 - Modify: `backend/app/config.py`
 - Modify: `backend/app/main.py`
-- Modify: `backend/.env.example`
+- Modify: `.env.example`
 - Create: `backend/tests/fixtures/api_tennis/events.json`
 - Create: `backend/tests/fixtures/api_tennis/livescore.json`
 - Create: `backend/tests/fixtures/api_tennis/fixtures.json`
@@ -321,7 +321,7 @@ Vendor DTOs use aliases matching API-Tennis and `extra="ignore"`; they are impor
 
 Use one `_request(method, params)` path with `APIkey` injected after safe diagnostic metadata is created. Errors expose method and status only, never the full URL. `get_livescore` and `get_fixtures` map inline score/PBP/statistics in one response. `get_H2H` is bounded by service-provided limits.
 
-Wire provider modes as `fake | livetennis | api_tennis`; API-Tennis becomes the documented P2 live default but tests remain fake by default.
+Wire provider modes as `fake | livetennis | api_tennis`; API-Tennis becomes the documented P2 live default but tests remain fake by default. Read its credential as `TENNIX_API_TENNIS_API_KEY` from the repository-root `.env` through `Settings`; never require a subdirectory env file.
 
 - [ ] **Step 4: Run deterministic and opt-in live gates**
 
@@ -338,7 +338,7 @@ Expected: fixture tests PASS; live smoke validates REST capability without print
 - [ ] **Step 5: Commit and push**
 
 ```bash
-git add backend/app/providers/api_tennis_dtos.py backend/app/providers/api_tennis_classification.py backend/app/providers/api_tennis.py backend/app/providers/__init__.py backend/app/config.py backend/app/main.py backend/.env.example backend/tests/fixtures/api_tennis backend/tests/test_api_tennis_provider.py backend/tests/live/test_api_tennis_live.py PROJECT.md ROADMAP.md CURRENT.md
+git add backend/app/providers/api_tennis_dtos.py backend/app/providers/api_tennis_classification.py backend/app/providers/api_tennis.py backend/app/providers/__init__.py backend/app/config.py backend/app/main.py .env.example backend/tests/fixtures/api_tennis backend/tests/test_api_tennis_provider.py backend/tests/live/test_api_tennis_live.py PROJECT.md ROADMAP.md CURRENT.md
 git commit -m "feat: add the API-Tennis REST provider"
 git push origin main
 ```
@@ -568,7 +568,7 @@ git push origin main
 - Create: `backend/app/realtime/publisher.py`
 - Create: `backend/app/realtime/worker.py`
 - Modify: `backend/app/config.py`
-- Modify: `backend/.env.example`
+- Modify: `.env.example`
 - Test: `backend/tests/test_api_tennis_live_feed.py`
 - Test: `backend/tests/test_realtime_leases.py`
 - Test: `backend/tests/test_realtime_worker.py`
@@ -618,7 +618,7 @@ Expected: deterministic tests PASS; live test authenticates and receives a valid
 - [ ] **Step 5: Commit and push**
 
 ```bash
-git add backend/app/providers/api_tennis_live.py backend/app/realtime/leases.py backend/app/realtime/publisher.py backend/app/realtime/worker.py backend/app/config.py backend/.env.example backend/tests/test_api_tennis_live_feed.py backend/tests/test_realtime_leases.py backend/tests/test_realtime_worker.py backend/tests/live/test_api_tennis_websocket_live.py PROJECT.md ROADMAP.md CURRENT.md
+git add backend/app/providers/api_tennis_live.py backend/app/realtime/leases.py backend/app/realtime/publisher.py backend/app/realtime/worker.py backend/app/config.py .env.example backend/tests/test_api_tennis_live_feed.py backend/tests/test_realtime_leases.py backend/tests/test_realtime_worker.py backend/tests/live/test_api_tennis_websocket_live.py PROJECT.md ROADMAP.md CURRENT.md
 git commit -m "feat: add the P2 realtime worker"
 git push origin main
 ```
