@@ -20,6 +20,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -151,6 +152,9 @@ class MatchStateSnapshotRow(Base):
         String(16), nullable=False, default="unavailable"
     )
     as_of: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    quality: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

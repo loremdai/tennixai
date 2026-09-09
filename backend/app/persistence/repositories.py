@@ -19,12 +19,16 @@ from app.persistence.models import (
     MatchExternalIdRow,
     MatchRow,
     MatchStateSnapshotRow,
+    MatchStatisticRow,
     PlayerExternalIdRow,
     PlayerRow,
+    PointEventRevisionRow,
+    PointEventRow,
     RawProviderEventRow,
     TournamentExternalIdRow,
     TournamentRow,
 )
+from app.realtime.models import LiveReduction
 
 _ENTITY_TABLES: dict[str, tuple[type, type, str]] = {
     "match": (MatchRow, MatchExternalIdRow, "mat"),
@@ -142,6 +146,133 @@ class MatchSnapshotRepository:
         if row is None:
             return None
         return LiveMatchState.model_validate(row.state), row.as_of
+
+    async def save_reduction(self, reduction: LiveReduction) -> None:
+        """Persist snapshot, points, revisions, statistics and quality in one
+        transaction. Returns only after commit; a failed transaction leaves
+        the previous version fully readable."""
+        snapshot = reduction.snapshot
+        live_state = snapshot.match.live_state or LiveMatchState()
+        quality_payload = [item.model_dump(mode="json") for item in snapshot.quality]
+
+        async with self._database.session() as session:
+            async with session.begin():
+                statement = pg_insert(MatchStateSnapshotRow).values(
+                    match_id=reduction.match_id,
+                    state=live_state.model_dump(mode="json"),
+                    state_version=snapshot.state_version,
+                    connection_status=live_state.connection_status.value,
+                    as_of=snapshot.as_of,
+                    quality=quality_payload,
+                    updated_at=snapshot.as_of,
+                )
+                await session.execute(
+                    statement.on_conflict_do_update(
+                        index_elements=["match_id"],
+                        set_={
+                            "state": statement.excluded.state,
+                            "state_version": statement.excluded.state_version,
+                            "connection_status": statement.excluded.connection_status,
+                            "as_of": statement.excluded.as_of,
+                            "quality": statement.excluded.quality,
+                            "updated_at": statement.excluded.updated_at,
+                        },
+                    )
+                )
+
+                for point in snapshot.points:
+                    values = {
+                        "id": point.id,
+                        "match_id": point.match_id,
+                        "sequence": point.sequence,
+                        "set_number": point.set_number,
+                        "game_number": point.game_number,
+                        "point_number": point.point_number,
+                        "server_player_id": point.server_player_id,
+                        "winner_player_id": point.winner_player_id,
+                        "score_before": (
+                            point.score_before.model_dump(mode="json")
+                            if point.score_before is not None
+                            else None
+                        ),
+                        "score_after": point.score_after.model_dump(mode="json"),
+                        "is_break_point": point.is_break_point,
+                        "is_set_point": point.is_set_point,
+                        "is_match_point": point.is_match_point,
+                        "observed_at": point.observed_at,
+                        "provider": point.provider,
+                        "source_fingerprint": point.source_fingerprint,
+                        "revision": point.revision,
+                        "quality": (
+                            point.quality.model_dump(mode="json")
+                            if point.quality is not None
+                            else None
+                        ),
+                    }
+                    point_statement = pg_insert(PointEventRow).values(**values)
+                    await session.execute(
+                        point_statement.on_conflict_do_update(
+                            index_elements=["id"],
+                            set_={
+                                key: point_statement.excluded[key]
+                                for key in (
+                                    "sequence",
+                                    "server_player_id",
+                                    "winner_player_id",
+                                    "score_before",
+                                    "score_after",
+                                    "is_break_point",
+                                    "is_set_point",
+                                    "is_match_point",
+                                    "observed_at",
+                                    "source_fingerprint",
+                                    "revision",
+                                    "quality",
+                                )
+                            },
+                        )
+                    )
+
+                for revision in reduction.point_revisions:
+                    revision_statement = pg_insert(PointEventRevisionRow).values(
+                        point_event_id=revision.point_id,
+                        revision=revision.revision,
+                        before_state=revision.before.model_dump(mode="json"),
+                        after_state=revision.after.model_dump(mode="json"),
+                        revised_at=revision.revised_at,
+                        reason=revision.reason,
+                    )
+                    await session.execute(
+                        revision_statement.on_conflict_do_nothing(
+                            index_elements=["point_event_id", "revision"]
+                        )
+                    )
+
+                for statistic in reduction.statistics:
+                    statistic_statement = pg_insert(MatchStatisticRow).values(
+                        match_id=statistic.match_id,
+                        name=statistic.name.value,
+                        period=statistic.period,
+                        player1_value=statistic.player1_value,
+                        player2_value=statistic.player2_value,
+                        unit=statistic.unit,
+                        provenance=statistic.provenance.value,
+                        availability=statistic.availability.value,
+                        as_of=statistic.as_of,
+                    )
+                    await session.execute(
+                        statistic_statement.on_conflict_do_update(
+                            index_elements=["match_id", "name", "period"],
+                            set_={
+                                "player1_value": statistic_statement.excluded.player1_value,
+                                "player2_value": statistic_statement.excluded.player2_value,
+                                "unit": statistic_statement.excluded.unit,
+                                "provenance": statistic_statement.excluded.provenance,
+                                "availability": statistic_statement.excluded.availability,
+                                "as_of": statistic_statement.excluded.as_of,
+                            },
+                        )
+                    )
 
 
 class RawProviderEventRepository:
