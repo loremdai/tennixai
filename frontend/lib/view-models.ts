@@ -1,4 +1,10 @@
-import type { MatchDto, MatchScoreDto, MatchStatus } from '@/lib/api/types'
+import type {
+  MatchDto,
+  MatchScoreDto,
+  MatchStatus,
+  MomentumObservationDto,
+  PointEventDto,
+} from '@/lib/api/types'
 
 export type HomeMatchViewModel = {
   id: string
@@ -243,4 +249,30 @@ export function formatAsOf(iso: string | null): string | null {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return null
   return asOfFormatter.format(date)
+}
+
+export type MomentumChartPoint = {
+  sequence: number
+  value: number
+  isKeyPoint: boolean
+}
+
+export function toMomentumChart(
+  observations: MomentumObservationDto[],
+  points: PointEventDto[],
+): MomentumChartPoint[] {
+  const keyPointSequences = new Set(
+    points
+      .filter((point) => point.is_break_point || point.is_set_point || point.is_match_point)
+      .map((point) => point.sequence),
+  )
+  return observations
+    .slice()
+    .sort((a, b) => a.point_sequence - b.point_sequence)
+    .slice(-20)
+    .map((observation) => ({
+      sequence: observation.point_sequence,
+      value: observation.value,
+      isKeyPoint: keyPointSequences.has(observation.point_sequence),
+    }))
 }

@@ -21,6 +21,7 @@ from app.domain import (
     StatisticProvenance,
     Tournament,
 )
+from app.momentum import ALGORITHM_VERSION
 from app.realtime.models import ReductionChange
 from app.realtime.reducer import reduce_live_snapshot
 
@@ -142,6 +143,44 @@ def test_initial_reduction_assigns_version_one_and_reports_changes() -> None:
     assert reduction.appended_points == reduction.snapshot.points
     assert reduction.point_revisions == ()
     assert reduction.recompute_from_sequence is None
+
+
+def test_initial_reduction_computes_versioned_recent_control() -> None:
+    reduction = reduce_live_snapshot(None, supplier_snapshot(points=seven_point_history()))
+
+    assert len(reduction.snapshot.momentum) == 7
+    assert all(
+        observation.algorithm_version == ALGORITHM_VERSION
+        and observation.state_version == reduction.snapshot.state_version
+        for observation in reduction.snapshot.momentum
+    )
+    assert ReductionChange.MOMENTUM_UPDATED in reduction.events
+
+
+def test_point_correction_recomputes_recent_control_from_changed_point() -> None:
+    history = seven_point_history()
+    first = reduce_live_snapshot(None, supplier_snapshot(points=history))
+    corrected = history[3].model_copy(
+        update={"winner_player_id": PLY_B, "source_fingerprint": "fp-corrected-4"}
+    )
+
+    reduction = reduce_live_snapshot(
+        first.snapshot,
+        supplier_snapshot(points=[*history[:3], corrected, *history[4:]]),
+    )
+
+    assert reduction.recompute_from_sequence == 4
+    assert ReductionChange.MOMENTUM_UPDATED in reduction.events
+    assert [item.value for item in reduction.snapshot.momentum[:3]] == pytest.approx(
+        [item.value for item in first.snapshot.momentum[:3]]
+    )
+    assert reduction.snapshot.momentum[3].value != pytest.approx(
+        first.snapshot.momentum[3].value
+    )
+    assert all(
+        item.state_version == reduction.snapshot.state_version
+        for item in reduction.snapshot.momentum[3:]
+    )
 
 
 def test_identical_supplier_snapshot_does_not_advance_version() -> None:

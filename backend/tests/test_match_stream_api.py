@@ -193,7 +193,7 @@ async def test_stream_sends_ready_then_atomic_deltas_with_version_ids(env) -> No
     assert frames[1]["event"] == "match_delta"
     assert frames[1]["id"] == "2"
     assert frames[1]["data"]["state_version"] == 2
-    assert set(frames[1]["data"]["changes"]) == {"point_appended"}
+    assert set(frames[1]["data"]["changes"]) == {"point_appended", "momentum_updated"}
 
 
 @pytest.mark.asyncio

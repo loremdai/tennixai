@@ -13,15 +13,7 @@ import {
   Radio,
   Sparkles,
   Trophy,
-  TrendingUp,
 } from 'lucide-react'
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ReferenceLine,
-  XAxis,
-} from 'recharts'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -32,12 +24,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from '@/components/ui/chart'
 import { Separator } from '@/components/ui/separator'
 import type { MatchSnapshotDto } from '@/lib/api/types'
 import type { MatchViewModel } from '@/lib/view-models'
@@ -46,17 +32,15 @@ import { cn } from '@/lib/utils'
 
 import { FutureModule } from './future-module'
 import { setLabel, type MatchHighlight, type MatchStatus } from './match-data'
-import { MatchPointsTimeline } from './match-points'
 import {
   getPreviewPlayer,
   previewFinishedScore,
   previewLiveScore,
   previewMatchMeta,
   previewMatchStats,
-  previewMomentumData,
   previewPromptsByStatus,
-  previewRecentPoints,
 } from './match-preview-data'
+import { MatchMomentumCard } from './match-momentum'
 import { MatchStatisticsCard } from './match-statistics'
 
 type MainColumnProps = {
@@ -66,13 +50,6 @@ type MainColumnProps = {
   onPromptSelect: (prompt: string) => void
   snapshot?: MatchSnapshotDto | null
 }
-
-const momentumConfig = {
-  momentum: {
-    label: 'Sinner 动量指数',
-    color: 'var(--chart-1)',
-  },
-} satisfies ChartConfig
 
 const highlightedServeStats = new Set(['一发成功率', '一发得分率', 'ACE 球'])
 
@@ -410,121 +387,6 @@ function StatsCard({ match, preview, highlight, snapshot }: Pick<MainColumnProps
   )
 }
 
-function MomentumCard({ match, preview, highlight, snapshot }: Pick<MainColumnProps, 'match' | 'preview' | 'highlight' | 'snapshot'>) {
-  const visualStatus = match.visualStatus
-  const liveSnapshot = !preview && visualStatus !== 'upcoming' ? snapshot ?? null : null
-
-  return (
-    <Card
-      id="momentum"
-      className={cn(
-        'scroll-mt-24 transition-[box-shadow,background-color]',
-        highlight === 'momentum' && 'bg-primary/5 ring-2 ring-primary/60',
-      )}
-    >
-      <CardHeader>
-        <CardTitle><h2>{visualStatus === 'finished' ? '比赛总结' : '逐分与动量'}</h2></CardTitle>
-        <p className="text-sm text-muted-foreground">
-          {visualStatus === 'finished' ? '决胜盘的关键转折' : '最近 20 分的比赛控制指数'}
-        </p>
-        <CardAction>
-          {preview ? (
-            visualStatus === 'upcoming' ? (
-              <Badge variant="outline">P2</Badge>
-            ) : visualStatus === 'live' ? (
-              <Badge variant="secondary">
-                <TrendingUp data-icon="inline-start" aria-hidden="true" />
-                Sinner +14
-              </Badge>
-            ) : (
-              <Badge variant="secondary">赛后</Badge>
-            )
-          ) : (
-            <Badge variant="outline">{liveSnapshot ? 'P2 实时' : 'P2 数据暂不可用'}</Badge>
-          )}
-        </CardAction>
-      </CardHeader>
-      <CardContent>
-        {liveSnapshot ? (
-          <div className="flex flex-col gap-5">
-            <MatchPointsTimeline points={liveSnapshot.points} players={liveSnapshot.match.players} />
-            {liveSnapshot.momentum.length === 0 ? (
-              <p className="rounded-md bg-muted/25 px-3 py-2 text-xs text-muted-foreground">
-                近期控制指数暂未提供；校准完成后将在此展示最近 20 分走势，缺失能力保持缺失。
-              </p>
-            ) : null}
-          </div>
-        ) : match.visualStatus === 'upcoming' ? (
-          <FutureModule
-            phase="P2"
-            title="动量时间线将在直播中展开"
-            description="关键破发、盘点与连续得分会与比赛走势同步标注。"
-          />
-        ) : preview ? (
-          visualStatus === 'finished' ? (
-            <div className="flex flex-col gap-4 rounded-lg bg-muted/25 p-4">
-              <div className="flex items-start gap-3">
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-secondary text-primary">
-                  <Trophy aria-hidden="true" className="size-4" />
-                </div>
-                <div>
-                  <h3 className="font-semibold">Sinner 在决胜盘掌控关键分</h3>
-                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                    双方各赢一盘后，Sinner 在第三盘提升一发质量，并通过一次关键破发建立领先，最终以 6–3 收下比赛。
-                  </p>
-                </div>
-              </div>
-              <dl className="grid grid-cols-2 gap-3 border-t pt-4 sm:grid-cols-3">
-                <div><dt className="text-xs text-muted-foreground">胜者</dt><dd className="mt-1 font-medium">Jannik Sinner</dd></div>
-                <div><dt className="text-xs text-muted-foreground">时长</dt><dd className="mt-1 font-medium">{previewMatchMeta.finalDuration}</dd></div>
-                <div><dt className="text-xs text-muted-foreground">决胜盘</dt><dd className="mt-1 font-mono font-semibold text-primary">6–3</dd></div>
-              </dl>
-            </div>
-          ) : (
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(16rem,0.75fr)]">
-              <div className="min-w-0">
-                <ChartContainer config={momentumConfig} className="h-44 w-full">
-                  <LineChart accessibilityLayer data={previewMomentumData} margin={{ left: 8, right: 8, top: 12, bottom: 0 }}>
-                    <CartesianGrid vertical={false} strokeDasharray="3 6" />
-                    <XAxis dataKey="point" tickLine={false} axisLine={false} tickMargin={10} interval="preserveStartEnd" />
-                    <ReferenceLine y={0} stroke="var(--border)" />
-                    <ChartTooltip content={<ChartTooltipContent hideLabel />} />
-                    <Line type="monotone" dataKey="momentum" stroke="var(--color-momentum)" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} />
-                  </LineChart>
-                </ChartContainer>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  Sinner 在最近 7 个短回合中赢下 5 分，比赛控制指数上升至 +14。
-                </p>
-              </div>
-
-              <ol className="flex flex-col divide-y" aria-label="最近比赛事件">
-                {previewRecentPoints.map((point) => (
-                  <li key={`${point.score}-${point.detail}`} className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0">
-                    <span className="mt-1 size-2 shrink-0 rounded-full bg-primary" aria-hidden="true" />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium">{point.player}</span>
-                        <span className="font-mono text-sm text-muted-foreground">{point.score}</span>
-                      </div>
-                      <p className="mt-1 text-sm text-muted-foreground">{point.detail}</p>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          )
-        ) : (
-          <FutureModule
-            phase="P2"
-            title="P2 数据暂不可用"
-            description="逐分事件与动量指数属于 P2 实时比赛智能；P1 不提供该数据。"
-          />
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
 function InsightRow({
   icon: Icon,
   eyebrow,
@@ -652,7 +514,7 @@ export function MatchMainColumn({ match, preview, highlight, onPromptSelect, sna
       <OverviewCard match={match} preview={preview} />
       <ScoreProgressCard match={match} preview={preview} highlight={highlight} />
       <StatsCard match={match} preview={preview} highlight={highlight} snapshot={snapshot} />
-      <MomentumCard match={match} preview={preview} highlight={highlight} snapshot={snapshot} />
+      <MatchMomentumCard match={match} preview={preview} highlight={highlight} snapshot={snapshot} />
       <AIInsightsCard match={match} preview={preview} onPromptSelect={onPromptSelect} />
     </div>
   )

@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "algorithm_version": "recent-control-v1",
+  "generated_at": "2026-09-10T00:00:00Z",
+  "sample": {
+    "matches_used": 48,
+    "determinate_points": 1920,
+    "window_days": 30
+  },
+  "global": {
+    "serve_win_prior": 0.66,
+    "prior_strength": 9.0,
+    "sample_points": 1920
+  },
+  "cohorts": {
+    "atp|men|singles": {
+      "serve_win_prior": 0.67,
+      "prior_strength": 4.0,
+      "sample_points": 960
+    },
+    "wta|women|singles": {
+      "serve_win_prior": 0.65,
+      "prior_strength": 4.0,
+      "sample_points": 960
+    }
+  },
+  "fallback": {
+    "strategy": "global_prior",
+    "min_cohort_points": 500
+  },
+  "half_life_points": 8.0,
+  "alpha": 0.086643,
+  "scale": 0.9
+}

@@ -7,7 +7,8 @@ reordered tails are rebuilt from the first difference. `state_version`
 advances only on semantic change.
 """
 
-from app.domain import LiveMatchState, Match, MatchSnapshot, PointEvent
+from app.domain import LiveMatchState, Match, MatchSnapshot, MomentumObservation, PointEvent
+from app.momentum.engine import RecentControlEngine
 from app.realtime.models import (
     CHANGE_ORDER,
     LiveReduction,
@@ -68,7 +69,10 @@ def _statistics_fingerprint(snapshot: MatchSnapshot) -> tuple:
 
 
 def reduce_live_snapshot(
-    previous: MatchSnapshot | None, candidate: MatchSnapshot
+    previous: MatchSnapshot | None,
+    candidate: MatchSnapshot,
+    *,
+    momentum_engine: RecentControlEngine | None = None,
 ) -> LiveReduction:
     match = candidate.match
     match_id = match.id
@@ -87,7 +91,15 @@ def reduce_live_snapshot(
             events.add(ReductionChange.STATISTICS_UPDATED)
         if candidate.quality:
             events.add(ReductionChange.QUALITY_UPDATED)
-        snapshot = _with_version(match, candidate, 1, points)
+        momentum = _compute_momentum(
+            momentum_engine,
+            match,
+            points,
+            state_version=1,
+        )
+        if momentum:
+            events.add(ReductionChange.MOMENTUM_UPDATED)
+        snapshot = _with_version(match, candidate, 1, points, momentum)
         return LiveReduction(
             match_id=match_id,
             previous_version=0,
@@ -198,6 +210,28 @@ def reduce_live_snapshot(
     if candidate.quality != previous.quality:
         changes.add(ReductionChange.QUALITY_UPDATED)
 
+    momentum = previous.momentum
+    if _momentum_signature(previous.points) != _momentum_signature(reduced_points):
+        recomputed = _compute_momentum(
+            momentum_engine,
+            match,
+            tuple(reduced_points),
+            state_version=previous.state_version + 1,
+        )
+        if recomputed != previous.momentum:
+            changes.add(ReductionChange.MOMENTUM_UPDATED)
+        momentum = recomputed
+    elif not previous.momentum and _momentum_signature(reduced_points):
+        recomputed = _compute_momentum(
+            momentum_engine,
+            match,
+            tuple(reduced_points),
+            state_version=previous.state_version + 1,
+        )
+        if recomputed:
+            changes.add(ReductionChange.MOMENTUM_UPDATED)
+            momentum = recomputed
+
     changed = bool(changes)
     if not changed:
         return LiveReduction(
@@ -214,7 +248,7 @@ def reduce_live_snapshot(
         )
 
     version = previous.state_version + 1
-    snapshot = _with_version(match, candidate, version, tuple(reduced_points))
+    snapshot = _with_version(match, candidate, version, tuple(reduced_points), momentum)
     return LiveReduction(
         match_id=match_id,
         previous_version=previous.state_version,
@@ -234,6 +268,7 @@ def _with_version(
     candidate: MatchSnapshot,
     version: int,
     points: tuple[PointEvent, ...],
+    momentum: tuple[MomentumObservation, ...],
 ) -> MatchSnapshot:
     live_state = match.live_state or LiveMatchState()
     versioned_match = match.model_copy(
@@ -243,7 +278,7 @@ def _with_version(
         match=versioned_match,
         points=points,
         statistics=candidate.statistics,
-        momentum=candidate.momentum,
+        momentum=momentum,
         quality=candidate.quality,
         state_version=version,
         as_of=candidate.as_of,
@@ -252,3 +287,42 @@ def _with_version(
 
 def _ordered(changes: set[ReductionChange]) -> tuple[ReductionChange, ...]:
     return tuple(change for change in CHANGE_ORDER if change in changes)
+
+
+def _momentum_signature(points: tuple[PointEvent, ...] | list[PointEvent]) -> tuple:
+    """Return only the point inputs that can change the numeric index."""
+    return tuple(
+        (
+            point.sequence,
+            point.server_player_id,
+            point.winner_player_id,
+            point.observed_at,
+        )
+        for point in points
+        if point.winner_player_id is not None
+    )
+
+
+def _compute_momentum(
+    engine: RecentControlEngine | None,
+    match: Match,
+    points: tuple[PointEvent, ...],
+    *,
+    state_version: int,
+) -> tuple[MomentumObservation, ...]:
+    if not _momentum_signature(points):
+        return ()
+    runtime = engine or RecentControlEngine()
+    return tuple(
+        runtime.compute(
+            points,
+            focal_player_id=match.players[0].id,
+            cohort=(
+                match.tournament.circuit,
+                match.tournament.gender,
+                match.tournament.discipline,
+            ),
+            match_id=match.id,
+            state_version=state_version,
+        )
+    )

@@ -27,6 +27,7 @@ from app.domain import (
     MatchSnapshot,
     MatchStatistic,
     MatchStatus,
+    MomentumObservation,
     Player,
     PointEvent,
     StatisticName,
@@ -39,6 +40,7 @@ from app.persistence.models import (
     MatchRow,
     MatchStateSnapshotRow,
     MatchStatisticRow,
+    MomentumObservationRow,
     PlayerExternalIdRow,
     PlayerRow,
     PointEventRevisionRow,
@@ -206,6 +208,20 @@ class MatchSnapshotRepository:
                 .scalars()
                 .all()
             )
+            momentum_rows = (
+                (
+                    await session.execute(
+                        select(MomentumObservationRow)
+                        .where(MomentumObservationRow.match_id == match_id)
+                        .order_by(
+                            MomentumObservationRow.algorithm_version,
+                            MomentumObservationRow.point_sequence,
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
 
         def player_or_placeholder(player_id: str | None) -> Player:
             row = player_rows.get(player_id) if player_id else None
@@ -285,12 +301,26 @@ class MatchSnapshotRepository:
             )
             for stat in stat_rows
         )
+        momentum = tuple(
+            MomentumObservation(
+                match_id=observation.match_id,
+                point_sequence=observation.point_sequence,
+                state_version=observation.state_version,
+                algorithm_version=observation.algorithm_version,
+                value=observation.value,
+                leader_player_id=observation.leader_player_id,
+                is_provisional=observation.is_provisional,
+                as_of=observation.as_of,
+                input_summary=observation.input_summary,
+            )
+            for observation in momentum_rows
+        )
         quality = tuple(DataQuality.model_validate(item) for item in (row.quality or []))
         return MatchSnapshot(
             match=match,
             points=points,
             statistics=statistics,
-            momentum=(),
+            momentum=momentum,
             quality=quality,
             state_version=row.state_version,
             as_of=row.as_of,
@@ -497,6 +527,50 @@ class MatchSnapshotRepository:
                                 "provenance": statistic_statement.excluded.provenance,
                                 "availability": statistic_statement.excluded.availability,
                                 "as_of": statistic_statement.excluded.as_of,
+                            },
+                        )
+                    )
+
+                from app.momentum.engine import ALGORITHM_VERSION
+
+                momentum_sequences = {
+                    observation.point_sequence for observation in snapshot.momentum
+                }
+                momentum_delete = delete(MomentumObservationRow).where(
+                    MomentumObservationRow.match_id == reduction.match_id,
+                    MomentumObservationRow.algorithm_version == ALGORITHM_VERSION,
+                )
+                if momentum_sequences:
+                    momentum_delete = momentum_delete.where(
+                        MomentumObservationRow.point_sequence.not_in(momentum_sequences)
+                    )
+                await session.execute(momentum_delete)
+                for observation in snapshot.momentum:
+                    observation_statement = pg_insert(MomentumObservationRow).values(
+                        match_id=observation.match_id,
+                        point_sequence=observation.point_sequence,
+                        state_version=observation.state_version,
+                        algorithm_version=observation.algorithm_version,
+                        value=observation.value,
+                        leader_player_id=observation.leader_player_id,
+                        is_provisional=observation.is_provisional,
+                        as_of=observation.as_of,
+                        input_summary=observation.input_summary,
+                    )
+                    await session.execute(
+                        observation_statement.on_conflict_do_update(
+                            index_elements=[
+                                "match_id",
+                                "algorithm_version",
+                                "point_sequence",
+                            ],
+                            set_={
+                                "state_version": observation_statement.excluded.state_version,
+                                "value": observation_statement.excluded.value,
+                                "leader_player_id": observation_statement.excluded.leader_player_id,
+                                "is_provisional": observation_statement.excluded.is_provisional,
+                                "as_of": observation_statement.excluded.as_of,
+                                "input_summary": observation_statement.excluded.input_summary,
                             },
                         )
                     )

@@ -28,6 +28,7 @@ from app.persistence.database import Database
 from app.persistence.models import (
     MatchStateSnapshotRow,
     MatchStatisticRow,
+    MomentumObservationRow,
     PointEventRevisionRow,
     PointEventRow,
 )
@@ -145,6 +146,42 @@ async def test_load_snapshot_rebuilds_the_canonical_view(database: Database) -> 
     assert loaded.match.players[0].id == "ply_a"
     assert loaded.match.live_state is not None
     assert loaded.match.live_state.state_version == loaded.state_version
+    assert len(loaded.momentum) == 2
+    assert all(item.state_version == loaded.state_version for item in loaded.momentum)
+
+
+async def test_save_reduction_upserts_and_replays_momentum_observations(
+    database: Database,
+) -> None:
+    repository = MatchSnapshotRepository(database)
+    base = await candidate(database, points=4)
+    first = reduce_live_snapshot(None, base)
+    await repository.save_reduction(first)
+
+    corrected_last = base.points[-1].model_copy(
+        update={"winner_player_id": "ply_b", "source_fingerprint": "fp-4-fixed"}
+    )
+    second_candidate = base.model_copy(
+        update={"points": (*base.points[:-1], corrected_last)}
+    )
+    second = reduce_live_snapshot(first.snapshot, second_candidate)
+    await repository.save_reduction(second)
+
+    async with database.session() as session:
+        rows = (
+            await session.execute(
+                select(MomentumObservationRow)
+                .where(MomentumObservationRow.match_id == base.match.id)
+                .order_by(MomentumObservationRow.point_sequence)
+            )
+        ).scalars().all()
+
+    loaded = await repository.load_snapshot(base.match.id)
+    assert loaded is not None
+    assert [row.point_sequence for row in rows] == [1, 2, 3, 4]
+    assert [item.point_sequence for item in loaded.momentum] == [1, 2, 3, 4]
+    assert rows[-1].state_version == second.snapshot.state_version
+    assert rows[-1].value == pytest.approx(second.snapshot.momentum[-1].value)
 
 
 async def test_save_reduction_writes_snapshot_points_and_statistics(database: Database) -> None:

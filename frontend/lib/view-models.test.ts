@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatAsOf, formatStatValue, STAT_META, toHomeMatch, toMatchViewModel } from './view-models'
-import type { MatchDto } from '@/lib/api/types'
+import {
+  formatAsOf,
+  formatStatValue,
+  STAT_META,
+  toHomeMatch,
+  toMatchViewModel,
+  toMomentumChart,
+} from './view-models'
+import type { MatchDto, MomentumObservationDto, PointEventDto } from '@/lib/api/types'
 
 function baseMatch(overrides: Partial<MatchDto> = {}): MatchDto {
   return {
@@ -222,5 +229,35 @@ describe('statistics presentation mapping', () => {
     expect(label).toMatch(/18:00/)
     expect(formatAsOf(null)).toBeNull()
     expect(formatAsOf('not-a-date')).toBeNull()
+  })
+})
+
+describe('momentum presentation mapping', () => {
+  it('limits the chart to the latest twenty observations and marks key points', () => {
+    const observations = Array.from({ length: 21 }, (_, index) => ({
+      match_id: 'mat_1',
+      point_sequence: index + 1,
+      state_version: index + 1,
+      algorithm_version: 'recent-control-v1',
+      value: index,
+      leader_player_id: index % 2 === 0 ? 'ply_1' : 'ply_2',
+      is_provisional: index < 5,
+      as_of: '2026-09-08T10:00:00Z',
+      input_summary: 'n=1',
+    })) satisfies MomentumObservationDto[]
+    const points = [
+      {
+        sequence: 21,
+        is_break_point: true,
+        is_set_point: false,
+        is_match_point: false,
+      },
+    ] as PointEventDto[]
+
+    const chart = toMomentumChart(observations, points)
+
+    expect(chart).toHaveLength(20)
+    expect(chart[0].sequence).toBe(2)
+    expect(chart.at(-1)).toMatchObject({ sequence: 21, isKeyPoint: true })
   })
 })
