@@ -3,17 +3,17 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-08 23:37 CST
+**最后更新：** 2026-09-09 09:14 CST
 
-**当前任务：** 无（T17 已完成；等待下一阶段明确批准）
+**当前任务：** T18 — Render Markdown in Conversational Answers
 
-**任务状态：** `idle`
+**任务状态：** `in_progress`
 
-**当前执行者 / ADE：** —
+**当前执行者 / ADE：** Codex
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**最近完成任务提交：** `69c8238`
+**任务起始提交：** `2fdd983`
 
 **最后验证的产品提交：** `69c8238`
 
@@ -31,11 +31,14 @@
 - 本地运行与 opt-in 真实门命令见 [docs/runbooks/p1-local.md](./docs/runbooks/p1-local.md)。
 - P2（Live Match Intelligence）保持 `planned`：需要 PostgreSQL/Redis/API-Tennis 等另行批准的设计；当前没有领取中的任务。
 - 已知非 T17 限制：LiveTennisAPI 的 `/players?search` 当前不能把中文显示名“郑钦文”直接映射到 `Qinwen Zheng`；canonical English name 查询已通过，中文别名/名称归一化需另立任务批准。
+- T18 于 2026-09-09 09:14 领取：修复全局/比赛问答中的 Markdown 原文显示，并用回归测试与浏览器验收确认粗体、列表和段落呈现；不改变结构化比赛卡片与原型布局。
 - 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`（任务外）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`（next dev 自动生成）、`frontend/next-env.d.ts`（Next 工具链生成）；保留原样。
 
 ## 当前任务
 
-当前没有 `in_progress` 任务。P1 已完成；下一步只有在用户明确批准后，才为 P2 或已登记的后续任务建立新的领取记录。
+执行边界：只修复问答 prose 的 Markdown 渲染与安全输出，覆盖全局助手和比赛上下文助手；保留结构化比赛卡片的现有数据边界，不引入新的 Markdown 依赖或 P2 能力。
+
+完成门：找到并证明原文显示的责任组件；添加最小回归测试；真实浏览器中确认 `**粗体**`、无序列表和普通段落正确渲染且不显示 Markdown 标记；确定性前端测试、typecheck、build 和相关 Playwright 流程通过；完成后更新三份总控并推送。
 
 ## 最近验证
 
@@ -51,7 +54,7 @@
 
 ## 最近交接
 
-**状态：** T17 已由 Codex 于 2026-09-08 在 `main` 完成，代码提交 `69c8238`；当前无领取中的任务。
+**状态：** T18 已由 Codex 于 2026-09-09 在 `main` 领取，起始提交 `2fdd983`；正在定位问答 Markdown 原文显示问题。
 
 **交接说明：** 本地持久配置位于被忽略的 `backend/.env` 与 `frontend/.env.local`，未入库；`backend/.env` 含 `TENNIX_LLM_TIMEOUT_SECONDS=45` 与当前可用的 LiveTennisAPI key。T17 已完成真实 provider、真实 LLM 与浏览器验收；服务可按 [docs/runbooks/p1-local.md](./docs/runbooks/p1-local.md) 启动。已知视觉/StrictMode 说明保留在 T15 证据中。
 
@@ -63,6 +66,7 @@
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-09 | 领取 T18：问答 Markdown 原文显示修复 | `2fdd983` 起始 |
 | 2026-09-08 | T17 完成：真实 upcoming provider、指定球员过滤、局部失败与 429 友好降级 | `69c8238` |
 | 2026-09-08 | 领取并规划 T17 | `ef85ea3` / `da27574` |
 | 2026-09-08 | T16 完成：真实 live chat 上下文/超时/球员消歧硬化 | `5dcaa6a` |
