@@ -3,7 +3,7 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-09 16:28 CST
+**最后更新：** 2026-09-09 16:58 CST
 
 **总体状态：** `in_progress`（P1 已完成；P2 设计冻结进行中）
 
@@ -52,12 +52,43 @@
 | 阶段 | 状态 | 核心交付 | Exit gate / 当前缺口 |
 |---|---|---|---|
 | P2.0 — Design freeze | `in_progress` | API-Tennis 能力边界、实时架构、领域模型、存储、UI、Chat、测试与任务路线 | T20 正在把已批准决策写入规格、实施计划与三份总控；尚未授权实现代码 |
+| P2.1 — Durable foundations | `planned` | P2 canonical domain、provider contracts、PostgreSQL、Redis、稳定 identity | T21–T22；等待 T20 完成 |
+| P2.2 — Unified data and discovery | `planned` | API-Tennis REST、历史/H2H、赛事分类和 Home 叠加筛选 | T23–T25；等待 P2.1 |
+| P2.3 — Realtime pipeline | `planned` | Reducer、WebSocket worker、租约、持久化、snapshot + SSE | T26–T28；等待 P2.2 |
+| P2.4 — Match intelligence | `planned` | 完整 PBP、22 项统计、近期控制指数、版本化上下文 Chat | T29–T31；等待 P2.3 |
+| P2.5 — Acceptance and hardening | `planned` | Replay、恢复门、真实 smoke、双视口视觉和本地 runbook | T32；等待 P2.4 |
+
+详细产品、架构和数据语义见 [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md)，逐任务实施步骤见 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md)。
 
 ## P2 任务登记表
 
 | ID | 主要阶段 | 任务 | 状态 | 完成提交 | 验收证据 |
 |---|---|---|---|---|---|
 | T20 | P2.0 | Freeze P2 Live Match Intelligence Design and Roadmap | `in_progress` | — | 规格、实施计划与三份总控待落盘并完成一致性审查 |
+| T21 | P2.1 | Extend the Canonical Domain and Provider Contracts | `planned` | — | P2 models、async identity 和 query/live contracts；P1 provider 回归门 |
+| T22 | P2.1 | Add PostgreSQL, Redis, Migrations, and Durable Identity | `planned` | — | Compose health、Alembic up/down/up、并发 identity 与 repository integration |
+| T23 | P2.2 | Implement the API-Tennis REST Adapter | `planned` | — | fixture contract + opt-in REST smoke；零 vendor 字段/secret 泄漏 |
+| T24 | P2.2 | Add Match Catalog Filters, History, H2H, and P2 REST APIs | `planned` | — | tier sort、facet counts、昨天/近期/H2H、TTL 与 P1 regression |
+| T25 | P2.2 | Add Stackable Home Facets and Priority Presentation | `planned` | — | ATP+WTA/all/singles 默认；三类叠加筛选和双视口门 |
+| T26 | P2.3 | Build the Canonical Live Reducer and Transactional Persistence | `planned` | — | full snapshot 去重、point append/correction、版本与原子持久化 |
+| T27 | P2.3 | Add WebSocket Feed, Redis Leases, and the Realtime Worker | `planned` | — | shared upstream、lease/grace、reconnect/reconcile/fallback 与 retention |
+| T28 | P2.3 | Expose Match Snapshots and Versioned SSE to the Browser | `planned` | — | snapshot + typed delta + gap reconcile + visibility lifecycle |
+| T29 | P2.4 | Render Full PBP and Available Match Statistics | `planned` | — | Set→Game→Point、关键分、partial/unavailable 和 22-stat UI |
+| T30 | P2.4 | Calibrate and Implement Recent Control Index v1 | `planned` | — | aggregate calibration、发球校正、EWMA、无固定关键分倍率 |
+| T31 | P2.4 | Add P2 Intelligence Tools and Versioned Chat Answers | `planned` | — | compact fact packet、history/H2H/tools、answer version/as_of |
+| T32 | P2.5 | Add Replay E2E, Fault Recovery, Runbook, and Final P2 Gate | `planned` | — | deterministic replay、重启/纠错/断线、真实 smoke 与完整验收 |
+
+## P2 完成门摘要
+
+- API-Tennis 是默认 P2 provider；WebSocket 是正常实时路径，REST 仅初始、重连和 fallback。
+- PostgreSQL identity 跨进程重启稳定；Redis 丢失可恢复；同一比赛多 viewer 只使用一个上游订阅。
+- Home 默认与叠加筛选正确，高级别比赛优先，Featured 不再直接取供应商首项。
+- Match 无需浏览器刷新即可更新比分、发球方、PBP、统计和近期控制指数。
+- PBP correction、版本缺口、断线、隐藏标签、终态和进程重启均通过 Replay 验证。
+- Chat 只消费 compact canonical facts，回答固定 `state_version/as_of`，旧回答不随比赛静默改写。
+- History/H2H 按需来自 API-Tennis；raw payload 14 天，canonical observations 长期；无完整供应商历史镜像。
+- P2 schema/API/UI 中不存在 odds、prediction、market、edge 或 trading 能力。
+- 完整 15 项技术完成门以 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#final-p2-completion-gate) 为准。
 
 ## P1 任务登记表
 
@@ -104,10 +135,12 @@
 
 ## 长期边界与升级触发
 
-- PostgreSQL：P2 在需要跨重启身份、观察历史和稳定映射时设计并引入。
-- Redis：P2 在需要多 worker 共享缓存、配额、polling lock 和事件分发时引入。
-- 自动轮询：P2 基于比赛生命周期和供应商配额单独设计。
-- 历史结果：只有确认数据 entitlement 与保存策略后才进入，不因接数据库自动获得。
+- PostgreSQL：P2 已批准用于稳定 identity、canonical live/PBP/statistics/control observations 和 provenance，不用于复制供应商完整历史。
+- Redis：P2 已批准用于 viewer lease、demand index、hot snapshot 和 pub/sub；不作为长期事实来源。
+- 实时刷新：P2 使用 API-Tennis per-match WebSocket；REST 只做初始 snapshot、重连校准和受限 fallback，不做常态固定轮询。
+- 历史结果：P2 使用 API-Tennis fixtures/H2H 按需提供昨天、近期和有限 H2H；未承诺的数据返回 unavailable/partial。
+- 数据保留：raw provider payload 14 天清理，canonical/derived observations 长期保留。
+- 赔率：即使 API-Tennis 可提供也不接入；P3 由独立 `MarketDataProvider` 对接 Polymarket。
 - 自动交易：不属于 P3 默认范围，必须经过独立法律、风控、安全和执行设计。
 
 ## 更新纪律

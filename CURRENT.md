@@ -3,7 +3,7 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-09 16:28 CST
+**最后更新：** 2026-09-09 16:58 CST
 
 **当前任务：** T20 — Freeze P2 Live Match Intelligence Design and Roadmap
 
@@ -34,7 +34,9 @@
 - 视觉：prototype 10 张基线（home 4 张经 T13/T15 审阅更新，match 6 张自 T01 起零变化）+ p1.visual 12 张新基线（逐张审阅入库）。
 - Final P1 Completion Gate 八条已人工核对（凭据仅服务端、无自动轮询、无超范围实现、结构化事实来源、供应商/LLM 失败降级、预览与生产路由分离、双视口视觉一致、泄漏检查业务代码零命中）；T16/T17 额外通过真实 provider、LLM、组合及浏览器门。
 - 本地运行与 opt-in 真实门命令见 [docs/runbooks/p1-local.md](./docs/runbooks/p1-local.md)。
-- P2（Live Match Intelligence）设计已获用户批准进入落盘阶段；T20 负责规格、实施计划与三份总控，不实现产品代码。
+- P2（Live Match Intelligence）设计已逐项批准：API-Tennis REST/WebSocket、FastAPI + 独立 worker、PostgreSQL + Redis、snapshot + versioned SSE、Home facets、PBP/statistics、Recent Control、轻量 history/H2H 和 Replay 测试。
+- P2 详细规格已写入 [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md)，T21–T32 的逐任务文件、接口、TDD 步骤和验收命令见 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md)。
+- T20 只负责设计与路线落盘，不实现 P2 产品代码；下一任务将是 T21 canonical domain/provider contracts，必须另行领取。
 - 已知非 T17 限制：LiveTennisAPI 的 `/players?search` 当前不能把中文显示名“郑钦文”直接映射到 `Qinwen Zheng`；canonical English name 查询已通过，中文别名/名称归一化需另立任务批准。
 - 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`（任务外）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`（next dev 自动生成）、`frontend/next-env.d.ts`（Next 工具链生成）；保留原样。
 
@@ -49,7 +51,7 @@
 - **领取时间：** 2026-09-09 16:28 CST
 - **完成提交：** —
 - **范围：** 把用户逐项批准的 P2 产品边界、API-Tennis 能力、实时架构、canonical model、PostgreSQL/Redis 职责、Home 筛选、Match 体验、Chat、近期控制指数和测试策略写成权威规格与可执行路线。
-- **完成事实：** 已完成设计访谈与关键研究；正在落盘，不实现 P2 产品代码。
+- **完成事实：** 已完成设计访谈、API-Tennis 官方文档/真实 Trial 能力核查和 Momentum 原始研究复核；P2 规格与 T21–T32 实施计划已形成，正在做最终一致性审查，不实现 P2 产品代码。
 - **验证门：** 规格与计划无占位符；所有批准事项均有任务归属和验收门；三份总控状态一致；文档链接与 Git diff 经核对。
 - **阻塞：** 无。
 
