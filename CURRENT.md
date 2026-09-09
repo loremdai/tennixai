@@ -3,13 +3,13 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-09 19:01 CST
+**最后更新：** 2026-09-09 19:04 CST
 
-**当前任务：** 无（T22 已完成；T23 已 ready，尚未领取）
+**当前任务：** T23 — Implement the API-Tennis REST Adapter
 
-**任务状态：** `idle`
+**任务状态：** `in_progress`
 
-**当前执行者 / ADE：** —
+**当前执行者 / ADE：** Claude Code / Claude Code
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
@@ -17,7 +17,7 @@
 
 **最后验证的产品提交：** `20dac5f`
 
-**T23 起始提交：** 待领取时填写
+**T23 起始提交：** `103ecff`
 
 **远程：** `origin` → `https://github.com/loremdai/tennixai.git`
 
@@ -48,7 +48,15 @@
 
 ## 当前任务
 
-无。T22 已完成；T23（Implement the API-Tennis REST Adapter）已 ready，接手前须按启动入口另行领取。
+### T23 — Implement the API-Tennis REST Adapter
+
+- **状态：** `in_progress`
+- **执行者 / ADE：** Claude Code / Claude Code
+- **分支：** `main`
+- **起始提交：** `103ecff`
+- **领取时间：** 2026-09-09 19:04 CST
+- **范围：** 按 [P2 实施计划 T23](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t23-implement-the-api-tennis-rest-adapter)：permissive vendor DTO、event 分类映射、`ApiTennisProvider`（live/fixtures/player/match snapshot/recent results/H2H，canonical-only 输出）、provider mode `api_tennis` 接线、脱敏 fixtures、确定性契约测试与 opt-in REST smoke。
+- **阻塞：** 无。
 
 ## 最近完成任务
 
@@ -83,7 +91,7 @@
 
 ## 最近交接
 
-**状态：** T22 已由 Claude Code 于 2026-09-09 在 `main` 完成，实现提交 `20dac5f`；当前无领取中的任务，T23 保持 ready。
+**状态：** T22 已由 Claude Code 于 2026-09-09 在 `main` 完成，实现提交 `20dac5f`；T23 已于 2026-09-09 19:04 CST 由 Claude Code 在 `main` 领取，起始提交 `103ecff`。
 
 **交接说明：** 接手 T23 前完整阅读 [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) 和 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t23-implement-the-api-tennis-rest-adapter)。所有 ADE 只使用根目录 `.env`；API-Tennis 凭据变量为 `TENNIX_API_TENNIS_API_KEY`，不得写入代码、文档、fixture、日志、提交或聊天输出。T22 起本地基础设施为 compose 的 `tennix-postgres`/`tennix-redis`（colima）；identity 持久化实现为 `PostgresIdentityRepository`（`app/persistence/repositories.py`），`MemoryIdentityRepository` 仅用于单元测试；integration 测试以 `infrastructure` marker 运行且在环境缺失时如实 skip。用户已追加要求：P2 收尾时用真实浏览器按业务流程逐项人工验收直到无 bug。
 
@@ -95,11 +103,11 @@
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-09 | 领取 T23：实现 API-Tennis REST adapter | `103ecff` 起始 |
 | 2026-09-09 | T22 完成：compose、Alembic、P2 schema 与 durable identity repositories | `20dac5f` |
 | 2026-09-09 | 领取 T22：PostgreSQL、Redis、migrations 与 durable identity | `181f04e` 起始 |
 | 2026-09-09 | T21 完成：P2 canonical domain、async identity 与 provider contracts | `5b479fc` |
 | 2026-09-09 | 领取 T21：扩展 canonical domain 与 provider contracts | `f574b1a` 起始 |
-| 2026-09-09 | M01 完成：backend/frontend/Playwright/真实测试统一使用根目录 `.env` | `969c7ec` |
 
 ## 接手与更新规则
 
