@@ -3,21 +3,21 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-09 21:55 CST
+**最后更新：** 2026-09-09 22:38 CST
 
-**当前任务：** T28 — Expose Match Snapshots and Versioned SSE to the Browser
+**当前任务：** 无（T28 已完成；T29 已 ready，尚未领取）
 
-**任务状态：** `in_progress`
+**任务状态：** `idle`
 
-**当前执行者 / ADE：** Claude Code / Claude Code
+**当前执行者 / ADE：** —
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**最近完成任务提交：** `d354aba`
+**最近完成任务提交：** `f03985b`
 
-**最后验证的产品提交：** `d354aba`
+**最后验证的产品提交：** `f03985b`
 
-**T28 起始提交：** `fe1d48b`
+**T29 起始提交：** 待领取时填写
 
 **远程：** `origin` → `https://github.com/loremdai/tennixai.git`
 
@@ -52,21 +52,32 @@
 - T26 已确认的事实：相同 supplier snapshot 不进版本不发事件；纠错 revision+1 且 `recompute_from_sequence` 指向变化序列；删除尾段自首个差异重建连续序列；仅 freshness 差异不算状态变化；重复保存幂等、失败回滚旧版本可读；全套确定性 256 passed/7 deselected。
 - T27 已于 2026-09-09 完成并推送：WS feed adapter（batch 帧 + 客户端过滤）、Redis leases（TTL/grace/arrival-order）、publisher（hot snapshot + pub/sub）、realtime worker（REST 先行/断线 reconcile/terminal 即关/capacity/retention）；实现提交为 `d354aba`。
 - T27 已确认的事实：vendor WS 每帧为约 10 场全量对象数组，需客户端按 `event_key` 过滤；断线前积压帧在 reconnect 时丢弃；lease 同刻 acquire 的容量优先用 1e-6 arrival stamp 保证确定序；全套确定性 276 passed/8 deselected，真实 WS/REST smoke 各 1 passed。
-- 下一任务是 T28（Match snapshot 与版本化 SSE 暴露给浏览器），必须按启动入口另行领取；需要 compose Redis+PostgreSQL 在位。
+- T28 已于 2026-09-09 完成并推送：snapshot REST（hot→PG→provider 回存）、版本化 SSE（ready/delta/ended/heartbeat、lease 生命周期）、Next 代理与 `useMatchStream`；实现提交为 `f03985b`。
+- T28 已确认的事实：SSE 每版本仅一帧且 id=state_version；gap 只转发不造事件；隐藏 60s abort 释放 lease；httpx ASGITransport 缓冲响应，SSE 测试须用进程内 uvicorn；全套确定性 286 passed/8 deselected、infrastructure 12、frontend 106、e2e 40/4 skipped 且视觉零变化。
+- 下一任务是 T29（完整 PBP 与 22 项统计的前端渲染），必须按启动入口另行领取。
 - 已知非 T17 限制：LiveTennisAPI 的 `/players?search` 当前不能把中文显示名“郑钦文”直接映射到 `Qinwen Zheng`；canonical English name 查询已通过，中文别名/名称归一化需另立任务批准。
 - 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`（任务外）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`（next dev 自动生成）、`frontend/next-env.d.ts`（Next 工具链生成）；保留原样。
 
 ## 当前任务
 
+无。T28 已完成；T29（Render Full PBP and Available Match Statistics）已 ready，接手前须按启动入口另行领取。
+
+## 最近完成任务
+
 ### T28 — Expose Match Snapshots and Versioned SSE to the Browser
 
-- **状态：** `in_progress`
+- **状态：** `done`
 - **执行者 / ADE：** Claude Code / Claude Code
 - **分支：** `main`
-- **起始提交：** `fe1d48b`
+- **起始提交：** `fe1d48b`（领取记录 `3709fe9`）
 - **领取时间：** 2026-09-09 21:55 CST
-- **范围：** 按 [P2 实施计划 T28](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t28-expose-match-snapshots-and-versioned-sse-to-the-browser)：`GET /matches/{id}` 全量 MatchSnapshot、`GET /matches/{id}/stream` 版本化 SSE（ready/match_delta/match_ended/heartbeat/error、lease 生命周期、gap 不造事件）、Next 薄代理与 `useMatchStream` hook、MatchPage 接入。
+- **完成提交：** `f03985b`
+- **范围：** 按 [P2 实施计划 T28](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t28-expose-match-snapshots-and-versioned-sse-to-the-browser)：snapshot REST、版本化 SSE、Next 代理、`useMatchStream`、MatchPage 接入。
+- **完成事实：** TDD 先行：stream 9 项 + hook 8 项测试先失败后实现。`GET /matches/{id}` 切为 MatchSnapshot（hot→PG→provider 并回存；PG 重建经 `load_snapshot`，补 DataFreshness 导入修复 e2e 暴露的 NameError）；SSE：ready 带全量 snapshot、match_delta 的 SSE id=state_version 且每版本仅一帧、match_ended 后关流、heartbeat 无版本、lease acquire+20s renew+断开 release；gap 只转发不造事件（客户端跳号重取）；Next 代理转发 Accept/Last-Event-ID；hook：REST 先行、delta=local+1 原子替换、重复忽略、错误保留数据 2s 重连、隐藏 60s abort 释放、恢复先 snapshot 再 SSE、unmount abort；httpx ASGITransport 不支持流式响应，SSE 测试改用进程内 uvicorn。
+- **验证门：** backend stream 9 passed、全套确定性 286 passed/8 deselected、infrastructure 12 passed（新增 load_snapshot 重建测试）；frontend `pnpm test` 106 passed、typecheck、build exit 0；完整 e2e 40 passed/4 skipped，P1 视觉基线零变化；`git diff --check` 通过。
 - **阻塞：** 无。
+
+（T27 详情见 ROADMAP 登记表与提交 `d354aba`。）
 
 ## 最近完成任务
 
@@ -136,6 +147,7 @@
 
 | 日期 | 提交 | 验证 | 结果 |
 |---|---|---|---|
+| 2026-09-09 | `f03985b` | TDD：stream 9 + hook 8 先失败后通过；backend 286 passed/8 deselected、infrastructure 12；frontend 106 + typecheck + build；完整 e2e 40 passed/4 skipped 视觉零变化 | T28 完成；snapshot + 版本化 SSE 就绪，T29 ready |
 | 2026-09-09 | `d354aba` | TDD：leases 6 + worker 8 + feed 6 先失败后通过；20/20 轮 stress 全绿；全套确定性 276 passed/8 deselected；infrastructure 11 passed；真实 WS smoke 1 passed、REST smoke 1 passed | T27 完成；WS feed/leases/worker 就绪，T28 ready |
 | 2026-09-09 | `98a1a22` | TDD：reducer 11 项 + integration 4 项先失败后通过；infrastructure 11 passed；alembic base↔head 往返 exit 0；全套确定性 256 passed/7 deselected；`git diff --check` 通过 | T26 完成；canonical reducer 与事务化持久化就绪，T27 ready |
 | 2026-09-09 | `e904485` | TDD：match-filters 单元 13 + 组件 9 先失败后通过；`pnpm test` 98 passed；typecheck/build exit 0；e2e P2 Home filters 6/6 双视口；4 张 Home 基线审阅后更新、match 页零变化；完整 e2e 连续两轮 40 passed/4 skipped；后端 241 passed/7 deselected | T25 完成；Home 叠加筛选与优先级展示就绪，T26 ready |
@@ -152,9 +164,11 @@
 
 ## 最近交接
 
-**状态：** T27 已由 Claude Code 于 2026-09-09 在 `main` 完成，实现提交 `d354aba`；当前无领取中的任务，T28 保持 ready。
+**状态：** T28 已由 Claude Code 于 2026-09-09 在 `main` 完成，实现提交 `f03985b`；当前无领取中的任务，T29 保持 ready。
 
-**交接说明：** 接手 T28 前完整阅读 [P2 设计规格 §9–§11](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) 和 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t28-expose-match-snapshots-and-versioned-sse-to-the-browser)。所有 ADE 只使用根目录 `.env`；API-Tennis 凭据变量为 `TENNIX_API_TENNIS_API_KEY`，不得写入代码、文档、fixture、日志、提交或聊天输出。T27 起实时链路为：leases（`tnx:lease:*`/`tnx:demand*`）→ worker（REST 先行 + WS 增量 + reducer + save_reduction + publisher）→ Redis（`tnx:hot:*` + `tnx:match:*` pub/sub）；SSE 尚未接线（T28）。vendor WS 为数组批次帧，adapter 客户端过滤。用户已追加要求：P2 收尾时用真实浏览器按业务流程逐项人工验收直到无 bug。
+**交接说明：** 接手 T29 前完整阅读 [P2 设计规格 §14](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) 和 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t29-render-full-pbp-and-available-match-statistics)。所有 ADE 只使用根目录 `.env`；API-Tennis 凭据变量为 `TENNIX_API_TENNIS_API_KEY`，不得写入代码、文档、fixture、日志、提交或聊天输出。T28 起 MatchPage 经 `useMatchStream` 消费 `/api/matches/{id}` + `/stream`（snapshot 含 points/statistics/quality/state_version）；SSE 测试用进程内 uvicorn（ASGITransport 缓冲）；用户已追加要求：P2 收尾时用真实浏览器按业务流程逐项人工验收直到无 bug。
+
+**旧交接（T27）：** 接手 T28 前完整阅读 [P2 设计规格 §9–§11](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) 和 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t28-expose-match-snapshots-and-versioned-sse-to-the-browser)。所有 ADE 只使用根目录 `.env`；API-Tennis 凭据变量为 `TENNIX_API_TENNIS_API_KEY`，不得写入代码、文档、fixture、日志、提交或聊天输出。T27 起实时链路为：leases（`tnx:lease:*`/`tnx:demand*`）→ worker（REST 先行 + WS 增量 + reducer + save_reduction + publisher）→ Redis（`tnx:hot:*` + `tnx:match:*` pub/sub）；SSE 尚未接线（T28）。vendor WS 为数组批次帧，adapter 客户端过滤。用户已追加要求：P2 收尾时用真实浏览器按业务流程逐项人工验收直到无 bug。
 
 **已知本地状态：** 未跟踪的 `.codex/skills/ui-ux-pro-max/SKILL.md`、`frontend/AGENTS.md`、`frontend/CLAUDE.md`（next dev 生成）、`frontend/next-env.d.ts`（Next 工具链生成），保留原样。
 
@@ -164,6 +178,7 @@
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-09 | T28 完成：snapshot REST、版本化 SSE、useMatchStream 与 MatchPage 接入 | `f03985b` |
 | 2026-09-09 | 领取 T28：Match snapshot 与版本化 SSE | `fe1d48b` 起始 |
 | 2026-09-09 | T27 完成：WS feed、Redis leases 与 realtime worker | `d354aba` |
 | 2026-09-09 | 领取 T27：WebSocket feed、Redis leases 与 realtime worker | `1d5d3cf` 起始 |

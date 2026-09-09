@@ -3,7 +3,7 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-09 21:49 CST
+**最后更新：** 2026-09-09 22:38 CST
 
 **总体状态：** `in_progress`（P1 已完成；P2 实施中）
 
@@ -29,7 +29,7 @@
 | 里程碑 | 状态 | 目标 | 进入/完成条件 |
 |---|---|---|---|
 | P1 — Match Information Assistant | `done` | 跑通真实结构化比赛查询、卡片、Match Page 与上下文 Chat | T17/T18/T19 均已完成（`69c8238`、`5572960`、`fdb0131`）；P1 已关闭 |
-| P2 — Live Match Intelligence | `in_progress` | 技术统计、PBP、近期控制指数、持久化和多进程实时协调 | T20–T27 已完成（`b7921c0`、`5b479fc`、`20dac5f`、`015ff7f`、`dddb734`、`e904485`、`98a1a22`、`d354aba`）；T28 是下一可领取任务 |
+| P2 — Live Match Intelligence | `in_progress` | 技术统计、PBP、近期控制指数、持久化和多进程实时协调 | T20–T28 已完成（`b7921c0`、`5b479fc`、`20dac5f`、`015ff7f`、`dddb734`、`e904485`、`98a1a22`、`d354aba`、`f03985b`）；T29 是下一可领取任务 |
 | P3 — Market & Decision Support | `planned` | 市场状态、预测、edge、confidence 和 paper trading | P2 数据可信；映射、模型评估和风控设计另行批准 |
 | Optional — Automated Execution | `deferred` | 在满足法律、风控、安全和可审计条件后考虑自动下单 | 不属于 P3 默认范围，必须单独批准 |
 
@@ -54,7 +54,7 @@
 | P2.0 — Design freeze | `done` | API-Tennis 能力边界、实时架构、领域模型、存储、UI、Chat、测试与任务路线 | T20 完成提交 `b7921c0`；规格、计划、总控一致性审查通过 |
 | P2.1 — Durable foundations | `done` | P2 canonical domain、provider contracts、PostgreSQL、Redis、稳定 identity | T21（`5b479fc`）与 T22（`20dac5f`）完成；P2.2 可开始 |
 | P2.2 — Unified data and discovery | `done` | API-Tennis REST、历史/H2H、赛事分类和 Home 叠加筛选 | T23–T25 完成（`015ff7f`、`dddb734`、`e904485`）；P2.3 可开始 |
-| P2.3 — Realtime pipeline | `in_progress` | Reducer、WebSocket worker、租约、持久化、snapshot + SSE | T26（`98a1a22`）、T27（`d354aba`）完成；T28 可领取 |
+| P2.3 — Realtime pipeline | `in_progress` | Reducer、WebSocket worker、租约、持久化、snapshot + SSE | T26–T28 完成（`98a1a22`、`d354aba`、`f03985b`）；T29 可领取 |
 | P2.4 — Match intelligence | `planned` | 完整 PBP、22 项统计、近期控制指数、版本化上下文 Chat | T29–T31；等待 P2.3 |
 | P2.5 — Acceptance and hardening | `planned` | Replay、恢复门、真实 smoke、双视口视觉和本地 runbook | T32；等待 P2.4 |
 
@@ -73,7 +73,7 @@
 | T25 | P2.2 | Add Stackable Home Facets and Priority Presentation | `done` | `e904485` | `lib/match-filters.ts`（默认 ATP+WTA/全部性别/单打、空组=全部、tier→live→时间→id 排序、toggle 不可自动补选）+ 可访问 chip 组（aria-pressed/计数/零计数禁用/恢复默认）；Home 改消费 `GET /api/matches/catalog`（新 Next 代理路由），Featured 取 `featured_match_id`，Live/Upcoming/Featured 共用同一筛选状态；单元/组件 26 项新测试；`pnpm test` 98 passed、typecheck、build 通过；e2e `P2 Home filters` 6/6 双视口（默认 top-tier、stacked ITF women doubles、恢复默认）；4 张 Home 视觉基线经逐张 diff 审阅后有意更新（仅新增筛选栏与整体下移），match 页基线零变化；P1 failure 拦截 glob 修正为 `**/api/matches**` 并加滚动稳定化；完整 e2e 连续两轮 40 passed/4 skipped |
 | T26 | P2.3 | Build the Canonical Live Reducer and Transactional Persistence | `done` | `98a1a22` | `reduce_live_snapshot`：相同 snapshot 不进版本不发事件；append 续号；旧分变化→`PointRevision`（revision+1）且 `recompute_from_sequence`=变化序列；删除/重排尾段自首个差异重建连续序列；仅语义变化进版本；typed changes 按 §11 顺序；`save_reduction` 单事务写 snapshot/points/revisions/statistics/quality（migration `0002` 增 quality 列），重复保存幂等、失败回滚后旧版本可读；reducer 单元 11 passed；infrastructure integration 11 passed（含 T22 7 项）；alembic base↔head 往返 exit 0；全套确定性 256 passed/7 deselected |
 | T27 | P2.3 | Add WebSocket Feed, Redis Leases, and the Realtime Worker | `done` | `d354aba` | `ApiTennisLiveFeedProvider`（batch 帧解析 + 客户端 `event_key` 过滤、secret-safe断线信号）；`ViewerLeaseStore`（lease TTL/renew/grace/demand index、arrival-order 容量优先）；`RealtimePublisher`（hot snapshot + pub/sub）；`RealtimeWorker`（一 match 一上游、REST 先行、断线丢弃旧帧后 REST reconcile 再继续、terminal 立即关闭、capacity_limited、14 天 raw cleanup）；lease 6 + worker 8 + feed 6 共 20 项确定性测试（20 轮 stress 全绿）；真实 opt-in WS smoke 1 passed（认证、收到真实 push、canonical 映射零泄漏）；REST smoke 1 passed；infrastructure 11 passed；全套确定性 276 passed/8 deselected |
-| T28 | P2.3 | Expose Match Snapshots and Versioned SSE to the Browser | `ready` | — | snapshot + typed delta + gap reconcile + visibility lifecycle |
+| T28 | P2.3 | Expose Match Snapshots and Versioned SSE to the Browser | `done` | `f03985b` | `GET /matches/{id}` 全量 MatchSnapshot（hot→PG→provider 并回存）；`GET /matches/{id}/stream` 版本化 SSE（ready/match_delta(id=version)/match_ended/heartbeat、lease acquire+20s renew+断开 release、gap 只转发不造事件）；Next 薄代理转发 Accept/Last-Event-ID；`useMatchStream`（REST 先行、delta=local+1 原子替换、重复忽略、跳号重取、错误保留数据重连、隐藏 60s 释放、恢复先 snapshot 再 SSE、unmount abort）；stream 9 项 + hook 8 项新测试；backend 286 passed/8 deselected、infrastructure 12 passed；frontend 106 passed + typecheck + build；完整 e2e 40 passed/4 skipped 且 P1 视觉基线零变化 |
 | T29 | P2.4 | Render Full PBP and Available Match Statistics | `planned` | — | Set→Game→Point、关键分、partial/unavailable 和 22-stat UI |
 | T30 | P2.4 | Calibrate and Implement Recent Control Index v1 | `planned` | — | aggregate calibration、发球校正、EWMA、无固定关键分倍率 |
 | T31 | P2.4 | Add P2 Intelligence Tools and Versioned Chat Answers | `planned` | — | compact fact packet、history/H2H/tools、answer version/as_of |
