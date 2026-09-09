@@ -1,4 +1,11 @@
-import type { ChatEvent, ChatRequest, MatchDto, PlayerDto } from './types'
+import type {
+  ChatEvent,
+  ChatRequest,
+  MatchCatalogDto,
+  MatchDto,
+  MatchFiltersDto,
+  PlayerDto,
+} from './types'
 
 export class ApiError extends Error {
   readonly status: number
@@ -59,6 +66,20 @@ export function getMatches(
 
 export function getMatch(matchId: string, signal?: AbortSignal): Promise<MatchDto> {
   return requestJson<MatchDto>(`/api/matches/${encodeURIComponent(matchId)}`, signal)
+}
+
+export function getMatchCatalog(
+  status: 'live' | 'upcoming',
+  filters: MatchFiltersDto,
+  signal?: AbortSignal,
+): Promise<MatchCatalogDto> {
+  const params = new URLSearchParams({ status })
+  // Empty facet groups are omitted: the backend treats a missing group as
+  // "all values", matching the shared Home filter semantics.
+  for (const circuit of filters.circuits) params.append('circuit', circuit)
+  for (const gender of filters.genders) params.append('gender', gender)
+  for (const discipline of filters.disciplines) params.append('discipline', discipline)
+  return requestJson<MatchCatalogDto>(`/api/matches/catalog?${params.toString()}`, signal)
 }
 
 function parseFrame(frame: string): ChatEvent | null {

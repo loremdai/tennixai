@@ -118,8 +118,9 @@ test.describe('P1 flow', () => {
   })
 
   test('provider failure renders typed retry copy on home', async ({ page }) => {
-    await page.route('**/api/matches*', (route) => {
-      if (route.request().url().includes('/api/matches?')) {
+    await page.route('**/api/matches**', (route) => {
+      const url = route.request().url()
+      if (url.includes('/api/matches?') || url.includes('/api/matches/catalog?')) {
         return route.fulfill({
           status: 503,
           contentType: 'application/json',

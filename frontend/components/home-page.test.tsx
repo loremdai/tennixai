@@ -3,9 +3,16 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { HomePage } from './home-page'
-import type { ChatEvent, MatchDto, StructuredData } from '@/lib/api/types'
+import type {
+  ChatEvent,
+  MatchCatalogDto,
+  MatchDto,
+  StructuredData,
+} from '@/lib/api/types'
+import { DEFAULT_MATCH_FILTERS } from '@/lib/match-filters'
 
-const { getMatchesMock, getPlayersMock, getMatchMock, streamChatMock } = vi.hoisted(() => ({
+const { getMatchCatalogMock, getMatchesMock, getPlayersMock, getMatchMock, streamChatMock } = vi.hoisted(() => ({
+  getMatchCatalogMock: vi.fn(),
   getMatchesMock: vi.fn(),
   getPlayersMock: vi.fn(),
   getMatchMock: vi.fn(),
@@ -13,6 +20,7 @@ const { getMatchesMock, getPlayersMock, getMatchMock, streamChatMock } = vi.hois
 }))
 
 vi.mock('@/lib/api/client', () => ({
+  getMatchCatalog: getMatchCatalogMock,
   getMatches: getMatchesMock,
   getPlayers: getPlayersMock,
   getMatch: getMatchMock,
@@ -92,6 +100,32 @@ const upcomingDto: MatchDto = {
   },
 }
 
+function makeCatalog(
+  status: 'live' | 'upcoming',
+  matches: MatchDto[],
+  overrides: Partial<MatchCatalogDto> = {},
+): MatchCatalogDto {
+  // Non-zero counts everywhere so facet chips stay clickable in tests;
+  // disabled-state behavior is covered in match-filters.test.tsx.
+  const count = Math.max(matches.length, 1)
+  return {
+    status,
+    matches,
+    filters: {
+      circuits: [...DEFAULT_MATCH_FILTERS.circuits],
+      genders: [...DEFAULT_MATCH_FILTERS.genders],
+      disciplines: [...DEFAULT_MATCH_FILTERS.disciplines],
+    },
+    facet_counts: {
+      circuits: { atp: count, wta: count, challenger: count, itf: count, other: count },
+      genders: { men: count, women: count, mixed: count, unknown: count },
+      disciplines: { singles: count, doubles: count, team: count, unknown: count },
+    },
+    featured_match_id: matches[0]?.id ?? null,
+    ...overrides,
+  }
+}
+
 function mockStream(options: {
   data?: StructuredData
   text?: string
@@ -119,11 +153,9 @@ function mockStream(options: {
 beforeEach(() => {
   vi.clearAllMocks()
   Element.prototype.scrollIntoView = vi.fn()
-  getMatchesMock.mockImplementation(async (status: string) => {
-    if (status === 'live') return [liveDto]
-    if (status === 'upcoming') return [upcomingDto]
-    return []
-  })
+  getMatchCatalogMock.mockImplementation(async (status: 'live' | 'upcoming') =>
+    makeCatalog(status, status === 'live' ? [liveDto] : [upcomingDto]),
+  )
   mockStream({ data: { kind: 'matches', matches: [upcomingDto] }, text: 'Sinner 今晚 20:30 出场。' })
 })
 
@@ -139,19 +171,19 @@ async function askQuestion(question: string) {
 }
 
 describe('HomePage slate', () => {
-  it('loads live and upcoming exactly once without polling timers', async () => {
+  it('loads live and upcoming catalogs exactly once without polling timers', async () => {
     render(<HomePage />)
 
     await screen.findByText('Jannik Sinner')
     await waitFor(() => {
-      expect(getMatchesMock).toHaveBeenCalledWith('live')
-      expect(getMatchesMock).toHaveBeenCalledWith('upcoming')
+      expect(getMatchCatalogMock).toHaveBeenCalledWith('live', DEFAULT_MATCH_FILTERS)
+      expect(getMatchCatalogMock).toHaveBeenCalledWith('upcoming', DEFAULT_MATCH_FILTERS)
     })
-    expect(getMatchesMock).toHaveBeenCalledTimes(2)
+    expect(getMatchCatalogMock).toHaveBeenCalledTimes(2)
 
     // No polling: the call count stays stable over time without user action.
     await new Promise((resolve) => setTimeout(resolve, 150))
-    expect(getMatchesMock).toHaveBeenCalledTimes(2)
+    expect(getMatchCatalogMock).toHaveBeenCalledTimes(2)
   })
 
   it('refresh makes exactly one new pair of calls', async () => {
@@ -161,12 +193,14 @@ describe('HomePage slate', () => {
     await userEvent.click(screen.getByRole('button', { name: '刷新比赛数据' }))
 
     await waitFor(() => {
-      expect(getMatchesMock).toHaveBeenCalledTimes(4)
+      expect(getMatchCatalogMock).toHaveBeenCalledTimes(4)
     })
   })
 
   it('keeps section shells with factual empty copy when lists are empty', async () => {
-    getMatchesMock.mockResolvedValue([])
+    getMatchCatalogMock.mockImplementation(async (status: 'live' | 'upcoming') =>
+      makeCatalog(status, []),
+    )
 
     render(<HomePage />)
 
@@ -177,7 +211,7 @@ describe('HomePage slate', () => {
   })
 
   it('renders typed retry copy when the slate API fails', async () => {
-    getMatchesMock.mockRejectedValue(Object.assign(new Error('down'), { code: 'provider_unavailable' }))
+    getMatchCatalogMock.mockRejectedValue(Object.assign(new Error('down'), { code: 'provider_unavailable' }))
 
     render(<HomePage />)
 
@@ -187,11 +221,11 @@ describe('HomePage slate', () => {
   })
 
   it('keeps the healthy upcoming section when live loading fails', async () => {
-    getMatchesMock.mockImplementation(async (status: string) => {
+    getMatchCatalogMock.mockImplementation(async (status: 'live' | 'upcoming') => {
       if (status === 'live') {
         throw Object.assign(new Error('live down'), { code: 'provider_unavailable' })
       }
-      return [upcomingDto]
+      return makeCatalog(status, [upcomingDto])
     })
 
     render(<HomePage />)
@@ -200,6 +234,94 @@ describe('HomePage slate', () => {
     expect(screen.getByRole('heading', { name: '今晚比赛' })).toBeVisible()
     expect(screen.getByText('Carlos Alcaraz')).toBeVisible()
     expect(screen.queryByText(/比赛数据加载失败（provider_unavailable）/)).toBeNull()
+  })
+})
+
+describe('HomePage facets', () => {
+  it('shows the filter groups with default active facets', async () => {
+    render(<HomePage />)
+    await screen.findByText('Jannik Sinner')
+
+    expect(screen.getByRole('group', { name: '赛事级别' })).toBeVisible()
+    expect(screen.getByRole('button', { name: /ATP/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: /WTA/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: /单打/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: /Challenger/ })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.queryByRole('button', { name: '恢复默认' })).toBeNull()
+  })
+
+  it('follows featured_match_id instead of the first array item', async () => {
+    const secondLive: MatchDto = {
+      ...liveDto,
+      id: 'mat_live2',
+      players: [
+        { id: 'ply_5', name: 'Iga Swiatek', country_code: 'pol', ranking: 1 },
+        { id: 'ply_6', name: 'Aryna Sabalenka', country_code: 'blr', ranking: 2 },
+      ],
+      tournament: { id: 'trn_2', name: 'WTA Finals', tour: 'wta', circuit: 'wta', gender: 'women', discipline: 'singles' },
+    }
+    getMatchCatalogMock.mockImplementation(async (status: 'live' | 'upcoming') =>
+      status === 'live'
+        ? makeCatalog(status, [liveDto, secondLive], { featured_match_id: 'mat_live2' })
+        : makeCatalog(status, [upcomingDto]),
+    )
+
+    render(<HomePage />)
+    await screen.findByText('Iga Swiatek')
+
+    const featuredLink = screen.getByRole('link', { name: '打开比赛' })
+    expect(featuredLink).toHaveAttribute('href', '/matches/mat_live2')
+  })
+
+  it('refetches both sections with stacked filters and never relaxes them', async () => {
+    getMatchCatalogMock.mockImplementation(async (status: 'live' | 'upcoming') => {
+      const call = getMatchCatalogMock.mock.calls.at(-1)?.[1] ?? DEFAULT_MATCH_FILTERS
+      if (call.genders.includes('women')) return makeCatalog(status, [])
+      return makeCatalog(status, status === 'live' ? [liveDto] : [upcomingDto])
+    })
+
+    render(<HomePage />)
+    await screen.findByText('Jannik Sinner')
+
+    await userEvent.click(screen.getByRole('button', { name: /女子/ }))
+
+    await waitFor(() => {
+      expect(getMatchCatalogMock).toHaveBeenCalledWith('live', {
+        circuits: ['atp', 'wta'],
+        genders: ['women'],
+        disciplines: ['singles'],
+      })
+      expect(getMatchCatalogMock).toHaveBeenCalledWith('upcoming', {
+        circuits: ['atp', 'wta'],
+        genders: ['women'],
+        disciplines: ['singles'],
+      })
+    })
+    // Filtered-empty shows the empty state; the filters stay exactly as chosen.
+    expect(await screen.findByText('暂无直播比赛')).toBeVisible()
+    expect(screen.getByRole('button', { name: /女子/ })).toHaveAttribute('aria-pressed', 'true')
+    const lastFilters = getMatchCatalogMock.mock.calls.at(-1)?.[1]
+    expect(lastFilters).toEqual({
+      circuits: ['atp', 'wta'],
+      genders: ['women'],
+      disciplines: ['singles'],
+    })
+  })
+
+  it('restores the approved defaults with 恢复默认', async () => {
+    render(<HomePage />)
+    await screen.findByText('Jannik Sinner')
+
+    await userEvent.click(screen.getByRole('button', { name: /女子/ }))
+    const reset = await screen.findByRole('button', { name: '恢复默认' })
+    await userEvent.click(reset)
+
+    await waitFor(() => {
+      const lastFilters = getMatchCatalogMock.mock.calls.at(-1)?.[1]
+      expect(lastFilters).toEqual(DEFAULT_MATCH_FILTERS)
+    })
+    expect(screen.queryByRole('button', { name: '恢复默认' })).toBeNull()
+    expect(screen.getByRole('button', { name: /女子/ })).toHaveAttribute('aria-pressed', 'false')
   })
 })
 

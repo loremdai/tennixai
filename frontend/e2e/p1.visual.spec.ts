@@ -16,8 +16,9 @@ const states: Array<[string, (page: Page) => Promise<void>]> = [
     await page.getByRole('link', { name: /打开比赛：Sinner 对阵/ }).first().waitFor()
   }],
   ['p1-home-error', async (page) => {
-    await page.route('**/api/matches*', (route) => {
-      if (route.request().url().includes('/api/matches?')) {
+    await page.route('**/api/matches**', (route) => {
+      const url = route.request().url()
+      if (url.includes('/api/matches?') || url.includes('/api/matches/catalog?')) {
         return route.fulfill({
           status: 503,
           contentType: 'application/json',
@@ -57,6 +58,16 @@ for (const [name, prepare] of states) {
       window.scrollTo(0, 0)
       return document.fonts.ready
     })
+    // Let any scheduled smooth scroll run to completion, then pin the viewport
+    // back to the top so sticky-header baselines stay repeatable.
+    await page.waitForTimeout(600)
+    await page.evaluate(
+      () =>
+        new Promise((resolve) => {
+          window.scrollTo({ top: 0, behavior: 'instant' })
+          requestAnimationFrame(() => resolve(null))
+        }),
+    )
     await expect(page).toHaveScreenshot(`${name}.png`, {
       animations: 'disabled',
       fullPage: true,

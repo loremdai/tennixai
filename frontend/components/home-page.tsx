@@ -13,6 +13,7 @@ import {
   UpcomingSection,
   type SlateState,
 } from '@/components/home/home-match-sections'
+import { MatchFiltersBar } from '@/components/home/match-filters'
 import {
   FollowedPlayersSection,
   RecentResultsCard,
@@ -25,8 +26,9 @@ import { ProductHeader } from '@/components/match/match-header'
 import { Badge } from '@/components/ui/badge'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useChatStream } from '@/hooks/use-chat-stream'
-import { getMatches } from '@/lib/api/client'
-import type { MatchDto } from '@/lib/api/types'
+import { getMatchCatalog } from '@/lib/api/client'
+import type { FacetCountsDto, MatchCatalogDto, MatchFiltersDto } from '@/lib/api/types'
+import { DEFAULT_MATCH_FILTERS } from '@/lib/match-filters'
 import { toHomeMatch, toMatchViewModel } from '@/lib/view-models'
 
 const phases = Object.keys(phaseLabels) as ProductPhase[]
@@ -51,6 +53,27 @@ function getErrorCode(error: unknown): string {
     : 'internal_error'
 }
 
+function mergeFacetCounts(
+  live: FacetCountsDto | null,
+  upcoming: FacetCountsDto | null,
+): FacetCountsDto | null {
+  if (!live && !upcoming) return null
+  const base = live ?? upcoming
+  const other = live && upcoming ? upcoming : null
+  if (!other || !base) return base
+  const sumGroup = <K extends string>(a: Record<K, number>, b: Record<K, number>) => {
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)]) as Set<K>
+    const merged = {} as Record<K, number>
+    for (const key of keys) merged[key] = (a[key] ?? 0) + (b[key] ?? 0)
+    return merged
+  }
+  return {
+    circuits: sumGroup(base.circuits, other.circuits),
+    genders: sumGroup(base.genders, other.genders),
+    disciplines: sumGroup(base.disciplines, other.disciplines),
+  }
+}
+
 export function HomePage({ initialQuestion }: HomePageProps) {
   const [phase, setPhase] = useState<ProductPhase>('p1')
   const [prompt, setPrompt] = useState('')
@@ -59,9 +82,13 @@ export function HomePage({ initialQuestion }: HomePageProps) {
   const chat = useChatStream('global')
   const busy = chat.state.phase === 'loading' || chat.state.phase === 'streaming'
 
-  const [slate, setSlate] = useState<{ live: MatchDto[]; upcoming: MatchDto[] }>({
-    live: [],
-    upcoming: [],
+  const [filters, setFilters] = useState<MatchFiltersDto>(DEFAULT_MATCH_FILTERS)
+  const [catalogs, setCatalogs] = useState<{
+    live: MatchCatalogDto | null
+    upcoming: MatchCatalogDto | null
+  }>({
+    live: null,
+    upcoming: null,
   })
   const [slateState, setSlateState] = useState<SlateStatuses>({
     live: 'loading',
@@ -77,13 +104,13 @@ export function HomePage({ initialQuestion }: HomePageProps) {
     setSlateErrorCodes({ live: null, upcoming: null })
 
     const [liveResult, upcomingResult] = await Promise.allSettled([
-      getMatches('live'),
-      getMatches('upcoming'),
+      getMatchCatalog('live', filters),
+      getMatchCatalog('upcoming', filters),
     ])
 
-    setSlate({
-      live: liveResult.status === 'fulfilled' ? liveResult.value : [],
-      upcoming: upcomingResult.status === 'fulfilled' ? upcomingResult.value : [],
+    setCatalogs({
+      live: liveResult.status === 'fulfilled' ? liveResult.value : null,
+      upcoming: upcomingResult.status === 'fulfilled' ? upcomingResult.value : null,
     })
     setSlateState({
       live: liveResult.status === 'fulfilled' ? 'success' : 'error',
@@ -93,7 +120,7 @@ export function HomePage({ initialQuestion }: HomePageProps) {
       live: liveResult.status === 'rejected' ? getErrorCode(liveResult.reason) : null,
       upcoming: upcomingResult.status === 'rejected' ? getErrorCode(upcomingResult.reason) : null,
     })
-  }, [])
+  }, [filters])
 
   useEffect(() => {
     void loadSlate()
@@ -137,10 +164,22 @@ export function HomePage({ initialQuestion }: HomePageProps) {
     window.setTimeout(() => document.getElementById('home-question')?.focus(), 350)
   }
 
-  const featuredDto = slate.live[0] ?? slate.upcoming[0] ?? null
+  const liveMatches = catalogs.live?.matches ?? []
+  const upcomingMatches = catalogs.upcoming?.matches ?? []
+  const featuredId =
+    catalogs.live?.featured_match_id ?? catalogs.upcoming?.featured_match_id ?? null
+  const featuredDto = featuredId
+    ? (liveMatches.find((match) => match.id === featuredId) ??
+      upcomingMatches.find((match) => match.id === featuredId) ??
+      null)
+    : null
   const featured = featuredDto ? toMatchViewModel(featuredDto) : null
-  const liveCards = slate.live.map(toHomeMatch)
-  const upcomingCards = slate.upcoming.map(toHomeMatch)
+  const liveCards = liveMatches.map(toHomeMatch)
+  const upcomingCards = upcomingMatches.map(toHomeMatch)
+  const facetCounts = mergeFacetCounts(
+    catalogs.live?.facet_counts ?? null,
+    catalogs.upcoming?.facet_counts ?? null,
+  )
   const allSlateFailed = slateState.live === 'error' && slateState.upcoming === 'error'
   const featuredState: SlateState =
     featuredDto || slateState.live === 'success' || slateState.upcoming === 'success'
@@ -236,6 +275,12 @@ export function HomePage({ initialQuestion }: HomePageProps) {
               />
             ) : (
               <>
+                <MatchFiltersBar
+                  filters={filters}
+                  facetCounts={facetCounts}
+                  onChange={setFilters}
+                  onReset={() => setFilters(DEFAULT_MATCH_FILTERS)}
+                />
                 <FeaturedMatchSection phase={phase} match={featured} state={featuredState} onAsk={focusAssistant} />
                 <LiveNowSection
                   matches={liveCards}

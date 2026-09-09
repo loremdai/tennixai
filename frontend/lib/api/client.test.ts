@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ApiError, getMatch, getMatches, getPlayers, parseSse, streamChat } from './client'
+import { ApiError, getMatch, getMatchCatalog, getMatches, getPlayers, parseSse, streamChat } from './client'
 import type { ChatEvent } from './types'
 
 afterEach(() => {
@@ -111,6 +111,43 @@ describe('REST helpers', () => {
     await getMatch('mat_1/2')
 
     expect(fetchMock.mock.calls[0][0]).toBe('/api/matches/mat_1%2F2')
+  })
+
+  it('builds catalog queries with repeated facet params and omits empty groups', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () =>
+      jsonResponse({
+        data: {
+          status: 'upcoming',
+          matches: [],
+          filters: { circuits: [], genders: [], disciplines: [] },
+          facet_counts: {
+            circuits: { atp: 0, wta: 0, challenger: 0, itf: 0, other: 0 },
+            genders: { men: 0, women: 0, mixed: 0, unknown: 0 },
+            disciplines: { singles: 0, doubles: 0, team: 0, unknown: 0 },
+          },
+          featured_match_id: null,
+        },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getMatchCatalog('upcoming', {
+      circuits: ['atp', 'wta'],
+      genders: [],
+      disciplines: ['singles'],
+    })
+    await getMatchCatalog('live', {
+      circuits: ['itf'],
+      genders: ['women'],
+      disciplines: ['doubles'],
+    })
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      '/api/matches/catalog?status=upcoming&circuit=atp&circuit=wta&discipline=singles',
+    )
+    expect(fetchMock.mock.calls[1][0]).toBe(
+      '/api/matches/catalog?status=live&circuit=itf&gender=women&discipline=doubles',
+    )
   })
 
   it('throws ApiError with code and details on non-2xx', async () => {
