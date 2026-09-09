@@ -3,13 +3,13 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-09 19:51 CST
+**最后更新：** 2026-09-09 19:55 CST
 
-**当前任务：** 无（T24 已完成；T25 已 ready，尚未领取）
+**当前任务：** T25 — Add Stackable Home Facets and Priority Presentation
 
-**任务状态：** `idle`
+**任务状态：** `in_progress`
 
-**当前执行者 / ADE：** —
+**当前执行者 / ADE：** Claude Code / Claude Code
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
@@ -17,7 +17,7 @@
 
 **最后验证的产品提交：** `dddb734`
 
-**T25 起始提交：** 待领取时填写
+**T25 起始提交：** `13a545f`
 
 **远程：** `origin` → `https://github.com/loremdai/tennixai.git`
 
@@ -52,7 +52,15 @@
 
 ## 当前任务
 
-无。T24 已完成；T25（Add Stackable Home Facets and Priority Presentation）已 ready，接手前须按启动入口另行领取。
+### T25 — Add Stackable Home Facets and Priority Presentation
+
+- **状态：** `in_progress`
+- **执行者 / ADE：** Claude Code / Claude Code
+- **分支：** `main`
+- **起始提交：** `13a545f`
+- **领取时间：** 2026-09-09 19:55 CST
+- **范围：** 按 [P2 实施计划 T25](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t25-add-stackable-home-facets-and-priority-presentation)：`lib/match-filters.ts` 状态/计数/兼容/排序、`components/home/match-filters.tsx` 可访问叠加筛选控件、Home Featured/Live/Upcoming 共用同一筛选状态并消费 catalog `featured_match_id`、typed client/types 扩展、`e2e/p2-home-filters.spec.ts` 双视口验证；不重设计现有 v0 Home。
+- **阻塞：** 无。
 
 ## 最近完成任务
 
@@ -104,11 +112,11 @@
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-09 | 领取 T25：Home 叠加筛选与优先级展示 | `13a545f` 起始 |
 | 2026-09-09 | T24 完成：catalog 筛选/排序/facet counts、history/H2H 服务与 REST 路由 | `dddb734` |
 | 2026-09-09 | 领取 T24：catalog 筛选、history/H2H 服务与 P2 REST APIs | `85dd65d` 起始 |
 | 2026-09-09 | T23 完成：API-Tennis REST adapter、分类映射与 provider mode 接线 | `015ff7f` |
 | 2026-09-09 | 领取 T23：实现 API-Tennis REST adapter | `103ecff` 起始 |
-| 2026-09-09 | T22 完成：compose、Alembic、P2 schema 与 durable identity repositories | `20dac5f` |
 
 ## 接手与更新规则
 
