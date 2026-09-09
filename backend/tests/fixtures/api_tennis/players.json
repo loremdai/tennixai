@@ -1,0 +1,115 @@
+{
+ "success": 1,
+ "result": [
+  {
+   "player_key": 1274,
+   "player_name": "J. Cui",
+   "player_full_name": "Jie Cui",
+   "player_country": "China",
+   "player_bday": "24.01.1998",
+   "player_logo": "https://api.api-tennis.com/logo-tennis/1274_j-cui.jpg",
+   "stats": [
+    {
+     "season": "2022",
+     "type": "doubles",
+     "rank": "1222",
+     "titles": "0",
+     "matches_won": "8",
+     "matches_lost": "10",
+     "hard_won": "8",
+     "hard_lost": "10",
+     "clay_won": "",
+     "clay_lost": "",
+     "grass_won": "",
+     "grass_lost": ""
+    },
+    {
+     "season": "2019",
+     "type": "doubles",
+     "rank": "972",
+     "titles": "0",
+     "matches_won": "0",
+     "matches_lost": "5",
+     "hard_won": "0",
+     "hard_lost": "4",
+     "clay_won": "0",
+     "clay_lost": "1",
+     "grass_won": "",
+     "grass_lost": ""
+    },
+    {
+     "season": "2018",
+     "type": "doubles",
+     "rank": "650",
+     "titles": "0",
+     "matches_won": "1",
+     "matches_lost": "1",
+     "hard_won": "1",
+     "hard_lost": "1",
+     "clay_won": "",
+     "clay_lost": "",
+     "grass_won": "",
+     "grass_lost": ""
+    }
+   ],
+   "tournaments": [
+    {
+     "name": "M15 Nakhon Si Thammarat 3 (ITF)",
+     "season": "2024",
+     "type": "singles",
+     "surface": "hard",
+     "prize": "$15,000"
+    },
+    {
+     "name": "M25 Yinchuan (ITF)",
+     "season": "2023",
+     "type": "singles",
+     "surface": "hard",
+     "prize": "$25,000"
+    },
+    {
+     "name": "M25 Anning (ITF)",
+     "season": "2024",
+     "type": "singles",
+     "surface": "clay",
+     "prize": "$25,000"
+    },
+    {
+     "name": "M25 Anning (ITF)",
+     "season": "2023",
+     "type": "doubles",
+     "surface": "clay",
+     "prize": "$25,000"
+    },
+    {
+     "name": "M25 Fuzhou (ITF)",
+     "season": "2023",
+     "type": "doubles",
+     "surface": "hard",
+     "prize": "$25,000"
+    },
+    {
+     "name": "M25 Luzhou (ITF)",
+     "season": "2023",
+     "type": "doubles",
+     "surface": "hard",
+     "prize": "$25,000"
+    },
+    {
+     "name": "M15 Luan 6 (ITF)",
+     "season": "2025",
+     "type": "singles",
+     "surface": "hard",
+     "prize": "$15,000"
+    },
+    {
+     "name": "M15 Luan 4 (ITF)",
+     "season": "2025",
+     "type": "singles",
+     "surface": "hard",
+     "prize": "$15,000"
+    }
+   ]
+  }
+ ]
+}

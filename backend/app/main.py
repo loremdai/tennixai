@@ -17,6 +17,9 @@ from app.chat.tools import BusinessTools
 from app.config import Settings
 from app.errors import AppError
 from app.identity import MemoryIdentityRepository
+from app.persistence.database import Database
+from app.persistence.repositories import PostgresIdentityRepository
+from app.providers.api_tennis import ApiTennisProvider
 from app.providers.base import TennisDataProvider
 from app.providers.fake import FakeTennisProvider
 from app.providers.livetennis import LiveTennisProvider
@@ -45,8 +48,26 @@ def create_app(
     identities = MemoryIdentityRepository()
 
     live_client: httpx.AsyncClient | None = None
+    api_tennis_client: httpx.AsyncClient | None = None
+    database: Database | None = None
     if provider is None:
-        if settings.provider_mode == "live":
+        if settings.provider_mode == "api_tennis":
+            api_key = settings.api_tennis_api_key
+            if api_key is None:
+                raise ValueError(
+                    "TENNIX_API_TENNIS_API_KEY is required in api_tennis provider mode"
+                )
+            database = Database(settings.database_url)
+            api_tennis_client = httpx.AsyncClient(
+                base_url=settings.api_tennis_base_url, timeout=15.0
+            )
+            provider = ApiTennisProvider(
+                client=api_tennis_client,
+                identities=PostgresIdentityRepository(database),
+                api_key=api_key.get_secret_value(),
+                now=clock,
+            )
+        elif settings.provider_mode in ("live", "livetennis"):
             api_key = settings.livetennis_api_key
             if api_key is None:
                 raise ValueError("TENNIX_LIVETENNIS_API_KEY is required in live provider mode")
@@ -85,6 +106,10 @@ def create_app(
         yield
         if live_client is not None:
             await live_client.aclose()
+        if api_tennis_client is not None:
+            await api_tennis_client.aclose()
+        if database is not None:
+            await database.dispose()
 
     app = FastAPI(title="Tennix API", lifespan=lifespan)
     app.state.settings = settings

@@ -1,0 +1,327 @@
+{
+ "success": 1,
+ "result": {
+  "H2H": [
+   {
+    "event_key": 12160567,
+    "event_date": "2026-09-08",
+    "event_time": "09:10",
+    "event_first_player": "J. Cui",
+    "first_player_key": 1274,
+    "first_player_dp1_key": null,
+    "first_player_dp2_key": null,
+    "event_second_player": "F. Sun",
+    "second_player_key": 876,
+    "second_player_dp1_key": null,
+    "second_player_dp2_key": null,
+    "event_final_result": "2 - 0",
+    "event_game_result": "-",
+    "event_serve": null,
+    "event_winner": "First Player",
+    "event_status": "Finished",
+    "event_type_type": "Challenger Men Singles",
+    "tournament_name": "Shanghai",
+    "tournament_key": 2356,
+    "tournament_round": "Shanghai - 1/16-finals",
+    "tournament_season": "2026",
+    "event_live": "0",
+    "event_qualification": "False",
+    "scores": [
+     {
+      "score_first": "7",
+      "score_second": "5",
+      "score_set": "1"
+     },
+     {
+      "score_first": "6",
+      "score_second": "4",
+      "score_set": "2"
+     }
+    ]
+   },
+   {
+    "event_key": 11986742,
+    "event_date": "2024-09-28",
+    "event_time": "04:15",
+    "event_first_player": "J. Cui",
+    "first_player_key": 1274,
+    "first_player_dp1_key": null,
+    "first_player_dp2_key": null,
+    "event_second_player": "F. Sun",
+    "second_player_key": 876,
+    "second_player_dp1_key": null,
+    "second_player_dp2_key": null,
+    "event_final_result": "2 - 1",
+    "event_game_result": "-",
+    "event_serve": null,
+    "event_winner": "First Player",
+    "event_status": "Finished",
+    "event_type_type": "Itf Men Singles",
+    "tournament_name": "M25 Fuzhou",
+    "tournament_key": 9893,
+    "tournament_round": "M25 Fuzhou - Semi-finals",
+    "tournament_season": "2024",
+    "event_live": "0",
+    "event_qualification": "False",
+    "scores": [
+     {
+      "score_first": "3",
+      "score_second": "6",
+      "score_set": "1"
+     },
+     {
+      "score_first": "6",
+      "score_second": "2",
+      "score_set": "2"
+     },
+     {
+      "score_first": "6",
+      "score_second": "4",
+      "score_set": "3"
+     },
+     {
+      "score_first": "0",
+      "score_second": "0",
+      "score_set": "4"
+     },
+     {
+      "score_first": "0",
+      "score_second": "0",
+      "score_set": "5"
+     }
+    ]
+   }
+  ],
+  "firstPlayerResults": [
+   {
+    "event_key": 12160567,
+    "event_date": "2026-09-08",
+    "event_time": "09:10",
+    "event_first_player": "J. Cui",
+    "first_player_key": 1274,
+    "first_player_dp1_key": null,
+    "first_player_dp2_key": null,
+    "event_second_player": "F. Sun",
+    "second_player_key": 876,
+    "second_player_dp1_key": null,
+    "second_player_dp2_key": null,
+    "event_final_result": "2 - 0",
+    "event_game_result": "-",
+    "event_serve": null,
+    "event_winner": "First Player",
+    "event_status": "Finished",
+    "event_type_type": "Challenger Men Singles",
+    "tournament_name": "Shanghai",
+    "tournament_key": 2356,
+    "tournament_round": "Shanghai - 1/16-finals",
+    "tournament_season": "2026",
+    "event_live": "0",
+    "event_qualification": "False",
+    "scores": [
+     {
+      "score_first": "7",
+      "score_second": "5",
+      "score_set": "1"
+     },
+     {
+      "score_first": "6",
+      "score_second": "4",
+      "score_set": "2"
+     }
+    ]
+   },
+   {
+    "event_key": 12158504,
+    "event_date": "2026-08-31",
+    "event_time": "13:30",
+    "event_first_player": "J. Cui",
+    "first_player_key": 1274,
+    "first_player_dp1_key": null,
+    "first_player_dp2_key": null,
+    "event_second_player": "J. K. Trotter",
+    "second_player_key": 9193,
+    "second_player_dp1_key": null,
+    "second_player_dp2_key": null,
+    "event_final_result": "0 - 2",
+    "event_game_result": "-",
+    "event_serve": null,
+    "event_winner": "Second Player",
+    "event_status": "Finished",
+    "event_type_type": "Challenger Men Singles",
+    "tournament_name": "Zhangjiagang",
+    "tournament_key": 2778,
+    "tournament_round": "Zhangjiagang - 1/16-finals",
+    "tournament_season": "2026",
+    "event_live": "0",
+    "event_qualification": "False",
+    "scores": [
+     {
+      "score_first": "3",
+      "score_second": "6",
+      "score_set": "1"
+     },
+     {
+      "score_first": "4",
+      "score_second": "6",
+      "score_set": "2"
+     }
+    ]
+   },
+   {
+    "event_key": 12154505,
+    "event_date": "2026-08-14",
+    "event_time": "10:20",
+    "event_first_player": "J. Cui",
+    "first_player_key": 1274,
+    "first_player_dp1_key": null,
+    "first_player_dp2_key": null,
+    "event_second_player": "A. Dougaz",
+    "second_player_key": 798,
+    "second_player_dp1_key": null,
+    "second_player_dp2_key": null,
+    "event_final_result": "1 - 2",
+    "event_game_result": "-",
+    "event_serve": null,
+    "event_winner": "Second Player",
+    "event_status": "Finished",
+    "event_type_type": "Challenger Men Singles",
+    "tournament_name": "Astana",
+    "tournament_key": 3146,
+    "tournament_round": "Astana - Quarter-finals",
+    "tournament_season": "2026",
+    "event_live": "0",
+    "event_qualification": "False",
+    "scores": [
+     {
+      "score_first": "2",
+      "score_second": "6",
+      "score_set": "1"
+     },
+     {
+      "score_first": "6",
+      "score_second": "4",
+      "score_set": "2"
+     },
+     {
+      "score_first": "5",
+      "score_second": "7",
+      "score_set": "3"
+     }
+    ]
+   }
+  ],
+  "secondPlayerResults": [
+   {
+    "event_key": 12160567,
+    "event_date": "2026-09-08",
+    "event_time": "09:10",
+    "event_first_player": "J. Cui",
+    "first_player_key": 1274,
+    "first_player_dp1_key": null,
+    "first_player_dp2_key": null,
+    "event_second_player": "F. Sun",
+    "second_player_key": 876,
+    "second_player_dp1_key": null,
+    "second_player_dp2_key": null,
+    "event_final_result": "2 - 0",
+    "event_game_result": "-",
+    "event_serve": null,
+    "event_winner": "First Player",
+    "event_status": "Finished",
+    "event_type_type": "Challenger Men Singles",
+    "tournament_name": "Shanghai",
+    "tournament_key": 2356,
+    "tournament_round": "Shanghai - 1/16-finals",
+    "tournament_season": "2026",
+    "event_live": "0",
+    "event_qualification": "False",
+    "scores": [
+     {
+      "score_first": "7",
+      "score_second": "5",
+      "score_set": "1"
+     },
+     {
+      "score_first": "6",
+      "score_second": "4",
+      "score_set": "2"
+     }
+    ]
+   },
+   {
+    "event_key": 12160181,
+    "event_date": "2026-09-04",
+    "event_time": "07:05",
+    "event_first_player": "C. H. Tseng",
+    "first_player_key": 389,
+    "first_player_dp1_key": null,
+    "first_player_dp2_key": null,
+    "event_second_player": "F. Sun",
+    "second_player_key": 876,
+    "second_player_dp1_key": null,
+    "second_player_dp2_key": null,
+    "event_final_result": "2 - 0",
+    "event_game_result": "-",
+    "event_serve": null,
+    "event_winner": "First Player",
+    "event_status": "Finished",
+    "event_type_type": "Challenger Men Singles",
+    "tournament_name": "Zhangjiagang",
+    "tournament_key": 2778,
+    "tournament_round": "Zhangjiagang - Quarter-finals",
+    "tournament_season": "2026",
+    "event_live": "0",
+    "event_qualification": "False",
+    "scores": [
+     {
+      "score_first": "6",
+      "score_second": "3",
+      "score_set": "1"
+     },
+     {
+      "score_first": "6",
+      "score_second": "3",
+      "score_set": "2"
+     }
+    ]
+   },
+   {
+    "event_key": 12158761,
+    "event_date": "2026-09-03",
+    "event_time": "07:45",
+    "event_first_player": "F. Sun",
+    "first_player_key": 876,
+    "first_player_dp1_key": null,
+    "first_player_dp2_key": null,
+    "event_second_player": "H. Liu",
+    "second_player_key": 1270,
+    "second_player_dp1_key": null,
+    "second_player_dp2_key": null,
+    "event_final_result": "2 - 0",
+    "event_game_result": "-",
+    "event_serve": null,
+    "event_winner": "First Player",
+    "event_status": "Finished",
+    "event_type_type": "Challenger Men Singles",
+    "tournament_name": "Zhangjiagang",
+    "tournament_key": 2778,
+    "tournament_round": "Zhangjiagang - 1/8-finals",
+    "tournament_season": "2026",
+    "event_live": "0",
+    "event_qualification": "False",
+    "scores": [
+     {
+      "score_first": "6",
+      "score_second": "0",
+      "score_set": "1"
+     },
+     {
+      "score_first": "7",
+      "score_second": "5",
+      "score_set": "2"
+     }
+    ]
+   }
+  ]
+ }
+}
