@@ -3,13 +3,13 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-09 17:55 CST
+**最后更新：** 2026-09-09 18:13 CST
 
-**当前任务：** 无（T21 已完成；T22 已 ready，尚未领取）
+**当前任务：** T22 — Add PostgreSQL, Redis, Migrations, and Durable Identity
 
-**任务状态：** `idle`
+**任务状态：** `in_progress`
 
-**当前执行者 / ADE：** —
+**当前执行者 / ADE：** Claude Code / Claude Code
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
@@ -17,7 +17,7 @@
 
 **最后验证的产品提交：** `5b479fc`
 
-**T22 起始提交：** 待领取时填写
+**T22 起始提交：** `181f04e`
 
 **远程：** `origin` → `https://github.com/loremdai/tennixai.git`
 
@@ -45,7 +45,15 @@
 
 ## 当前任务
 
-无。T21 已完成；T22（Add PostgreSQL, Redis, Migrations, and Durable Identity）已 ready，接手前须按启动入口另行领取。
+### T22 — Add PostgreSQL, Redis, Migrations, and Durable Identity
+
+- **状态：** `in_progress`
+- **执行者 / ADE：** Claude Code / Claude Code
+- **分支：** `main`
+- **起始提交：** `181f04e`
+- **领取时间：** 2026-09-09 18:13 CST
+- **范围：** 按 [P2 实施计划 T22](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t22-add-postgresql-redis-migrations-and-durable-identity)：`compose.yaml`（仅 postgres:16 + redis:7，localhost 绑定端口、named volumes、healthchecks、无凭据）；SQLAlchemy async/asyncpg/Alembic/redis/websockets 依赖；`infrastructure`/`api_tennis_live`/`realtime_live` pytest markers；P2 schema migration；`Database`、`PostgresIdentityRepository`、`MatchSnapshotRepository`、`RawProviderEventRepository`；typed settings 与安全默认值。
+- **阻塞：** 无（本地 Docker 通过 colima 已于 18:12 启动）。
 
 ## 最近完成任务
 
@@ -92,11 +100,11 @@
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-09 | 领取 T22：PostgreSQL、Redis、migrations 与 durable identity | `181f04e` 起始 |
 | 2026-09-09 | T21 完成：P2 canonical domain、async identity 与 provider contracts | `5b479fc` |
 | 2026-09-09 | 领取 T21：扩展 canonical domain 与 provider contracts | `f574b1a` 起始 |
 | 2026-09-09 | M01 完成：backend/frontend/Playwright/真实测试统一使用根目录 `.env` | `969c7ec` |
 | 2026-09-09 | 领取 M01：本地配置统一迁移到根目录 `.env` | `aece736` 起始 |
-| 2026-09-09 | T20 完成：P2 设计规格、T21–T32 实施计划与三份总控落盘 | `b7921c0` |
 
 ## 接手与更新规则
 
