@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { toHomeMatch, toMatchViewModel } from './view-models'
+import { formatAsOf, formatStatValue, STAT_META, toHomeMatch, toMatchViewModel } from './view-models'
 import type { MatchDto } from '@/lib/api/types'
 
 function baseMatch(overrides: Partial<MatchDto> = {}): MatchDto {
@@ -183,5 +183,44 @@ describe('toMatchViewModel', () => {
     expect(toMatchViewModel(baseMatch({ surface: 'hard', indoor: false })).surface).toBe('硬地')
     expect(toMatchViewModel(baseMatch({ surface: 'clay', indoor: false })).surface).toBe('红土')
     expect(toMatchViewModel(baseMatch({ surface: 'grass', indoor: false })).surface).toBe('草地')
+  })
+})
+
+describe('statistics presentation mapping', () => {
+  it('covers all 22 canonical statistic names with labels, units and groups', () => {
+    const names = [
+      'aces', 'double_faults', 'first_serve_percentage', 'first_serve_points_won',
+      'second_serve_points_won', 'service_points_won', 'service_games_won',
+      'break_points_saved', 'break_points_converted', 'return_points_won',
+      'first_return_points_won', 'second_return_points_won', 'return_games_won',
+      'winners', 'unforced_errors', 'net_points_won', 'total_points_won',
+      'total_games_won', 'match_points_saved', 'average_first_serve_speed',
+      'average_second_serve_speed', 'distance_covered',
+    ]
+    expect(Object.keys(STAT_META)).toHaveLength(22)
+    for (const name of names) {
+      const meta = STAT_META[name]
+      expect(meta, name).toBeDefined()
+      expect(meta.label.length, name).toBeGreaterThan(0)
+      expect(['count', 'percent', 'km/h', 'm'], name).toContain(meta.unit)
+    }
+    expect(STAT_META.aces.label).toBe('ACE 球')
+    expect(STAT_META.double_faults.label).toBe('双误')
+  })
+
+  it('formats values by unit', () => {
+    expect(formatStatValue(8, 'count')).toBe('8')
+    expect(formatStatValue(68, 'percent')).toBe('68%')
+    expect(formatStatValue(181.5, 'km/h')).toBe('181.5 km/h')
+    expect(formatStatValue(2410, 'm')).toBe('2410 m')
+    expect(formatStatValue(null, 'count')).toBe('暂未提供')
+  })
+
+  it('formats snapshot as_of in Macau time and keeps missing values null', () => {
+    const label = formatAsOf('2026-09-08T10:00:00Z')
+    expect(label).toMatch(/9月8日/)
+    expect(label).toMatch(/18:00/)
+    expect(formatAsOf(null)).toBeNull()
+    expect(formatAsOf('not-a-date')).toBeNull()
   })
 })

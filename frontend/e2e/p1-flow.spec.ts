@@ -13,7 +13,7 @@ test.describe('P1 flow', () => {
 
     await card.click()
     await expect(page.getByRole('heading', { name: /Sinner/ }).first()).toBeVisible()
-    await expect(page.getByText('P2 数据暂不可用').first()).toBeVisible()
+    await expect(page.getByText('技术统计暂未提供').first()).toBeVisible()
   })
 
   test('keeps structured cards in the viewport after a long markdown answer', async ({ page }) => {

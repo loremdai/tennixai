@@ -253,12 +253,67 @@ describe('production match page', () => {
     })
   })
 
-  it('always shows P2-unavailable modules for stats and momentum in production', async () => {
+  it('renders live statistics and points from the snapshot in production', async () => {
+    const live = makeMatch()
+    nextMatch = live
+    getMatchSnapshotMock.mockImplementation(async () => ({
+      ...wrapSnapshot(live),
+      statistics: [
+        {
+          match_id: 'mat_1',
+          name: 'aces',
+          period: 'match',
+          player1_value: 8,
+          player2_value: 5,
+          unit: null,
+          provenance: 'provider',
+          availability: 'available',
+          as_of: '2026-09-08T10:00:00Z',
+        },
+      ],
+      points: [
+        {
+          id: 'pe_1',
+          match_id: 'mat_1',
+          sequence: 1,
+          set_number: 1,
+          game_number: 1,
+          point_number: 1,
+          server_player_id: 'ply_1',
+          winner_player_id: 'ply_1',
+          score_before: null,
+          score_after: {
+            sets_won: [0, 0],
+            sets: [],
+            points: ['15', '0'],
+            is_tiebreak: false,
+          },
+          is_break_point: false,
+          is_set_point: false,
+          is_match_point: false,
+          observed_at: '2026-09-08T10:00:00Z',
+          provider: 'fake',
+          source_fingerprint: 'fp-1',
+          revision: 1,
+          quality: null,
+        },
+      ],
+    }))
+
     render(<MatchPage matchId="mat_1" />)
     await screen.findByText('Jannik Sinner')
 
-    const unavailable = await screen.findAllByText('P2 数据暂不可用')
-    expect(unavailable.length).toBeGreaterThanOrEqual(2)
+    expect(screen.getByText('ACE 球')).toBeVisible()
+    expect(screen.getByRole('button', { name: /第 1 盘/ })).toBeVisible()
+    expect(screen.queryByText('P2 数据暂不可用')).toBeNull()
+  })
+
+  it('keeps honest missing copy when the snapshot carries no statistics or points', async () => {
+    render(<MatchPage matchId="mat_1" />)
+    await screen.findByText('Jannik Sinner')
+
+    expect(screen.getByText(/技术统计暂未提供/)).toBeVisible()
+    expect(screen.getByText(/逐分数据暂未提供/)).toBeVisible()
     expect(screen.queryByText('一发成功率')).toBeNull()
     expect(screen.queryByText(/Sinner \+14/)).toBeNull()
   })

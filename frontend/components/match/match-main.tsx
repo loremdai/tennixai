@@ -39,11 +39,14 @@ import {
   type ChartConfig,
 } from '@/components/ui/chart'
 import { Separator } from '@/components/ui/separator'
+import type { MatchSnapshotDto } from '@/lib/api/types'
 import type { MatchViewModel } from '@/lib/view-models'
+import { formatAsOf } from '@/lib/view-models'
 import { cn } from '@/lib/utils'
 
 import { FutureModule } from './future-module'
 import { setLabel, type MatchHighlight, type MatchStatus } from './match-data'
+import { MatchPointsTimeline } from './match-points'
 import {
   getPreviewPlayer,
   previewFinishedScore,
@@ -54,12 +57,14 @@ import {
   previewPromptsByStatus,
   previewRecentPoints,
 } from './match-preview-data'
+import { MatchStatisticsCard } from './match-statistics'
 
 type MainColumnProps = {
   match: MatchViewModel
   preview: boolean
   highlight: MatchHighlight
   onPromptSelect: (prompt: string) => void
+  snapshot?: MatchSnapshotDto | null
 }
 
 const momentumConfig = {
@@ -330,8 +335,9 @@ function ComparisonRow({
   )
 }
 
-function StatsCard({ match, preview, highlight }: Pick<MainColumnProps, 'match' | 'preview' | 'highlight'>) {
+function StatsCard({ match, preview, highlight, snapshot }: Pick<MainColumnProps, 'match' | 'preview' | 'highlight' | 'snapshot'>) {
   const isHighlighted = highlight === 'serve-stats'
+  const liveSnapshot = !preview && match.visualStatus !== 'upcoming' ? snapshot ?? null : null
 
   return (
     <Card
@@ -348,11 +354,26 @@ function StatsCard({ match, preview, highlight }: Pick<MainColumnProps, 'match' 
           {match.visualStatus === 'finished' ? '赛后技术表现对比' : '实时技术表现对比'}
         </p>
         <CardAction>
-          <Badge variant="outline">{preview ? (match.visualStatus === 'finished' ? 'P2 赛后' : 'P2 预览') : 'P2 数据暂不可用'}</Badge>
+          <Badge variant="outline">
+            {preview
+              ? match.visualStatus === 'finished'
+                ? 'P2 赛后'
+                : 'P2 预览'
+              : liveSnapshot
+                ? 'P2 实时'
+                : 'P2 数据暂不可用'}
+          </Badge>
         </CardAction>
       </CardHeader>
       <CardContent>
-        {match.visualStatus === 'upcoming' ? (
+        {liveSnapshot ? (
+          <MatchStatisticsCard
+            statistics={liveSnapshot.statistics}
+            points={liveSnapshot.points}
+            players={liveSnapshot.match.players}
+            asOf={formatAsOf(liveSnapshot.as_of)}
+          />
+        ) : match.visualStatus === 'upcoming' ? (
           <FutureModule
             phase="P2"
             title="技术统计等待实时数据"
@@ -389,8 +410,9 @@ function StatsCard({ match, preview, highlight }: Pick<MainColumnProps, 'match' 
   )
 }
 
-function MomentumCard({ match, preview, highlight }: Pick<MainColumnProps, 'match' | 'preview' | 'highlight'>) {
+function MomentumCard({ match, preview, highlight, snapshot }: Pick<MainColumnProps, 'match' | 'preview' | 'highlight' | 'snapshot'>) {
   const visualStatus = match.visualStatus
+  const liveSnapshot = !preview && visualStatus !== 'upcoming' ? snapshot ?? null : null
 
   return (
     <Card
@@ -418,12 +440,21 @@ function MomentumCard({ match, preview, highlight }: Pick<MainColumnProps, 'matc
               <Badge variant="secondary">赛后</Badge>
             )
           ) : (
-            <Badge variant="outline">P2 数据暂不可用</Badge>
+            <Badge variant="outline">{liveSnapshot ? 'P2 实时' : 'P2 数据暂不可用'}</Badge>
           )}
         </CardAction>
       </CardHeader>
       <CardContent>
-        {match.visualStatus === 'upcoming' ? (
+        {liveSnapshot ? (
+          <div className="flex flex-col gap-5">
+            <MatchPointsTimeline points={liveSnapshot.points} players={liveSnapshot.match.players} />
+            {liveSnapshot.momentum.length === 0 ? (
+              <p className="rounded-md bg-muted/25 px-3 py-2 text-xs text-muted-foreground">
+                近期控制指数暂未提供；校准完成后将在此展示最近 20 分走势，缺失能力保持缺失。
+              </p>
+            ) : null}
+          </div>
+        ) : match.visualStatus === 'upcoming' ? (
           <FutureModule
             phase="P2"
             title="动量时间线将在直播中展开"
@@ -615,13 +646,13 @@ function AIInsightsCard({ match, preview, onPromptSelect }: Pick<MainColumnProps
   )
 }
 
-export function MatchMainColumn({ match, preview, highlight, onPromptSelect }: MainColumnProps) {
+export function MatchMainColumn({ match, preview, highlight, onPromptSelect, snapshot }: MainColumnProps) {
   return (
     <div className="flex min-w-0 flex-col gap-4">
       <OverviewCard match={match} preview={preview} />
       <ScoreProgressCard match={match} preview={preview} highlight={highlight} />
-      <StatsCard match={match} preview={preview} highlight={highlight} />
-      <MomentumCard match={match} preview={preview} highlight={highlight} />
+      <StatsCard match={match} preview={preview} highlight={highlight} snapshot={snapshot} />
+      <MomentumCard match={match} preview={preview} highlight={highlight} snapshot={snapshot} />
       <AIInsightsCard match={match} preview={preview} onPromptSelect={onPromptSelect} />
     </div>
   )

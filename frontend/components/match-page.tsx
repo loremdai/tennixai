@@ -239,6 +239,7 @@ export function MatchPage({ matchId, previewMatch, preview = false }: MatchPageP
                   preview={false}
                   highlight={highlight}
                   onPromptSelect={handlePromptSelect}
+                  snapshot={stream.snapshot}
                 />
               </div>
             </div>

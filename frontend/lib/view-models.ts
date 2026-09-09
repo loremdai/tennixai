@@ -185,3 +185,62 @@ export function toMatchViewModel(match: MatchDto): MatchViewModel {
     isStale: match.freshness.is_stale,
   }
 }
+
+export type StatGroup = '发球' | '接发' | '关键分' | '制胜与失误' | '体能' | '总计'
+
+export type StatMeta = { label: string; unit: 'count' | 'percent' | 'km/h' | 'm'; group: StatGroup }
+
+export const STAT_GROUP_ORDER: StatGroup[] = ['发球', '接发', '关键分', '制胜与失误', '体能', '总计']
+
+export const STAT_META: Record<string, StatMeta> = {
+  aces: { label: 'ACE 球', unit: 'count', group: '发球' },
+  double_faults: { label: '双误', unit: 'count', group: '发球' },
+  first_serve_percentage: { label: '一发成功率', unit: 'percent', group: '发球' },
+  first_serve_points_won: { label: '一发得分率', unit: 'percent', group: '发球' },
+  second_serve_points_won: { label: '二发得分率', unit: 'percent', group: '发球' },
+  service_points_won: { label: '发球得分率', unit: 'percent', group: '发球' },
+  service_games_won: { label: '发球局胜率', unit: 'percent', group: '发球' },
+  return_points_won: { label: '接发得分率', unit: 'percent', group: '接发' },
+  first_return_points_won: { label: '一发接发得分率', unit: 'percent', group: '接发' },
+  second_return_points_won: { label: '二发接发得分率', unit: 'percent', group: '接发' },
+  return_games_won: { label: '接发局胜率', unit: 'percent', group: '接发' },
+  break_points_saved: { label: '破发点挽救率', unit: 'percent', group: '关键分' },
+  break_points_converted: { label: '破发点转化率', unit: 'percent', group: '关键分' },
+  match_points_saved: { label: '赛点挽救', unit: 'count', group: '关键分' },
+  winners: { label: '制胜分', unit: 'count', group: '制胜与失误' },
+  unforced_errors: { label: '非受迫性失误', unit: 'count', group: '制胜与失误' },
+  net_points_won: { label: '上网得分率', unit: 'percent', group: '制胜与失误' },
+  average_first_serve_speed: { label: '一发平均速度', unit: 'km/h', group: '体能' },
+  average_second_serve_speed: { label: '二发平均速度', unit: 'km/h', group: '体能' },
+  distance_covered: { label: '跑动距离', unit: 'm', group: '体能' },
+  total_points_won: { label: '总得分', unit: 'count', group: '总计' },
+  total_games_won: { label: '总赢局', unit: 'count', group: '总计' },
+}
+
+export function formatStatValue(value: number | null, unit: string): string {
+  if (value === null) return '暂未提供'
+  if (unit === 'percent') return `${trimNumber(value)}%`
+  if (unit === 'count') return trimNumber(value)
+  return `${trimNumber(value)} ${unit}`
+}
+
+function trimNumber(value: number): string {
+  return Number.isInteger(value) ? String(value) : String(Math.round(value * 10) / 10)
+}
+
+const asOfFormatter = new Intl.DateTimeFormat('zh-CN', {
+  timeZone: 'Asia/Macau',
+  month: 'long',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+})
+
+/** Formats a snapshot `as_of` timestamp for display; null stays null (missing, not guessed). */
+export function formatAsOf(iso: string | null): string | null {
+  if (!iso) return null
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return null
+  return asOfFormatter.format(date)
+}
