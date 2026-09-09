@@ -12,8 +12,19 @@ from enum import StrEnum
 from typing import cast
 from zoneinfo import ZoneInfo
 
+from pydantic import BaseModel, ConfigDict
+
 from app.cache import AsyncTTLCache, CacheOutcome
-from app.domain import Match, MatchStatus, Player
+from app.domain import (
+    CapabilityStatus,
+    CircuitTier,
+    Discipline,
+    Gender,
+    HeadToHead,
+    Match,
+    MatchStatus,
+    Player,
+)
 from app.errors import AppError
 from app.providers.base import TennisDataProvider
 
@@ -22,6 +33,89 @@ class MatchTimeScope(StrEnum):
     TODAY = "today"
     TONIGHT = "tonight"
     NEXT = "next"
+
+
+CIRCUIT_PRIORITY = {
+    CircuitTier.ATP: 0,
+    CircuitTier.WTA: 0,
+    CircuitTier.CHALLENGER: 1,
+    CircuitTier.ITF: 2,
+    CircuitTier.OTHER: 3,
+}
+
+
+class MatchFilters(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    circuits: tuple[CircuitTier, ...] = (CircuitTier.ATP, CircuitTier.WTA)
+    genders: tuple[Gender, ...] = ()  # empty = all genders
+    disciplines: tuple[Discipline, ...] = (Discipline.SINGLES,)
+
+    @classmethod
+    def default(cls) -> "MatchFilters":
+        return cls()
+
+
+class FacetCounts(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    circuits: dict[CircuitTier, int]
+    genders: dict[Gender, int]
+    disciplines: dict[Discipline, int]
+
+
+class MatchCatalog(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    status: str
+    matches: tuple[Match, ...]
+    filters: MatchFilters
+    facet_counts: FacetCounts
+    featured_match_id: str | None
+
+
+class PlayerResultsScope(StrEnum):
+    YESTERDAY = "yesterday"
+    RECENT = "recent"
+
+
+class PlayerResults(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    player_id: str
+    scope: PlayerResultsScope
+    availability: CapabilityStatus
+    matches: tuple[Match, ...]
+
+
+class HeadToHeadResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    first_player_id: str
+    second_player_id: str
+    availability: CapabilityStatus
+    head_to_head: HeadToHead | None
+
+
+HISTORY_FETCH_LIMIT = 10
+HISTORY_FRESH_TTL = 600
+HISTORY_EMPTY_TTL = 60
+
+
+class _UnsupportedCapability:
+    """Sentinel: provider answered typed `unsupported` (negative-cached)."""
+
+
+_UNSUPPORTED = _UnsupportedCapability()
+
+
+def catalog_sort_key(match: Match) -> tuple[int, int, datetime, str]:
+    return (
+        CIRCUIT_PRIORITY[match.tournament.circuit],
+        0 if match.status is MatchStatus.LIVE else 1,
+        match.scheduled_at or datetime.max.replace(tzinfo=timezone.utc),
+        match.id,
+    )
 
 
 def _is_composite_player_name(name: str) -> bool:
@@ -212,3 +306,226 @@ class TennisService:
                 "age_seconds": outcome.age_seconds,
             }),
         })
+
+    # ------------------------------------------------------------- P2 catalog
+
+    async def list_catalog(
+        self, status: str, filters: MatchFilters | None = None
+    ) -> MatchCatalog:
+        if status not in {"live", "upcoming"}:
+            raise AppError("invalid_request", "Status must be live or upcoming", 422)
+        active = filters if filters is not None else MatchFilters.default()
+        source = await self._list_by_player_id(status, None)
+
+        def passes(
+            match: Match,
+            *,
+            skip_circuits: bool = False,
+            skip_genders: bool = False,
+            skip_disciplines: bool = False,
+        ) -> bool:
+            tournament = match.tournament
+            if (
+                not skip_circuits
+                and active.circuits
+                and tournament.circuit not in active.circuits
+            ):
+                return False
+            if (
+                not skip_genders
+                and active.genders
+                and tournament.gender not in active.genders
+            ):
+                return False
+            if (
+                not skip_disciplines
+                and active.disciplines
+                and tournament.discipline not in active.disciplines
+            ):
+                return False
+            return True
+
+        selected = sorted(
+            (match for match in source if passes(match)), key=catalog_sort_key
+        )
+        facet_counts = FacetCounts(
+            circuits={
+                tier: sum(
+                    1
+                    for match in source
+                    if passes(match, skip_circuits=True)
+                    and match.tournament.circuit is tier
+                )
+                for tier in CircuitTier
+            },
+            genders={
+                gender: sum(
+                    1
+                    for match in source
+                    if passes(match, skip_genders=True)
+                    and match.tournament.gender is gender
+                )
+                for gender in Gender
+            },
+            disciplines={
+                discipline: sum(
+                    1
+                    for match in source
+                    if passes(match, skip_disciplines=True)
+                    and match.tournament.discipline is discipline
+                )
+                for discipline in Discipline
+            },
+        )
+        return MatchCatalog(
+            status=status,
+            matches=tuple(selected),
+            filters=active,
+            facet_counts=facet_counts,
+            featured_match_id=selected[0].id if selected else None,
+        )
+
+    # ------------------------------------------------------- P2 history/H2H
+
+    async def _fetch_recent_history(self, player_id: str) -> object:
+        async def load() -> object:
+            try:
+                return await self._provider.get_recent_results(
+                    player_id, limit=HISTORY_FETCH_LIMIT
+                )
+            except AppError as error:
+                if error.code == "unsupported":
+                    return _UNSUPPORTED
+                if error.code == "not_found":
+                    return None
+                raise
+
+        def ttl(value: object) -> int:
+            if value is _UNSUPPORTED or value is None:
+                return HISTORY_EMPTY_TTL
+            return HISTORY_EMPTY_TTL if not cast(list[Match], value) else HISTORY_FRESH_TTL
+
+        outcome = await self._cache.get_or_load(
+            f"history:{player_id}", load, ttl=ttl, stale_ttl=0
+        )
+        return outcome.value
+
+    async def get_player_results(
+        self, player_id: str, scope: str, limit: int
+    ) -> PlayerResults:
+        try:
+            results_scope = PlayerResultsScope(scope)
+        except ValueError:
+            raise AppError(
+                "invalid_request", "Scope must be yesterday or recent", 422
+            ) from None
+        if not 1 <= limit <= 10:
+            raise AppError("invalid_request", "Limit must be between 1 and 10", 422)
+
+        fetched = await self._fetch_recent_history(player_id)
+        if fetched is None:
+            raise AppError("not_found", "Player not found", 404)
+        if isinstance(fetched, _UnsupportedCapability):
+            return PlayerResults(
+                player_id=player_id,
+                scope=results_scope,
+                availability=CapabilityStatus.UNAVAILABLE,
+                matches=(),
+            )
+
+        matches = sorted(
+            cast(list[Match], fetched),
+            key=lambda match: match.scheduled_at
+            or datetime.min.replace(tzinfo=timezone.utc),
+            reverse=True,
+        )
+        if results_scope is PlayerResultsScope.YESTERDAY:
+            yesterday = (
+                self._now().astimezone(self._timezone) - timedelta(days=1)
+            ).date()
+            matches = [
+                match
+                for match in matches
+                if match.scheduled_at is not None
+                and match.scheduled_at.astimezone(self._timezone).date() == yesterday
+            ]
+            availability = CapabilityStatus.AVAILABLE
+        else:
+            availability = (
+                CapabilityStatus.PARTIAL
+                if len(matches) >= HISTORY_FETCH_LIMIT
+                else CapabilityStatus.AVAILABLE
+            )
+        return PlayerResults(
+            player_id=player_id,
+            scope=results_scope,
+            availability=availability,
+            matches=tuple(matches[:limit]),
+        )
+
+    async def _fetch_head_to_head(self, first_player_id: str, second_player_id: str) -> object:
+        async def load() -> object:
+            try:
+                return await self._provider.get_head_to_head(
+                    first_player_id, second_player_id, limit=HISTORY_FETCH_LIMIT
+                )
+            except AppError as error:
+                if error.code == "unsupported":
+                    return _UNSUPPORTED
+                if error.code == "not_found":
+                    return None
+                raise
+
+        def ttl(value: object) -> int:
+            if isinstance(value, _UnsupportedCapability) or value is None:
+                return HISTORY_EMPTY_TTL
+            head_to_head = cast(HeadToHead, value)
+            empty = not (
+                head_to_head.meetings
+                or head_to_head.first_player_recent
+                or head_to_head.second_player_recent
+            )
+            return HISTORY_EMPTY_TTL if empty else HISTORY_FRESH_TTL
+
+        outcome = await self._cache.get_or_load(
+            f"h2h:{first_player_id}:{second_player_id}", load, ttl=ttl, stale_ttl=0
+        )
+        return outcome.value
+
+    async def get_head_to_head(
+        self, first_player_id: str, second_player_id: str, limit: int
+    ) -> HeadToHeadResult:
+        if not 1 <= limit <= 10:
+            raise AppError("invalid_request", "Limit must be between 1 and 10", 422)
+
+        fetched = await self._fetch_head_to_head(first_player_id, second_player_id)
+        if fetched is None:
+            raise AppError("not_found", "Player not found", 404)
+        if isinstance(fetched, _UnsupportedCapability):
+            return HeadToHeadResult(
+                first_player_id=first_player_id,
+                second_player_id=second_player_id,
+                availability=CapabilityStatus.UNAVAILABLE,
+                head_to_head=None,
+            )
+
+        head_to_head = cast(HeadToHead, fetched)
+        availability = (
+            CapabilityStatus.PARTIAL
+            if len(head_to_head.meetings) >= HISTORY_FETCH_LIMIT
+            else CapabilityStatus.AVAILABLE
+        )
+        bounded = HeadToHead(
+            first_player_id=head_to_head.first_player_id,
+            second_player_id=head_to_head.second_player_id,
+            meetings=head_to_head.meetings[:limit],
+            first_player_recent=head_to_head.first_player_recent[:limit],
+            second_player_recent=head_to_head.second_player_recent[:limit],
+            freshness=head_to_head.freshness,
+        )
+        return HeadToHeadResult(
+            first_player_id=first_player_id,
+            second_player_id=second_player_id,
+            availability=availability,
+            head_to_head=bounded,
+        )

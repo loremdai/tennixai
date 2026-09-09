@@ -99,6 +99,9 @@ class FakeTennisProvider:
             id=await identities.get_or_create("tournament", "fake", "fake-atp-finals"),
             name="ATP Finals",
             tour="atp",
+            circuit="atp",
+            gender="men",
+            discipline="singles",
         )
 
         self.sinner_alcaraz = Match(

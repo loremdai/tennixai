@@ -3,6 +3,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from app.domain import Match, Player
+from app.service import HeadToHeadResult, MatchCatalog, PlayerResults
 
 
 class PlayerListResponse(BaseModel):
@@ -15,6 +16,18 @@ class MatchListResponse(BaseModel):
 
 class MatchResponse(BaseModel):
     data: Match
+
+
+class MatchCatalogResponse(BaseModel):
+    data: MatchCatalog
+
+
+class PlayerResultsResponse(BaseModel):
+    data: PlayerResults
+
+
+class HeadToHeadResultResponse(BaseModel):
+    data: HeadToHeadResult
 
 
 class ErrorBody(BaseModel):
