@@ -236,6 +236,32 @@ describe('HomePage chat', () => {
     expect(answer.textContent).not.toContain('**')
   })
 
+  it('keeps structured match cards in view after the markdown answer completes', async () => {
+    mockStream({
+      data: { kind: 'matches', matches: [upcomingDto] },
+      text: [
+        '当前查到 **Qinwen Zheng**。',
+        '',
+        '- **对手**：Elena Rybakina',
+        '- **赛事**：US Open',
+        '- **轮次**：Quarter-finals',
+        '- **场地**：硬地',
+        '- **赛制**：BO3',
+      ].join('\n'),
+    })
+    render(<HomePage />)
+    await screen.findByText('Jannik Sinner')
+
+    await askQuestion('Qinwen Zheng 下一场比赛是什么时候？')
+
+    await screen.findByRole('link', { name: /打开比赛：Sinner 对阵 Alcaraz/ })
+    await waitFor(() => {
+      expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith(
+        expect.objectContaining({ behavior: 'smooth', block: 'start' }),
+      )
+    })
+  })
+
   it('triggers the initial question exactly once', async () => {
     render(<HomePage initialQuestion="Sinner 今晚几点比赛？" />)
 

@@ -1,6 +1,6 @@
 'use client'
 
-import type { FormEvent, KeyboardEvent } from 'react'
+import { useEffect, useRef, type FormEvent, type KeyboardEvent } from 'react'
 import Link from 'next/link'
 import {
   ArrowRight,
@@ -218,6 +218,23 @@ export function HomeAssistant({
   const summary =
     chat.text ||
     errorSummary(chat.error)
+  const structuredResultsRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if ((chat.phase !== 'success' && chat.phase !== 'error') || cards.length === 0) return
+
+    const results = structuredResultsRef.current
+    if (!results) return
+
+    const rect = results.getBoundingClientRect()
+    if (rect.height > 0 && rect.top >= 0 && rect.bottom <= window.innerHeight) return
+
+    const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+    results.scrollIntoView({
+      behavior: prefersReducedMotion ? 'auto' : 'smooth',
+      block: 'start',
+    })
+  }, [chat.phase, cards.length])
 
   return (
     <Card id="assistant" data-tone="assistant" className="scroll-mt-24">
@@ -265,7 +282,11 @@ export function HomeAssistant({
               </article>
 
               {cards.length > 0 ? (
-                <div className="flex flex-col gap-3" aria-label="结构化比赛结果">
+                <div
+                  ref={structuredResultsRef}
+                  className="scroll-mt-24 flex flex-col gap-3"
+                  aria-label="结构化比赛结果"
+                >
                   {cards.map((match) => (
                     <MatchResultCard key={match.id} match={match} onFollowUp={followUp} />
                   ))}
