@@ -3,21 +3,21 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-09 19:37 CST
+**最后更新：** 2026-09-09 19:51 CST
 
-**当前任务：** T24 — Add Match Catalog Filters, History, H2H, and P2 REST APIs
+**当前任务：** 无（T24 已完成；T25 已 ready，尚未领取）
 
-**任务状态：** `in_progress`
+**任务状态：** `idle`
 
-**当前执行者 / ADE：** Claude Code / Claude Code
+**当前执行者 / ADE：** —
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**最近完成任务提交：** `015ff7f`
+**最近完成任务提交：** `dddb734`
 
-**最后验证的产品提交：** `015ff7f`
+**最后验证的产品提交：** `dddb734`
 
-**T24 起始提交：** `85dd65d`
+**T25 起始提交：** 待领取时填写
 
 **远程：** `origin` → `https://github.com/loremdai/tennixai.git`
 
@@ -44,36 +44,32 @@
 - 本地基础设施：colima 已于 18:12 启动；`tennix-postgres`/`tennix-redis` 容器 healthy（pg_isready 通过、redis PONG）。integration 测试在 PostgreSQL 不可达或 schema 未迁移时如实 skip。
 - T23 已于 2026-09-09 完成并推送：`ApiTennisProvider` REST adapter（live/fixtures/search/player/match/snapshot/recent/H2H）、permissive vendor DTO、event 分类映射、provider mode `fake|live|livetennis|api_tennis`（api_tennis 用 `PostgresIdentityRepository`）、5 个脱敏 fixtures、40 项契约测试与真实 REST smoke；实现提交为 `015ff7f`。
 - T23 已确认的事实：`get_players` 无名称搜索，`search_players` 在 livescore + 3 天 fixtures 窗口做有界扫描；upcoming 窗口 7 天且只保留 SCHEDULED；recent 30 天 + FINISHED + limit≤10；scheduled 且无真实比分不构造 live_state；PBP winner 由比分推进推导、不可判定→PARTIAL；`Last 10 balls` 与未知 stat 丢弃；错误翻译零 key/URL 泄漏；真实 smoke（Trial key）通过：get_events 认证、72 场 live canonical 映射、snapshot 版本一致。
-- 下一任务是 T24（Match Catalog Filters、History/H2H 与 P2 REST APIs），必须按启动入口另行领取。
+- T24 已于 2026-09-09 完成并推送：catalog 筛选/排序/facet counts、昨天（Asia/Macau）/近期/H2H 服务方法（10min/60s TTL、PARTIAL/UNAVAILABLE 语义）、新 REST 路由 `GET /api/v1/matches/catalog`、`GET /api/v1/players/{id}/results`、`GET /api/v1/head-to-head`；P1 `/matches` 与 Chat 历史 guard 未动；实现提交为 `dddb734`。
+- T24 已确认的事实：默认 facet=ATP+WTA/全部性别/单打，空组=全部；排序 tier→live→开赛时间→id；facet counts 尊重另外两组且保留 0 值；Featured=排序后首项；recent fetch 满 10 条→PARTIAL；unsupported→UNAVAILABLE 且 matches 为空；全套确定性 backend 241 passed/7 deselected。
+- 下一任务是 T25（前端 Home 叠加筛选与优先级展示），必须按启动入口另行领取；前端消费 `/api/v1/matches/catalog`。
 - 已知非 T17 限制：LiveTennisAPI 的 `/players?search` 当前不能把中文显示名“郑钦文”直接映射到 `Qinwen Zheng`；canonical English name 查询已通过，中文别名/名称归一化需另立任务批准。
 - 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`（任务外）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`（next dev 自动生成）、`frontend/next-env.d.ts`（Next 工具链生成）；保留原样。
 
 ## 当前任务
 
-### T24 — Add Match Catalog Filters, History, H2H, and P2 REST APIs
-
-- **状态：** `in_progress`
-- **执行者 / ADE：** Claude Code / Claude Code
-- **分支：** `main`
-- **起始提交：** `85dd65d`
-- **领取时间：** 2026-09-09 19:37 CST
-- **范围：** 按 [P2 实施计划 T24](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t24-add-match-catalog-filters-history-h2h-and-p2-rest-apis)：`MatchFilters.default()`（ATP+WTA/全部性别/单打）、`catalog_sort_key`（tier→live→时间→id）、`MatchCatalog`/`FacetCounts`、昨天/近期结果与 H2H 服务方法（limit 1..10、10min/60s TTL）、新 REST 路由（`/players/{id}/results`、`/head-to-head`）与 P1 回归门。
-- **阻塞：** 无。
+无。T24 已完成；T25（Add Stackable Home Facets and Priority Presentation）已 ready，接手前须按启动入口另行领取。
 
 ## 最近完成任务
 
-### T23 — Implement the API-Tennis REST Adapter
+### T24 — Add Match Catalog Filters, History, H2H, and P2 REST APIs
 
 - **状态：** `done`
 - **执行者 / ADE：** Claude Code / Claude Code
 - **分支：** `main`
-- **起始提交：** `103ecff`（领取记录 `f55e49b`）
-- **领取时间：** 2026-09-09 19:04 CST
-- **完成提交：** `015ff7f`
-- **范围：** 按 [P2 实施计划 T23](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t23-implement-the-api-tennis-rest-adapter)：vendor DTO、event 分类、`ApiTennisProvider` REST adapter、provider mode 接线与脱敏 fixtures、确定性契约测试和 opt-in 真实 smoke。
-- **完成事实：** TDD 先行：40 项 fixture 契约测试先失败（模块不存在）后实现。fixtures 由真实 Trial 探测数据脱敏裁剪生成（无 key、无 URL）；`get_players` 无名称搜索能力，`search_players` 在 livescore + 3 天 fixtures 窗口内做有界名称扫描；`get_fixtures` 使用 7 天窗口并只保留 SCHEDULED；recent results 使用 30 天窗口 + terminal 过滤 + limit≤10；H2H limit≤10；scheduled 且无真实比分的比赛不构造 live_state（0-0 预置行不算比分）；PBP winner 由分内比分推进推导，不可判定时 `winner_player_id=None` + PARTIAL quality；统计按 22 项目录映射并合并双方球员，`Last 10 balls`/未知项丢弃；错误翻译不含 key/URL。`provider_mode` 扩展为 `fake|live|livetennis|api_tennis`；api_tennis 模式在 `create_app` 使用 `PostgresIdentityRepository`（lifespan 释放 Database），凭据经根目录 `.env` 的 `TENNIX_API_TENNIS_API_KEY`。
-- **验证门：** `uv run pytest tests/test_api_tennis_provider.py tests/test_provider_contract.py` 53 passed；全套确定性 `-m "not llm_live and not provider_live and not end_to_end_live and not api_tennis_live and not realtime_live"` 214 passed/7 deselected；真实 opt-in smoke `TENNIX_RUN_API_TENNIS_LIVE=1 uv run pytest -m api_tennis_live tests/live/test_api_tennis_live.py` 1 passed（get_events 认证、live 列表 canonical 形状、snapshot 版本一致、零 vendor/key 泄漏）；`git diff --check` 通过。
+- **起始提交：** `85dd65d`（领取记录 `5dd7af1`）
+- **领取时间：** 2026-09-09 19:37 CST
+- **完成提交：** `dddb734`
+- **范围：** 按 [P2 实施计划 T24](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t24-add-match-catalog-filters-history-h2h-and-p2-rest-apis)：`MatchFilters`/`FacetCounts`/`MatchCatalog`/`PlayerResults`/`HeadToHeadResult`、确定性排序、昨天/近期/H2H 服务方法与三个新 REST 路由，并保持 P1 回归。
+- **完成事实：** TDD 先行：`test_p2_service.py`（17 项）与 `test_p2_api.py`（10 项）先失败（MatchFilters 不存在）后实现。默认 facet=ATP+WTA/全部性别/单打，空组=全部；排序 tier→live→scheduled_at→id（与计划代码一致）；facet counts 按“尊重另外两组、保留 0 值”计算；昨天=Asia/Macau 日历；recent 满 fetch 上限（10）→PARTIAL，否则 AVAILABLE；provider typed unsupported→UNAVAILABLE（非零值、非空猜测）；历史/H2H 成功缓存 600s、空/unsupported 60s（provider 调用计数证明）；`GET /matches/catalog` 注册在 `/matches/{match_id}` 之前；limit/scope/status/enum 非法输入全部 422；P1 `/matches` 形状、Chat 历史 guard、`chat/tools.py`、`main.py` 均未改动（guard 留待 T31）。共享多 facet 测试数据集移入 `tests/p2_fakes.py`；Fake 的 ATP Finals 补上诚实 facet（atp/men/singles）。
+- **验证门：** `uv run pytest tests/test_p2_service.py tests/test_p2_api.py tests/test_service.py tests/test_api.py tests/test_p1_acceptance.py` 74 passed；全套确定性 241 passed/7 deselected；`git diff --check` 通过。
 - **阻塞：** 无。
+
+（T23 详情见 ROADMAP 登记表与提交 `015ff7f`。）
 
 （T22 详情见 ROADMAP 登记表与提交 `20dac5f`。）
 
@@ -81,6 +77,7 @@
 
 | 日期 | 提交 | 验证 | 结果 |
 |---|---|---|---|
+| 2026-09-09 | `dddb734` | TDD：p2_service 17 项 + p2_api 10 项先失败后通过；service/API/P1 acceptance 门 74 passed；全套确定性 241 passed/7 deselected；`git diff --check` 通过 | T24 完成；catalog/history/H2H 服务与 REST 就绪，T25 ready |
 | 2026-09-09 | `015ff7f` | TDD：40 项契约测试先失败后通过；adapter+contract 53 passed；全套确定性 214 passed/7 deselected；真实 opt-in REST smoke 1 passed（认证、live canonical、snapshot、零泄漏）；`git diff --check` 通过 | T23 完成；API-Tennis REST adapter 就绪，T24 ready |
 | 2026-09-09 | `20dac5f` | TDD：persistence 单元 17 项 + integration 7 项先失败后通过；compose postgres/redis healthy；alembic upgrade→downgrade base→upgrade exit 0；全套确定性 174 passed/6 deselected；redis PONG、pg_isready；敏感模式/whitespace 扫描无命中 | T22 完成；P2 持久化地基就绪，T23 ready |
 | 2026-09-09 | `5b479fc` | TDD：test_p2_domain 13 项与 async identity 先失败后通过；领域/兼容门 55 passed；全套确定性 150 passed/6 deselected（P1 验收矩阵 10/10）；`git diff --check` 通过 | T21 完成；P2 canonical domain 与 provider contracts 就绪，T22 ready |
@@ -95,9 +92,9 @@
 
 ## 最近交接
 
-**状态：** T23 已由 Claude Code 于 2026-09-09 在 `main` 完成，实现提交 `015ff7f`；当前无领取中的任务，T24 保持 ready。
+**状态：** T24 已由 Claude Code 于 2026-09-09 在 `main` 完成，实现提交 `dddb734`；当前无领取中的任务，T25 保持 ready。
 
-**交接说明：** 接手 T24 前完整阅读 [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) 和 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t24-add-match-catalog-filters-history-h2h-and-p2-rest-apis)。所有 ADE 只使用根目录 `.env`；API-Tennis 凭据变量为 `TENNIX_API_TENNIS_API_KEY`，不得写入代码、文档、fixture、日志、提交或聊天输出。T23 起 `ApiTennisProvider` 已可用（mode `api_tennis`，`create_app` 中走 `PostgresIdentityRepository`）；`Tournament` facet 由 `classify_event_type` 填充；Home/Chat 仍由 P1 service 路径驱动，T24 负责 catalog 过滤、history/H2H 服务与新 REST 路由。用户已追加要求：P2 收尾时用真实浏览器按业务流程逐项人工验收直到无 bug。
+**交接说明：** 接手 T25 前完整阅读 [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) 和 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t25-add-stackable-home-facets-and-priority-presentation)。所有 ADE 只使用根目录 `.env`；API-Tennis 凭据变量为 `TENNIX_API_TENNIS_API_KEY`，不得写入代码、文档、fixture、日志、提交或聊天输出。T24 起后端 catalog 契约为 `GET /api/v1/matches/catalog?status=live|upcoming&circuit=&gender=&discipline=`（多值重复参数；未传 facet 参数=默认 ATP+WTA/全部性别/单打），响应 `data:{status,matches,filters,facet_counts,featured_match_id}`；history 契约为 `/players/{id}/results` 与 `/head-to-head`。共享后端测试 fake 在 `tests/p2_fakes.py`。用户已追加要求：P2 收尾时用真实浏览器按业务流程逐项人工验收直到无 bug。
 
 **已知本地状态：** 未跟踪的 `.codex/skills/ui-ux-pro-max/SKILL.md`、`frontend/AGENTS.md`、`frontend/CLAUDE.md`（next dev 生成）、`frontend/next-env.d.ts`（Next 工具链生成），保留原样。
 
@@ -107,11 +104,11 @@
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-09 | T24 完成：catalog 筛选/排序/facet counts、history/H2H 服务与 REST 路由 | `dddb734` |
 | 2026-09-09 | 领取 T24：catalog 筛选、history/H2H 服务与 P2 REST APIs | `85dd65d` 起始 |
 | 2026-09-09 | T23 完成：API-Tennis REST adapter、分类映射与 provider mode 接线 | `015ff7f` |
 | 2026-09-09 | 领取 T23：实现 API-Tennis REST adapter | `103ecff` 起始 |
 | 2026-09-09 | T22 完成：compose、Alembic、P2 schema 与 durable identity repositories | `20dac5f` |
-| 2026-09-09 | 领取 T22：PostgreSQL、Redis、migrations 与 durable identity | `181f04e` 起始 |
 
 ## 接手与更新规则
 
