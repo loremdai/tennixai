@@ -3,19 +3,23 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-10 01:30 CST
+**最后更新：** 2026-09-10 07:43 CST
 
-**当前任务：** 空闲（P2 已完成；下一阶段需显式批准）
+**当前任务：** P2 post-close UX patch — 隐藏无数据的“未知”筛选项
 
-**任务状态：** `idle`
+**任务状态：** `in_progress`
 
-**当前执行者 / ADE：** —
+**当前执行者 / ADE：** Codex / Codex
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**最近完成任务提交：** `ac9c6e5`
+**最近完成任务提交：** `5c504b7`
 
-**最后验证的产品提交：** `ac9c6e5`
+**最后验证的产品提交：** `5c504b7`
+
+**本次任务起始提交：** `5c504b7`
+
+**本次任务领取时间：** 2026-09-10 07:43 CST
 
 **T30 完成提交：** `8c9e161`
 
@@ -64,7 +68,7 @@
 - T29 已确认的事实：preview 原型与卡片顺序零变化；fake 模式统计/逐分为空时显示诚实缺失文案；`p1-match-live` 生产视觉基线经审阅有意重生成（desktop+mobile）；另以 `6c1b448` 修复 T27 提交遗漏的 `api_tennis.py`/`realtime/models.py`（HEAD 曾无法 import live feed）。
 - T31 已于 2026-09-10 完成并推送：compact intelligence packet、三项 P2 Chat 工具、有限历史/H2H 能力路由和不可变 `answer_context`；实现提交为 `128518f`。
 - T31 验证事实：focused backend 56 passed；全确定性 backend 322 passed/11 deselected；frontend 127 passed、typecheck/build；完整 Playwright 40 passed/4 skipped；真实 LLM opt-in 运行结果为 7 failed，根因是 endpoint 对配置模型返回 403 `AccessDenied.Unpurchased`，不能作为通过证据。
-- T32 已完成并推送产品提交 `ac9c6e5`；P2 已关闭，当前无进行中的任务，下一阶段必须经项目所有者显式批准后再领取。
+- T32 已完成并推送产品提交 `ac9c6e5`；P2 已关闭。本次用户明确提出的 UX 修复只处理空 facet 的可见性，不改变 canonical `unknown` 数据语义。
 - 已知非 T17 限制：LiveTennisAPI 的 `/players?search` 当前不能把中文显示名“郑钦文”直接映射到 `Qinwen Zheng`；canonical English name 查询已通过，中文别名/名称归一化需另立任务批准。
 - 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`（任务外）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`（next dev 自动生成）、`frontend/next-env.d.ts`（Next 工具链生成）；保留原样。
 
@@ -229,7 +233,7 @@
 
 ## 最近交接
 
-**状态：** T32 已由 Codex 于 2026-09-10 在 `main` 完成，实现提交 `ac9c6e5`；P2 已关闭，当前空闲，下一阶段需项目所有者显式批准。
+**状态：** T32 已由 Codex 于 2026-09-10 在 `main` 完成，实现提交 `ac9c6e5`；当前由 Codex 在同一 `main` 领取用户明确提出的最小 UX 修复。
 
 **交接说明：** T30 接管时原执行者因额度耗尽中断，项目所有者明确批准 Codex 接管；T30、T31、T32 已在 `main` 串行完成并推送。T32 通过 deterministic Replay、PostgreSQL/Redis 恢复、纠错/断线/终态、双视口 Playwright、真实 API-Tennis REST/WS smoke 和真实浏览器业务流程验收；真实 LLM endpoint 返回 403 `AccessDenied.Unpurchased`，未计作通过，待 entitlement 后按 [docs/runbooks/p2-local.md](./docs/runbooks/p2-local.md) 重跑。所有 ADE 只使用根目录 `.env`；API-Tennis 凭据不得写入代码、文档、fixture、日志、提交或聊天输出。
 
@@ -239,12 +243,13 @@
 
 **已知本地状态：** 未跟踪的 `.codex/skills/ui-ux-pro-max/SKILL.md`、`frontend/AGENTS.md`、`frontend/CLAUDE.md`（next dev 生成）、`frontend/next-env.d.ts`（Next 工具链生成），保留原样。
 
-**阻塞：** 无；下一阶段未领取。
+**阻塞：** 无。
 
 ## 近期变更（最多 5 条）
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-10 | 领取 P2 post-close UX patch：隐藏无数据的“未知”筛选项 | `5c504b7` 起始 |
 | 2026-09-10 | T32 完成：Replay、恢复门、双视口验收、本地 runbook 与 Final P2 Gate | `ac9c6e5` |
 | 2026-09-10 | T31 完成：P2 Intelligence tools 与版本化 Chat | `128518f` |
 | 2026-09-10 | 领取 T31：P2 Intelligence tools 与版本化 Chat | `8c9e161` 起始 |
