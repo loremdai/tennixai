@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-10 01:30 CST
+**最后更新：** 2026-09-10 10:42 CST
 
-**总体状态：** `done`（P1、P2 均已完成）
+**总体状态：** `in_progress`（P1、P2 产品交付完成；P2 post-close real-data hardening 进行中）
 
 **当前里程碑：** P2 — Live Match Intelligence（`done`）
 
-**当前阶段：** P2.5 — Acceptance and hardening（`done`）
+**当前阶段：** P2.5 — Acceptance and hardening（`in_progress`）
 
 ## 状态说明
 
@@ -56,7 +56,7 @@
 | P2.2 — Unified data and discovery | `done` | API-Tennis REST、历史/H2H、赛事分类和 Home 叠加筛选 | T23–T25 完成（`015ff7f`、`dddb734`、`e904485`）；P2.3 可开始 |
 | P2.3 — Realtime pipeline | `done` | Reducer、WebSocket worker、租约、持久化、snapshot + SSE | T26–T28 完成（`98a1a22`、`d354aba`、`f03985b`）；T29/T30 已在 P2.4 完成 |
 | P2.4 — Match intelligence | `done` | 完整 PBP、22 项统计、近期控制指数、版本化上下文 Chat | T29（`ecd916b`）、T30（`8c9e161`）、T31（`128518f`）完成；P2.5 可开始 |
-| P2.5 — Acceptance and hardening | `done` | Replay、恢复门、真实 smoke、双视口视觉和本地 runbook | T32 实现提交 `ac9c6e5`；三份总控文件随闭环提交更新并推送 |
+| P2.5 — Acceptance and hardening | `in_progress` | Replay、恢复门、真实 smoke、双视口视觉、本地 runbook 与真实数据回归修复 | T32 实现提交 `ac9c6e5`；T33 正在修复真实 API-Tennis 直播与 Match Page 渲染问题 |
 
 详细产品、架构和数据语义见 [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md)，逐任务实施步骤见 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md)。
 
@@ -78,6 +78,7 @@
 | T30 | P2.4 | Calibrate and Implement Recent Control Index v1 | `done` | `8c9e161` | versioned aggregate calibration（schema/先验强度/alpha/scale/fallback，无 vendor raw/ID）；Recent Control v1 使用分前发球校正残差 + EWMA，不确定 winner 跳过、关键分只作 annotation、纠错从受影响分重算；reducer/Snapshot persistence 接线；前端最近 20 条控制图、zero line、leader/value、provisional、as_of、关键分标记；focused 33 passed、infrastructure 6 passed、全确定性 backend 309 passed/8 deselected；frontend 124 passed + typecheck/build；Playwright 40 passed/4 skipped，prototype 10/10、P1 visual 12/12 |
 | T31 | P2.4 | Add P2 Intelligence Tools and Versioned Chat Answers | `done` | `128518f` | compact fact packet（topic 选择、20 条逐分/走势上限、能力缺失保留且无供应商字段）；history/H2H 工具与 broad-history typed unsupported；Match Chat 的 `answer_context={match_id,state_version,as_of}` 首事件固定，前端新版本只显示“比赛已更新”且不改旧回答；focused 56 passed、全确定性 backend 322 passed/11 deselected、frontend 127 passed + typecheck/build、Playwright 40 passed/4 skipped；真实 LLM opt-in 已运行但 endpoint 返回 403 `AccessDenied.Unpurchased`，未计作通过 |
 | T32 | P2.5 | Add Replay E2E, Fault Recovery, Runbook, and Final P2 Gate | `done` | `ac9c6e5` | Replay provider/脱敏 JSONL fixture 使用同一 identity→reducer→PostgreSQL→Redis→FastAPI SSE→Next 路径；focused replay/recovery 3 passed；确定性 backend 325 passed/11 deselected；infrastructure 13 passed/323 deselected；frontend 127 passed + typecheck/build；默认 Playwright 40 passed/10 skipped；Replay Playwright 功能 2 passed、视觉 4 passed（1440×1000 与 390×844），PNG 逐张审阅；真实 API-Tennis REST 1 passed、WebSocket 1 passed；真实 LLM 7 failed，endpoint 返回 403 `AccessDenied.Unpurchased`，未计作通过；`git diff --check` 与范围审计通过 |
+| T33 | P2.5 | Harden Real-Provider Live Discovery and Match Rendering | `in_progress` | `626feab` | 修复 livescore 终态泄漏、默认筛选下真实直播不可发现与多周期统计重复 key；保留供应商未返回字段的诚实缺失语义；待 TDD、后端/前端回归和真实浏览器复核完成 |
 
 ## P2 完成门摘要
 
