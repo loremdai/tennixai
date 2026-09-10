@@ -5,8 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HomePage } from './home-page'
 import type {
   ChatEvent,
+  FacetCountsDto,
   MatchCatalogDto,
   MatchDto,
+  MatchFiltersDto,
   StructuredData,
 } from '@/lib/api/types'
 import { DEFAULT_MATCH_FILTERS } from '@/lib/match-filters'
@@ -98,6 +100,12 @@ const upcomingDto: MatchDto = {
     is_stale: false,
     age_seconds: 0,
   },
+}
+
+const emptyFacetCounts: FacetCountsDto = {
+  circuits: { atp: 0, wta: 0, challenger: 0, itf: 0, other: 0 },
+  genders: { men: 0, women: 0, mixed: 0, unknown: 0 },
+  disciplines: { singles: 0, doubles: 0, team: 0, unknown: 0 },
 }
 
 function makeCatalog(
@@ -199,7 +207,7 @@ describe('HomePage slate', () => {
 
   it('keeps section shells with factual empty copy when lists are empty', async () => {
     getMatchCatalogMock.mockImplementation(async (status: 'live' | 'upcoming') =>
-      makeCatalog(status, []),
+      makeCatalog(status, [], { facet_counts: emptyFacetCounts }),
     )
 
     render(<HomePage />)
@@ -234,6 +242,40 @@ describe('HomePage slate', () => {
     expect(screen.getByRole('heading', { name: '今晚比赛' })).toBeVisible()
     expect(screen.getByText('Carlos Alcaraz')).toBeVisible()
     expect(screen.queryByText(/比赛数据加载失败（provider_unavailable）/)).toBeNull()
+  })
+
+  it('offers all provider live matches when the approved default facets hide them', async () => {
+    getMatchCatalogMock.mockImplementation(async (
+      status: 'live' | 'upcoming',
+      requestedFilters: MatchFiltersDto = DEFAULT_MATCH_FILTERS,
+    ) => {
+      if (status === 'live' && requestedFilters.circuits.length === 0) {
+        return makeCatalog(status, [liveDto], { facet_counts: emptyFacetCounts })
+      }
+      if (status === 'live') {
+        return makeCatalog(status, [], {
+          facet_counts: {
+            ...emptyFacetCounts,
+            circuits: { ...emptyFacetCounts.circuits, itf: 1 },
+          },
+        })
+      }
+      return makeCatalog(status, [upcomingDto])
+    })
+
+    render(<HomePage />)
+
+    expect(await screen.findByText('当前筛选暂无直播，其他赛事发现可用直播')).toBeVisible()
+    await userEvent.click(screen.getByRole('button', { name: '显示全部直播' }))
+
+    await waitFor(() => {
+      expect(getMatchCatalogMock).toHaveBeenCalledWith('live', {
+        circuits: [],
+        genders: [],
+        disciplines: [],
+      })
+    })
+    expect(await screen.findByText('Jannik Sinner')).toBeVisible()
   })
 })
 
@@ -276,7 +318,9 @@ describe('HomePage facets', () => {
   it('refetches both sections with stacked filters and never relaxes them', async () => {
     getMatchCatalogMock.mockImplementation(async (status: 'live' | 'upcoming') => {
       const call = getMatchCatalogMock.mock.calls.at(-1)?.[1] ?? DEFAULT_MATCH_FILTERS
-      if (call.genders.includes('women')) return makeCatalog(status, [])
+      if (call.genders.includes('women')) {
+        return makeCatalog(status, [], { facet_counts: emptyFacetCounts })
+      }
       return makeCatalog(status, status === 'live' ? [liveDto] : [upcomingDto])
     })
 

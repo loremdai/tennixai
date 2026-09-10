@@ -18,8 +18,13 @@ from app.domain import (
 )
 from app.errors import AppError
 from app.identity import MemoryIdentityRepository
-from app.providers.api_tennis import ApiTennisProvider
+from app.providers.api_tennis import (
+    ApiTennisProvider,
+    map_livescore_row_to_snapshot,
+    map_status,
+)
 from app.providers.api_tennis_classification import classify_event_type
+from app.providers.api_tennis_dtos import MatchDto
 
 FIXTURES = Path(__file__).parent / "fixtures" / "api_tennis"
 BASE_URL = "https://api.api-tennis.com/tennis/"
@@ -136,6 +141,21 @@ def test_classification_of_none_is_honest_unknown():
     )
 
 
+@pytest.mark.parametrize(
+    ("event_status", "event_live", "expected"),
+    [
+        (None, "1", MatchStatus.LIVE),
+        ("", "1", MatchStatus.LIVE),
+        ("Finished", "1", MatchStatus.FINISHED),
+        ("Set 1", "0", MatchStatus.LIVE),
+    ],
+)
+def test_event_live_flag_fills_missing_live_status_but_terminal_wins(
+    event_status, event_live, expected
+) -> None:
+    assert map_status(event_status, event_live) is expected
+
+
 @pytest.mark.asyncio
 async def test_live_request_uses_method_timezone_and_key(provider) -> None:
     built, seen = provider
@@ -155,7 +175,8 @@ async def test_live_maps_vendor_payload_to_canonical(provider) -> None:
 
     live = await built.get_live_matches()
 
-    assert len(live) == 3
+    assert len(live) == 2
+    assert all(match.status is MatchStatus.LIVE for match in live)
     rich = next(match for match in live if match.round == "Tulln - 1/8-finals")
     assert rich.id.startswith("mat_")
     assert rich.status is MatchStatus.LIVE
@@ -181,11 +202,6 @@ async def test_live_maps_vendor_payload_to_canonical(provider) -> None:
     assert rich.freshness.provider == "api_tennis"
     assert rich.freshness.observed_at == NOW
     assert rich.freshness.source_updated_at is None
-
-    finished = next(
-        match for match in live if match.status is MatchStatus.FINISHED
-    )
-    assert finished.winner_player_id == finished.players[1].id
 
 
 @pytest.mark.asyncio
@@ -274,6 +290,28 @@ async def test_snapshot_maps_points_with_sequence_flags_and_winner_rules(provide
     assert len({point.source_fingerprint for point in snapshot.points}) == len(
         snapshot.points
     )
+    point_identities = {
+        (point.set_number, point.game_number, point.point_number)
+        for point in snapshot.points
+    }
+    assert len(point_identities) == len(snapshot.points)
+
+
+@pytest.mark.asyncio
+async def test_snapshot_normalizes_duplicate_vendor_point_numbers(provider) -> None:
+    built, _ = provider
+    row = load("livescore.json")["result"][0]
+    row["pointbypoint"][0]["points"][1]["number_point"] = row["pointbypoint"][0]["points"][0]["number_point"]
+    dto = MatchDto.model_validate(row)
+
+    snapshot = await map_livescore_row_to_snapshot(dto, built._identities, built._now)
+
+    assert snapshot is not None
+    identities = [
+        (point.set_number, point.game_number, point.point_number)
+        for point in snapshot.points
+    ]
+    assert len(identities) == len(set(identities))
 
 
 @pytest.mark.asyncio

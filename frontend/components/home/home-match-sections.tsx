@@ -309,11 +309,15 @@ export function LiveNowSection({
   state,
   errorCode,
   onRefresh,
+  hasMatchesOutsideFilters = false,
+  onShowAllMatches,
 }: {
   matches: HomeMatchViewModel[]
   state: SlateState
   errorCode?: string | null
   onRefresh: () => void
+  hasMatchesOutsideFilters?: boolean
+  onShowAllMatches?: () => void
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null)
 
@@ -352,9 +356,20 @@ export function LiveNowSection({
       ) : state === 'error' ? (
         <SlateSectionError title="直播比赛" code={errorCode} onRetry={onRefresh} />
       ) : matches.length === 0 ? (
-        <p className="rounded-xl border border-dashed bg-muted/15 p-5 text-sm text-muted-foreground">
-          暂无直播比赛
-        </p>
+        hasMatchesOutsideFilters ? (
+          <div className="flex flex-col items-start gap-3 rounded-xl border border-dashed bg-muted/15 p-5">
+            <p className="text-sm text-muted-foreground">当前筛选暂无直播，其他赛事发现可用直播</p>
+            {onShowAllMatches ? (
+              <Button variant="outline" onClick={onShowAllMatches}>
+                显示全部直播
+              </Button>
+            ) : null}
+          </div>
+        ) : (
+          <p className="rounded-xl border border-dashed bg-muted/15 p-5 text-sm text-muted-foreground">
+            暂无直播比赛
+          </p>
+        )
       ) : (
         <div ref={scrollerRef} className="grid auto-cols-[minmax(16rem,1fr)] grid-flow-col gap-3 overflow-x-auto pb-1 lg:grid-cols-3 lg:grid-flow-row">
           {matches.map((match) => <CompactLiveCard key={match.id} match={match} />)}

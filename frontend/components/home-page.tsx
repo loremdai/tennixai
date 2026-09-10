@@ -74,6 +74,28 @@ function mergeFacetCounts(
   }
 }
 
+function hasLiveMatchesOutsideFilters(
+  catalog: MatchCatalogDto | null,
+  filters: MatchFiltersDto,
+): boolean {
+  if (!catalog || catalog.matches.length > 0) return false
+
+  const hasOutsideValue = <T extends string>(
+    selected: readonly T[],
+    counts: Record<T, number>,
+  ) =>
+    selected.length > 0 &&
+    (Object.entries(counts) as Array<[string, number]>).some(
+      ([value, count]) => count > 0 && !selected.includes(value as T),
+    )
+
+  return (
+    hasOutsideValue(filters.circuits, catalog.facet_counts.circuits) ||
+    hasOutsideValue(filters.genders, catalog.facet_counts.genders) ||
+    hasOutsideValue(filters.disciplines, catalog.facet_counts.disciplines)
+  )
+}
+
 export function HomePage({ initialQuestion }: HomePageProps) {
   const [phase, setPhase] = useState<ProductPhase>('p1')
   const [prompt, setPrompt] = useState('')
@@ -180,6 +202,7 @@ export function HomePage({ initialQuestion }: HomePageProps) {
     catalogs.live?.facet_counts ?? null,
     catalogs.upcoming?.facet_counts ?? null,
   )
+  const liveHasMatchesOutsideFilters = hasLiveMatchesOutsideFilters(catalogs.live, filters)
   const allSlateFailed = slateState.live === 'error' && slateState.upcoming === 'error'
   const featuredState: SlateState =
     featuredDto || slateState.live === 'success' || slateState.upcoming === 'success'
@@ -287,6 +310,10 @@ export function HomePage({ initialQuestion }: HomePageProps) {
                   state={slateState.live}
                   errorCode={slateErrorCodes.live}
                   onRefresh={() => void loadSlate()}
+                  hasMatchesOutsideFilters={liveHasMatchesOutsideFilters}
+                  onShowAllMatches={() =>
+                    setFilters({ circuits: [], genders: [], disciplines: [] })
+                  }
                 />
                 <UpcomingSection
                   matches={upcomingCards}

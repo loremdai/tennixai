@@ -89,18 +89,21 @@ TERMINAL_STATUSES = frozenset(
 )
 
 
-def map_status(event_status: str | None) -> MatchStatus:
+def map_status(event_status: str | None, event_live: str | None = None) -> MatchStatus:
     text = (event_status or "").strip().casefold()
-    if text in {"", "1", "0", "-", "not started", "scheduled", "vs", "vs."}:
-        return MatchStatus.SCHEDULED
-    if text.startswith("set ") or text in {"live", "in progress", "in play"}:
-        return MatchStatus.LIVE
     if text in {"finished", "retired", "walk over", "walkover", "wo", "ret."}:
         return MatchStatus.FINISHED
     if text in {"cancelled", "canceled", "abandoned"}:
         return MatchStatus.CANCELLED
     if text in {"postponed"}:
         return MatchStatus.POSTPONED
+    live_flag = (event_live or "").strip().casefold()
+    if live_flag in {"1", "true", "yes"}:
+        return MatchStatus.LIVE
+    if text.startswith("set ") or text in {"live", "in progress", "in play"}:
+        return MatchStatus.LIVE
+    if text in {"", "1", "0", "-", "not started", "scheduled", "vs", "vs."}:
+        return MatchStatus.SCHEDULED
     return MatchStatus.UNKNOWN
 
 
@@ -268,7 +271,7 @@ async def map_match(
         discipline=discipline,
     )
 
-    status = map_status(dto.event_status)
+    status = map_status(dto.event_status, dto.event_live)
     live_state = map_live_state(dto, player_ids, status)
 
     return Match(
@@ -301,6 +304,7 @@ def map_points(
     points: list[PointEvent] = []
     sequence = 0
     last_known_set = 1
+    used_point_numbers: dict[tuple[int, int], set[int]] = {}
     for game in dto.pointbypoint:
         set_number = _leading_int(game.set_number)
         if set_number is None:
@@ -322,6 +326,18 @@ def map_points(
                 continue
             after: tuple[int, int] = (values[0], values[1])  # type: ignore[assignment]
             sequence += 1
+            point_key = (set_number, game_number)
+            used = used_point_numbers.setdefault(point_key, set())
+            # Some live rows repeat `number_point=10` for later points in a
+            # long game. Keep the vendor value when valid, but make repeats
+            # monotonic so canonical point identity stays unique.
+            point_number = _leading_int(raw_point.number_point)
+            if point_number is None:
+                point_number = max(used, default=0) + 1
+            point_number = max(1, point_number)
+            while point_number in used:
+                point_number += 1
+            used.add(point_number)
             winner_id = _derive_point_winner(before, after, player_ids)
             quality = None
             if winner_id is None:
@@ -352,7 +368,7 @@ def map_points(
                     sequence=sequence,
                     set_number=set_number,
                     game_number=game_number,
-                    point_number=_leading_int(raw_point.number_point) or sequence,
+                    point_number=point_number,
                     server_player_id=server_id,
                     winner_player_id=winner_id,
                     score_before=MatchScore(
@@ -614,7 +630,8 @@ class ApiTennisProvider:
             for dto in rows
             if (match := await map_match(dto, self._identities, self._now)) is not None
         ]
-        return self._filter(mapped, player_id)
+        live = [match for match in mapped if match.status is MatchStatus.LIVE]
+        return self._filter(live, player_id)
 
     async def get_fixtures(self, *, player_id: str | None = None) -> list[Match]:
         params = self._window_params(UPCOMING_WINDOW_DAYS)

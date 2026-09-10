@@ -29,7 +29,7 @@ from app.domain import (
 from app.errors import AppError
 from app.intelligence import IntelligencePacket, IntelligenceTopic, build_intelligence_packet
 from app.providers.base import TennisDataProvider
-from app.realtime.reducer import reduce_live_snapshot
+from app.realtime.reducer import normalize_snapshot_quality, reduce_live_snapshot
 
 
 class MatchTimeScope(StrEnum):
@@ -515,6 +515,77 @@ class TennisService:
 
     # ------------------------------------------------------- P2 snapshot read
 
+    async def _cached_player_profile(self, player_id: str) -> Player | None:
+        async def load() -> object:
+            try:
+                return await self._provider.get_player(player_id)
+            except AppError:
+                # A profile lookup must not make an otherwise valid match
+                # snapshot unavailable.
+                return None
+
+        outcome = await self._cache.get_or_load(
+            f"player-profile:{player_id}",
+            load,
+            ttl=lambda value: 3600 if isinstance(value, Player) else 60,
+            stale_ttl=0,
+        )
+        return cast(Player | None, outcome.value)
+
+    async def _hydrate_snapshot_players(self, snapshot: MatchSnapshot) -> MatchSnapshot:
+        current_players = snapshot.match.players
+        to_hydrate = [
+            player
+            for player in current_players
+            if player.ranking is None or player.country_code is None
+        ]
+        profiles = await asyncio.gather(
+            *(self._cached_player_profile(player.id) for player in to_hydrate)
+        )
+        if not profiles:
+            return snapshot
+
+        profile_by_id = {
+            player.id: profile
+            for player, profile in zip(to_hydrate, profiles)
+            if profile is not None
+        }
+        if not profile_by_id:
+            return snapshot
+
+        players = tuple(
+            player.model_copy(
+                update={
+                    "name": (
+                        profile_by_id[player.id].name
+                        if profile_by_id[player.id].name != "Unknown player"
+                        else player.name
+                    ),
+                    "country_code": (
+                        profile_by_id[player.id].country_code or player.country_code
+                    ),
+                    "ranking": (
+                        profile_by_id[player.id].ranking
+                        if profile_by_id[player.id].ranking is not None
+                        else player.ranking
+                    ),
+                }
+            )
+            if player.id in profile_by_id
+            else player
+            for player in current_players
+        )
+        if players == current_players:
+            return snapshot
+        return snapshot.model_copy(
+            update={
+                "match": snapshot.match.model_copy(update={"players": players}),
+            }
+        )
+
+    async def _normalize_snapshot(self, snapshot: MatchSnapshot) -> MatchSnapshot:
+        return normalize_snapshot_quality(await self._hydrate_snapshot_players(snapshot))
+
     async def resolve_match_snapshot(self, match_id: str) -> MatchSnapshot:
         """Redis hot snapshot first, PostgreSQL second, provider REST last.
 
@@ -523,12 +594,13 @@ class TennisService:
         if self._publisher is not None:
             hot = await self._publisher.get_hot_snapshot(match_id)
             if hot is not None:
-                return hot
+                return await self._normalize_snapshot(hot)
         if self._snapshots is not None:
             stored = await self._snapshots.load_snapshot(match_id)
             if stored is not None:
-                return stored
+                return await self._normalize_snapshot(stored)
         candidate = await self._provider.get_match_snapshot(match_id)
+        candidate = await self._normalize_snapshot(candidate)
         if self._snapshots is not None:
             reduction = reduce_live_snapshot(None, candidate)
             await self._snapshots.save_reduction(reduction)

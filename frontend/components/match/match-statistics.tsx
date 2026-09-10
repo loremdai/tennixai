@@ -11,13 +11,27 @@ import {
 
 type StatisticGroupView = {
   group: StatGroup
-  rows: Array<{ name: string; label: string; unit: string; p1: number | null; p2: number | null; partial: boolean }>
+  rows: Array<{
+    name: string
+    period: string
+    label: string
+    unit: string
+    p1: number | null
+    p2: number | null
+    partial: boolean
+  }>
   missing: string[]
 }
 
 function shortName(name: string): string {
   const parts = name.trim().split(/\s+/)
   return parts[parts.length - 1] || name
+}
+
+function formatPeriod(period: string): string {
+  if (period === 'match') return '全场'
+  const set = /^set:(\d+)$/.exec(period)
+  return set ? `第 ${set[1]} 盘` : period
 }
 
 export function MatchStatisticsCard({
@@ -38,6 +52,7 @@ export function MatchStatisticsCard({
     const view = byGroup.get(meta.group) ?? { group: meta.group, rows: [], missing: [] }
     view.rows.push({
       name: stat.name,
+      period: stat.period,
       label: meta.label,
       unit: meta.unit,
       p1: stat.player1_value,
@@ -78,12 +93,12 @@ export function MatchStatisticsCard({
             </h3>
             <div className="divide-y rounded-lg bg-muted/20 px-3">
               {view.rows.map((row) => (
-                <div key={row.name} className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 py-2.5">
+                <div key={`${row.period}:${row.name}`} className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 py-2.5">
                   <span className="text-right font-mono text-sm font-medium tabular-nums">
                     {formatStatValue(row.p1, row.unit)}
                   </span>
                   <span className="flex items-center gap-2 text-center text-xs text-muted-foreground sm:text-sm">
-                    {row.label}
+                    {formatPeriod(row.period)} · {row.label}
                     {row.partial ? <Badge variant="outline">部分提供</Badge> : null}
                   </span>
                   <span className="font-mono text-sm font-medium tabular-nums">

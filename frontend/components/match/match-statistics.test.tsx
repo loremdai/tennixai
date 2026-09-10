@@ -14,11 +14,12 @@ function stat(
   p1: number | null,
   p2: number | null,
   availability: 'available' | 'partial' | 'unavailable' = 'available',
+  period = 'match',
 ): MatchStatisticDto {
   return {
     match_id: 'mat_1',
     name,
-    period: 'match',
+    period,
     player1_value: p1,
     player2_value: p2,
     unit: null,
@@ -75,10 +76,10 @@ describe('MatchStatisticsCard', () => {
       />,
     )
 
-    expect(screen.getByText('ACE 球')).toBeVisible()
+    expect(screen.getByText('全场 · ACE 球')).toBeVisible()
     expect(screen.getByText('8')).toBeVisible()
-    expect(screen.getByText('双误')).toBeVisible()
-    expect(screen.getByText('一发成功率')).toBeVisible()
+    expect(screen.getByText('全场 · 双误')).toBeVisible()
+    expect(screen.getByText('全场 · 一发成功率')).toBeVisible()
     expect(screen.getByText('68%')).toBeVisible()
     expect(screen.getByText('181 km/h')).toBeVisible()
     expect(screen.getByText('2410 m')).toBeVisible()
@@ -119,9 +120,26 @@ describe('MatchStatisticsCard', () => {
       />,
     )
 
-    expect(screen.getByText('制胜分')).toBeVisible()
+    expect(screen.getByText('全场 · 制胜分')).toBeVisible()
     expect(screen.getByText('部分提供')).toBeVisible()
     expect(screen.getByText('暂未提供')).toBeVisible()
+  })
+
+  it('keeps same statistic rows distinct when provider reports multiple periods', () => {
+    render(
+      <MatchStatisticsCard
+        statistics={[
+          stat('aces', 8, 5, 'available', 'match'),
+          stat('aces', 4, 2, 'available', 'set:1'),
+        ]}
+        points={[]}
+        players={players}
+        asOf="2026-09-09T12:00:00Z"
+      />,
+    )
+
+    expect(screen.getByText('全场 · ACE 球')).toBeVisible()
+    expect(screen.getByText('第 1 盘 · ACE 球')).toBeVisible()
   })
 
   it('derives the last ten points from determinate point events only', () => {

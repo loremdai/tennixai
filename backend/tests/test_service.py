@@ -5,11 +5,15 @@ import pytest
 
 from app.cache import AsyncTTLCache
 from app.domain import (
+    CapabilityStatus,
     DataFreshness,
+    DataQuality,
     LiveMatchState,
     Match,
     MatchScore,
+    MatchSnapshot,
     MatchStatus,
+    MomentumObservation,
     Player,
     SetScore,
     Tournament,
@@ -56,11 +60,15 @@ class CountingProvider:
         live: list[Match] | None = None,
         upcoming: list[Match] | None = None,
         matches: dict[str, Match] | None = None,
+        profiles: dict[str, Player] | None = None,
+        snapshots: dict[str, MatchSnapshot] | None = None,
     ) -> None:
         self.players = players or []
         self.live = live or []
         self.upcoming = upcoming or []
         self.matches = matches or {}
+        self.profiles = profiles or {}
+        self.snapshots = snapshots or {}
         self.calls: Counter[str] = Counter()
         self.list_failure: AppError | None = None
         self.detail_failure: AppError | None = None
@@ -92,6 +100,20 @@ class CountingProvider:
         if match is None:
             raise AppError("not_found", "Match not found", 404)
         return match
+
+    async def get_player(self, player_id: str) -> Player:
+        self.calls["get_player"] += 1
+        profile = self.profiles.get(player_id)
+        if profile is None:
+            raise AppError("not_found", "Player not found", 404)
+        return profile
+
+    async def get_match_snapshot(self, match_id: str) -> MatchSnapshot:
+        self.calls["get_match_snapshot"] += 1
+        snapshot = self.snapshots.get(match_id)
+        if snapshot is None:
+            raise AppError("not_found", "Match not found", 404)
+        return snapshot
 
     async def get_score(self, match_id: str) -> LiveMatchState:
         self.calls["get_score"] += 1
@@ -355,6 +377,69 @@ async def test_live_list_stale_fallback_bounded_at_300_seconds() -> None:
     with pytest.raises(AppError) as error_info:
         await service.list_matches("live")
     assert error_info.value.code == "provider_unavailable"
+
+
+@pytest.mark.asyncio
+async def test_match_snapshot_hydrates_missing_player_profiles_once() -> None:
+    match = build_match("mat_detail", MatchStatus.LIVE, NOW_UTC)
+    snapshot = MatchSnapshot(match=match, state_version=0, as_of=NOW_UTC)
+    provider = CountingProvider(
+        snapshots={match.id: snapshot},
+        profiles={
+            SINNER.id: Player(id=SINNER.id, name="Jannik Sinner", ranking=1),
+            ALCARAZ.id: Player(id=ALCARAZ.id, name="Carlos Alcaraz", ranking=2),
+        },
+    )
+    service, _, _ = build_service(provider)
+
+    first = await service.resolve_match_snapshot(match.id)
+    second = await service.resolve_match_snapshot(match.id)
+
+    assert [player.ranking for player in first.match.players] == [1, 2]
+    assert [player.ranking for player in second.match.players] == [1, 2]
+    assert provider.calls["get_player"] == 2
+
+
+@pytest.mark.asyncio
+async def test_match_snapshot_normalizes_quality_for_persisted_momentum() -> None:
+    match = build_match("mat_quality", MatchStatus.LIVE, NOW_UTC)
+    snapshot = MatchSnapshot(
+        match=match,
+        momentum=(
+            MomentumObservation(
+                match_id=match.id,
+                point_sequence=1,
+                state_version=0,
+                algorithm_version="recent-control-v1",
+                value=12.5,
+                leader_player_id=SINNER.id,
+                as_of=NOW_UTC,
+                input_summary="test",
+            ),
+        ),
+        quality=(
+            DataQuality(
+                capability="momentum",
+                status=CapabilityStatus.UNAVAILABLE,
+                provider="api_tennis",
+                reason="not_computed",
+                observed_at=NOW_UTC,
+            ),
+        ),
+        state_version=0,
+        as_of=NOW_UTC,
+    )
+    provider = CountingProvider(snapshots={match.id: snapshot})
+    service, _, _ = build_service(provider)
+
+    resolved = await service.resolve_match_snapshot(match.id)
+
+    momentum_quality = next(
+        item for item in resolved.quality if item.capability == "momentum"
+    )
+    assert momentum_quality.status is CapabilityStatus.AVAILABLE
+    assert momentum_quality.provider == "tennix"
+    assert momentum_quality.reason is None
 
 
 @pytest.mark.asyncio

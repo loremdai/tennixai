@@ -7,7 +7,15 @@ reordered tails are rebuilt from the first difference. `state_version`
 advances only on semantic change.
 """
 
-from app.domain import LiveMatchState, Match, MatchSnapshot, MomentumObservation, PointEvent
+from app.domain import (
+    CapabilityStatus,
+    DataQuality,
+    LiveMatchState,
+    Match,
+    MatchSnapshot,
+    MomentumObservation,
+    PointEvent,
+)
 from app.momentum.engine import RecentControlEngine
 from app.realtime.models import (
     CHANGE_ORDER,
@@ -47,9 +55,55 @@ def _state_fingerprint(match: Match) -> tuple:
     return (
         match.status,
         match.winner_player_id,
+        tuple(
+            (player.id, player.name, player.country_code, player.ranking)
+            for player in match.players
+        ),
         live.connection_status if live is not None else None,
         _score_fingerprint(match),
     )
+
+
+def _preserve_player_metadata(previous: Match, candidate: Match) -> Match:
+    """Do not erase profile fields when a live row carries only match data."""
+    if tuple(player.id for player in previous.players) != tuple(
+        player.id for player in candidate.players
+    ):
+        return candidate
+
+    players = tuple(
+        incoming.model_copy(
+            update={
+                "name": _preferred_player_name(stored.name, incoming.name),
+                "country_code": incoming.country_code or stored.country_code,
+                "ranking": (
+                    incoming.ranking
+                    if incoming.ranking is not None
+                    else stored.ranking
+                ),
+            }
+        )
+        for stored, incoming in zip(previous.players, candidate.players)
+    )
+    return candidate.model_copy(update={"players": players})
+
+
+def _preferred_player_name(stored: str, incoming: str) -> str:
+    """Keep a hydrated full name when a live row regresses to an initial."""
+    if _name_quality(incoming) >= _name_quality(stored):
+        return incoming
+    return stored
+
+
+def _name_quality(name: str) -> int:
+    text = name.strip()
+    if not text or text.casefold() == "unknown player":
+        return 0
+    parts = text.split()
+    initial = parts[0].rstrip(".")
+    if len(parts) > 1 and len(initial) == 1 and initial.isascii() and initial.isalpha():
+        return 1
+    return 2
 
 
 def _statistics_fingerprint(snapshot: MatchSnapshot) -> tuple:
@@ -75,6 +129,8 @@ def reduce_live_snapshot(
     momentum_engine: RecentControlEngine | None = None,
 ) -> LiveReduction:
     match = candidate.match
+    if previous is not None:
+        match = _preserve_player_metadata(previous.match, match)
     match_id = match.id
 
     if previous is None:
@@ -99,7 +155,10 @@ def reduce_live_snapshot(
         )
         if momentum:
             events.add(ReductionChange.MOMENTUM_UPDATED)
-        snapshot = _with_version(match, candidate, 1, points, momentum)
+        quality = _quality_with_momentum(candidate.quality, momentum)
+        if quality:
+            events.add(ReductionChange.QUALITY_UPDATED)
+        snapshot = _with_version(match, candidate, 1, points, momentum, quality)
         return LiveReduction(
             match_id=match_id,
             previous_version=0,
@@ -110,13 +169,21 @@ def reduce_live_snapshot(
             point_revisions=(),
             recompute_from_sequence=None,
             statistics=candidate.statistics,
-            quality=candidate.quality,
+            quality=quality,
         )
 
     changes: set[ReductionChange] = set()
     if _state_fingerprint(match) != _state_fingerprint(previous.match):
         if _score_fingerprint(match) != _score_fingerprint(previous.match):
             changes.add(ReductionChange.SCORE_UPDATED)
+        if tuple(
+            (player.id, player.name, player.country_code, player.ranking)
+            for player in match.players
+        ) != tuple(
+            (player.id, player.name, player.country_code, player.ranking)
+            for player in previous.match.players
+        ):
+            changes.add(ReductionChange.PLAYER_METADATA_UPDATED)
         if (
             match.status != previous.match.status
             or (match.live_state.connection_status if match.live_state else None)
@@ -207,9 +274,6 @@ def reduce_live_snapshot(
         changes.add(ReductionChange.POINT_CORRECTED)
     if _statistics_fingerprint(candidate) != _statistics_fingerprint(previous):
         changes.add(ReductionChange.STATISTICS_UPDATED)
-    if candidate.quality != previous.quality:
-        changes.add(ReductionChange.QUALITY_UPDATED)
-
     momentum = previous.momentum
     if _momentum_signature(previous.points) != _momentum_signature(reduced_points):
         recomputed = _compute_momentum(
@@ -232,6 +296,10 @@ def reduce_live_snapshot(
             changes.add(ReductionChange.MOMENTUM_UPDATED)
             momentum = recomputed
 
+    quality = _quality_with_momentum(candidate.quality, momentum)
+    if quality != previous.quality:
+        changes.add(ReductionChange.QUALITY_UPDATED)
+
     changed = bool(changes)
     if not changed:
         return LiveReduction(
@@ -248,7 +316,9 @@ def reduce_live_snapshot(
         )
 
     version = previous.state_version + 1
-    snapshot = _with_version(match, candidate, version, tuple(reduced_points), momentum)
+    snapshot = _with_version(
+        match, candidate, version, tuple(reduced_points), momentum, quality
+    )
     return LiveReduction(
         match_id=match_id,
         previous_version=previous.state_version,
@@ -259,7 +329,7 @@ def reduce_live_snapshot(
         point_revisions=tuple(revisions),
         recompute_from_sequence=recompute,
         statistics=candidate.statistics,
-        quality=candidate.quality,
+        quality=quality,
     )
 
 
@@ -269,6 +339,7 @@ def _with_version(
     version: int,
     points: tuple[PointEvent, ...],
     momentum: tuple[MomentumObservation, ...],
+    quality: tuple[DataQuality, ...],
 ) -> MatchSnapshot:
     live_state = match.live_state or LiveMatchState()
     versioned_match = match.model_copy(
@@ -279,10 +350,47 @@ def _with_version(
         points=points,
         statistics=candidate.statistics,
         momentum=momentum,
-        quality=candidate.quality,
+        quality=quality,
         state_version=version,
         as_of=candidate.as_of,
     )
+
+
+def _quality_with_momentum(
+    quality: tuple[DataQuality, ...],
+    momentum: tuple[MomentumObservation, ...],
+) -> tuple[DataQuality, ...]:
+    """Make the derived momentum capability agree with reducer output."""
+    if not momentum:
+        return quality
+
+    computed = DataQuality(
+        capability="momentum",
+        status=CapabilityStatus.AVAILABLE,
+        provider="tennix",
+        reason=None,
+        observed_at=momentum[-1].as_of,
+    )
+    result: list[DataQuality] = []
+    replaced = False
+    for item in quality:
+        if item.capability != "momentum":
+            result.append(item)
+            continue
+        if not replaced:
+            result.append(computed)
+            replaced = True
+    if not replaced:
+        result.append(computed)
+    return tuple(result)
+
+
+def normalize_snapshot_quality(snapshot: MatchSnapshot) -> MatchSnapshot:
+    """Repair quality metadata on snapshots persisted before derived momentum."""
+    quality = _quality_with_momentum(snapshot.quality, snapshot.momentum)
+    if quality == snapshot.quality:
+        return snapshot
+    return snapshot.model_copy(update={"quality": quality})
 
 
 def _ordered(changes: set[ReductionChange]) -> tuple[ReductionChange, ...]:

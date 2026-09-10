@@ -303,7 +303,7 @@ describe('production match page', () => {
     render(<MatchPage matchId="mat_1" />)
     await screen.findByText('Jannik Sinner')
 
-    expect(screen.getByText('ACE 球')).toBeVisible()
+    expect(screen.getByText(/ACE 球/)).toBeVisible()
     expect(screen.getByRole('button', { name: /第 1 盘/ })).toBeVisible()
     expect(screen.queryByText('P2 数据暂不可用')).toBeNull()
   })

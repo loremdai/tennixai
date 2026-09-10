@@ -85,6 +85,17 @@ def base_match(match_id: str, status: MatchStatus = MatchStatus.LIVE) -> Match:
     )
 
 
+class ProfileRestProvider(FakeRestProvider):
+    def __init__(self, snapshots: list[MatchSnapshot], profiles: dict[str, Player]) -> None:
+        super().__init__(snapshots)
+        self.profiles = profiles
+        self.profile_calls: list[str] = []
+
+    async def get_player(self, player_id: str) -> Player:
+        self.profile_calls.append(player_id)
+        return self.profiles[player_id]
+
+
 def point(match_id: str, sequence: int) -> PointEvent:
     return PointEvent(
         id=f"pe_{match_id}_{sequence}",
@@ -201,6 +212,35 @@ async def test_rest_initial_snapshot_persists_before_stream_envelopes(
     assert len(store.saved) == 2
     assert store.saved[1].snapshot.state_version == 2
     assert publisher.events[1]["state_version"] == 2
+    await worker.stop()
+
+
+@pytest.mark.asyncio
+async def test_rest_reconcile_hydrates_profiles_before_live_feed_deltas(
+    identity, leases, clock
+) -> None:
+    match = await match_id(identity)
+    snapshot = candidate(match, points=1)
+    profiles = {
+        "ply_a": Player(id="ply_a", name="Jerry Roddick", ranking=3),
+        "ply_b": Player(id="ply_b", name="Ryota Tanuma", ranking=8),
+    }
+    rest = ProfileRestProvider([snapshot], profiles)
+    worker, store, publisher, feed, raw = make_worker(
+        identity=identity,
+        clock=clock,
+        leases=leases,
+        rest=rest,
+    )
+
+    await leases.acquire(match, "viewer_a")
+    await worker.reconcile_demand_once()
+
+    assert [player.name for player in store.saved[0].snapshot.match.players] == [
+        "Jerry Roddick",
+        "Ryota Tanuma",
+    ]
+    assert rest.profile_calls == ["ply_a", "ply_b"]
     await worker.stop()
 
 

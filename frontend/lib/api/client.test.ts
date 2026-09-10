@@ -113,7 +113,7 @@ describe('REST helpers', () => {
     expect(fetchMock.mock.calls[0][0]).toBe('/api/matches/mat_1%2F2')
   })
 
-  it('builds catalog queries with repeated facet params and omits empty groups', async () => {
+  it('builds catalog queries with repeated facet params and expands empty groups to all', async () => {
     const fetchMock = vi.fn().mockImplementation(async () =>
       jsonResponse({
         data: {
@@ -143,7 +143,7 @@ describe('REST helpers', () => {
     })
 
     expect(fetchMock.mock.calls[0][0]).toBe(
-      '/api/matches/catalog?status=upcoming&circuit=atp&circuit=wta&discipline=singles',
+      '/api/matches/catalog?status=upcoming&circuit=atp&circuit=wta&gender=men&gender=women&gender=mixed&gender=unknown&discipline=singles',
     )
     expect(fetchMock.mock.calls[1][0]).toBe(
       '/api/matches/catalog?status=live&circuit=itf&gender=women&discipline=doubles',

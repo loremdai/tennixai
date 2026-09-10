@@ -157,6 +157,84 @@ def test_initial_reduction_computes_versioned_recent_control() -> None:
     assert ReductionChange.MOMENTUM_UPDATED in reduction.events
 
 
+def test_computed_recent_control_is_declared_available() -> None:
+    reduction = reduce_live_snapshot(None, supplier_snapshot(points=seven_point_history()))
+
+    momentum_quality = next(
+        item for item in reduction.snapshot.quality if item.capability == "momentum"
+    )
+    assert momentum_quality.status is CapabilityStatus.AVAILABLE
+    assert momentum_quality.reason is None
+    assert reduction.quality == reduction.snapshot.quality
+
+
+def test_feed_updates_preserve_hydrated_player_metadata() -> None:
+    ranked_match = base_match().model_copy(
+        update={
+            "players": (
+                Player(id=PLY_A, name="Jerry Roddick", ranking=3),
+                Player(id=PLY_B, name="Ryota Tanuma", ranking=8),
+            )
+        }
+    )
+    first = reduce_live_snapshot(
+        None, supplier_snapshot(points=seven_point_history(), match=ranked_match)
+    )
+
+    later = reduce_live_snapshot(
+        first.snapshot,
+        supplier_snapshot(
+            points=[*seven_point_history(), point(8, 3, 2, 1, ("0", "15"))],
+            match=base_match().model_copy(
+                update={
+                    "players": (
+                        Player(id=PLY_A, name="J. Roddick"),
+                        Player(id=PLY_B, name="R. Tanuma"),
+                    )
+                }
+            ),
+        ),
+    )
+
+    assert [player.name for player in later.snapshot.match.players] == [
+        "Jerry Roddick",
+        "Ryota Tanuma",
+    ]
+    assert [player.ranking for player in later.snapshot.match.players] == [3, 8]
+
+
+def test_profile_metadata_change_advances_version() -> None:
+    abbreviated = base_match().model_copy(
+        update={
+            "players": (
+                Player(id=PLY_A, name="J. Roddick"),
+                Player(id=PLY_B, name="R. Tanuma"),
+            )
+        }
+    )
+    full = base_match().model_copy(
+        update={
+            "players": (
+                Player(id=PLY_A, name="Jerry Roddick", ranking=3),
+                Player(id=PLY_B, name="Ryota Tanuma", ranking=8),
+            )
+        }
+    )
+    first = reduce_live_snapshot(None, supplier_snapshot(match=abbreviated))
+
+    reduction = reduce_live_snapshot(
+        first.snapshot, supplier_snapshot(match=full)
+    )
+
+    assert reduction.changed is True
+    assert reduction.events == (ReductionChange.PLAYER_METADATA_UPDATED,)
+    assert reduction.snapshot.state_version == first.snapshot.state_version + 1
+    assert [player.name for player in reduction.snapshot.match.players] == [
+        "Jerry Roddick",
+        "Ryota Tanuma",
+    ]
+
+
 def test_point_correction_recomputes_recent_control_from_changed_point() -> None:
     history = seven_point_history()
     first = reduce_live_snapshot(None, supplier_snapshot(points=history))
@@ -329,7 +407,9 @@ def test_quality_change_emits_quality_updated() -> None:
 
     assert reduction.changed is True
     assert reduction.events == (ReductionChange.QUALITY_UPDATED,)
-    assert reduction.snapshot.quality == tuple(quality)
+    declared = {item.capability: item for item in reduction.snapshot.quality}
+    assert declared["statistics"] == quality[0]
+    assert declared["momentum"].status is CapabilityStatus.AVAILABLE
 
 
 def test_dropped_tail_is_rebuilt_from_first_difference() -> None:

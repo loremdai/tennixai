@@ -305,6 +305,25 @@ async def test_second_reduction_appends_point_and_records_revision(database: Dat
     assert snapshot_row.state_version == 2
 
 
+async def test_save_reduction_handles_resequenced_point_ids(database: Database) -> None:
+    repository = MatchSnapshotRepository(database)
+    base = await candidate(database, points=3)
+    first = reduce_live_snapshot(None, base)
+    await repository.save_reduction(first)
+
+    extra = point(base.match.id, 4, ("30", "15"), winner="ply_b")
+    reordered = base.model_copy(
+        update={"points": (base.points[0], base.points[2], extra)}
+    )
+    second = reduce_live_snapshot(first.snapshot, reordered)
+
+    await repository.save_reduction(second)
+
+    loaded = await repository.load_snapshot(base.match.id)
+    assert loaded is not None
+    assert [item.sequence for item in loaded.points] == [1, 2, 3]
+
+
 async def test_failed_reduction_save_leaves_previous_version_readable(
     database: Database,
 ) -> None:

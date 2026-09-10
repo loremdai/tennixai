@@ -8,6 +8,11 @@ import type {
   MatchStreamFrame,
   PlayerDto,
 } from './types'
+import {
+  CIRCUIT_ORDER,
+  DISCIPLINE_ORDER,
+  GENDER_ORDER,
+} from '@/lib/match-filters'
 
 export class ApiError extends Error {
   readonly status: number
@@ -147,11 +152,17 @@ export function getMatchCatalog(
   signal?: AbortSignal,
 ): Promise<MatchCatalogDto> {
   const params = new URLSearchParams({ status })
-  // Empty facet groups are omitted: the backend treats a missing group as
-  // "all values", matching the shared Home filter semantics.
-  for (const circuit of filters.circuits) params.append('circuit', circuit)
-  for (const gender of filters.genders) params.append('gender', gender)
-  for (const discipline of filters.disciplines) params.append('discipline', discipline)
+  // The API uses an omitted group for its approved defaults. Expand the
+  // frontend's empty="all" state so both contracts remain expressible.
+  for (const circuit of filters.circuits.length ? filters.circuits : CIRCUIT_ORDER) {
+    params.append('circuit', circuit)
+  }
+  for (const gender of filters.genders.length ? filters.genders : GENDER_ORDER) {
+    params.append('gender', gender)
+  }
+  for (const discipline of filters.disciplines.length ? filters.disciplines : DISCIPLINE_ORDER) {
+    params.append('discipline', discipline)
+  }
   return requestJson<MatchCatalogDto>(`/api/matches/catalog?${params.toString()}`, signal)
 }
 

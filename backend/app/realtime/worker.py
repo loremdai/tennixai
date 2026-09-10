@@ -10,7 +10,7 @@ import asyncio
 from collections.abc import Callable
 from datetime import datetime, timedelta
 
-from app.domain import MatchSnapshot, MatchStatus
+from app.domain import MatchSnapshot, MatchStatus, Player
 from app.identity import IdentityRepository
 from app.realtime.leases import ViewerLeaseStore
 from app.realtime.models import FeedDisconnected, LiveReduction
@@ -179,6 +179,59 @@ class RealtimeWorker:
         await self._publisher.publish_delta(reduction)
         return reduction
 
+    async def _hydrate_player_profiles(self, snapshot: MatchSnapshot) -> MatchSnapshot:
+        """Enrich initial/recovery rows before abbreviated WS rows can overwrite them."""
+        get_player = getattr(self._rest, "get_player", None)
+        if not callable(get_player):
+            return snapshot
+
+        players = snapshot.match.players
+        to_hydrate = [player for player in players if _needs_player_profile(player)]
+
+        async def load(player: Player) -> Player | None:
+            try:
+                profile = await get_player(player.id)
+            except Exception:
+                return None
+            return profile if isinstance(profile, Player) else None
+
+        profiles = await asyncio.gather(*(load(player) for player in to_hydrate))
+        profile_by_id = {
+            player.id: profile
+            for player, profile in zip(to_hydrate, profiles)
+            if profile is not None
+        }
+        if not profile_by_id:
+            return snapshot
+
+        hydrated = tuple(
+            player.model_copy(
+                update={
+                    "name": (
+                        profile_by_id[player.id].name
+                        if profile_by_id[player.id].name.casefold() != "unknown player"
+                        else player.name
+                    ),
+                    "country_code": (
+                        profile_by_id[player.id].country_code or player.country_code
+                    ),
+                    "ranking": (
+                        profile_by_id[player.id].ranking
+                        if profile_by_id[player.id].ranking is not None
+                        else player.ranking
+                    ),
+                }
+            )
+            if player.id in profile_by_id
+            else player
+            for player in players
+        )
+        if hydrated == players:
+            return snapshot
+        return snapshot.model_copy(
+            update={"match": snapshot.match.model_copy(update={"players": hydrated})}
+        )
+
     async def _rest_reconcile(self, match_id: str, *, recovery: bool) -> None:
         if match_id not in self._current:
             loader = getattr(self._snapshots, "load_snapshot", None)
@@ -191,6 +244,7 @@ class RealtimeWorker:
             candidate = await reconcile(match_id, recovery=recovery)
         else:
             candidate = await self._rest.get_match_snapshot(match_id)
+        candidate = await self._hydrate_player_profiles(candidate)
         await self._apply(match_id, candidate)
 
     async def _close(self, match_id: str) -> None:
@@ -212,3 +266,13 @@ class RealtimeWorker:
         while True:
             await self.reconcile_demand_once()
             await asyncio.sleep(interval_seconds)
+
+
+def _needs_player_profile(player: Player) -> bool:
+    if player.ranking is None:
+        return True
+    parts = player.name.strip().split()
+    if len(parts) <= 1:
+        return False
+    initial = parts[0].rstrip(".")
+    return len(initial) == 1 and initial.isascii() and initial.isalpha()

@@ -469,11 +469,17 @@ class MatchSnapshotRepository:
                     point_statement = pg_insert(PointEventRow).values(**values)
                     await session.execute(
                         point_statement.on_conflict_do_update(
-                            index_elements=["id"],
+                            # `sequence` is the current canonical row identity.
+                            # A provider correction can rebuild a tail and move
+                            # a point's supplier-derived id, so upserting by id
+                            # can violate the unique (match_id, sequence) key.
+                            index_elements=["match_id", "sequence"],
                             set_={
                                 key: point_statement.excluded[key]
                                 for key in (
-                                    "sequence",
+                                    "set_number",
+                                    "game_number",
+                                    "point_number",
                                     "server_player_id",
                                     "winner_player_id",
                                     "score_before",
