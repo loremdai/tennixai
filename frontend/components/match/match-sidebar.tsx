@@ -26,7 +26,7 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from '@/components/ui/input-group'
-import type { ChatViewState } from '@/hooks/use-chat-stream'
+import { chatStageLabel, type ChatViewState } from '@/hooks/use-chat-stream'
 import { formatAsOf, type MatchViewModel } from '@/lib/view-models'
 
 import type { MatchStatus } from './match-data'
@@ -187,7 +187,7 @@ function AssistantPanel({
                 </p>
               ) : null}
               {chat.phase === 'loading' || chat.phase === 'streaming' ? (
-                <p className="mt-2 text-xs text-muted-foreground">正在查询…</p>
+                <p className="mt-2 text-xs text-muted-foreground">{chatStageLabel(chat.stage)}</p>
               ) : null}
               <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
                 <CircleCheck aria-hidden="true" className="size-4" />
@@ -199,7 +199,7 @@ function AssistantPanel({
               <div className="flex size-9 items-center justify-center rounded-full bg-secondary text-primary">
                 <BrainCircuit aria-hidden="true" className="size-4" />
               </div>
-              <p className="text-sm font-medium">正在查询…</p>
+              <p className="text-sm font-medium">{chatStageLabel(chat.stage)}</p>
             </div>
           ) : (
             <PreviewEmptyState />

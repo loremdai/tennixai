@@ -2,7 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ChatEvent } from '@/lib/api/types'
-import { useChatStream } from './use-chat-stream'
+import { chatStageLabel, useChatStream } from './use-chat-stream'
 
 const { streamChatMock } = vi.hoisted(() => ({ streamChatMock: vi.fn() }))
 
@@ -132,6 +132,51 @@ describe('useChatStream', () => {
     expect(result.current.state.text).toBe('Sinner 今晚出场。')
     expect(result.current.state.data).toEqual(dataEvent.payload)
     expect(result.current.state.error).toBeNull()
+  })
+
+  it('tracks the server progress stage while a stream is waiting', async () => {
+    let markStatusSeen!: () => void
+    const statusSeen = new Promise<void>((resolve) => {
+      markStatusSeen = resolve
+    })
+    let releaseStream!: () => void
+    const streamReleased = new Promise<void>((resolve) => {
+      releaseStream = resolve
+    })
+    streamChatMock.mockImplementation(() => {
+      async function* generate(): AsyncGenerator<ChatEvent> {
+        yield { type: 'status', payload: { stage: 'fetching_data' } }
+        markStatusSeen()
+        await streamReleased
+        yield { type: 'done', payload: { ok: true } }
+      }
+      return generate()
+    })
+
+    const { result } = renderHook(() => useChatStream('match', 'mat_42'))
+    const pending = result.current.send('问题')
+
+    await statusSeen
+    await waitFor(() => expect(result.current.state.stage).toBe('fetching_data'))
+
+    act(() => result.current.cancel())
+    expect(result.current.state.stage).toBeNull()
+
+    act(() => releaseStream())
+    await act(async () => {
+      await pending
+    })
+
+    expect(result.current.state.stage).toBeNull()
+  })
+
+  it.each([
+    ['resolving', '正在锁定比赛快照…'],
+    ['planning', '正在拆解问题…'],
+    ['fetching_data', '正在读取比赛数据…'],
+    ['generating', '正在组织回答…'],
+  ])('maps %s to a user-visible progress label', (stage, label) => {
+    expect(chatStageLabel(stage)).toBe(label)
   })
 
   it('sends match scope with the internal match id', async () => {
@@ -322,6 +367,7 @@ describe('useChatStream', () => {
       text: '',
       data: null,
       answerContext: null,
+      stage: null,
       error: null,
     })
   })

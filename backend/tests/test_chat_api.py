@@ -90,10 +90,21 @@ async def test_chat_stream_routes_supported_historical_queries(client: AsyncClie
     )
 
     events = parse_sse(response.text)
-    assert [event_type for event_type, _ in events] == ["status", "data", "text_delta", "done"]
-    assert events[1][1]["kind"] == "matches"
-    assert events[1][1]["metadata"]["scope"] == "yesterday"
-    assert events[2][1]["delta"] == "当前没有查到符合条件的比赛。"
+    assert [event_type for event_type, _ in events] == [
+        "status",
+        "status",
+        "status",
+        "data",
+        "status",
+        "status",
+        "text_delta",
+        "done",
+    ]
+    data = next(payload for event_type, payload in events if event_type == "data")
+    text = next(payload for event_type, payload in events if event_type == "text_delta")
+    assert data["kind"] == "matches"
+    assert data["metadata"]["scope"] == "yesterday"
+    assert text["delta"] == "当前没有查到符合条件的比赛。"
 
 
 @pytest.mark.asyncio

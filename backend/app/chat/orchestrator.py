@@ -1,8 +1,8 @@
 """Chat orchestrator: historical guard, bounded tool loop, data-first fallback.
 
-Event order is fixed: status → data → text_delta → done. Structured data is
-always emitted before generated prose so the UI can render trusted cards even
-when the model later fails.
+Status events expose the phases before and during model work. Structured data
+is always emitted before generated prose so the UI can render trusted cards
+even when the model later fails.
 """
 
 import json
@@ -191,6 +191,7 @@ class ChatOrchestrator:
                 },
             )
             return
+        yield ChatEvent(type=ChatEventType.STATUS, payload={"stage": "planning"})
         system = GLOBAL_SYSTEM_PROMPT
         if request.scope is ChatScope.MATCH:
             system = f"{system}\n{MATCH_SYSTEM_SUFFIX.format(match_id=request.match_id)}"
@@ -216,6 +217,9 @@ class ChatOrchestrator:
                         "invalid_request", "Too many tool-call rounds requested", 422
                     )
 
+                yield ChatEvent(
+                    type=ChatEventType.STATUS, payload={"stage": "fetching_data"}
+                )
                 messages.append(
                     {
                         "role": "assistant",
@@ -274,6 +278,9 @@ class ChatOrchestrator:
                         type=ChatEventType.DATA, payload=result.model_dump(mode="json")
                     )
                     data_emitted = True
+                yield ChatEvent(
+                    type=ChatEventType.STATUS, payload={"stage": "planning"}
+                )
         except AppError as error:
             yield ChatEvent(
                 type=ChatEventType.ERROR,
@@ -286,6 +293,9 @@ class ChatOrchestrator:
             return
 
         try:
+            yield ChatEvent(
+                type=ChatEventType.STATUS, payload={"stage": "generating"}
+            )
             async for chunk in self._model.stream_text(messages, tools=catalog):
                 yield ChatEvent(type=ChatEventType.TEXT_DELTA, payload={"delta": chunk})
         except Exception:

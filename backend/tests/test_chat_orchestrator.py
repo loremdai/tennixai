@@ -119,10 +119,43 @@ async def test_tool_result_precedes_generated_text() -> None:
 
     events = [event async for event in orchestrator.stream(request)]
 
-    assert [event.type for event in events] == ["status", "data", "text_delta", "done"]
-    assert events[1].payload["matches"][0]["id"].startswith("mat_")
-    assert events[2].payload["delta"] == "Sinner 今晚出场。"
-    assert events[3].payload == {"ok": True}
+    assert [event.type for event in events] == [
+        "status",
+        "status",
+        "status",
+        "data",
+        "status",
+        "status",
+        "text_delta",
+        "done",
+    ]
+    data = next(event for event in events if event.type is ChatEventType.DATA)
+    text = next(event for event in events if event.type is ChatEventType.TEXT_DELTA)
+    assert data.payload["matches"][0]["id"].startswith("mat_")
+    assert text.payload["delta"] == "Sinner 今晚出场。"
+    assert events[-1].payload == {"ok": True}
+
+
+@pytest.mark.asyncio
+async def test_stream_emits_progress_stages_around_planning_and_generation() -> None:
+    model = FakeChatModel(
+        turns=[
+            tool_turn("find_player_matches", {"player_name": "Sinner", "time_scope": "tonight"}),
+            ModelTurn(),
+        ],
+        text_chunks=["已完成。"],
+    )
+    orchestrator, _ = build_orchestrator(model)
+
+    events = [event async for event in orchestrator.stream(global_request("今晚 Sinner 几点打？"))]
+
+    assert [event.payload["stage"] for event in events if event.type is ChatEventType.STATUS] == [
+        "resolving",
+        "planning",
+        "fetching_data",
+        "planning",
+        "generating",
+    ]
 
 
 @pytest.mark.asyncio
@@ -159,9 +192,19 @@ async def test_llm_failure_after_data_keeps_structured_result() -> None:
 
     events = [event async for event in orchestrator.stream(global_request("现在有什么比赛？"))]
 
-    assert [event.type for event in events] == ["status", "data", "text_delta", "error"]
-    assert events[2].payload["delta"] == "比赛数据已找到，但 AI 说明暂时不可用。"
-    assert events[3].payload["code"] == "llm_unavailable"
+    assert [event.type for event in events] == [
+        "status",
+        "status",
+        "status",
+        "data",
+        "status",
+        "status",
+        "text_delta",
+        "error",
+    ]
+    text = next(event for event in events if event.type is ChatEventType.TEXT_DELTA)
+    assert text.payload["delta"] == "比赛数据已找到，但 AI 说明暂时不可用。"
+    assert events[-1].payload["code"] == "llm_unavailable"
 
 
 @pytest.mark.asyncio
@@ -195,9 +238,19 @@ async def test_supported_yesterday_query_uses_history_tool() -> None:
 
     events = [event async for event in orchestrator.stream(global_request("昨天 Sinner 赢了吗？"))]
 
-    assert [event.type for event in events] == ["status", "data", "text_delta", "done"]
-    assert events[1].payload["kind"] == "matches"
-    assert events[1].payload["metadata"]["scope"] == "yesterday"
+    assert [event.type for event in events] == [
+        "status",
+        "status",
+        "status",
+        "data",
+        "status",
+        "status",
+        "text_delta",
+        "done",
+    ]
+    data = next(event for event in events if event.type is ChatEventType.DATA)
+    assert data.payload["kind"] == "matches"
+    assert data.payload["metadata"]["scope"] == "yesterday"
     assert recording.calls["get_recent_results"] == 1
 
 
@@ -212,8 +265,8 @@ async def test_provider_exception_emits_only_status_and_error() -> None:
 
     events = [event async for event in orchestrator.stream(global_request("Federer 下一场对谁？"))]
 
-    assert [event.type for event in events] == ["status", "error"]
-    assert events[1].payload["code"] == "not_found"
+    assert [event.type for event in events] == ["status", "status", "status", "error"]
+    assert events[-1].payload["code"] == "not_found"
 
 
 @pytest.mark.asyncio
@@ -229,8 +282,18 @@ async def test_third_tool_round_is_rejected() -> None:
 
     events = [event async for event in orchestrator.stream(global_request("现在有什么比赛？"))]
 
-    assert [event.type for event in events] == ["status", "data", "data", "error"]
-    assert events[3].payload["code"] == "invalid_request"
+    assert [event.type for event in events] == [
+        "status",
+        "status",
+        "status",
+        "data",
+        "status",
+        "status",
+        "data",
+        "status",
+        "error",
+    ]
+    assert events[-1].payload["code"] == "invalid_request"
 
 
 @pytest.mark.asyncio
@@ -250,10 +313,20 @@ async def test_match_scope_context_appears_in_system_message() -> None:
 
     events = [event async for event in orchestrator.stream(request)]
 
-    assert [event.type for event in events] == ["status", "data", "text_delta", "done"]
-    assert events[1].payload["kind"] == "match"
-    assert events[1].payload["matches"][0]["id"] == known_match_id
-    assert events[1].payload["answer_context"]["match_id"] == known_match_id
+    assert [event.type for event in events] == [
+        "status",
+        "status",
+        "status",
+        "data",
+        "status",
+        "status",
+        "text_delta",
+        "done",
+    ]
+    data = next(event for event in events if event.type is ChatEventType.DATA)
+    assert data.payload["kind"] == "match"
+    assert data.payload["matches"][0]["id"] == known_match_id
+    assert data.payload["answer_context"]["match_id"] == known_match_id
 
     system_message = model.choose_calls[0][0]
     assert system_message["role"] == "system"
@@ -292,8 +365,12 @@ async def test_match_scope_freezes_one_snapshot_for_all_context_tools() -> None:
     data_events = [event for event in events if event.type is ChatEventType.DATA]
     assert [event.type for event in events] == [
         ChatEventType.STATUS,
+        ChatEventType.STATUS,
+        ChatEventType.STATUS,
         ChatEventType.DATA,
         ChatEventType.DATA,
+        ChatEventType.STATUS,
+        ChatEventType.STATUS,
         ChatEventType.TEXT_DELTA,
         ChatEventType.DONE,
     ]
@@ -325,6 +402,8 @@ async def test_match_current_analysis_does_not_offer_unrequested_history_tools()
     events = [event async for event in orchestrator.stream(request)]
 
     assert [event.type for event in events] == [
+        ChatEventType.STATUS,
+        ChatEventType.STATUS,
         ChatEventType.STATUS,
         ChatEventType.TEXT_DELTA,
         ChatEventType.DONE,
@@ -364,7 +443,13 @@ async def test_match_scope_optional_player_lookup_does_not_abort_existing_answer
 
     assert [event.type for event in events] == [
         ChatEventType.STATUS,
+        ChatEventType.STATUS,
+        ChatEventType.STATUS,
         ChatEventType.DATA,
+        ChatEventType.STATUS,
+        ChatEventType.STATUS,
+        ChatEventType.STATUS,
+        ChatEventType.STATUS,
         ChatEventType.TEXT_DELTA,
         ChatEventType.DONE,
     ]
@@ -434,8 +519,8 @@ async def test_choose_failure_without_data_emits_terminal_llm_error() -> None:
 
     events = [event async for event in orchestrator.stream(global_request("今晚 Sinner 几点打？"))]
 
-    assert [event.type for event in events] == ["status", "error"]
-    assert events[1].payload["code"] == "llm_unavailable"
+    assert [event.type for event in events] == ["status", "status", "error"]
+    assert events[-1].payload["code"] == "llm_unavailable"
 
 
 @pytest.mark.asyncio
@@ -445,8 +530,8 @@ async def test_stream_failure_without_data_emits_only_terminal_error() -> None:
 
     events = [event async for event in orchestrator.stream(global_request("你好"))]
 
-    assert [event.type for event in events] == ["status", "error"]
-    assert events[1].payload["code"] == "llm_unavailable"
+    assert [event.type for event in events] == ["status", "status", "status", "error"]
+    assert events[-1].payload["code"] == "llm_unavailable"
 
 
 def test_sse_frame_ends_with_exactly_two_newlines() -> None:

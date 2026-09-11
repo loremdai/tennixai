@@ -15,7 +15,7 @@ import {
 
 import { homeExampleQueries } from '@/components/home/home-data'
 import { MarkdownAnswer } from '@/components/markdown-answer'
-import type { ChatViewState } from '@/hooks/use-chat-stream'
+import { chatStageLabel, type ChatViewState } from '@/hooks/use-chat-stream'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import {
@@ -279,7 +279,7 @@ export function HomeAssistant({
                 <h3 className="mt-2 text-balance text-lg font-semibold">{answerTitle(chat, cards)}</h3>
                 {summary ? <MarkdownAnswer content={summary} /> : null}
                 {chat.phase === 'loading' || chat.phase === 'streaming' ? (
-                  <p className="mt-2 text-xs text-muted-foreground">正在查询…</p>
+                  <p className="mt-2 text-xs text-muted-foreground">{chatStageLabel(chat.stage)}</p>
                 ) : null}
               </article>
 
@@ -309,7 +309,7 @@ export function HomeAssistant({
               <div className="flex size-10 items-center justify-center rounded-full bg-secondary text-primary">
                 <BrainCircuit aria-hidden="true" className="size-5" />
               </div>
-              <p className="font-medium">正在查询…</p>
+              <p className="font-medium">{chatStageLabel(chat.stage)}</p>
             </div>
           ) : (
             <div className="flex min-h-36 flex-col items-center justify-center gap-3 rounded-xl border border-dashed bg-muted/15 p-5 text-center">

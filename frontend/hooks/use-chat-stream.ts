@@ -7,6 +7,7 @@ import type { AnswerContextDto, StructuredData } from '@/lib/api/types'
 
 export type ChatViewState = {
   phase: 'idle' | 'loading' | 'streaming' | 'success' | 'error'
+  stage: string | null
   question: string
   text: string
   data: StructuredData | null
@@ -20,11 +21,23 @@ const MAX_HISTORY = 12
 
 const IDLE_STATE: ChatViewState = {
   phase: 'idle',
+  stage: null,
   question: '',
   text: '',
   data: null,
   answerContext: null,
   error: null,
+}
+
+const CHAT_STAGE_LABELS: Record<string, string> = {
+  resolving: '正在锁定比赛快照…',
+  planning: '正在拆解问题…',
+  fetching_data: '正在读取比赛数据…',
+  generating: '正在组织回答…',
+}
+
+export function chatStageLabel(stage: string | null): string {
+  return (stage && CHAT_STAGE_LABELS[stage]) || '正在查询…'
 }
 
 function getErrorDetails(error: unknown): Record<string, unknown> {
@@ -68,6 +81,7 @@ export function useChatStream(scope: 'global' | 'match', matchId?: string): {
       ].slice(-MAX_HISTORY)
       setState({
         phase: 'loading',
+        stage: null,
         question: prompt,
         text: '',
         data: null,
@@ -87,24 +101,27 @@ export function useChatStream(scope: 'global' | 'match', matchId?: string): {
           if (!mountedRef.current || controller.signal.aborted) return
           switch (event.type) {
             case 'status':
+              setState((current) => ({ ...current, stage: event.payload.stage }))
               break
             case 'data':
               setState((current) => ({
                 ...current,
                 phase: 'streaming',
+                stage: 'fetching_data',
                 data: event.payload,
                 answerContext: current.answerContext ?? event.payload.answer_context ?? null,
               }))
               break
             case 'text_delta':
               text += event.payload.delta
-              setState((current) => ({ ...current, phase: 'streaming', text }))
+              setState((current) => ({ ...current, phase: 'streaming', stage: 'generating', text }))
               break
             case 'error':
               terminated = true
               setState((current) => ({
                 ...current,
                 phase: 'error',
+                stage: null,
                 error: {
                   code: event.payload.code,
                   message: event.payload.message,
@@ -114,7 +131,7 @@ export function useChatStream(scope: 'global' | 'match', matchId?: string): {
               break
             case 'done':
               terminated = true
-              setState((current) => ({ ...current, phase: 'success' }))
+              setState((current) => ({ ...current, phase: 'success', stage: null }))
               break
           }
           if (terminated) break
@@ -122,7 +139,7 @@ export function useChatStream(scope: 'global' | 'match', matchId?: string): {
 
         if (!mountedRef.current || controller.signal.aborted) return
         if (!terminated) {
-          setState((current) => ({ ...current, phase: 'success' }))
+          setState((current) => ({ ...current, phase: 'success', stage: null }))
         }
         if (text) {
           historyRef.current = [
@@ -141,6 +158,7 @@ export function useChatStream(scope: 'global' | 'match', matchId?: string): {
         setState((current) => ({
           ...current,
           phase: 'error',
+          stage: null,
           error: { code, message, details: getErrorDetails(error) },
         }))
       }
@@ -152,7 +170,7 @@ export function useChatStream(scope: 'global' | 'match', matchId?: string): {
     abortRef.current?.abort()
     setState((current) =>
       current.phase === 'loading' || current.phase === 'streaming'
-        ? { ...current, phase: 'idle' }
+        ? { ...current, phase: 'idle', stage: null }
         : current,
     )
   }, [])
