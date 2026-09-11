@@ -3,11 +3,11 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-10 11:17 CST
+**最后更新：** 2026-09-11 10:28 CST
 
-**当前任务：** P2 post-close real-data hardening — 修复直播发现、终态混入和统计周期渲染
+**当前任务：** T34 — 修复详情页实时 worker 因 PBP 主键冲突退出
 
-**任务状态：** `done`
+**任务状态：** `in_progress`
 
 **当前执行者 / ADE：** Codex / Codex
 
@@ -17,9 +17,9 @@
 
 **最后验证的产品提交：** `b60217e`
 
-**本次任务起始提交：** `626feab`
+**本次任务起始提交：** `d16dbfe`
 
-**本次任务领取时间：** 2026-09-10 10:42 CST
+**本次任务领取时间：** 2026-09-11 10:28 CST
 
 **T30 完成提交：** `8c9e161`
 
@@ -74,6 +74,17 @@
 - 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`（任务外）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`（next dev 自动生成）、`frontend/next-env.d.ts`（Next 工具链生成）；保留原样。
 
 ## 当前任务
+
+### T34 — 修复详情页实时 worker 因 PBP 主键冲突退出
+
+- **状态：** `in_progress`
+- **执行者 / ADE：** Codex / Codex
+- **分支：** `main`
+- **起始提交：** `d16dbfe`
+- **领取时间：** 2026-09-11 10:28 CST
+- **范围：** 修复 API-Tennis 实时快照在供应商 PBP 重排/修正后生成重复 `point_events.id`，导致 PostgreSQL `save_reduction` 唯一约束异常并使后台 realtime worker 静默退出；保持详情页 REST/SSE、Home 数据和官方缺失字段语义不变。
+- **执行方式：** 先用真实浏览器复现 Home→Match，再用官方 API-Tennis REST/WebSocket 对照定位；回归测试先红后绿；重启真实服务后复核详情页无需刷新即可追上首页比分。
+- **阻塞：** 无。
 
 ### P2 post-close real-data hardening — 修复直播发现、终态混入和统计周期渲染
 
