@@ -107,7 +107,7 @@ export function MatchPointsTimeline({
   if (points.length === 0) {
     return (
       <p className="rounded-lg bg-muted/25 p-4 text-sm text-muted-foreground">
-        逐分数据暂未提供；开赛后逐分事件会在此按盘/局展开。
+        供应商尚未返回逐分数据；开赛后逐分事件会在此按盘/局展开。
       </p>
     )
   }

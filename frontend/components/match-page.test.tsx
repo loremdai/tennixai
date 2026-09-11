@@ -204,7 +204,7 @@ describe('production match page', () => {
     render(<MatchPage matchId="mat_1" />)
 
     await screen.findByText('Jannik Sinner')
-    expect(screen.getAllByText('暂未提供').length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/官方未返回|官方未提供/).length).toBeGreaterThan(0)
   })
 
   it('shows the stale indicator', async () => {
@@ -312,8 +312,8 @@ describe('production match page', () => {
     render(<MatchPage matchId="mat_1" />)
     await screen.findByText('Jannik Sinner')
 
-    expect(screen.getByText(/技术统计暂未提供/)).toBeVisible()
-    expect(screen.getByText(/逐分数据暂未提供/)).toBeVisible()
+    expect(screen.getByText(/供应商尚未返回本场技术统计/)).toBeVisible()
+    expect(screen.getByText(/供应商尚未返回逐分数据/)).toBeVisible()
     expect(screen.queryByText('一发成功率')).toBeNull()
     expect(screen.queryByText(/Sinner \+14/)).toBeNull()
   })

@@ -85,7 +85,7 @@ function RecentControlPanel({
   if (!latest || chart.length === 0) {
     return (
       <p className="rounded-md bg-muted/25 px-3 py-2 text-xs text-muted-foreground">
-        近期控制指数暂未提供；校准完成后将在此展示最近 20 分走势，缺失能力保持缺失。
+        近期控制指数尚未计算；需要供应商返回可判定逐分数据后才会展示最近 20 分走势。
       </p>
     )
   }
@@ -96,7 +96,7 @@ function RecentControlPanel({
         <div>
           <p className="text-sm font-medium">{leaderName(match, latest.leader_player_id)} {formatIndex(latest.value)}</p>
           <p className="text-xs text-muted-foreground">
-            最近 {chart.length} 分 · {asOf ? `更新于 ${asOf}` : '更新时间暂未提供'}
+            最近 {chart.length} 分 · {asOf ? `更新于 ${asOf}` : '更新时间官方未返回'}
           </p>
         </div>
         {latest.is_provisional ? <Badge variant="outline">暂定走势</Badge> : <Badge variant="secondary">已校准</Badge>}

@@ -97,9 +97,9 @@ describe('toHomeMatch', () => {
       baseMatch({ round: null, surface: null, indoor: null, scheduled_at: null }),
     )
 
-    expect(view.round).toBe('暂未提供')
-    expect(view.surface).toBe('暂未提供')
-    expect(view.time).toBe('暂未提供')
+    expect(view.round).toBe('官方未返回轮次')
+    expect(view.surface).toBe('官方未返回场地类型')
+    expect(view.time).toBe('官方未返回开赛时间')
   })
 
   it('maps cancelled, postponed, and unknown to unavailable status', () => {
@@ -159,12 +159,12 @@ describe('toMatchViewModel', () => {
       baseMatch({ round: null, surface: null, indoor: null, format: null, scheduled_at: null }),
     )
 
-    expect(view.round).toBe('暂未提供')
-    expect(view.surface).toBe('暂未提供')
-    expect(view.indoorLabel).toBe('暂未提供')
-    expect(view.format).toBe('暂未提供')
-    expect(view.scheduledDate).toBe('暂未提供')
-    expect(view.scheduledTime).toBe('暂未提供')
+    expect(view.round).toBe('官方未返回轮次')
+    expect(view.surface).toBe('官方未返回场地类型')
+    expect(view.indoorLabel).toBe('官方未返回室内外')
+    expect(view.format).toBe('官方未返回赛制')
+    expect(view.scheduledDate).toBe('官方未返回开赛日期')
+    expect(view.scheduledTime).toBe('官方未返回开赛时间')
   })
 
   it('maps format and indoor labels', () => {
@@ -172,6 +172,20 @@ describe('toMatchViewModel', () => {
     expect(toMatchViewModel(baseMatch({ format: 'BO5' })).format).toContain('BO5')
     expect(toMatchViewModel(baseMatch({ indoor: true })).indoorLabel).toBe('室内')
     expect(toMatchViewModel(baseMatch({ indoor: false })).indoorLabel).toBe('室外')
+  })
+
+  it('explains missing player country codes instead of showing a bare placeholder', () => {
+    const view = toMatchViewModel(
+      baseMatch({
+        players: [
+          { id: 'ply_1', name: 'Alexander Zverev', country_code: null, ranking: 2 },
+          { id: 'ply_2', name: 'Karen Khachanov', country_code: null, ranking: 142 },
+        ],
+      }),
+    )
+
+    expect(view.players[0].countryCode).toBe('官方未提供国家代码')
+    expect(view.players[1].countryCode).toBe('官方未提供国家代码')
   })
 
   it('carries score, server, and winner ids unchanged', () => {
@@ -220,7 +234,7 @@ describe('statistics presentation mapping', () => {
     expect(formatStatValue(68, 'percent')).toBe('68%')
     expect(formatStatValue(181.5, 'km/h')).toBe('181.5 km/h')
     expect(formatStatValue(2410, 'm')).toBe('2410 m')
-    expect(formatStatValue(null, 'count')).toBe('暂未提供')
+    expect(formatStatValue(null, 'count')).toBe('官方未返回')
   })
 
   it('formats snapshot as_of in Macau time and keeps missing values null', () => {

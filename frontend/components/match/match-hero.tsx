@@ -76,7 +76,7 @@ function PlayerSummary({
         {player.ranking !== null ? (
           <Badge variant="outline">{previewPlayer ? `${previewPlayer.seed} 号种子` : `#${player.ranking}`}</Badge>
         ) : (
-          <Badge variant="outline">排名暂未提供</Badge>
+          <Badge variant="outline">官方未返回排名</Badge>
         )}
       </div>
 
@@ -85,7 +85,7 @@ function PlayerSummary({
           {player.name}
         </p>
         <p className="mt-1 text-sm text-muted-foreground">
-          {player.ranking !== null ? `世界排名 #${player.ranking}` : '世界排名暂未提供'}
+          {player.ranking !== null ? `世界排名 #${player.ranking}` : '世界排名官方未返回'}
         </p>
       </div>
 
@@ -222,7 +222,9 @@ function LiveScore({
         <span>
           {match.serverPlayerId
             ? `${match.players.find((player) => player.id === match.serverPlayerId)?.shortName ?? ''} 发球`
-            : '发球方暂未提供'}
+            : match.visualStatus === 'upcoming'
+              ? '开赛前未产生发球方'
+              : '官方未返回发球方'}
         </span>
         <span aria-hidden="true">·</span>
         <span>当前局 {score.points[0] ?? '–'}–{score.points[1] ?? '–'}</span>

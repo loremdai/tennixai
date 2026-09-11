@@ -235,6 +235,22 @@ def test_profile_metadata_change_advances_version() -> None:
     ]
 
 
+def test_match_metadata_change_advances_version_and_reports_metadata_event() -> None:
+    previous = MatchSnapshot(match=base_match(), state_version=0, as_of=NOW)
+    candidate = MatchSnapshot(
+        match=base_match().model_copy(update={"surface": "hard"}),
+        state_version=0,
+        as_of=NOW,
+    )
+
+    reduction = reduce_live_snapshot(previous, candidate)
+
+    assert reduction.changed is True
+    assert reduction.events == (ReductionChange.MATCH_METADATA_UPDATED,)
+    assert reduction.snapshot.match.surface == "hard"
+    assert reduction.snapshot.state_version == 1
+
+
 def test_point_correction_recomputes_recent_control_from_changed_point() -> None:
     history = seven_point_history()
     first = reduce_live_snapshot(None, supplier_snapshot(points=history))

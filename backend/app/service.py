@@ -586,6 +586,77 @@ class TennisService:
     async def _normalize_snapshot(self, snapshot: MatchSnapshot) -> MatchSnapshot:
         return normalize_snapshot_quality(await self._hydrate_snapshot_players(snapshot))
 
+    async def _persist_snapshot_upgrade(
+        self, previous: MatchSnapshot, candidate: MatchSnapshot
+    ) -> MatchSnapshot:
+        if candidate == previous or self._snapshots is None:
+            return candidate
+        reduction = reduce_live_snapshot(previous, candidate)
+        if not reduction.changed:
+            return candidate
+        await self._snapshots.save_reduction(reduction)
+        return reduction.snapshot
+
+    async def _refresh_missing_match_metadata(
+        self, snapshot: MatchSnapshot
+    ) -> MatchSnapshot:
+        normalized = await self._normalize_snapshot(snapshot)
+        normalized = await self._persist_snapshot_upgrade(snapshot, normalized)
+        # Fixture/draw responses can fill these three canonical fields. The
+        # current API does not expose indoor/format, so those stay null rather
+        # than triggering a request that cannot improve the snapshot.
+        if not any(
+            value is None
+            for value in (
+                normalized.match.scheduled_at,
+                normalized.match.round,
+                normalized.match.surface,
+            )
+        ):
+            return normalized
+
+        async def load_optional_metadata() -> object:
+            try:
+                return await self._provider.get_match_snapshot(normalized.match.id)
+            except AppError:
+                # Existing canonical data remains usable when optional
+                # enrichment is unavailable or the provider plan omits the
+                # draw endpoint.
+                return None
+
+        outcome = await self._cache.get_or_load(
+            f"match-metadata:{normalized.match.id}",
+            load_optional_metadata,
+            ttl=lambda value: 300 if isinstance(value, MatchSnapshot) else 60,
+            stale_ttl=0,
+        )
+        candidate = cast(MatchSnapshot | None, outcome.value)
+        if candidate is None:
+            return normalized
+        candidate = await self._normalize_snapshot(candidate)
+        current_match = normalized.match
+        provider_match = candidate.match
+        merged_match = current_match.model_copy(
+            update={
+                "scheduled_at": current_match.scheduled_at or provider_match.scheduled_at,
+                "round": current_match.round or provider_match.round,
+                "surface": current_match.surface or provider_match.surface,
+                "indoor": (
+                    current_match.indoor
+                    if current_match.indoor is not None
+                    else provider_match.indoor
+                ),
+                "format": current_match.format or provider_match.format,
+            }
+        )
+        merged = normalized.model_copy(
+            update={
+                "match": merged_match,
+                "as_of": candidate.as_of,
+            }
+        )
+        return await self._persist_snapshot_upgrade(normalized, merged)
+
     async def resolve_match_snapshot(self, match_id: str) -> MatchSnapshot:
         """Redis hot snapshot first, PostgreSQL second, provider REST last.
 
@@ -594,11 +665,11 @@ class TennisService:
         if self._publisher is not None:
             hot = await self._publisher.get_hot_snapshot(match_id)
             if hot is not None:
-                return await self._normalize_snapshot(hot)
+                return await self._refresh_missing_match_metadata(hot)
         if self._snapshots is not None:
             stored = await self._snapshots.load_snapshot(match_id)
             if stored is not None:
-                return await self._normalize_snapshot(stored)
+                return await self._refresh_missing_match_metadata(stored)
         candidate = await self._provider.get_match_snapshot(match_id)
         candidate = await self._normalize_snapshot(candidate)
         if self._snapshots is not None:

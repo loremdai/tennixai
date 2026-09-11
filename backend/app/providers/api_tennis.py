@@ -40,6 +40,7 @@ from app.identity import IdentityRepository
 from app.providers.api_tennis_classification import classify_event_type
 from app.providers.api_tennis_dtos import (
     ApiTennisResponse,
+    DrawResultDto,
     HeadToHeadDto,
     MatchDto,
     PlayerDto,
@@ -88,6 +89,84 @@ TERMINAL_STATUSES = frozenset(
     {MatchStatus.FINISHED, MatchStatus.CANCELLED, MatchStatus.POSTPONED}
 )
 
+SURFACE_ALIASES = {
+    "hard": "hard",
+    "hard court": "hard",
+    "clay": "clay",
+    "red clay": "clay",
+    "grass": "grass",
+}
+
+# API-Tennis exposes player_country as a name, while the canonical model has
+# an ISO 3166-1 alpha-3 code. Unknown names and non-country markers (for
+# example, "World") stay unavailable instead of being guessed.
+COUNTRY_CODES = {
+    "argentina": "arg",
+    "australia": "aus",
+    "austria": "aut",
+    "belarus": "blr",
+    "belgium": "bel",
+    "brazil": "bra",
+    "bulgaria": "bgr",
+    "canada": "can",
+    "chile": "chl",
+    "china": "chn",
+    "colombia": "col",
+    "croatia": "hrv",
+    "czech republic": "cze",
+    "czechia": "cze",
+    "denmark": "dnk",
+    "egypt": "egy",
+    "estonia": "est",
+    "finland": "fin",
+    "france": "fra",
+    "georgia": "geo",
+    "germany": "deu",
+    "greece": "grc",
+    "hungary": "hun",
+    "india": "ind",
+    "indonesia": "idn",
+    "ireland": "irl",
+    "israel": "isr",
+    "italy": "ita",
+    "japan": "jpn",
+    "kazakhstan": "kaz",
+    "latvia": "lva",
+    "lithuania": "ltu",
+    "luxembourg": "lux",
+    "malaysia": "mys",
+    "mexico": "mex",
+    "morocco": "mar",
+    "netherlands": "nld",
+    "new zealand": "nzl",
+    "norway": "nor",
+    "poland": "pol",
+    "portugal": "prt",
+    "romania": "rou",
+    "russia": "rus",
+    "serbia": "srb",
+    "slovakia": "svk",
+    "slovenia": "svn",
+    "south africa": "zaf",
+    "south korea": "kor",
+    "spain": "esp",
+    "sweden": "swe",
+    "switzerland": "che",
+    "taiwan": "twn",
+    "thailand": "tha",
+    "tunisia": "tun",
+    "turkey": "tur",
+    "ukraine": "ukr",
+    "united kingdom": "gbr",
+    "great britain": "gbr",
+    "united states": "usa",
+    "usa": "usa",
+    "uruguay": "ury",
+    "uzbekistan": "uzb",
+    "venezuela": "ven",
+    "vietnam": "vnm",
+}
+
 
 def map_status(event_status: str | None, event_live: str | None = None) -> MatchStatus:
     text = (event_status or "").strip().casefold()
@@ -105,6 +184,15 @@ def map_status(event_status: str | None, event_live: str | None = None) -> Match
     if text in {"", "1", "0", "-", "not started", "scheduled", "vs", "vs."}:
         return MatchStatus.SCHEDULED
     return MatchStatus.UNKNOWN
+
+
+def normalize_surface(raw: str | None) -> str | None:
+    return SURFACE_ALIASES.get(" ".join((raw or "").strip().casefold().split()))
+
+
+def country_code_from_name(country: str | None) -> str | None:
+    normalized = " ".join((country or "").strip().casefold().split())
+    return COUNTRY_CODES.get(normalized)
 
 
 def parse_int_pair(raw: str | None) -> tuple[int, int] | None:
@@ -236,7 +324,11 @@ def map_live_state(
 
 
 async def map_match(
-    dto: MatchDto, identities: IdentityRepository, now: Callable[[], datetime]
+    dto: MatchDto,
+    identities: IdentityRepository,
+    now: Callable[[], datetime],
+    *,
+    surface: str | None = None,
 ) -> Match | None:
     if dto.first_player_key is None or dto.second_player_key is None:
         return None
@@ -281,7 +373,7 @@ async def map_match(
         tournament=tournament,
         scheduled_at=parse_scheduled_at(dto.event_date, dto.event_time),
         round=dto.tournament_round,
-        surface=None,
+        surface=surface,
         indoor=None,
         format=None,
         live_state=live_state,
@@ -499,9 +591,13 @@ def _leading_int(raw: str | None) -> int | None:
 
 
 async def map_livescore_row_to_snapshot(
-    dto: MatchDto, identities: IdentityRepository, now: Callable[[], datetime]
+    dto: MatchDto,
+    identities: IdentityRepository,
+    now: Callable[[], datetime],
+    *,
+    surface: str | None = None,
 ) -> MatchSnapshot | None:
-    match = await map_match(dto, identities, now)
+    match = await map_match(dto, identities, now, surface=surface)
     if match is None:
         return None
     player_ids = (match.players[0].id, match.players[1].id)
@@ -605,6 +701,27 @@ class ApiTennisProvider:
         parsed = self._validate(ApiTennisResponse[list[MatchDto]], payload)
         return list(parsed.result or [])
 
+    async def _draw_surface(self, dto: MatchDto) -> str | None:
+        if dto.tournament_key is None:
+            return None
+        params: dict[str, Any] = {
+            "timezone": "GMT",
+            "tournament_key": str(dto.tournament_key),
+        }
+        if dto.tournament_season:
+            params["tournament_season"] = dto.tournament_season
+        try:
+            payload = await self._request("get_draw", params)
+            parsed = self._validate(ApiTennisResponse[DrawResultDto], payload)
+        except AppError:
+            # Draw metadata is an optional enrichment. A plan limitation or a
+            # missing draw must not hide an otherwise valid match snapshot.
+            return None
+        tournament = parsed.result.tournament if parsed.result else None
+        return normalize_surface(
+            tournament.tournament_surface if tournament is not None else None
+        )
+
     @staticmethod
     def _filter(matches: list[Match], player_id: str | None) -> list[Match]:
         if player_id is None:
@@ -699,7 +816,7 @@ class ApiTennisProvider:
             id=player_id,
             name=(dto.player_full_name or dto.player_name or "").strip()
             or "Unknown player",
-            country_code=None,
+            country_code=country_code_from_name(dto.player_country),
             ranking=_latest_ranking(dto),
         )
 
@@ -718,7 +835,10 @@ class ApiTennisProvider:
             )
         if not rows:
             raise AppError("not_found", "Match not found", 404)
-        match = await map_match(rows[0], self._identities, self._now)
+        surface = await self._draw_surface(rows[0])
+        match = await map_match(
+            rows[0], self._identities, self._now, surface=surface
+        )
         if match is None:
             raise AppError("not_found", "Match not found", 404)
         return match
@@ -738,7 +858,10 @@ class ApiTennisProvider:
             )
         if not rows:
             raise AppError("not_found", "Match not found", 404)
-        snapshot = await map_livescore_row_to_snapshot(rows[0], self._identities, self._now)
+        surface = await self._draw_surface(rows[0])
+        snapshot = await map_livescore_row_to_snapshot(
+            rows[0], self._identities, self._now, surface=surface
+        )
         if snapshot is None:
             raise AppError("not_found", "Match not found", 404)
         return snapshot

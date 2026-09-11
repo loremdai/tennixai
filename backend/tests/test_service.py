@@ -133,6 +133,19 @@ class CountingProvider:
         ]
 
 
+class MemorySnapshotStore:
+    def __init__(self, snapshot: MatchSnapshot) -> None:
+        self.snapshot = snapshot
+        self.saved = []
+
+    async def load_snapshot(self, match_id: str) -> MatchSnapshot | None:
+        return self.snapshot if self.snapshot.match.id == match_id else None
+
+    async def save_reduction(self, reduction) -> None:
+        self.saved.append(reduction)
+        self.snapshot = reduction.snapshot
+
+
 def build_match(
     match_id: str,
     status: MatchStatus,
@@ -163,13 +176,20 @@ def build_match(
 
 
 def build_service(
-    provider: CountingProvider, now: datetime = NOW_UTC
+    provider: CountingProvider,
+    now: datetime = NOW_UTC,
+    *,
+    snapshots=None,
 ) -> tuple[TennisService, UtcClock, NumericClock]:
     utc_clock = UtcClock(now)
     numeric_clock = NumericClock()
     cache: AsyncTTLCache[str, object] = AsyncTTLCache(max_entries=256, now=numeric_clock)
     service = TennisService(
-        provider, cache, now=utc_clock, timezone="Asia/Macau"
+        provider,
+        cache,
+        now=utc_clock,
+        timezone="Asia/Macau",
+        snapshots=snapshots,
     )
     return service, utc_clock, numeric_clock
 
@@ -398,6 +418,28 @@ async def test_match_snapshot_hydrates_missing_player_profiles_once() -> None:
     assert [player.ranking for player in first.match.players] == [1, 2]
     assert [player.ranking for player in second.match.players] == [1, 2]
     assert provider.calls["get_player"] == 2
+
+
+@pytest.mark.asyncio
+async def test_match_snapshot_refreshes_and_persists_missing_match_metadata() -> None:
+    stored_match = build_match("mat_metadata", MatchStatus.SCHEDULED, NOW_UTC)
+    stored = MatchSnapshot(match=stored_match, state_version=0, as_of=NOW_UTC)
+    provider_match = stored_match.model_copy(update={"surface": "hard"})
+    provider_snapshot = MatchSnapshot(
+        match=provider_match, state_version=0, as_of=NOW_UTC
+    )
+    provider = CountingProvider(snapshots={stored_match.id: provider_snapshot})
+    store = MemorySnapshotStore(stored)
+    service, _, _ = build_service(provider, snapshots=store)
+
+    first = await service.resolve_match_snapshot(stored_match.id)
+    second = await service.resolve_match_snapshot(stored_match.id)
+
+    assert first.match.surface == "hard"
+    assert second.match.surface == "hard"
+    assert provider.calls["get_match_snapshot"] == 1
+    assert len(store.saved) == 1
+    assert store.saved[0].snapshot.match.surface == "hard"
 
 
 @pytest.mark.asyncio

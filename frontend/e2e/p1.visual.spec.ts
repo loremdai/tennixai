@@ -37,7 +37,7 @@ const states: Array<[string, (page: Page) => Promise<void>]> = [
     await preparePage(page, '/')
     await page.getByRole('link', { name: '打开比赛', exact: true }).click()
     await page.locator('#match').waitFor()
-    await page.getByText('技术统计暂未提供').first().waitFor()
+    await page.getByText('供应商尚未返回本场技术统计').first().waitFor()
   }],
   ['p1-match-upcoming', async (page) => {
     await preparePage(page, '/?q=' + encodeURIComponent('Sinner 今晚几点比赛？'))

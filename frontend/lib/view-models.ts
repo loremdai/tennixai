@@ -48,7 +48,13 @@ export type MatchViewModel = {
   isStale: boolean
 }
 
-const UNAVAILABLE = '暂未提供'
+const OFFICIAL_MISSING_ROUND = '官方未返回轮次'
+const OFFICIAL_MISSING_SURFACE = '官方未返回场地类型'
+const OFFICIAL_MISSING_INDOOR = '官方未返回室内外'
+const OFFICIAL_MISSING_FORMAT = '官方未返回赛制'
+const OFFICIAL_MISSING_COUNTRY = '官方未提供国家代码'
+const OFFICIAL_MISSING_DATE = '官方未返回开赛日期'
+const OFFICIAL_MISSING_TIME = '官方未返回开赛时间'
 
 const timeFormatter = new Intl.DateTimeFormat('zh-CN', {
   timeZone: 'Asia/Macau',
@@ -77,17 +83,21 @@ function toVisualStatus(status: MatchStatus): HomeMatchViewModel['status'] {
 }
 
 function formatTime(iso: string | null): string {
-  if (!iso) return UNAVAILABLE
+  if (!iso) return OFFICIAL_MISSING_TIME
   return timeFormatter.format(new Date(iso))
 }
 
 function formatDate(iso: string | null): string {
-  if (!iso) return UNAVAILABLE
+  if (!iso) return OFFICIAL_MISSING_DATE
   return dateFormatter.format(new Date(iso))
 }
 
 function surfaceLabel(surface: string | null, indoor: boolean | null): string {
-  if (!surface) return UNAVAILABLE
+  if (!surface) {
+    return indoor === null
+      ? OFFICIAL_MISSING_SURFACE
+      : `${indoor ? '室内' : '室外'} · ${OFFICIAL_MISSING_SURFACE}`
+  }
   const base = SURFACE_LABELS[surface] ?? surface
   return indoor ? `室内${base}` : base
 }
@@ -122,7 +132,7 @@ export function toHomeMatch(match: MatchDto): HomeMatchViewModel {
     href: matchHref(match),
     status: toVisualStatus(match.status),
     tournament: match.tournament.name,
-    round: match.round ?? UNAVAILABLE,
+    round: match.round ?? OFFICIAL_MISSING_ROUND,
     time: match.status === 'live' ? '进行中' : formatTime(match.scheduled_at),
     surface: surfaceLabel(match.surface, match.indoor),
     players: [shortName(match.players[0].name), shortName(match.players[1].name)],
@@ -159,20 +169,20 @@ export function toMatchViewModel(match: MatchDto): MatchViewModel {
     canonicalStatus: match.status,
     visualStatus: toVisualStatus(match.status),
     tournament: match.tournament.name,
-    round: match.round ?? UNAVAILABLE,
+    round: match.round ?? OFFICIAL_MISSING_ROUND,
     surface: surfaceLabel(match.surface, match.indoor),
     scheduledDate: formatDate(match.scheduled_at),
     scheduledTime: formatTime(match.scheduled_at),
     timezoneLabel: '澳门时间',
-    format: match.format ? (match.format === 'BO5' ? '五盘三胜 · BO5' : `三盘两胜 · ${match.format}`) : UNAVAILABLE,
-    indoorLabel: match.indoor === null ? UNAVAILABLE : match.indoor ? '室内' : '室外',
+    format: match.format ? (match.format === 'BO5' ? '五盘三胜 · BO5' : `三盘两胜 · ${match.format}`) : OFFICIAL_MISSING_FORMAT,
+    indoorLabel: match.indoor === null ? OFFICIAL_MISSING_INDOOR : match.indoor ? '室内' : '室外',
     players: [
       {
         id: match.players[0].id,
         name: match.players[0].name,
         shortName: shortName(match.players[0].name),
         initials: initials(match.players[0].name),
-        countryCode: (match.players[0].country_code ?? UNAVAILABLE).toUpperCase(),
+        countryCode: (match.players[0].country_code ?? OFFICIAL_MISSING_COUNTRY).toUpperCase(),
         ranking: match.players[0].ranking,
       },
       {
@@ -180,7 +190,7 @@ export function toMatchViewModel(match: MatchDto): MatchViewModel {
         name: match.players[1].name,
         shortName: shortName(match.players[1].name),
         initials: initials(match.players[1].name),
-        countryCode: (match.players[1].country_code ?? UNAVAILABLE).toUpperCase(),
+        countryCode: (match.players[1].country_code ?? OFFICIAL_MISSING_COUNTRY).toUpperCase(),
         ranking: match.players[1].ranking,
       },
     ],
@@ -224,7 +234,7 @@ export const STAT_META: Record<string, StatMeta> = {
 }
 
 export function formatStatValue(value: number | null, unit: string): string {
-  if (value === null) return '暂未提供'
+  if (value === null) return '官方未返回'
   if (unit === 'percent') return `${trimNumber(value)}%`
   if (unit === 'count') return trimNumber(value)
   return `${trimNumber(value)} ${unit}`

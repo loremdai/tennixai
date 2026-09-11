@@ -87,12 +87,29 @@ def _state_fingerprint(match: Match) -> tuple:
     return (
         match.status,
         match.winner_player_id,
+        _match_metadata_fingerprint(match),
         tuple(
             (player.id, player.name, player.country_code, player.ranking)
             for player in match.players
         ),
         live.connection_status if live is not None else None,
         _score_fingerprint(match),
+    )
+
+
+def _match_metadata_fingerprint(match: Match) -> tuple:
+    return (
+        match.scheduled_at,
+        match.round,
+        match.surface,
+        match.indoor,
+        match.format,
+        match.tournament.id,
+        match.tournament.name,
+        match.tournament.tour,
+        match.tournament.circuit,
+        match.tournament.gender,
+        match.tournament.discipline,
     )
 
 
@@ -117,7 +134,16 @@ def _preserve_player_metadata(previous: Match, candidate: Match) -> Match:
         )
         for stored, incoming in zip(previous.players, candidate.players)
     )
-    return candidate.model_copy(update={"players": players})
+    return candidate.model_copy(
+        update={
+            "players": players,
+            "scheduled_at": candidate.scheduled_at or previous.scheduled_at,
+            "round": candidate.round or previous.round,
+            "surface": candidate.surface or previous.surface,
+            "indoor": candidate.indoor if candidate.indoor is not None else previous.indoor,
+            "format": candidate.format or previous.format,
+        }
+    )
 
 
 def _preferred_player_name(stored: str, incoming: str) -> str:
@@ -226,6 +252,10 @@ def reduce_live_snapshot(
             )
         ):
             changes.add(ReductionChange.CONNECTION_UPDATED)
+        if _match_metadata_fingerprint(match) != _match_metadata_fingerprint(
+            previous.match
+        ):
+            changes.add(ReductionChange.MATCH_METADATA_UPDATED)
 
     previous_points = sorted(previous.points, key=lambda item: item.sequence)
     previous_by_identity = {_point_identity(item): item for item in previous_points}

@@ -95,7 +95,7 @@ function FeaturedScore({ match }: { match: MatchViewModel }) {
   return (
     <div className="flex flex-col gap-3 rounded-xl bg-background/45 p-4">
       <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-        <span>{setCount > 0 ? `第 ${setCount} 盘` : '比分暂未提供'}</span>
+        <span>{setCount > 0 ? `第 ${setCount} 盘` : '官方未返回比分'}</span>
         <span className="font-mono">{match.freshnessLabel}</span>
       </div>
       {score ? (
@@ -133,7 +133,7 @@ function FeaturedScore({ match }: { match: MatchViewModel }) {
       <p className="border-t pt-3 text-center text-xs text-muted-foreground">
         {match.serverPlayerId
           ? `${match.players.find((player) => player.id === match.serverPlayerId)?.shortName ?? ''} 发球`
-          : '发球方暂未提供'}
+          : '官方未返回发球方'}
       </p>
     </div>
   )
@@ -215,7 +215,7 @@ export function FeaturedMatchSection({
                     <span className="text-primary">
                       {match.serverPlayerId
                         ? `${match.players.find((player) => player.id === match.serverPlayerId)?.shortName ?? ''} 发球`
-                        : '发球方暂未提供'}
+                        : '官方未返回发球方'}
                     </span>
                   </>
                 ) : (

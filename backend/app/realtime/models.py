@@ -22,6 +22,7 @@ class ReductionChange(StrEnum):
     MOMENTUM_UPDATED = "momentum_updated"
     QUALITY_UPDATED = "quality_updated"
     CONNECTION_UPDATED = "connection_updated"
+    MATCH_METADATA_UPDATED = "match_metadata_updated"
     PLAYER_METADATA_UPDATED = "player_metadata_updated"
 
 
@@ -33,6 +34,7 @@ CHANGE_ORDER: tuple[ReductionChange, ...] = (
     ReductionChange.MOMENTUM_UPDATED,
     ReductionChange.QUALITY_UPDATED,
     ReductionChange.CONNECTION_UPDATED,
+    ReductionChange.MATCH_METADATA_UPDATED,
     ReductionChange.PLAYER_METADATA_UPDATED,
 )
 

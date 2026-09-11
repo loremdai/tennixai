@@ -151,6 +151,6 @@ describe('MatchMomentumCard', () => {
         snapshot={{ ...snapshot(0), points: [] }}
       />,
     )
-    expect(screen.getByText(/近期控制指数暂未提供/)).toBeVisible()
+    expect(screen.getByText(/近期控制指数尚未计算/)).toBeVisible()
   })
 })

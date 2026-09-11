@@ -20,8 +20,10 @@ from app.errors import AppError
 from app.identity import MemoryIdentityRepository
 from app.providers.api_tennis import (
     ApiTennisProvider,
+    country_code_from_name,
     map_livescore_row_to_snapshot,
     map_status,
+    normalize_surface,
 )
 from app.providers.api_tennis_classification import classify_event_type
 from app.providers.api_tennis_dtos import MatchDto
@@ -66,6 +68,21 @@ def route_handler(request: httpx.Request) -> httpx.Response:
                 or str(row["second_player_key"]) == player_key
             ]
         return httpx.Response(200, json={"success": 1, "result": rows})
+    if method == "get_draw":
+        return httpx.Response(
+            200,
+            json={
+                "success": 1,
+                "result": {
+                    "tournament": {
+                        "tournament_surface": "Hard",
+                        "tournament_country": "Atp Singles",
+                    },
+                    "source": "draw_feed",
+                    "brackets": [],
+                },
+            },
+        )
     if method == "get_H2H":
         return httpx.Response(200, json=load("h2h.json"))
     if method == "get_players":
@@ -94,6 +111,19 @@ def build_provider(handler=route_handler):
         now=lambda: NOW,
     )
     return provider, seen, client
+
+
+def draw_unavailable_handler(request: httpx.Request) -> httpx.Response:
+    if request.url.params.get("method") == "get_draw":
+        return httpx.Response(403, json={"success": 0, "error": "not available"})
+    return route_handler(request)
+
+
+def test_metadata_normalizers_only_map_explicit_values() -> None:
+    assert normalize_surface(" Red Clay ") == "clay"
+    assert normalize_surface("Indoor Hard") is None
+    assert country_code_from_name("Germany") == "deu"
+    assert country_code_from_name("World") is None
 
 
 @pytest.fixture()
@@ -541,7 +571,7 @@ async def test_get_player_maps_profile_with_latest_season_ranking(provider) -> N
     assert player.id == cui.id
     assert player.name == "Jie Cui"
     assert player.ranking == 1222
-    assert player.country_code is None  # vendor provides a country name, not a code
+    assert player.country_code == "chn"
 
     with pytest.raises(AppError) as error_info:
         await built.get_player("ply_missing")
@@ -563,7 +593,7 @@ async def test_get_match_falls_back_from_fixtures_to_livescore(provider) -> None
     detail = await built.get_match(rich.id)
 
     methods = [item.url.params.get("method") for item in seen]
-    assert methods == ["get_fixtures", "get_livescore"]
+    assert methods == ["get_fixtures", "get_livescore", "get_draw"]
     assert seen[0].url.params["match_key"] == "12161239"
     assert detail.id == rich.id
     assert detail.status is MatchStatus.LIVE
@@ -571,6 +601,43 @@ async def test_get_match_falls_back_from_fixtures_to_livescore(provider) -> None
     with pytest.raises(AppError) as error_info:
         await built.get_match("mat_missing")
     assert error_info.value.code == "not_found"
+
+
+@pytest.mark.asyncio
+async def test_match_snapshot_enriches_surface_from_official_draw_metadata(provider) -> None:
+    built, seen = provider
+
+    live = await built.get_live_matches()
+    rich = next(match for match in live if match.round == "Tulln - 1/8-finals")
+    seen.clear()
+
+    snapshot = await built.get_match_snapshot(rich.id)
+
+    draw_request = next(
+        item for item in seen if item.url.params.get("method") == "get_draw"
+    )
+    assert draw_request.url.params["tournament_key"] == "4579"
+    assert draw_request.url.params["tournament_season"] == "2026"
+    assert snapshot.match.surface == "hard"
+
+
+@pytest.mark.asyncio
+async def test_match_snapshot_keeps_match_when_draw_metadata_is_unavailable() -> None:
+    built, seen, client = build_provider(draw_unavailable_handler)
+    try:
+        live = await built.get_live_matches()
+        rich = next(match for match in live if match.round == "Tulln - 1/8-finals")
+        seen.clear()
+
+        snapshot = await built.get_match_snapshot(rich.id)
+
+        assert snapshot.match.status is MatchStatus.LIVE
+        assert snapshot.match.surface is None
+        assert any(
+            item.url.params.get("method") == "get_draw" for item in seen
+        )
+    finally:
+        await client.aclose()
 
 
 @pytest.mark.asyncio

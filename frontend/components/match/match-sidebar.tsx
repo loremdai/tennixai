@@ -278,7 +278,7 @@ function KeyFactsCard({ match, preview }: { match: MatchViewModel; preview: bool
             <div key={player.id} className="min-w-0">
               <p className="truncate text-sm text-muted-foreground">{player.shortName}</p>
               <p className="mt-1 font-mono text-lg font-semibold">
-                {player.ranking !== null ? `#${player.ranking}` : '暂未提供'}
+                {player.ranking !== null ? `#${player.ranking}` : '官方未返回排名'}
               </p>
             </div>
           ))}

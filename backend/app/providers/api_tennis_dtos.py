@@ -5,7 +5,7 @@ unknown fields. They are imported ONLY by the API-Tennis adapter; nothing here
 may reach service, API, or UI layers.
 """
 
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -83,6 +83,20 @@ class MatchDto(VendorModel):
     pointbypoint: list[PbpGameDto] = Field(default_factory=list)
     scores: list[ScoreRowDto] = Field(default_factory=list)
     statistics: list[StatisticDto] = Field(default_factory=list)
+
+
+class DrawTournamentDto(VendorModel):
+    tournament_key: int | str | None = None
+    tournament_name: str | None = None
+    tournament_surface: str | None = None
+    tournament_country: str | None = None
+    tournament_season: str | None = None
+
+
+class DrawResultDto(VendorModel):
+    tournament: DrawTournamentDto | None = None
+    source: str | None = None
+    brackets: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class HeadToHeadDto(VendorModel):

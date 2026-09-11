@@ -83,7 +83,7 @@ export function MatchStatisticsCard({
     <div className="flex flex-col gap-5">
       {known.length === 0 ? (
         <p className="rounded-lg bg-muted/25 p-4 text-sm text-muted-foreground">
-          技术统计暂未提供；供应商未返回本场统计数据时保持缺失。
+          供应商尚未返回本场技术统计；已返回的项目才会展示，缺失不会按 0 处理。
         </p>
       ) : (
         groups.map((view) => (
@@ -102,13 +102,13 @@ export function MatchStatisticsCard({
                     {row.partial ? <Badge variant="outline">部分提供</Badge> : null}
                   </span>
                   <span className="font-mono text-sm font-medium tabular-nums">
-                    {row.p2 === null ? '暂未提供' : formatStatValue(row.p2, row.unit)}
+                    {row.p2 === null ? '官方未返回' : formatStatValue(row.p2, row.unit)}
                   </span>
                 </div>
               ))}
               {view.missing.map((label) => (
                 <p key={label} className="py-1.5 text-xs text-muted-foreground">
-                  {label}暂未提供
+                  {label}官方未返回
                 </p>
               ))}
             </div>
@@ -138,7 +138,7 @@ export function MatchStatisticsCard({
       ) : null}
 
       <p className="text-xs text-muted-foreground">
-        {asOf ? `统计更新于 ${asOf}` : '统计更新时间暂未提供'} · 缺失能力保持缺失，不猜测
+        {asOf ? `统计更新于 ${asOf}` : '统计更新时间官方未返回'} · 缺失能力保持缺失，不猜测
       </p>
     </div>
   )

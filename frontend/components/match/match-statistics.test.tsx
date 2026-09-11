@@ -97,7 +97,7 @@ describe('MatchStatisticsCard', () => {
       />,
     )
 
-    expect(screen.getByText('双误暂未提供')).toBeVisible()
+    expect(screen.getByText('双误官方未返回')).toBeVisible()
     expect(screen.queryByText('双误 0')).not.toBeInTheDocument()
     expect(screen.queryAllByText('0').length).toBe(0)
   })
@@ -107,7 +107,7 @@ describe('MatchStatisticsCard', () => {
       <MatchStatisticsCard statistics={[]} points={[]} players={players} asOf={null} />,
     )
 
-    expect(screen.getByText(/技术统计暂未提供/)).toBeVisible()
+    expect(screen.getByText(/供应商尚未返回本场技术统计/)).toBeVisible()
   })
 
   it('badges partial statistics', () => {
@@ -122,7 +122,7 @@ describe('MatchStatisticsCard', () => {
 
     expect(screen.getByText('全场 · 制胜分')).toBeVisible()
     expect(screen.getByText('部分提供')).toBeVisible()
-    expect(screen.getByText('暂未提供')).toBeVisible()
+    expect(screen.getByText('官方未返回')).toBeVisible()
   })
 
   it('keeps same statistic rows distinct when provider reports multiple periods', () => {
