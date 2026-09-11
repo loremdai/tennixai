@@ -301,6 +301,60 @@ def test_appended_point_advances_version_and_keeps_sequences() -> None:
     assert reduction.recompute_from_sequence is None
 
 
+def test_inserted_supplier_point_does_not_reuse_an_existing_point_id() -> None:
+    history = [
+        point(index, 2, 1, index, ("15", "0")).model_copy(
+            update={"id": f"pe_mat_live_{index}"}
+        )
+        for index in range(1, 4)
+    ]
+    first = reduce_live_snapshot(None, supplier_snapshot(points=history))
+
+    # API-Tennis numbers point ids by the raw payload position. If a point is
+    # inserted before an already persisted tail, the new point can carry an
+    # id that belongs to a different canonical point in the previous snapshot.
+    inserted = point(4, 2, 1, 4, ("30", "0")).model_copy(
+        update={"id": "pe_mat_live_2"}
+    )
+    candidate = supplier_snapshot(
+        points=[history[0], history[1], inserted, history[2]]
+    )
+
+    reduction = reduce_live_snapshot(first.snapshot, candidate)
+
+    ids = [item.id for item in reduction.snapshot.points]
+    assert len(ids) == len(set(ids))
+    assert reduction.appended_points[0].id not in {item.id for item in first.snapshot.points}
+
+
+def test_resequenced_existing_point_does_not_reuse_its_old_row_id() -> None:
+    history = [
+        point(index, 2, 1, index, ("15", "0")).model_copy(
+            update={"id": f"pe_mat_live_{index}"}
+        )
+        for index in range(1, 4)
+    ]
+    first = reduce_live_snapshot(None, supplier_snapshot(points=history))
+
+    # Dropping point 2 forces the tail to be rebuilt. The supplier now places
+    # point 3 at canonical sequence 2, while its old database row is still at
+    # sequence 3 and still owns the old id.
+    inserted = point(4, 2, 1, 4, ("30", "0")).model_copy(
+        update={"id": "pe_mat_live_2"}
+    )
+    candidate = supplier_snapshot(
+        points=[history[0], history[2], inserted]
+    )
+
+    reduction = reduce_live_snapshot(first.snapshot, candidate)
+
+    moved = next(item for item in reduction.snapshot.points if item.point_number == 3)
+    assert moved.sequence == 2
+    assert moved.id != first.snapshot.points[2].id
+    ids = [item.id for item in reduction.snapshot.points]
+    assert len(ids) == len(set(ids))
+
+
 def test_point_correction_starts_recompute_at_changed_sequence() -> None:
     history = seven_point_history()
     existing = reduce_live_snapshot(None, supplier_snapshot(points=history))

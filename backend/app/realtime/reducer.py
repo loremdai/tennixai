@@ -7,6 +7,8 @@ reordered tails are rebuilt from the first difference. `state_version`
 advances only on semantic change.
 """
 
+import hashlib
+
 from app.domain import (
     CapabilityStatus,
     DataQuality,
@@ -40,6 +42,36 @@ def _point_fingerprint(point: PointEvent) -> tuple:
         point.is_match_point,
         point.server_player_id,
     )
+
+
+def _unique_point_id(
+    point: PointEvent,
+    used_ids: set[str],
+    *,
+    sequence: int,
+) -> str:
+    """Keep supplier ids unless a PBP rebuild would reuse a database id.
+
+    API-Tennis numbers point ids by their position in the current payload.
+    When the supplier inserts or removes a point, an existing canonical point
+    can move to a sequence whose row id is still owned by its old row. Use a
+    deterministic id for that canonical point, scoped to its new sequence.
+    """
+    if point.id not in used_ids:
+        return point.id
+    identity = (
+        f"{point.match_id}:{point.set_number}:{point.game_number}:"
+        f"{point.point_number}:{sequence}"
+    )
+    attempt = 0
+    while True:
+        digest = hashlib.sha256(
+            f"{identity}:{attempt}".encode("utf-8")
+        ).hexdigest()[:32]
+        candidate = f"pe_{digest}"
+        if candidate not in used_ids:
+            return candidate
+        attempt += 1
 
 
 def _score_fingerprint(match: Match) -> tuple:
@@ -197,6 +229,7 @@ def reduce_live_snapshot(
 
     previous_points = sorted(previous.points, key=lambda item: item.sequence)
     previous_by_identity = {_point_identity(item): item for item in previous_points}
+    used_point_ids = {item.id for item in previous_points}
     candidate_identities = {_point_identity(item) for item in candidate.points}
 
     appended: list[PointEvent] = []
@@ -209,10 +242,20 @@ def reduce_live_snapshot(
         identity = _point_identity(point)
         stored = previous_by_identity.get(identity)
         if stored is None:
-            sequenced = point.model_copy(update={"sequence": next_sequence})
+            sequenced = point.model_copy(
+                update={
+                    "id": _unique_point_id(
+                        point,
+                        used_point_ids,
+                        sequence=next_sequence,
+                    ),
+                    "sequence": next_sequence,
+                }
+            )
             next_sequence += 1
             appended.append(sequenced)
             reduced_points.append(sequenced)
+            used_point_ids.add(sequenced.id)
             continue
         if _point_fingerprint(point) != _point_fingerprint(stored):
             corrected = stored.model_copy(
@@ -263,9 +306,19 @@ def reduce_live_snapshot(
         rebuilt: list[PointEvent] = []
         for index, point in enumerate(reduced_points):
             expected = index + 1
-            rebuilt.append(
-                point if point.sequence == expected else point.model_copy(update={"sequence": expected})
-            )
+            if point.sequence == expected:
+                rebuilt.append(point)
+                continue
+            update = {"sequence": expected}
+            if _point_identity(point) in previous_by_identity:
+                update["id"] = _unique_point_id(
+                    point,
+                    used_point_ids,
+                    sequence=expected,
+                )
+            rebuilt_point = point.model_copy(update=update)
+            used_point_ids.add(rebuilt_point.id)
+            rebuilt.append(rebuilt_point)
         reduced_points = rebuilt
 
     if appended:

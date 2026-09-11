@@ -1,6 +1,6 @@
 """Transactional persistence of live reductions against compose PostgreSQL."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
@@ -322,6 +322,66 @@ async def test_save_reduction_handles_resequenced_point_ids(database: Database) 
     loaded = await repository.load_snapshot(base.match.id)
     assert loaded is not None
     assert [item.sequence for item in loaded.points] == [1, 2, 3]
+
+
+async def test_save_reduction_handles_inserted_supplier_point_id_collision(
+    database: Database,
+) -> None:
+    repository = MatchSnapshotRepository(database)
+    base = await candidate(database, points=3)
+    first = reduce_live_snapshot(None, base)
+    await repository.save_reduction(first)
+
+    inserted = point(base.match.id, 4, ("30", "15"), winner="ply_b").model_copy(
+        update={"id": first.snapshot.points[1].id}
+    )
+    second_candidate = base.model_copy(
+        update={
+            "points": (base.points[0], base.points[1], inserted, base.points[2]),
+        }
+    )
+    second = reduce_live_snapshot(first.snapshot, second_candidate)
+
+    await repository.save_reduction(second)
+
+    loaded = await repository.load_snapshot(base.match.id)
+    assert loaded is not None
+    assert [item.sequence for item in loaded.points] == [1, 2, 3, 4]
+    assert len({item.id for item in loaded.points}) == 4
+
+
+async def test_save_reduction_handles_moved_tail_id_at_new_sequence(
+    database: Database,
+) -> None:
+    repository = MatchSnapshotRepository(database)
+    base = await candidate(database, points=3)
+    first = reduce_live_snapshot(None, base)
+    await repository.save_reduction(first)
+
+    inserted_before_tail = point(
+        base.match.id, 4, ("30", "15"), winner="ply_b"
+    ).model_copy(update={"id": first.snapshot.points[1].id})
+    inserted_before_tail_again = point(
+        base.match.id, 5, ("40", "15"), winner="ply_b"
+    ).model_copy(update={"id": first.snapshot.points[2].id})
+    reordered = base.model_copy(
+        update={
+            "points": (
+                base.points[0],
+                inserted_before_tail,
+                inserted_before_tail_again,
+                base.points[2],
+            ),
+        }
+    )
+    second = reduce_live_snapshot(first.snapshot, reordered)
+
+    await repository.save_reduction(second)
+
+    loaded = await repository.load_snapshot(base.match.id)
+    assert loaded is not None
+    assert [item.sequence for item in loaded.points] == [1, 2, 3, 4]
+    assert len({item.id for item in loaded.points}) == 4
 
 
 async def test_failed_reduction_save_leaves_previous_version_readable(
