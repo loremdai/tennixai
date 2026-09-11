@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.domain import Match
+from app.domain import Match, MatchSnapshot
 from app.intelligence import IntelligencePacket, IntelligenceTopic
 from app.service import MatchTimeScope, PlayerResultsScope
 
@@ -29,6 +29,7 @@ class ChatRequest(BaseModel):
 class ChatContext(BaseModel):
     scope: ChatScope
     match_id: str | None = None
+    snapshot: MatchSnapshot | None = None
 
 
 class AnswerContext(BaseModel):

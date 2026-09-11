@@ -328,7 +328,7 @@ describe('production match page', () => {
     expect(await screen.findByText('Sinner 正在发球。')).toBeVisible()
   })
 
-  it('keeps completed prose immutable and marks it stale after a newer snapshot', async () => {
+  it('keeps completed prose immutable and explains its frozen snapshot after a newer update', async () => {
     const live = makeMatch()
     getMatchSnapshotMock.mockImplementation(async () => wrapSnapshot(live, 2))
     mockStream({
@@ -351,7 +351,8 @@ describe('production match page', () => {
     await userEvent.keyboard('{Enter}')
 
     expect(await screen.findByText('回答基于版本 1。')).toBeVisible()
-    expect(screen.getByText(/比赛已更新/)).toBeVisible()
+    expect(screen.getByText(/比赛在回答期间更新/)).toBeVisible()
+    expect(screen.queryByText(/请重新提问/)).toBeNull()
   })
 
   it('renders contextual markdown instead of showing raw markers', async () => {

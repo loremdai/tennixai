@@ -18,7 +18,11 @@ from app.chat.models import (
     ChatScope,
     StructuredToolResult,
 )
-from app.chat.tools import BusinessTools, is_unsupported_historical_query
+from app.chat.tools import (
+    BusinessTools,
+    is_historical_query,
+    is_unsupported_historical_query,
+)
 from app.domain import Match
 from app.errors import AppError
 
@@ -32,13 +36,51 @@ GLOBAL_SYSTEM_PROMPT = (
     "所有网球事实（比分、赛程、球员、赛事、状态、发球方、ID、时间）必须来自工具结果，不得凭记忆编造。"
     "禁止输出任何外部供应商 ID；只使用工具返回的 Tennix 内部 ID。"
     "工具未提供的字段必须如实说明暂不可用。"
+    "本场综合分析只能使用比赛快照和工具返回的事实；球员特点或历史资料未提供时说明暂未提供，不要让可选资料缺失中止已有分析。"
     "昨天、最近有限场结果和两位球员的有限交手记录使用对应 P2 工具；大范围历史查询不支持。"
     "Match scope 的主题问题使用 get_match_intelligence，topic 只能是 overview、score、statistics、points 或 momentum。"
+    "趋势和控制指数只能做描述性分析，不得编造赔率、概率或确定性的胜负结论。"
 )
 MATCH_SYSTEM_SUFFIX = (
     "当前比赛已由页面上下文确定（current match id: {match_id}），"
-    "所有上下文事实问题先调用 get_match_intelligence，调用 get_match 时无需提供参数。"
+    "本次问答以提问开始时冻结的同一份比赛快照为事实基线；所有上下文事实问题先调用 get_match_intelligence，"
+    "综合问题可按需调用 overview、score、statistics、points、momentum，调用 get_match 时无需提供参数，"
+    "不要用回答期间的新版本覆盖或否定这份基线。"
 )
+
+OPTIONAL_MATCH_TOOLS = {"get_player_results", "get_head_to_head"}
+MATCH_CONTEXT_TOOLS = {"get_match_intelligence"}
+MATCH_HISTORY_PHRASES = (
+    "近期",
+    "recent",
+    "交手",
+    "对战",
+    "h2h",
+    "head-to-head",
+    "head to head",
+)
+
+
+def _requests_match_history(text: str) -> bool:
+    normalized = text.casefold()
+    return is_historical_query(text) or any(
+        phrase in normalized for phrase in MATCH_HISTORY_PHRASES
+    )
+
+
+def _catalog_for_request(
+    tools: list[dict[str, Any]], request: ChatRequest, last_user: str
+) -> list[dict[str, Any]]:
+    if request.scope is not ChatScope.MATCH:
+        return tools
+    allowed = set(MATCH_CONTEXT_TOOLS)
+    if _requests_match_history(last_user):
+        allowed.update(OPTIONAL_MATCH_TOOLS)
+    return [
+        item
+        for item in tools
+        if item.get("function", {}).get("name") in allowed
+    ]
 
 
 def _model_match_summary(match: Match) -> dict[str, Any]:
@@ -137,6 +179,18 @@ class ChatOrchestrator:
         yield ChatEvent(type=ChatEventType.STATUS, payload={"stage": "resolving"})
 
         context = ChatContext(scope=request.scope, match_id=request.match_id)
+        try:
+            context = await self._tools.freeze_match_context(context)
+        except AppError as error:
+            yield ChatEvent(
+                type=ChatEventType.ERROR,
+                payload={
+                    "code": error.code,
+                    "message": error.message,
+                    "details": error.details,
+                },
+            )
+            return
         system = GLOBAL_SYSTEM_PROMPT
         if request.scope is ChatScope.MATCH:
             system = f"{system}\n{MATCH_SYSTEM_SUFFIX.format(match_id=request.match_id)}"
@@ -149,7 +203,7 @@ class ChatOrchestrator:
 
         data_emitted = False
         rounds = 0
-        catalog = self._tools.catalog()
+        catalog = _catalog_for_request(self._tools.catalog(), request, last_user)
 
         try:
             while True:
@@ -182,7 +236,31 @@ class ChatOrchestrator:
                     }
                 )
                 for call in turn.tool_calls:
-                    result = await self._tools.execute(call.name, call.arguments, context)
+                    try:
+                        result = await self._tools.execute(call.name, call.arguments, context)
+                    except AppError as error:
+                        if (
+                            data_emitted
+                            and request.scope is ChatScope.MATCH
+                            and call.name in OPTIONAL_MATCH_TOOLS
+                            and error.code in {"not_found", "unsupported"}
+                        ):
+                            messages.append(
+                                {
+                                    "role": "tool",
+                                    "tool_call_id": call.id,
+                                    "content": json.dumps(
+                                        {
+                                            "kind": "unavailable",
+                                            "tool": call.name,
+                                            "code": error.code,
+                                        },
+                                        ensure_ascii=False,
+                                    ),
+                                }
+                            )
+                            continue
+                        raise
                     messages.append(
                         {
                             "role": "tool",
@@ -208,7 +286,7 @@ class ChatOrchestrator:
             return
 
         try:
-            async for chunk in self._model.stream_text(messages):
+            async for chunk in self._model.stream_text(messages, tools=catalog):
                 yield ChatEvent(type=ChatEventType.TEXT_DELTA, payload={"delta": chunk})
         except Exception:
             if data_emitted:

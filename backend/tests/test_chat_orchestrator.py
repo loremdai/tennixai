@@ -68,6 +68,26 @@ class WideRecordingProvider(RecordingProvider):
         return matches * 30
 
 
+class CatalogRecordingModel(FakeChatModel):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.catalog_calls: list[list[str]] = []
+        self.stream_catalog_calls: list[list[str]] = []
+
+    async def choose(self, messages, tools):
+        self.catalog_calls.append(
+            [item["function"]["name"] for item in tools]
+        )
+        return await super().choose(messages, tools)
+
+    async def stream_text(self, messages, *, tools=None):
+        self.stream_catalog_calls.append(
+            [item["function"]["name"] for item in (tools or [])]
+        )
+        async for chunk in super().stream_text(messages, tools=tools):
+            yield chunk
+
+
 def build_orchestrator(model: FakeChatModel, provider_type=RecordingProvider):
     fake = FakeTennisProvider(identities=MemoryIdentityRepository(), now=lambda: NOW)
     recording = provider_type(fake)
@@ -238,6 +258,129 @@ async def test_match_scope_context_appears_in_system_message() -> None:
     system_message = model.choose_calls[0][0]
     assert system_message["role"] == "system"
     assert known_match_id in system_message["content"]
+
+
+@pytest.mark.asyncio
+async def test_match_scope_freezes_one_snapshot_for_all_context_tools() -> None:
+    model = FakeChatModel(
+        turns=[
+            ModelTurn(
+                tool_calls=[
+                    ToolCall(id="call_match", name="get_match", arguments={}),
+                    ToolCall(
+                        id="call_score",
+                        name="get_match_intelligence",
+                        arguments={"topic": "score"},
+                    ),
+                ]
+            ),
+            ModelTurn(),
+        ],
+        text_chunks=["回答基于同一份比赛快照。"],
+    )
+    orchestrator, recording = build_orchestrator(model)
+    await recording.inner.build()
+    match_id = recording.inner.live_match.id
+
+    request = ChatRequest(
+        scope="match",
+        match_id=match_id,
+        messages=[ChatMessage(role="user", content="当前比分和本场比赛信息？")],
+    )
+    events = [event async for event in orchestrator.stream(request)]
+
+    data_events = [event for event in events if event.type is ChatEventType.DATA]
+    assert [event.type for event in events] == [
+        ChatEventType.STATUS,
+        ChatEventType.DATA,
+        ChatEventType.DATA,
+        ChatEventType.TEXT_DELTA,
+        ChatEventType.DONE,
+    ]
+    assert recording.calls["get_match_snapshot"] == 1
+    assert recording.calls["get_match"] == 0
+    assert [event.payload["answer_context"] for event in data_events] == [
+        data_events[0].payload["answer_context"],
+        data_events[0].payload["answer_context"],
+    ]
+
+
+@pytest.mark.asyncio
+async def test_match_current_analysis_does_not_offer_unrequested_history_tools() -> None:
+    model = CatalogRecordingModel(turns=[ModelTurn()], text_chunks=["已完成。"])
+    orchestrator, recording = build_orchestrator(model)
+    await recording.inner.build()
+    match_id = recording.inner.live_match.id
+
+    request = ChatRequest(
+        scope="match",
+        match_id=match_id,
+        messages=[
+            ChatMessage(
+                role="user",
+                content="分析当前比赛的每盘统计、趋势和原因。",
+            )
+        ],
+    )
+    events = [event async for event in orchestrator.stream(request)]
+
+    assert [event.type for event in events] == [
+        ChatEventType.STATUS,
+        ChatEventType.TEXT_DELTA,
+        ChatEventType.DONE,
+    ]
+    assert model.catalog_calls == [["get_match_intelligence"]]
+    assert model.stream_catalog_calls == [["get_match_intelligence"]]
+
+
+@pytest.mark.asyncio
+async def test_match_scope_optional_player_lookup_does_not_abort_existing_answer() -> None:
+    model = FakeChatModel(
+        turns=[
+            tool_turn(
+                "get_match_intelligence",
+                {"topic": "statistics"},
+                "call_statistics",
+            ),
+            tool_turn(
+                "get_player_results",
+                {"player_name": "Unknown Player", "scope": "recent", "limit": 5},
+                "call_player_results",
+            ),
+            ModelTurn(),
+        ],
+        text_chunks=["已基于提问时快照完成分析；球员背景资料暂未提供。"],
+    )
+    orchestrator, recording = build_orchestrator(model)
+    await recording.inner.build()
+    match_id = recording.inner.live_match.id
+
+    request = ChatRequest(
+        scope="match",
+        match_id=match_id,
+        messages=[ChatMessage(role="user", content="分析当前比赛和球员特点。")],
+    )
+    events = [event async for event in orchestrator.stream(request)]
+
+    assert [event.type for event in events] == [
+        ChatEventType.STATUS,
+        ChatEventType.DATA,
+        ChatEventType.TEXT_DELTA,
+        ChatEventType.DONE,
+    ]
+    assert events[-2].payload["delta"].endswith("暂未提供。")
+    last_choose = model.choose_calls[-1]
+    unavailable_tool = next(
+        message
+        for message in last_choose
+        if message.get("role") == "tool"
+        and "call_player_results" == message.get("tool_call_id")
+    )
+    assert json.loads(unavailable_tool["content"]) == {
+        "kind": "unavailable",
+        "tool": "get_player_results",
+        "code": "not_found",
+    }
 
 
 @pytest.mark.asyncio

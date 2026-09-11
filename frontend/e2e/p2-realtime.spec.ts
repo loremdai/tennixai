@@ -89,7 +89,8 @@ test.describe('P2 Replay realtime business flow', () => {
     await expect(page.getByText('数据已校准')).toBeVisible({ timeout: 5_000 })
     await expect.poll(async () => (await readSnapshot(page)).points[0]?.revision ?? 0, { timeout: 5_000 }).toBe(2)
     await expect(page.getByText(/实时连接(?:恢复中|已恢复)/)).toBeVisible({ timeout: 7_000 })
-    await expect(page.getByText(/比赛已更新；以上回答基于版本/)).toBeVisible({ timeout: 7_000 })
+    await expect(page.getByText(/比赛在回答期间更新；本回答固定基于提问时版本/)).toBeVisible({ timeout: 7_000 })
+    await expect(page.getByText(/请重新提问/)).toHaveCount(0)
     await expect(answerBody).toHaveText(answerText ?? '')
 
     await expect(page.locator('#final-scoreboard')).toBeVisible({ timeout: 10_000 })

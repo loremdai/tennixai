@@ -21,7 +21,12 @@ class ChatModel(Protocol):
         self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
     ) -> ModelTurn: ...
 
-    def stream_text(self, messages: list[dict[str, Any]]) -> AsyncIterator[str]: ...
+    def stream_text(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        tools: list[dict[str, Any]] | None = None,
+    ) -> AsyncIterator[str]: ...
 
 
 MATCH_CONTEXT_MARKER = "current match id:"
@@ -57,7 +62,12 @@ class FakeChatModel:
             return ModelTurn()
         return self._default_turn(messages)
 
-    async def stream_text(self, messages: list[dict[str, Any]]) -> AsyncIterator[str]:
+    async def stream_text(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        tools: list[dict[str, Any]] | None = None,
+    ) -> AsyncIterator[str]:
         self.stream_calls.append(messages)
         if self._stream_error is not None:
             raise self._stream_error
@@ -213,6 +223,7 @@ class OpenAICompatibleChatModel:
                     messages=messages,
                     tools=tools,
                     tool_choice="auto",
+                    extra_body={"enable_thinking": False},
                 )
         except (OpenAIError, TimeoutError) as error:
             raise AppError("llm_unavailable", "LLM request failed", 503) from error
@@ -235,17 +246,26 @@ class OpenAICompatibleChatModel:
             )
         return ModelTurn(tool_calls=calls)
 
-    async def stream_text(self, messages: list[dict[str, Any]]) -> AsyncIterator[str]:
+    async def stream_text(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        tools: list[dict[str, Any]] | None = None,
+    ) -> AsyncIterator[str]:
         from openai import OpenAIError
 
         try:
             async with asyncio.timeout(self._timeout_seconds):
-                stream = await self._client.chat.completions.create(
-                    model=self._model,
-                    messages=messages,
-                    stream=True,
-                    tool_choice="none",
-                )
+                request: dict[str, Any] = {
+                    "model": self._model,
+                    "messages": messages,
+                    "stream": True,
+                    "tool_choice": "none",
+                    "extra_body": {"enable_thinking": False},
+                }
+                if tools is not None:
+                    request["tools"] = tools
+                stream = await self._client.chat.completions.create(**request)
                 async for chunk in stream:
                     if not chunk.choices:
                         continue

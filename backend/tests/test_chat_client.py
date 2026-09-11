@@ -19,6 +19,14 @@ class NeverEndingStream:
         raise StopAsyncIteration
 
 
+class EmptyStream:
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        raise StopAsyncIteration
+
+
 @pytest.mark.asyncio
 async def test_stream_timeout_is_typed_and_passed_to_sdk(monkeypatch) -> None:
     captured: dict[str, object] = {}
@@ -76,6 +84,45 @@ async def test_choose_timeout_is_typed(monkeypatch) -> None:
 
     assert error_info.value.code == "llm_unavailable"
     assert captured["timeout"] == 0.01
+
+
+@pytest.mark.asyncio
+async def test_qwen_chat_requests_disable_thinking_for_responsive_factual_answers(monkeypatch) -> None:
+    requests: list[dict[str, object]] = []
+
+    class FakeCompletions:
+        async def create(self, **kwargs):
+            requests.append(kwargs)
+            if kwargs.get("stream"):
+                return EmptyStream()
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(tool_calls=[]))]
+            )
+
+    class FakeAsyncOpenAI:
+        def __init__(self, **kwargs):
+            self.chat = SimpleNamespace(completions=FakeCompletions())
+
+    monkeypatch.setattr(openai, "AsyncOpenAI", FakeAsyncOpenAI)
+    model = OpenAICompatibleChatModel(
+        api_key="test-key",
+        base_url="https://example.test/v1",
+        model="qwen3.8-max",
+    )
+
+    await model.choose([], [])
+    tools = [{
+        "type": "function",
+        "function": {"name": "get_match_intelligence"},
+    }]
+    async for _ in model.stream_text([], tools=tools):
+        pass
+
+    assert [request["extra_body"] for request in requests] == [
+        {"enable_thinking": False},
+        {"enable_thinking": False},
+    ]
+    assert requests[1]["tools"] == tools
 
 
 def test_llm_timeout_is_configurable() -> None:

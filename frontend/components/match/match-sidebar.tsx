@@ -27,7 +27,7 @@ import {
   InputGroupInput,
 } from '@/components/ui/input-group'
 import type { ChatViewState } from '@/hooks/use-chat-stream'
-import type { MatchViewModel } from '@/lib/view-models'
+import { formatAsOf, type MatchViewModel } from '@/lib/view-models'
 
 import type { MatchStatus } from './match-data'
 import {
@@ -102,6 +102,7 @@ function AssistantPanel({
   const chatHasContent =
     !preview && chat !== null && (Boolean(chat.data) || Boolean(chat.text) || Boolean(chat.error))
   const answerIsOutdated = Boolean(
+    !chat?.error &&
     chat?.answerContext &&
       currentStateVersion !== null &&
       currentStateVersion !== undefined &&
@@ -181,7 +182,8 @@ function AssistantPanel({
               <MarkdownAnswer content={chat.text || (chat.error ? `查询失败（${chat.error.code}），请重试。` : '')} />
               {answerIsOutdated ? (
                 <p className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200" role="status">
-                  比赛已更新；以上回答基于版本 {chat.answerContext?.state_version}，当前为版本 {currentStateVersion}。请重新提问以获取最新事实。
+                  比赛在回答期间更新；本回答固定基于提问时版本 {chat.answerContext?.state_version}
+                  {formatAsOf(chat.answerContext?.as_of ?? null) ? `（${formatAsOf(chat.answerContext?.as_of ?? null)}）` : ''}，当前为版本 {currentStateVersion}。
                 </p>
               ) : null}
               {chat.phase === 'loading' || chat.phase === 'streaming' ? (
