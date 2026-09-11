@@ -56,7 +56,7 @@
 | P2.2 — Unified data and discovery | `done` | API-Tennis REST、历史/H2H、赛事分类和 Home 叠加筛选 | T23–T25 完成（`015ff7f`、`dddb734`、`e904485`）；P2.3 可开始 |
 | P2.3 — Realtime pipeline | `done` | Reducer、WebSocket worker、租约、持久化、snapshot + SSE | T26–T28 完成（`98a1a22`、`d354aba`、`f03985b`）；T29/T30 已在 P2.4 完成 |
 | P2.4 — Match intelligence | `done` | 完整 PBP、22 项统计、近期控制指数、版本化上下文 Chat | T29（`ecd916b`）、T30（`8c9e161`）、T31（`128518f`）完成；P2.5 可开始 |
-| P2.5 — Acceptance and hardening | `done` | Replay、恢复门、真实 smoke、双视口视觉、本地 runbook 与真实数据回归修复 | T32 `ac9c6e5`、T33 `b60217e` 完成；确定性/基础设施/前端门与真实 REST/浏览器复核通过 |
+| P2.5 — Acceptance and hardening | `done` | Replay、恢复门、真实 smoke、双视口视觉、本地 runbook 与真实数据回归修复 | T32 `ac9c6e5`、T33 `b60217e`、T34 `84eb146` 完成；确定性/基础设施/前端门与真实 REST/浏览器复核通过 |
 
 详细产品、架构和数据语义见 [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md)，逐任务实施步骤见 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md)。
 
@@ -79,6 +79,7 @@
 | T31 | P2.4 | Add P2 Intelligence Tools and Versioned Chat Answers | `done` | `128518f` | compact fact packet（topic 选择、20 条逐分/走势上限、能力缺失保留且无供应商字段）；history/H2H 工具与 broad-history typed unsupported；Match Chat 的 `answer_context={match_id,state_version,as_of}` 首事件固定，前端新版本只显示“比赛已更新”且不改旧回答；focused 56 passed、全确定性 backend 322 passed/11 deselected、frontend 127 passed + typecheck/build、Playwright 40 passed/4 skipped；真实 LLM opt-in 已运行但 endpoint 返回 403 `AccessDenied.Unpurchased`，未计作通过 |
 | T32 | P2.5 | Add Replay E2E, Fault Recovery, Runbook, and Final P2 Gate | `done` | `ac9c6e5` | Replay provider/脱敏 JSONL fixture 使用同一 identity→reducer→PostgreSQL→Redis→FastAPI SSE→Next 路径；focused replay/recovery 3 passed；确定性 backend 325 passed/11 deselected；infrastructure 13 passed/323 deselected；frontend 127 passed + typecheck/build；默认 Playwright 40 passed/10 skipped；Replay Playwright 功能 2 passed、视觉 4 passed（1440×1000 与 390×844），PNG 逐张审阅；真实 API-Tennis REST 1 passed、WebSocket 1 passed；真实 LLM 7 failed，endpoint 返回 403 `AccessDenied.Unpurchased`，未计作通过；`git diff --check` 与范围审计通过 |
 | T33 | P2.5 | Harden Real-Provider Live Discovery and Match Rendering | `done` | `b60217e` | 修复 livescore 终态泄漏（`event_live` 映射且终态优先）、默认筛选下真实直播不可发现、统计多周期重复 key、实时推送覆盖球员全名、重复 PBP point identity 与 PostgreSQL 重排冲突；按 [API-Tennis REST 文档](https://api-tennis.com/documentation) 与 [WebSocket 文档](https://api-tennis.com/documentation_websocket) 保留官方未返回的场地/室内外/赛制/ISO 国家代码缺失语义；TDD 后确定性 backend 337 passed/2 skipped/9 deselected，infrastructure 14 passed，frontend 130 passed + typecheck/build，真实 REST smoke 1 passed，真实浏览器鼠标流程与最新前端告警复核通过 |
+| T34 | P2.5 | Repair Realtime Detail Worker After PBP Rebuilds | `done` | `84eb146` | 根因是供应商按 PBP 位置编号，插入/修正后已存 canonical point 移到新序号却复用旧 `point_events.id`，触发 PostgreSQL 主键冲突并使 worker 静默退出；reducer 为冲突点生成按 canonical identity+序号确定性的唯一 ID，新增单元与 infrastructure integration 覆盖新点复用旧 ID、尾部移到新序号两种形态；确定性 backend 341 passed/2 skipped/9 deselected，frontend 130 passed + typecheck，真实服务 state version 11→16、PBP 96→158，真实浏览器 Home→Match 详情页持续更新 |
 
 ## P2 完成门摘要
 

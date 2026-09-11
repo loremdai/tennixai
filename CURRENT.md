@@ -3,19 +3,19 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-11 10:28 CST
+**最后更新：** 2026-09-11 10:42 CST
 
-**当前任务：** T34 — 修复详情页实时 worker 因 PBP 主键冲突退出
+**当前任务：** 无（T34 — 修复详情页实时 worker 因 PBP 主键冲突退出已完成）
 
-**任务状态：** `in_progress`
+**任务状态：** `idle`
 
 **当前执行者 / ADE：** Codex / Codex
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**最近完成任务提交：** `b60217e`
+**最近完成任务提交：** `84eb146`
 
-**最后验证的产品提交：** `b60217e`
+**最后验证的产品提交：** `84eb146`
 
 **本次任务起始提交：** `d16dbfe`
 
@@ -77,13 +77,15 @@
 
 ### T34 — 修复详情页实时 worker 因 PBP 主键冲突退出
 
-- **状态：** `in_progress`
+- **状态：** `done`
 - **执行者 / ADE：** Codex / Codex
 - **分支：** `main`
 - **起始提交：** `d16dbfe`
 - **领取时间：** 2026-09-11 10:28 CST
+- **完成提交：** `84eb146`
 - **范围：** 修复 API-Tennis 实时快照在供应商 PBP 重排/修正后生成重复 `point_events.id`，导致 PostgreSQL `save_reduction` 唯一约束异常并使后台 realtime worker 静默退出；保持详情页 REST/SSE、Home 数据和官方缺失字段语义不变。
-- **执行方式：** 先用真实浏览器复现 Home→Match，再用官方 API-Tennis REST/WebSocket 对照定位；回归测试先红后绿；重启真实服务后复核详情页无需刷新即可追上首页比分。
+- **完成事实：** 根因是供应商按当前 PBP 位置编号，插入/修正后旧 canonical point 移到新序号却继续携带旧主键；reducer 现在在新序号上为冲突点生成确定性、唯一的内部 ID，并保留安全的供应商 ID。新增单元与 PostgreSQL integration 回归覆盖新点复用旧 ID、已存尾部点移到新序号两种形态；真实比赛演算 96→152 个逐分、序号连续且无重复 ID，worker 重启后持续推进至 state version 16 / 158 个逐分。
+- **验证门：** TDD focused 用例先红后绿；backend `env -u NO_PROXY -u no_proxy uv run pytest -m 'not llm_live and not provider_live and not end_to_end_live' -q` 实际为 341 passed、2 skipped、9 deselected；frontend `pnpm test -- --runInBand` 为 130 passed，`pnpm typecheck` 通过；改动文件 lint、`git diff --check` 通过；`GET /api/v1/health` 返回 200。真实浏览器按 Home→打开 Gauff 对阵 Rybakina→Match Page 流程复核，首页与详情均为 10:40、第三盘 1–2、当前局 30–0，详情页时间戳持续前进且后端日志无 worker 异常。实现依据 [API-Tennis REST 文档](https://api-tennis.com/documentation) 与 [WebSocket 文档](https://api-tennis.com/documentation_websocket)。
 - **阻塞：** 无。
 
 ### P2 post-close real-data hardening — 修复直播发现、终态混入和统计周期渲染
@@ -288,14 +290,11 @@
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-11 | T34 完成：修复 PBP 重排导致详情页 realtime worker 因 point 主键冲突退出 | `84eb146` |
 | 2026-09-10 | T33 完成：真实 API-Tennis 直播发现、状态、档案与持久化 hardening | `b60217e` |
 | 2026-09-10 | 领取 T33：真实数据 hardening | `2668fd9` |
 | 2026-09-10 | P2 post-close UX patch 完成：隐藏无数据的“未知”筛选项 | `525d701` |
 | 2026-09-10 | T32 完成：Replay、恢复门、双视口验收、本地 runbook 与 Final P2 Gate | `ac9c6e5` |
-| 2026-09-10 | T31 完成：P2 Intelligence tools 与版本化 Chat | `128518f` |
-| 2026-09-10 | T30 接管记录 | `60fa62e` |
-| 2026-09-09 | T29 完成：完整 PBP 与 22 项统计渲染 | `ecd916b` |
-| 2026-09-09 | 修复 T27 遗漏提交：mapping helpers 与 FeedDisconnected | `6c1b448` |
 
 ## 接手与更新规则
 
