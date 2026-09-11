@@ -46,8 +46,8 @@ const match = {
   format: '三盘两胜 · BO3',
   indoorLabel: '室内',
   players: [
-    { id: 'ply_1', name: 'Jannik Sinner', shortName: 'Sinner', initials: 'JS', countryCode: 'ITA', ranking: 1 },
-    { id: 'ply_2', name: 'Carlos Alcaraz', shortName: 'Alcaraz', initials: 'CA', countryCode: 'ESP', ranking: 2 },
+    { id: 'ply_1', name: 'Jannik Sinner', shortName: 'Sinner', initials: 'JS', countryCode: 'ITA', countryName: '意大利', flagUrl: 'https://flagcdn.com/w40/it.png', ranking: 1 },
+    { id: 'ply_2', name: 'Carlos Alcaraz', shortName: 'Alcaraz', initials: 'CA', countryCode: 'ESP', countryName: '西班牙', flagUrl: 'https://flagcdn.com/w40/es.png', ranking: 2 },
   ],
   score: null,
   serverPlayerId: 'ply_1',

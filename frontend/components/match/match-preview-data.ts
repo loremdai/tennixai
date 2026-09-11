@@ -152,6 +152,8 @@ export function buildPreviewMatch(status: MatchStatus): MatchViewModel {
         shortName: previewPlayers[0].shortName,
         initials: previewPlayers[0].initials,
         countryCode: previewPlayers[0].countryCode,
+        countryName: previewPlayers[0].country,
+        flagUrl: previewPlayers[0].flagUrl,
         ranking: previewPlayers[0].rank,
       },
       {
@@ -160,6 +162,8 @@ export function buildPreviewMatch(status: MatchStatus): MatchViewModel {
         shortName: previewPlayers[1].shortName,
         initials: previewPlayers[1].initials,
         countryCode: previewPlayers[1].countryCode,
+        countryName: previewPlayers[1].country,
+        flagUrl: previewPlayers[1].flagUrl,
         ranking: previewPlayers[1].rank,
       },
     ],

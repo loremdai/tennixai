@@ -159,6 +159,22 @@ describe('production match page', () => {
     expect(screen.getByText('20:30')).toBeVisible()
   })
 
+  it('shows production player flags and country codes in the match hero', async () => {
+    const scheduled = makeMatch({
+      status: 'scheduled',
+      live_state: null,
+    })
+    nextMatch = scheduled
+
+    render(<MatchPage matchId="mat_1" />)
+
+    await screen.findByText('Jannik Sinner 对阵 Carlos Alcaraz')
+    expect(screen.getByRole('img', { name: '意大利国旗' })).toBeVisible()
+    expect(screen.getByRole('img', { name: '西班牙国旗' })).toBeVisible()
+    expect(screen.getAllByText('ITA').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('ESP').length).toBeGreaterThan(0)
+  })
+
   it('maps live hero state with server highlighting', async () => {
     render(<MatchPage matchId="mat_1" />)
 

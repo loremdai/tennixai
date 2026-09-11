@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 
 import { SectionHeading } from '@/components/home/section-heading'
+import { PlayerCountry } from '@/components/player-country'
 import type { ProductPhase } from '@/components/match/match-data'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -67,7 +68,7 @@ function FeaturedPlayer({
       </Avatar>
       <div className="min-w-0">
         <div className={cn('flex items-center gap-2', align === 'right' && 'justify-end')}>
-          <Badge variant="outline">{player.countryCode}</Badge>
+          <PlayerCountry player={player} />
           {player.ranking !== null ? <Badge variant="outline">#{player.ranking}</Badge> : null}
         </div>
         <h3 className="mt-2 text-balance text-base font-semibold leading-tight tracking-tight">{player.name}</h3>
@@ -278,9 +279,10 @@ function CompactLiveCard({ match }: { match: HomeMatchViewModel }) {
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
           {match.score
-            ? match.score.rows.map((row) => (
+            ? match.score.rows.map((row, index) => (
                 <div key={row.player} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 border-t py-2 first:border-t-0">
                   <div className="flex min-w-0 items-center gap-2">
+                    <PlayerCountry player={match.playerDetails[index]} />
                     {row.serving ? <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-label="发球方" /> : <span className="size-1.5 shrink-0" aria-hidden="true" />}
                     <span className="truncate text-sm font-medium">{row.player}</span>
                   </div>
@@ -288,10 +290,11 @@ function CompactLiveCard({ match }: { match: HomeMatchViewModel }) {
                   <span className="min-w-6 text-right font-mono font-semibold text-primary">{row.points}</span>
                 </div>
               ))
-            : match.players.map((player) => (
-                <div key={player} className="flex min-w-0 items-center gap-2 border-t py-2 first:border-t-0">
+            : match.playerDetails.map((player) => (
+                <div key={player.id} className="flex min-w-0 items-center gap-2 border-t py-2 first:border-t-0">
+                  <PlayerCountry player={player} />
                   <span className="size-1.5 shrink-0" aria-hidden="true" />
-                  <span className="truncate text-sm font-medium">{player}</span>
+                  <span className="truncate text-sm font-medium">{player.shortName}</span>
                 </div>
               ))}
           <div className="flex items-center justify-between gap-3 border-t pt-3 text-xs text-muted-foreground">
@@ -436,9 +439,10 @@ export function UpcomingSection({
                   </CardAction>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-3">
-                  {match.players.map((player) => (
-                    <div key={player} className="flex min-w-0 items-center gap-2">
-                      <span className="truncate font-medium">{player}</span>
+                  {match.playerDetails.map((player) => (
+                    <div key={player.id} className="flex min-w-0 items-center gap-2">
+                      <PlayerCountry player={player} />
+                      <span className="truncate font-medium">{player.shortName}</span>
                     </div>
                   ))}
                   <div className="flex items-center justify-between gap-3 border-t pt-3 text-xs text-muted-foreground">

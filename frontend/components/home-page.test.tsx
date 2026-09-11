@@ -218,6 +218,15 @@ describe('HomePage slate', () => {
     expect(screen.getByRole('heading', { name: '今晚比赛' })).toBeVisible()
   })
 
+  it('shows flags on Home match cards without adding country names', async () => {
+    render(<HomePage />)
+
+    await screen.findByText('Jannik Sinner')
+    expect(screen.getAllByRole('img', { name: '意大利国旗' }).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('img', { name: '西班牙国旗' }).length).toBeGreaterThan(0)
+    expect(screen.queryByText('意大利')).toBeNull()
+  })
+
   it('renders typed retry copy when the slate API fails', async () => {
     getMatchCatalogMock.mockRejectedValue(Object.assign(new Error('down'), { code: 'provider_unavailable' }))
 

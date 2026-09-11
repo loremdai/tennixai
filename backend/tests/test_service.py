@@ -421,6 +421,38 @@ async def test_match_snapshot_hydrates_missing_player_profiles_once() -> None:
 
 
 @pytest.mark.asyncio
+async def test_catalog_hydrates_missing_player_profiles_once() -> None:
+    match = build_match("mat_catalog", MatchStatus.SCHEDULED, NOW_UTC).model_copy(
+        update={
+            "players": (SINNER, ALCARAZ),
+            "tournament": Tournament(
+                id="trn_catalog",
+                name="ATP Finals",
+                tour="atp",
+                circuit="atp",
+                gender="men",
+                discipline="singles",
+            ),
+        }
+    )
+    provider = CountingProvider(
+        upcoming=[match],
+        profiles={
+            SINNER.id: Player(id=SINNER.id, name="Jannik Sinner", country_code="ita", ranking=1),
+            ALCARAZ.id: Player(id=ALCARAZ.id, name="Carlos Alcaraz", country_code="esp", ranking=2),
+        },
+    )
+    service, _, _ = build_service(provider)
+
+    first = await service.list_catalog(status="upcoming")
+    second = await service.list_catalog(status="upcoming")
+
+    assert [player.country_code for player in first.matches[0].players] == ["ita", "esp"]
+    assert [player.ranking for player in second.matches[0].players] == [1, 2]
+    assert provider.calls["get_player"] == 2
+
+
+@pytest.mark.asyncio
 async def test_match_snapshot_refreshes_and_persists_missing_match_metadata() -> None:
     stored_match = build_match("mat_metadata", MatchStatus.SCHEDULED, NOW_UTC)
     stored = MatchSnapshot(match=stored_match, state_version=0, as_of=NOW_UTC)

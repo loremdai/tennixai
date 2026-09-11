@@ -362,6 +362,7 @@ class TennisService:
         selected = sorted(
             (match for match in source if passes(match)), key=catalog_sort_key
         )
+        selected = await self._hydrate_matches_players(selected)
         facet_counts = FacetCounts(
             circuits={
                 tier: sum(
@@ -532,55 +533,64 @@ class TennisService:
         )
         return cast(Player | None, outcome.value)
 
-    async def _hydrate_snapshot_players(self, snapshot: MatchSnapshot) -> MatchSnapshot:
-        current_players = snapshot.match.players
-        to_hydrate = [
-            player
-            for player in current_players
-            if player.ranking is None or player.country_code is None
-        ]
-        profiles = await asyncio.gather(
-            *(self._cached_player_profile(player.id) for player in to_hydrate)
-        )
-        if not profiles:
-            return snapshot
+    async def _hydrate_matches_players(self, matches: list[Match]) -> list[Match]:
+        pending: dict[str, Player] = {}
+        for match in matches:
+            for player in match.players:
+                if (
+                    player.id not in pending
+                    and (player.ranking is None or player.country_code is None)
+                ):
+                    pending[player.id] = player
 
+        profiles = await asyncio.gather(
+            *(self._cached_player_profile(player.id) for player in pending.values())
+        )
         profile_by_id = {
-            player.id: profile
-            for player, profile in zip(to_hydrate, profiles)
+            player_id: profile
+            for player_id, profile in zip(pending, profiles)
             if profile is not None
         }
         if not profile_by_id:
-            return snapshot
+            return matches
 
-        players = tuple(
-            player.model_copy(
-                update={
-                    "name": (
-                        profile_by_id[player.id].name
-                        if profile_by_id[player.id].name != "Unknown player"
-                        else player.name
-                    ),
-                    "country_code": (
-                        profile_by_id[player.id].country_code or player.country_code
-                    ),
-                    "ranking": (
-                        profile_by_id[player.id].ranking
-                        if profile_by_id[player.id].ranking is not None
-                        else player.ranking
-                    ),
-                }
+        hydrated: list[Match] = []
+        for match in matches:
+            players = tuple(
+                player.model_copy(
+                    update={
+                        "name": (
+                            profile_by_id[player.id].name
+                            if profile_by_id[player.id].name != "Unknown player"
+                            else player.name
+                        ),
+                        "country_code": (
+                            profile_by_id[player.id].country_code or player.country_code
+                        ),
+                        "ranking": (
+                            profile_by_id[player.id].ranking
+                            if profile_by_id[player.id].ranking is not None
+                            else player.ranking
+                        ),
+                    }
+                )
+                if player.id in profile_by_id
+                else player
+                for player in match.players
             )
-            if player.id in profile_by_id
-            else player
-            for player in current_players
-        )
-        if players == current_players:
+            hydrated.append(
+                match
+                if players == match.players
+                else match.model_copy(update={"players": players})
+            )
+        return hydrated
+
+    async def _hydrate_snapshot_players(self, snapshot: MatchSnapshot) -> MatchSnapshot:
+        hydrated = await self._hydrate_matches_players([snapshot.match])
+        if hydrated[0] == snapshot.match:
             return snapshot
         return snapshot.model_copy(
-            update={
-                "match": snapshot.match.model_copy(update={"players": players}),
-            }
+            update={"match": hydrated[0]}
         )
 
     async def _normalize_snapshot(self, snapshot: MatchSnapshot) -> MatchSnapshot:

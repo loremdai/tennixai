@@ -123,7 +123,9 @@ def test_metadata_normalizers_only_map_explicit_values() -> None:
     assert normalize_surface(" Red Clay ") == "clay"
     assert normalize_surface("Indoor Hard") is None
     assert country_code_from_name("Germany") == "deu"
-    assert country_code_from_name("World") is None
+    assert country_code_from_name("World") == "world"
+    assert country_code_from_name("Russia") == "rus"
+    assert country_code_from_name("Belarus") == "blr"
 
 
 @pytest.fixture()

@@ -140,7 +140,7 @@ describe('toMatchViewModel', () => {
     expect(view.scheduledDate).toContain('8')
   })
 
-  it('maps player presentation fields without flag URLs', () => {
+  it('maps player presentation fields with localized country metadata', () => {
     const view = toMatchViewModel(baseMatch())
 
     expect(view.players[0]).toEqual({
@@ -149,9 +149,10 @@ describe('toMatchViewModel', () => {
       shortName: 'Sinner',
       initials: 'JS',
       countryCode: 'ITA',
+      countryName: '意大利',
+      flagUrl: 'https://flagcdn.com/w40/it.png',
       ranking: 1,
     })
-    expect(JSON.stringify(view)).not.toContain('flagUrl')
   })
 
   it('maps meta fields with unavailable fallbacks', () => {
@@ -185,7 +186,48 @@ describe('toMatchViewModel', () => {
     )
 
     expect(view.players[0].countryCode).toBe('官方未提供国家代码')
+    expect(view.players[0].countryName).toBe('官方未提供国家名称')
+    expect(view.players[0].flagUrl).toBeNull()
     expect(view.players[1].countryCode).toBe('官方未提供国家代码')
+  })
+
+  it('preserves World as a displayable non-country affiliation', () => {
+    const view = toMatchViewModel(
+      baseMatch({
+        players: [
+          { id: 'ply_1', name: 'Player One', country_code: 'world', ranking: null },
+          { id: 'ply_2', name: 'Player Two', country_code: 'rus', ranking: null },
+        ],
+      }),
+    )
+
+    expect(view.players[0]).toMatchObject({
+      countryCode: 'WORLD',
+      countryName: '世界',
+      flagUrl: null,
+    })
+    expect(view.players[1]).toMatchObject({
+      countryCode: 'RUS',
+      countryName: '俄罗斯',
+      flagUrl: 'https://flagcdn.com/w40/ru.png',
+    })
+  })
+
+  it('exposes country metadata for every Home player card', () => {
+    const view = toHomeMatch(baseMatch())
+
+    expect(view.playerDetails[0]).toMatchObject({
+      shortName: 'Sinner',
+      countryCode: 'ITA',
+      countryName: '意大利',
+      flagUrl: 'https://flagcdn.com/w40/it.png',
+    })
+    expect(view.playerDetails[1]).toMatchObject({
+      shortName: 'Alcaraz',
+      countryCode: 'ESP',
+      countryName: '西班牙',
+      flagUrl: 'https://flagcdn.com/w40/es.png',
+    })
   })
 
   it('carries score, server, and winner ids unchanged', () => {

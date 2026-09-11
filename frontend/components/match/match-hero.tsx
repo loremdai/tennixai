@@ -8,6 +8,7 @@ import {
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { PlayerCountry } from '@/components/player-country'
 import {
   Card,
   CardAction,
@@ -71,8 +72,9 @@ function PlayerSummary({
             fetchPriority="high"
             className="h-3.5 w-5 rounded-sm object-cover ring-1 ring-border"
           />
-        ) : null}
-        <span className="font-mono text-xs text-muted-foreground">{player.countryCode}</span>
+        ) : (
+          <PlayerCountry player={player} showCode />
+        )}
         {player.ranking !== null ? (
           <Badge variant="outline">{previewPlayer ? `${previewPlayer.seed} 号种子` : `#${player.ranking}`}</Badge>
         ) : (

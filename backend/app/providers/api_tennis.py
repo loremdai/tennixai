@@ -98,8 +98,9 @@ SURFACE_ALIASES = {
 }
 
 # API-Tennis exposes player_country as a name, while the canonical model has
-# an ISO 3166-1 alpha-3 code. Unknown names and non-country markers (for
-# example, "World") stay unavailable instead of being guessed.
+# an ISO 3166-1 alpha-3 code. The provider's explicit "World" affiliation is
+# retained as the canonical non-country value `world`; unknown names remain
+# unavailable instead of being guessed.
 COUNTRY_CODES = {
     "argentina": "arg",
     "australia": "aus",
@@ -165,6 +166,7 @@ COUNTRY_CODES = {
     "uzbekistan": "uzb",
     "venezuela": "ven",
     "vietnam": "vnm",
+    "world": "world",
 }
 
 
