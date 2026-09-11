@@ -3,11 +3,11 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-11 10:42 CST
+**最后更新：** 2026-09-11 10:55 CST
 
-**当前任务：** 无（T34 — 修复详情页实时 worker 因 PBP 主键冲突退出已完成）
+**当前任务：** T35 — 修复 Match Chat 查询时快照冻结与可选球员数据降级
 
-**任务状态：** `idle`
+**任务状态：** `in_progress`
 
 **当前执行者 / ADE：** Codex / Codex
 
@@ -17,9 +17,9 @@
 
 **最后验证的产品提交：** `84eb146`
 
-**本次任务起始提交：** `d16dbfe`
+**本次任务起始提交：** `6ab89c5`
 
-**本次任务领取时间：** 2026-09-11 10:28 CST
+**本次任务领取时间：** 2026-09-11 10:55 CST
 
 **T30 完成提交：** `8c9e161`
 
@@ -86,6 +86,17 @@
 - **范围：** 修复 API-Tennis 实时快照在供应商 PBP 重排/修正后生成重复 `point_events.id`，导致 PostgreSQL `save_reduction` 唯一约束异常并使后台 realtime worker 静默退出；保持详情页 REST/SSE、Home 数据和官方缺失字段语义不变。
 - **完成事实：** 根因是供应商按当前 PBP 位置编号，插入/修正后旧 canonical point 移到新序号却继续携带旧主键；reducer 现在在新序号上为冲突点生成确定性、唯一的内部 ID，并保留安全的供应商 ID。新增单元与 PostgreSQL integration 回归覆盖新点复用旧 ID、已存尾部点移到新序号两种形态；真实比赛演算 96→152 个逐分、序号连续且无重复 ID，worker 重启后持续推进至 state version 16 / 158 个逐分。
 - **验证门：** TDD focused 用例先红后绿；backend `env -u NO_PROXY -u no_proxy uv run pytest -m 'not llm_live and not provider_live and not end_to_end_live' -q` 实际为 341 passed、2 skipped、9 deselected；frontend `pnpm test -- --runInBand` 为 130 passed，`pnpm typecheck` 通过；改动文件 lint、`git diff --check` 通过；`GET /api/v1/health` 返回 200。真实浏览器按 Home→打开 Gauff 对阵 Rybakina→Match Page 流程复核，首页与详情均为 10:40、第三盘 1–2、当前局 30–0，详情页时间戳持续前进且后端日志无 worker 异常。实现依据 [API-Tennis REST 文档](https://api-tennis.com/documentation) 与 [WebSocket 文档](https://api-tennis.com/documentation_websocket)。
+- **阻塞：** 无。
+
+### T35 — 修复 Match Chat 查询时快照冻结与可选球员数据降级
+
+- **状态：** `in_progress`
+- **执行者 / ADE：** Codex / Codex
+- **分支：** `main`
+- **起始提交：** `6ab89c5`
+- **领取时间：** 2026-09-11 10:55 CST
+- **范围：** 真实比赛详情页的 Match Chat 在提问时固定一份 canonical snapshot，后续工具调用全部基于同一版本；当前比赛的综合分析在可选球员背景或历史能力缺失时继续回答，并将缺失字段如实标注；前端将回答期间的实时更新展示为快照时间说明，不再要求用户重新提问或把已有回答标记为失败。
+- **验收门：** 先红后绿的 backend/frontend 回归测试；确定性 backend/frontend/typecheck 门；真实服务健康检查；真实浏览器用复杂分析问题完成一次查询，确认有结构化数据和回答文本、无 `not_found`/“请重新提问”失败状态，且回答基线版本与提问时一致。
 - **阻塞：** 无。
 
 ### P2 post-close real-data hardening — 修复直播发现、终态混入和统计周期渲染
