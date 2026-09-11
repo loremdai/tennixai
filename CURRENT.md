@@ -3,19 +3,19 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-11 10:55 CST
+**最后更新：** 2026-09-11 11:27 CST
 
 **当前任务：** T35 — 修复 Match Chat 查询时快照冻结与可选球员数据降级
 
-**任务状态：** `in_progress`
+**任务状态：** `done`
 
 **当前执行者 / ADE：** Codex / Codex
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**最近完成任务提交：** `84eb146`
+**最近完成任务提交：** `054062b`
 
-**最后验证的产品提交：** `84eb146`
+**最后验证的产品提交：** `054062b`
 
 **本次任务起始提交：** `6ab89c5`
 
@@ -90,13 +90,15 @@
 
 ### T35 — 修复 Match Chat 查询时快照冻结与可选球员数据降级
 
-- **状态：** `in_progress`
+- **状态：** `done`
 - **执行者 / ADE：** Codex / Codex
 - **分支：** `main`
 - **起始提交：** `6ab89c5`
 - **领取时间：** 2026-09-11 10:55 CST
+- **完成提交：** `054062b`
 - **范围：** 真实比赛详情页的 Match Chat 在提问时固定一份 canonical snapshot，后续工具调用全部基于同一版本；当前比赛的综合分析在可选球员背景或历史能力缺失时继续回答，并将缺失字段如实标注；前端将回答期间的实时更新展示为快照时间说明，不再要求用户重新提问或把已有回答标记为失败。
-- **验收门：** 先红后绿的 backend/frontend 回归测试；确定性 backend/frontend/typecheck 门；真实服务健康检查；真实浏览器用复杂分析问题完成一次查询，确认有结构化数据和回答文本、无 `not_found`/“请重新提问”失败状态，且回答基线版本与提问时一致。
+- **完成事实：** backend 在一次请求开始冻结 `MatchSnapshot`，所有 Match Chat 主题工具复用同一 `state_version/as_of`；当前比赛默认只开放 `get_match_intelligence`，明确询问近期/交手时才开放有限历史工具；可选球员查询的 `not_found/unsupported` 作为不可用事实回传，不再中止已有分析；最终 Qwen 流式回答按阿里云兼容 Chat Completions 文档携带工具目录并关闭思考模式，避免历史 tool message 被误判为新工具调用。
+- **验收门：** TDD 回归先红后绿；确定性 backend `354 passed, 2 skipped`；真实 LLM `tests/live/test_llm_live.py` `7 passed`；frontend `130 passed`、`pnpm typecheck` 通过、`git diff --check` 通过；真实服务健康且真实浏览器复杂分析问题返回完整正文，无 `查询失败`、`not_found` 或“请重新提问”，完赛后重新提问也保留正文。实现依据 [阿里云 Function Calling 文档](https://help.aliyun.com/en/model-studio/qwen-function-calling) 与 [OpenAI 兼容 Chat Completions 文档](https://help.aliyun.com/en/model-studio/qwen-api-via-openai-chat-completions)。
 - **阻塞：** 无。
 
 ### P2 post-close real-data hardening — 修复直播发现、终态混入和统计周期渲染

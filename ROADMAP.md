@@ -3,7 +3,7 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-10 11:17 CST
+**最后更新：** 2026-09-11 11:27 CST
 
 **总体状态：** `done`（P1、P2 产品交付与 post-close real-data hardening 均已完成）
 
@@ -56,7 +56,7 @@
 | P2.2 — Unified data and discovery | `done` | API-Tennis REST、历史/H2H、赛事分类和 Home 叠加筛选 | T23–T25 完成（`015ff7f`、`dddb734`、`e904485`）；P2.3 可开始 |
 | P2.3 — Realtime pipeline | `done` | Reducer、WebSocket worker、租约、持久化、snapshot + SSE | T26–T28 完成（`98a1a22`、`d354aba`、`f03985b`）；T29/T30 已在 P2.4 完成 |
 | P2.4 — Match intelligence | `done` | 完整 PBP、22 项统计、近期控制指数、版本化上下文 Chat | T29（`ecd916b`）、T30（`8c9e161`）、T31（`128518f`）完成；P2.5 可开始 |
-| P2.5 — Acceptance and hardening | `done` | Replay、恢复门、真实 smoke、双视口视觉、本地 runbook 与真实数据回归修复 | T32 `ac9c6e5`、T33 `b60217e`、T34 `84eb146` 完成；确定性/基础设施/前端门与真实 REST/浏览器复核通过 |
+| P2.5 — Acceptance and hardening | `done` | Replay、恢复门、真实 smoke、双视口视觉、本地 runbook 与真实数据回归修复 | T32 `ac9c6e5`、T33 `b60217e`、T34 `84eb146`、T35 `054062b` 完成；确定性/基础设施/前端门、真实 REST/LLM/浏览器复核通过 |
 
 详细产品、架构和数据语义见 [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md)，逐任务实施步骤见 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md)。
 
@@ -80,7 +80,7 @@
 | T32 | P2.5 | Add Replay E2E, Fault Recovery, Runbook, and Final P2 Gate | `done` | `ac9c6e5` | Replay provider/脱敏 JSONL fixture 使用同一 identity→reducer→PostgreSQL→Redis→FastAPI SSE→Next 路径；focused replay/recovery 3 passed；确定性 backend 325 passed/11 deselected；infrastructure 13 passed/323 deselected；frontend 127 passed + typecheck/build；默认 Playwright 40 passed/10 skipped；Replay Playwright 功能 2 passed、视觉 4 passed（1440×1000 与 390×844），PNG 逐张审阅；真实 API-Tennis REST 1 passed、WebSocket 1 passed；真实 LLM 7 failed，endpoint 返回 403 `AccessDenied.Unpurchased`，未计作通过；`git diff --check` 与范围审计通过 |
 | T33 | P2.5 | Harden Real-Provider Live Discovery and Match Rendering | `done` | `b60217e` | 修复 livescore 终态泄漏（`event_live` 映射且终态优先）、默认筛选下真实直播不可发现、统计多周期重复 key、实时推送覆盖球员全名、重复 PBP point identity 与 PostgreSQL 重排冲突；按 [API-Tennis REST 文档](https://api-tennis.com/documentation) 与 [WebSocket 文档](https://api-tennis.com/documentation_websocket) 保留官方未返回的场地/室内外/赛制/ISO 国家代码缺失语义；TDD 后确定性 backend 337 passed/2 skipped/9 deselected，infrastructure 14 passed，frontend 130 passed + typecheck/build，真实 REST smoke 1 passed，真实浏览器鼠标流程与最新前端告警复核通过 |
 | T34 | P2.5 | Repair Realtime Detail Worker After PBP Rebuilds | `done` | `84eb146` | 根因是供应商按 PBP 位置编号，插入/修正后已存 canonical point 移到新序号却复用旧 `point_events.id`，触发 PostgreSQL 主键冲突并使 worker 静默退出；reducer 为冲突点生成按 canonical identity+序号确定性的唯一 ID，新增单元与 infrastructure integration 覆盖新点复用旧 ID、尾部移到新序号两种形态；确定性 backend 341 passed/2 skipped/9 deselected，frontend 130 passed + typecheck，真实服务 state version 11→16、PBP 96→158，真实浏览器 Home→Match 详情页持续更新 |
-| T35 | P2.5 | Freeze Match Chat Query Snapshot and Degrade Optional Player Data | `in_progress` | — | 真实复杂分析请求已复现：同一请求先返回比赛结构化数据和 intelligence 版本 41，随后可选球员查询 `not_found` 终止整条回答；同时前端把回答期间版本变化写成“请重新提问”。修复目标是一次请求内复用提问时 snapshot、可选能力缺失不升级为查询失败，并保留回答的 `state_version/as_of` 基线 |
+| T35 | P2.5 | Freeze Match Chat Query Snapshot and Degrade Optional Player Data | `done` | `054062b` | 一次请求开始冻结 `MatchSnapshot`，Match Chat 工具复用同一 `state_version/as_of`；当前分析默认不暴露未请求的历史工具，可选球员 `not_found/unsupported` 降级为不可用事实；Qwen 最终流携带工具目录并按官方兼容参数关闭思考模式。TDD 后确定性 backend `354 passed, 2 skipped`、真实 LLM `7 passed`、frontend `130 passed` + typecheck；真实浏览器复杂分析返回完整正文，无 `查询失败`/`not_found`/“请重新提问”，完赛后查询继续保留回答；依据 [阿里云 Function Calling 文档](https://help.aliyun.com/en/model-studio/qwen-function-calling) 与 [Chat Completions 文档](https://help.aliyun.com/en/model-studio/qwen-api-via-openai-chat-completions) |
 
 ## P2 完成门摘要
 
@@ -89,7 +89,7 @@
 - Home 默认与叠加筛选正确，高级别比赛优先，Featured 不再直接取供应商首项。
 - Match 无需浏览器刷新即可更新比分、发球方、PBP、统计和近期控制指数。
 - PBP correction、版本缺口、断线、隐藏标签、终态和进程重启均通过 Replay 验证。
-- Chat 只消费 compact canonical facts，回答固定 `state_version/as_of`，旧回答不随比赛静默改写。
+- Chat 只消费 compact canonical facts，回答在提问开始时固定 `state_version/as_of`，旧回答不随比赛静默改写；可选能力缺失不再把已有回答升级为失败。
 - History/H2H 按需来自 API-Tennis；raw payload 14 天，canonical observations 长期；无完整供应商历史镜像。
 - P2 schema/API/UI 中不存在 odds、prediction、market、edge 或 trading 能力。
 - 用户追加验收门（2026-09-09）已完成：使用真实浏览器和鼠标逐项核对 Home 筛选→Featured→Match Page 实时更新→PBP/统计/控制指数→版本化 Chat→终态；发现的问题已修复并复验至无 bug。
