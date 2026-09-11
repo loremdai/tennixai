@@ -3,19 +3,19 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-11 15:04 CST
+**最后更新：** 2026-09-11 15:32 CST
 
 **当前任务：** T37 — 适配可获得比赛元数据并解释不可用字段
 
-**任务状态：** `in_progress`
+**任务状态：** `done`
 
 **当前执行者 / ADE：** Codex / Codex
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**最近完成任务提交：** `28b316d`
+**最近完成任务提交：** `54059fe`
 
-**最后验证的产品提交：** `28b316d`
+**最后验证的产品提交：** `54059fe`
 
 **本次任务起始提交：** `d776443`
 
@@ -78,7 +78,7 @@
 
 ### T37 — 适配可获得比赛元数据并解释不可用字段
 
-- **状态：** `in_progress`
+- **状态：** `done`
 - **执行者 / ADE：** Codex / Codex
 - **分支：** `main`
 - **起始提交：** `d776443`
@@ -86,6 +86,10 @@
 - **范围：** 依据 API-Tennis 官方 REST 文档，补齐比赛详情可通过 `get_draw` 获得的赛事场地与可安全映射的球员国家代码；为官方响应明确为空或语义不足的室内外、赛制、赛前比分/PBP/统计/走势等字段提供准确说明，补充后端映射、前端展示和真实数据回归测试。
 - **执行方式：** 先写并运行失败的 provider/view-model 回归测试，再做最小适配；完成后运行后端、前端、构建、真实 API smoke，并用真实浏览器鼠标复核目标比赛详情页。
 - **验收门：** 目标比赛详情页不再把 API-Tennis `get_draw` 已提供的硬地信息显示为缺失；可映射的球员国家代码可见；仍无官方值的字段显示“官方未返回/赛前待产生”等解释，不伪造值；未跟踪用户文件保持不变。
+- **完成提交：** `54059fe`
+- **完成事实：** 详情快照按官方 `get_draw` 响应补齐并规范化 `hard/clay/grass` 场地；`get_players` 的明确国家名称安全映射为 ISO alpha-3（例如 Germany→`deu`），`World` 等非国家标记不猜测；缺失元数据采用短 TTL 缓存并持久化，避免重复消耗供应商配额；reducer 对元数据变化发出版本化事件；前端将轮次、场地、室内外、赛制、开赛时间、国家代码、比分、逐分、统计和动量的缺失分别解释，不再显示裸“暂未提供”。
+- **验证门：** TDD focused provider/service/reducer `91 passed`；backend 确定性 `349 passed, 2 skipped, 9 deselected`；frontend `136 passed`、`pnpm typecheck`、`pnpm build`；隔离 fake 服务 P1 Playwright 功能+视觉 `24 passed`；真实 API-Tennis REST smoke `1 passed`；真实服务 health 200、目标 Match API 200；真实浏览器鼠标进入并刷新目标页后显示硬地、`DEU/#2`、`#142`，室内外/赛制/逐分/统计/动量缺失解释正确，浏览器 error/warn 为空。一次误触全套 Playwright 时发现 4 个范围外 P2 Home filter 请求断言失败，未作为 T37 通过证据，也未改动其代码。
+- **阻塞：** 无。
 
 ### T36 — 暴露 Match Chat 流式进度阶段
 
@@ -290,6 +294,7 @@
 
 | 日期 | 提交 | 验证 | 结果 |
 |---|---|---|---|
+| 2026-09-11 | `54059fe` | TDD focused provider/service/reducer `91 passed`；backend 确定性 `349 passed, 2 skipped, 9 deselected`；frontend `136 passed` + typecheck + build；隔离 fake 服务 P1 Playwright 功能+视觉 `24 passed`；真实 API-Tennis REST smoke 1 passed；真实服务 health 200、目标 Match API 200；真实浏览器鼠标进入并刷新目标页，浏览器 error/warn 为空；`git diff --check` 通过 | T37 完成；详情页补齐官方可获得场地与安全国家代码，所有仍缺失的元数据/实时能力均改为字段级解释 |
 | 2026-09-11 | `28b316d` | TDD focused 用例先失败后通过；backend `355 passed, 2 skipped`；frontend `135 passed` + typecheck + build；隔离假服务关键 Playwright 4 passed；真实 SSE 阶段顺序与真实浏览器阶段文案复核通过；backend health 200、Match Page HTTP 200；`git diff --check` 通过 | T36 完成；Chat 长等待期间可见解析/规划/取数/生成进度，真实耗时未被掩盖 |
 | 2026-09-10 | `b60217e` | TDD focused 先红后绿；backend 确定性 337 passed/2 skipped/9 deselected；infrastructure 14 passed；frontend 130 passed + typecheck + build；真实 API-Tennis REST smoke 1 passed；真实浏览器鼠标流程与最新前端错误/警告复核通过；`git diff --check` 通过 | T33 完成；直播发现、终态过滤、球员档案持久化、PBP 持久化冲突和统计周期 key 已修复；官方缺失字段仍诚实保留 |
 | 2026-09-10 | `525d701` | TDD focused 用例先失败后通过；frontend `pnpm test` 128 passed；`pnpm typecheck` 通过；本地浏览器数据加载后的真实页面复核通过；`git diff --check` 通过 | 空 facet 的“未知”筛选项隐藏；canonical `unknown` 语义保留 |
@@ -314,9 +319,9 @@
 
 ## 最近交接
 
-**状态：** T37 已由 Codex 于 2026-09-11 15:04 在 `main` 领取；起始提交 `d776443`；工作区保留用户已有未跟踪文件，真实 backend/frontend 保持运行。
+**状态：** T37 已由 Codex 于 2026-09-11 15:04 在 `main` 领取并于 `54059fe` 完成；工作区保留用户已有未跟踪文件，真实 backend/frontend 保持运行。
 
-**交接说明：** T30 接管时原执行者因额度耗尽中断，项目所有者明确批准 Codex 接管；T30–T36 已在 `main` 串行完成并推送。T33–T36 按官方 API-Tennis 与阿里云兼容 API 文档核对并通过既有验证门；本次 T37 将复核并修正此前对 `surface/indoor/format/country_code` 的过度概括：官方 `get_draw` 可为赛事提供场地，`get_players` 可提供国家名称，其中只有语义明确且可安全映射的值才进入 canonical。所有 ADE 只使用根目录 `.env`；API-Tennis/LLM 凭据不得写入代码、文档、fixture、日志、提交或聊天输出。
+**交接说明：** T30 接管时原执行者因额度耗尽中断，项目所有者明确批准 Codex 接管；T30–T37 已在 `main` 串行完成并推送。T33–T37 按官方 API-Tennis 与阿里云兼容 API 文档核对并通过各自验证门；T37 确认 `get_draw` 可为赛事提供场地、`get_players` 可提供国家名称，但只有语义明确且可安全映射的值才进入 canonical；官方未返回的室内外、赛制、赛前比分/PBP/统计/动量继续按字段给出解释。所有 ADE 只使用根目录 `.env`；API-Tennis/LLM 凭据不得写入代码、文档、fixture、日志、提交或聊天输出。
 
 **旧交接（T29）：** 接手 T29 前完整阅读 [P2 设计规格 §14](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) 和 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t29-render-full-pbp-and-available-match-statistics)。所有 ADE 只使用根目录 `.env`；API-Tennis 凭据变量为 `TENNIX_API_TENNIS_API_KEY`，不得写入代码、文档、fixture、日志、提交或聊天输出。T28 起 MatchPage 经 `useMatchStream` 消费 `/api/matches/{id}` + `/stream`（snapshot 含 points/statistics/quality/state_version）；SSE 测试用进程内 uvicorn（ASGITransport 缓冲）；用户已追加要求：P2 收尾时用真实浏览器按业务流程逐项人工验收直到无 bug。
 
@@ -330,11 +335,11 @@
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-11 | T37 完成：详情页适配官方赛事场地与安全国家代码，并解释所有不可用字段 | `54059fe` |
 | 2026-09-11 | T36 完成：Match Chat 显示 SSE 解析、规划、取数和生成阶段 | `28b316d` |
-| 2026-09-11 | T34 完成：修复 PBP 重排导致详情页 realtime worker 因 point 主键冲突退出 | `84eb146` |
 | 2026-09-10 | T33 完成：真实 API-Tennis 直播发现、状态、档案与持久化 hardening | `b60217e` |
-| 2026-09-10 | 领取 T33：真实数据 hardening | `2668fd9` |
-| 2026-09-10 | P2 post-close UX patch 完成：隐藏无数据的“未知”筛选项 | `525d701` |
+| 2026-09-11 | T35 完成：冻结 Match Chat 快照并降级可选球员数据 | `054062b` |
+| 2026-09-11 | T34 完成：修复 PBP 重排导致详情页 realtime worker 因 point 主键冲突退出 | `84eb146` |
 
 ## 接手与更新规则
 
