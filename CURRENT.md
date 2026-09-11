@@ -3,11 +3,11 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-11 12:03 CST
+**最后更新：** 2026-09-11 15:04 CST
 
-**当前任务：** T36 — 暴露 Match Chat 流式进度阶段
+**当前任务：** T37 — 适配可获得比赛元数据并解释不可用字段
 
-**任务状态：** `done`
+**任务状态：** `in_progress`
 
 **当前执行者 / ADE：** Codex / Codex
 
@@ -17,9 +17,9 @@
 
 **最后验证的产品提交：** `28b316d`
 
-**本次任务起始提交：** `d6b33b6`
+**本次任务起始提交：** `d776443`
 
-**本次任务领取时间：** 2026-09-11 11:35 CST
+**本次任务领取时间：** 2026-09-11 15:04 CST
 
 **T30 完成提交：** `8c9e161`
 
@@ -75,6 +75,17 @@
 - 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`（任务外）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`（next dev 自动生成）、`frontend/next-env.d.ts`（Next 工具链生成）；保留原样。
 
 ## 当前任务
+
+### T37 — 适配可获得比赛元数据并解释不可用字段
+
+- **状态：** `in_progress`
+- **执行者 / ADE：** Codex / Codex
+- **分支：** `main`
+- **起始提交：** `d776443`
+- **领取时间：** 2026-09-11 15:04 CST
+- **范围：** 依据 API-Tennis 官方 REST 文档，补齐比赛详情可通过 `get_draw` 获得的赛事场地与可安全映射的球员国家代码；为官方响应明确为空或语义不足的室内外、赛制、赛前比分/PBP/统计/走势等字段提供准确说明，补充后端映射、前端展示和真实数据回归测试。
+- **执行方式：** 先写并运行失败的 provider/view-model 回归测试，再做最小适配；完成后运行后端、前端、构建、真实 API smoke，并用真实浏览器鼠标复核目标比赛详情页。
+- **验收门：** 目标比赛详情页不再把 API-Tennis `get_draw` 已提供的硬地信息显示为缺失；可映射的球员国家代码可见；仍无官方值的字段显示“官方未返回/赛前待产生”等解释，不伪造值；未跟踪用户文件保持不变。
 
 ### T36 — 暴露 Match Chat 流式进度阶段
 
@@ -303,9 +314,9 @@
 
 ## 最近交接
 
-**状态：** T36 已由 Codex 于 2026-09-11 在 `main` 完成，实现提交 `28b316d`；工作区保留用户已有未跟踪文件，真实 backend/frontend 已重启并通过健康检查。
+**状态：** T37 已由 Codex 于 2026-09-11 15:04 在 `main` 领取；起始提交 `d776443`；工作区保留用户已有未跟踪文件，真实 backend/frontend 保持运行。
 
-**交接说明：** T30 接管时原执行者因额度耗尽中断，项目所有者明确批准 Codex 接管；T30–T36 已在 `main` 串行完成并推送。T33–T35 按官方 API-Tennis 与阿里云兼容 API 文档核对并通过确定性、真实 provider/LLM（已完成门）与真实浏览器门；T36 另外验证了真实 SSE 阶段顺序和浏览器可见进度。`surface/indoor/format/country_code` 对当前真实响应仍不可得，不做推断。所有 ADE 只使用根目录 `.env`；API-Tennis/LLM 凭据不得写入代码、文档、fixture、日志、提交或聊天输出。
+**交接说明：** T30 接管时原执行者因额度耗尽中断，项目所有者明确批准 Codex 接管；T30–T36 已在 `main` 串行完成并推送。T33–T36 按官方 API-Tennis 与阿里云兼容 API 文档核对并通过既有验证门；本次 T37 将复核并修正此前对 `surface/indoor/format/country_code` 的过度概括：官方 `get_draw` 可为赛事提供场地，`get_players` 可提供国家名称，其中只有语义明确且可安全映射的值才进入 canonical。所有 ADE 只使用根目录 `.env`；API-Tennis/LLM 凭据不得写入代码、文档、fixture、日志、提交或聊天输出。
 
 **旧交接（T29）：** 接手 T29 前完整阅读 [P2 设计规格 §14](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) 和 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t29-render-full-pbp-and-available-match-statistics)。所有 ADE 只使用根目录 `.env`；API-Tennis 凭据变量为 `TENNIX_API_TENNIS_API_KEY`，不得写入代码、文档、fixture、日志、提交或聊天输出。T28 起 MatchPage 经 `useMatchStream` 消费 `/api/matches/{id}` + `/stream`（snapshot 含 points/statistics/quality/state_version）；SSE 测试用进程内 uvicorn（ASGITransport 缓冲）；用户已追加要求：P2 收尾时用真实浏览器按业务流程逐项人工验收直到无 bug。
 

@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-11 12:03 CST
+**最后更新：** 2026-09-11 15:04 CST
 
-**总体状态：** `done`（P1、P2 产品交付与 post-close real-data hardening 均已完成）
+**总体状态：** `in_progress`（T37 正在进行真实数据元数据适配与缺失字段语义 hardening）
 
 **当前里程碑：** P2 — Live Match Intelligence（`done`）
 
-**当前阶段：** P2.5 — Acceptance and hardening（`done`）
+**当前阶段：** P2.5 — Acceptance and hardening（`in_progress`）
 
 ## 状态说明
 
@@ -56,7 +56,7 @@
 | P2.2 — Unified data and discovery | `done` | API-Tennis REST、历史/H2H、赛事分类和 Home 叠加筛选 | T23–T25 完成（`015ff7f`、`dddb734`、`e904485`）；P2.3 可开始 |
 | P2.3 — Realtime pipeline | `done` | Reducer、WebSocket worker、租约、持久化、snapshot + SSE | T26–T28 完成（`98a1a22`、`d354aba`、`f03985b`）；T29/T30 已在 P2.4 完成 |
 | P2.4 — Match intelligence | `done` | 完整 PBP、22 项统计、近期控制指数、版本化上下文 Chat | T29（`ecd916b`）、T30（`8c9e161`）、T31（`128518f`）完成；P2.5 可开始 |
-| P2.5 — Acceptance and hardening | `done` | Replay、恢复门、真实 smoke、双视口视觉、本地 runbook 与真实数据回归修复 | T32 `ac9c6e5`、T33 `b60217e`、T34 `84eb146`、T35 `054062b`、T36 `28b316d` 完成；确定性/基础设施/前端门、真实 REST/LLM/浏览器复核通过 |
+| P2.5 — Acceptance and hardening | `in_progress` | Replay、恢复门、真实 smoke、双视口视觉、本地 runbook 与真实数据回归修复 | T32 `ac9c6e5`、T33 `b60217e`、T34 `84eb146`、T35 `054062b`、T36 `28b316d` 已完成；T37 正在补齐官方可获得赛事元数据并澄清不可用字段 |
 
 详细产品、架构和数据语义见 [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md)，逐任务实施步骤见 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md)。
 
@@ -82,6 +82,7 @@
 | T34 | P2.5 | Repair Realtime Detail Worker After PBP Rebuilds | `done` | `84eb146` | 根因是供应商按 PBP 位置编号，插入/修正后已存 canonical point 移到新序号却复用旧 `point_events.id`，触发 PostgreSQL 主键冲突并使 worker 静默退出；reducer 为冲突点生成按 canonical identity+序号确定性的唯一 ID，新增单元与 infrastructure integration 覆盖新点复用旧 ID、尾部移到新序号两种形态；确定性 backend 341 passed/2 skipped/9 deselected，frontend 130 passed + typecheck，真实服务 state version 11→16、PBP 96→158，真实浏览器 Home→Match 详情页持续更新 |
 | T35 | P2.5 | Freeze Match Chat Query Snapshot and Degrade Optional Player Data | `done` | `054062b` | 一次请求开始冻结 `MatchSnapshot`，Match Chat 工具复用同一 `state_version/as_of`；当前分析默认不暴露未请求的历史工具，可选球员 `not_found/unsupported` 降级为不可用事实；Qwen 最终流携带工具目录并按官方兼容参数关闭思考模式。TDD 后确定性 backend `354 passed, 2 skipped`、真实 LLM `7 passed`、frontend `130 passed` + typecheck；真实浏览器复杂分析返回完整正文，无 `查询失败`/`not_found`/“请重新提问”，完赛后查询继续保留回答；依据 [阿里云 Function Calling 文档](https://help.aliyun.com/en/model-studio/qwen-function-calling) 与 [Chat Completions 文档](https://help.aliyun.com/en/model-studio/qwen-api-via-openai-chat-completions) |
 | T36 | P2.5 | Expose Match Chat Streaming Progress Stages | `done` | `28b316d` | Match Chat SSE 暴露 `resolving`、`planning`、`fetching_data`、`generating` 阶段；Home/Match 将阶段映射为可见进度文案，并在完成、失败、取消时清理状态。TDD 后确定性 backend `355 passed, 2 skipped`、frontend `135 passed` + typecheck/build；隔离假服务关键 Playwright 4/4；真实 SSE 顺序与真实浏览器阶段文案均已复核。 |
+| T37 | P2.5 | Adapt Available Match Metadata and Explain Unavailable Fields | `in_progress` | — | 依据 API-Tennis `get_draw`/`get_players` 官方响应补齐可获得场地与安全国家代码映射；对官方未返回或赛前才产生的字段保留解释性缺失文案；待 TDD、真实 smoke 与浏览器复核完成 |
 
 ## P2 完成门摘要
 
