@@ -21,7 +21,11 @@ from app.config import Settings
 from app.errors import AppError
 from app.identity import MemoryIdentityRepository
 from app.persistence.database import Database
+from app.persistence.player_directory import PostgresPlayerDirectoryRepository
 from app.persistence.repositories import PostgresIdentityRepository
+from app.players.repository import MemoryPlayerDirectoryRepository
+from app.players.resolver import PlayerResolver
+from app.players.sync import PlayerDirectorySync
 from app.providers.api_tennis import ApiTennisProvider
 from app.providers.api_tennis_live import ApiTennisLiveFeedProvider
 from app.providers.base import TennisDataProvider
@@ -57,6 +61,8 @@ def create_app(
     live_client: httpx.AsyncClient | None = None
     api_tennis_client: httpx.AsyncClient | None = None
     database: Database | None = None
+    directory: object | None = None
+    resolver: PlayerResolver | None = None
     redis_client = None
     owns_realtime = realtime is None
     provider_identity = identities
@@ -72,11 +78,13 @@ def create_app(
                 base_url=settings.api_tennis_base_url, timeout=15.0
             )
             provider_identity = PostgresIdentityRepository(database)
+            directory = PostgresPlayerDirectoryRepository(database)
             provider = ApiTennisProvider(
                 client=api_tennis_client,
                 identities=provider_identity,
                 api_key=api_key.get_secret_value(),
                 now=clock,
+                directory=directory,
             )
         elif settings.provider_mode == "replay":
             database = Database(settings.database_url)
@@ -102,7 +110,23 @@ def create_app(
                 now=clock,
             )
         else:
+            directory = MemoryPlayerDirectoryRepository()
             provider = FakeTennisProvider(identities=identities, now=clock)
+
+    if directory is not None:
+        if settings.provider_mode == "fake":
+            # Deterministic in-memory directory so fake-mode pages and Chat
+            # resolve names without touching any vendor or the database. The
+            # one-shot seeder runs on first resolution, server or test alike.
+            sync = PlayerDirectorySync(provider, directory, now=clock)
+
+            async def _seed_directory() -> None:
+                await sync.sync_rankings()
+                await sync.sync_known_player_aliases()
+
+            resolver = PlayerResolver(directory, seeder=_seed_directory)
+        else:
+            resolver = PlayerResolver(directory)
 
     cache: AsyncTTLCache[str, object] = AsyncTTLCache(max_entries=settings.cache_max_entries)
 
@@ -178,6 +202,7 @@ def create_app(
         timezone=settings.product_timezone,
         snapshots=realtime.store,
         publisher=realtime.publisher,
+        resolver=resolver,
     )
 
     if chat_orchestrator is None:

@@ -83,3 +83,25 @@ class RankingEntry(FrozenModel):
         if value.tzinfo is None:
             raise ValueError("datetime must be timezone-aware")
         return value
+
+
+class PlayerResolutionStatus(StrEnum):
+    RESOLVED = "resolved"
+    AMBIGUOUS = "ambiguous"
+    NOT_FOUND = "not_found"
+
+
+class PlayerCandidate(FrozenModel):
+    player: Player
+    matched_alias: str
+    alias_kind: PlayerAliasKind
+    current_rank: int | None = None
+
+
+class PlayerResolution(FrozenModel):
+    """Domain result, never an exception: ambiguous/not_found are recoverable."""
+
+    status: PlayerResolutionStatus
+    query: str
+    player: Player | None = None
+    candidates: tuple[PlayerCandidate, ...] = ()

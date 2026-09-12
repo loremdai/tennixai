@@ -18,6 +18,8 @@ from app.domain import (
 )
 from app.errors import AppError
 from app.identity import MemoryIdentityRepository
+from app.players.repository import MemoryPlayerDirectoryRepository
+from app.players.sync import PlayerDirectorySync
 from app.providers.api_tennis import (
     ApiTennisProvider,
     country_code_from_name,
@@ -91,10 +93,46 @@ def route_handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"success": 1, "result": []})
     if method == "get_events":
         return httpx.Response(200, json=load("events.json"))
+    if method == "get_standings":
+        return httpx.Response(
+            200,
+            json={
+                "success": 1,
+                "result": [
+                    {
+                        "place": 1222,
+                        "player": "Jie Cui",
+                        "player_key": 1274,
+                        "league": "ATP",
+                        "movement": "0",
+                        "country": "China",
+                        "points": "150",
+                    },
+                    {
+                        "place": 900,
+                        "player": "F. Sun",
+                        "player_key": 876,
+                        "league": "ATP",
+                        "movement": "0",
+                        "country": "China",
+                        "points": "200",
+                    },
+                    {
+                        "place": 500,
+                        "player": "M. Moeller",
+                        "player_key": 4444,
+                        "league": "ATP",
+                        "movement": "0",
+                        "country": "Germany",
+                        "points": "300",
+                    },
+                ],
+            },
+        )
     return httpx.Response(404, json={"error": "1"})
 
 
-def build_provider(handler=route_handler):
+def build_provider(handler=route_handler, *, with_directory: bool = True):
     seen: list[httpx.Request] = []
 
     def wrapped(request: httpx.Request) -> httpx.Response:
@@ -104,13 +142,15 @@ def build_provider(handler=route_handler):
     client = httpx.AsyncClient(
         transport=httpx.MockTransport(wrapped), base_url=BASE_URL, timeout=10.0
     )
+    directory = MemoryPlayerDirectoryRepository() if with_directory else None
     provider = ApiTennisProvider(
         client=client,
         identities=MemoryIdentityRepository(),
         api_key=API_KEY,
         now=lambda: NOW,
+        directory=directory,
     )
-    return provider, seen, client
+    return provider, seen, client, directory
 
 
 def draw_unavailable_handler(request: httpx.Request) -> httpx.Response:
@@ -130,7 +170,10 @@ def test_metadata_normalizers_only_map_explicit_values() -> None:
 
 @pytest.fixture()
 async def provider():
-    built, seen, client = build_provider()
+    built, seen, client, directory = build_provider()
+    sync = PlayerDirectorySync(built, directory, now=lambda: NOW)
+    await sync.sync_rankings()
+    await sync.sync_known_player_aliases()
     try:
         yield built, seen
     finally:
@@ -194,7 +237,7 @@ async def test_live_request_uses_method_timezone_and_key(provider) -> None:
 
     await built.get_live_matches()
 
-    request = seen[0]
+    request = seen[-1]
     assert request.method == "GET"
     assert request.url.params["method"] == "get_livescore"
     assert request.url.params["timezone"] == "GMT"
@@ -540,23 +583,31 @@ async def test_head_to_head_maps_meetings_and_recent_with_limits(provider) -> No
 
 
 @pytest.mark.asyncio
-async def test_search_players_scans_live_and_upcoming_windows(provider) -> None:
+async def test_search_players_reads_local_directory_without_vendor_scan(
+    provider,
+) -> None:
     built, seen = provider
+    seen.clear()
 
     results = await built.search_players("moeller")
 
     assert [player.name for player in results] == ["M. Moeller"]
     assert results[0].id.startswith("ply_")
     methods = [item.url.params.get("method") for item in seen]
-    assert "get_livescore" in methods
-    fixture_request = next(
-        item for item in seen if item.url.params.get("method") == "get_fixtures"
-    )
-    assert fixture_request.url.params["date_start"] == "2026-09-09"
-    assert fixture_request.url.params["date_stop"] == "2026-09-12"
-
+    assert methods == []
     assert await built.search_players("nobody-here") == []
     assert await built.search_players("  ") == []
+
+
+@pytest.mark.asyncio
+async def test_search_players_without_directory_is_typed_unsupported() -> None:
+    built, _seen, client, _directory = build_provider(with_directory=False)
+    try:
+        with pytest.raises(AppError) as error_info:
+            await built.search_players("Cui")
+        assert error_info.value.code == "unsupported"
+    finally:
+        await client.aclose()
 
 
 @pytest.mark.asyncio
@@ -625,7 +676,7 @@ async def test_match_snapshot_enriches_surface_from_official_draw_metadata(provi
 
 @pytest.mark.asyncio
 async def test_match_snapshot_keeps_match_when_draw_metadata_is_unavailable() -> None:
-    built, seen, client = build_provider(draw_unavailable_handler)
+    built, seen, client, _directory = build_provider(draw_unavailable_handler)
     try:
         live = await built.get_live_matches()
         rich = next(match for match in live if match.round == "Tulln - 1/8-finals")
@@ -664,7 +715,7 @@ async def test_success_zero_and_error_payloads_translate_to_provider_unavailable
         {"success": 0},
         {"error": "1", "result": [{"param": "player_key", "msg": "Required", "cod": 201}]},
     ):
-        built, _, client = build_provider(
+        built, _, client, _directory = build_provider(
             lambda request: httpx.Response(200, json=payload)
         )
         try:
@@ -694,7 +745,7 @@ async def test_http_errors_translate_to_typed_app_errors(
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(status_code, json={"error": "boom"}, headers=headers)
 
-    built, _, client = build_provider(handler)
+    built, _, client, _directory = build_provider(handler)
     try:
         with pytest.raises(AppError) as error_info:
             await built.get_live_matches()
@@ -716,7 +767,7 @@ async def test_network_failure_translates_without_leaking_url() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("boom", request=request)
 
-    built, _, client = build_provider(handler)
+    built, _, client, _directory = build_provider(handler)
     try:
         with pytest.raises(AppError) as error_info:
             await built.get_live_matches()
@@ -732,7 +783,7 @@ async def test_network_failure_translates_without_leaking_url() -> None:
 @pytest.mark.asyncio
 async def test_empty_and_missing_results_are_honest_empty_lists() -> None:
     for payload in ({"success": 1, "result": []}, {"success": 1}):
-        built, _, client = build_provider(
+        built, _, client, _directory = build_provider(
             lambda request: httpx.Response(200, json=payload)
         )
         try:
@@ -744,7 +795,7 @@ async def test_empty_and_missing_results_are_honest_empty_lists() -> None:
 
 @pytest.mark.asyncio
 async def test_invalid_json_translates_to_provider_unavailable() -> None:
-    built, _, client = build_provider(
+    built, _, client, _directory = build_provider(
         lambda request: httpx.Response(200, text="<html>quota page</html>")
     )
     try:

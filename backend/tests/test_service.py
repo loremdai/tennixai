@@ -180,6 +180,7 @@ def build_service(
     now: datetime = NOW_UTC,
     *,
     snapshots=None,
+    resolver=None,
 ) -> tuple[TennisService, UtcClock, NumericClock]:
     utc_clock = UtcClock(now)
     numeric_clock = NumericClock()
@@ -190,6 +191,7 @@ def build_service(
         now=utc_clock,
         timezone="Asia/Macau",
         snapshots=snapshots,
+        resolver=resolver,
     )
     return service, utc_clock, numeric_clock
 
@@ -627,3 +629,103 @@ async def test_unknown_match_negative_cache_for_30_seconds() -> None:
     with pytest.raises(AppError):
         await service.get_match("mat_missing")
     assert provider.calls["get_match"] == 2
+
+
+# ---------------------------------------------------------------- T48 resolver
+
+
+@pytest.mark.asyncio
+async def test_resolve_player_uses_injected_resolver_without_provider_search() -> None:
+    from app.players.models import RankingEntry, RankingMovement, Tour
+    from app.players.normalization import derive_english_aliases
+    from app.players.repository import MemoryPlayerDirectoryRepository
+    from app.players.resolver import PlayerResolutionStatus, PlayerResolver
+
+    directory = MemoryPlayerDirectoryRepository()
+    ben = Player(id="ply_ben", name="Ben Shelton", ranking=5)
+    await directory.save_ranking_snapshot(
+        (
+            RankingEntry(
+                player=ben,
+                tour=Tour.ATP,
+                rank=5,
+                points=5200,
+                movement=RankingMovement.SAME,
+                ranking_date=NOW_UTC.date(),
+                fetched_at=NOW_UTC,
+            ),
+        )
+    )
+    await directory.upsert_aliases(
+        derive_english_aliases(await directory.get_player("ply_ben"))
+    )
+    live_match = build_match(
+        "mat_ben_live", MatchStatus.LIVE, datetime(2026, 9, 8, 10, 0, tzinfo=UTC),
+        players=(ben, ALCARAZ),
+    )
+    next_match = build_match(
+        "mat_ben_next", MatchStatus.SCHEDULED, NOW_UTC + timedelta(hours=2),
+        players=(ben, ALCARAZ),
+    )
+    provider = CountingProvider(live=[live_match], upcoming=[next_match])
+    service, _, _ = build_service(provider, resolver=PlayerResolver(directory))
+
+    resolution = await service.resolve_player("Shelton")
+    assert resolution.status is PlayerResolutionStatus.RESOLVED
+    assert resolution.player is not None
+    assert resolution.player.id == "ply_ben"
+    assert provider.calls["search_players"] == 0
+
+    matches = await service.find_player_matches("Ben Shelton", MatchTimeScope.NEXT)
+    assert [match.id for match in matches] == ["mat_ben_next"]
+    assert provider.calls["search_players"] == 0
+    assert provider.calls["get_live_matches"] >= 1
+
+    listed = await service.list_matches_by_player_id("live", "ply_ben")
+    assert [match.id for match in listed] == ["mat_ben_live"]
+
+
+@pytest.mark.asyncio
+async def test_legacy_resolution_without_resolver_still_uses_provider_search() -> None:
+    provider = CountingProvider(players=[SINNER])
+    service, _, _ = build_service(provider)
+
+    resolution = await service.resolve_player("Sinner")
+    assert resolution.player is not None
+    assert resolution.player.id == "ply_s"
+    assert provider.calls["search_players"] == 1
+
+
+@pytest.mark.asyncio
+async def test_ambiguous_resolution_raises_typed_conflict() -> None:
+    from app.players.models import RankingEntry, RankingMovement, Tour
+    from app.players.normalization import derive_english_aliases
+    from app.players.repository import MemoryPlayerDirectoryRepository
+    from app.players.resolver import PlayerResolver
+
+    directory = MemoryPlayerDirectoryRepository()
+    entries = []
+    for player_id, name, rank in (("ply_w1", "Xinyu Wang", 25), ("ply_w2", "Xiyu Wang", 50)):
+        entries.append(
+            RankingEntry(
+                player=Player(id=player_id, name=name, ranking=rank),
+                tour=Tour.WTA,
+                rank=rank,
+                points=100,
+                movement=RankingMovement.SAME,
+                ranking_date=NOW_UTC.date(),
+                fetched_at=NOW_UTC,
+            )
+        )
+    await directory.save_ranking_snapshot(tuple(entries))
+    for player_id in ("ply_w1", "ply_w2"):
+        await directory.upsert_aliases(
+            derive_english_aliases(await directory.get_player(player_id))
+        )
+    provider = CountingProvider()
+    service, _, _ = build_service(provider, resolver=PlayerResolver(directory))
+
+    with pytest.raises(AppError) as error_info:
+        await service._resolve_player("Wang")
+    assert error_info.value.code == "ambiguous_player"
+    assert len(error_info.value.details["candidates"]) == 2

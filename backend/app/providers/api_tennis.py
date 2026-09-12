@@ -38,6 +38,7 @@ from app.domain import (
 from app.errors import AppError
 from app.identity import IdentityRepository
 from app.players.models import RankingEntry, RankingMovement, Tour
+from app.players.normalization import normalize_player_name
 from app.providers.api_tennis_classification import classify_event_type
 from app.providers.api_tennis_dtos import (
     ApiTennisResponse,
@@ -51,7 +52,6 @@ from app.providers.api_tennis_dtos import (
 PROVIDER_NAME = "api_tennis"
 
 UPCOMING_WINDOW_DAYS = 7
-SEARCH_WINDOW_DAYS = 3
 RECENT_RESULTS_WINDOW_DAYS = 30
 SEARCH_RESULT_LIMIT = 20
 
@@ -661,11 +661,13 @@ class ApiTennisProvider:
         identities: IdentityRepository,
         api_key: str,
         now: Callable[[], datetime],
+        directory: object | None = None,
     ) -> None:
         self._client = client
         self._identities = identities
         self._api_key = api_key
         self._now = now
+        self._directory = directory
 
     async def _request(
         self, method: str, extra_params: dict[str, Any] | None = None
@@ -811,28 +813,23 @@ class ApiTennisProvider:
         }
 
     async def search_players(self, query: str) -> list[Player]:
-        normalized = query.strip().casefold()
+        """Local directory lookup; the vendor is never scanned for identity."""
+        if self._directory is None:
+            raise AppError(
+                "unsupported",
+                "Player search requires the local player directory",
+                501,
+            )
+        normalized = normalize_player_name(query)
         if not normalized:
             return []
-        live_rows = await self._match_rows("get_livescore", {"timezone": "GMT"})
-        fixture_rows = await self._match_rows(
-            "get_fixtures", self._window_params(SEARCH_WINDOW_DAYS)
+        matches = await self._directory.find_aliases(
+            normalized, limit=SEARCH_RESULT_LIMIT
         )
-        matches = [
-            match
-            for dto in [*live_rows, *fixture_rows]
-            if (match := await map_match(dto, self._identities, self._now)) is not None
-        ]
-        seen: set[str] = set()
-        results: list[Player] = []
+        unique: dict[str, Player] = {}
         for match in matches:
-            for player in match.players:
-                if player.id in seen:
-                    continue
-                if normalized in player.name.casefold():
-                    seen.add(player.id)
-                    results.append(player)
-        return results[:SEARCH_RESULT_LIMIT]
+            unique.setdefault(match.player.player.id, match.player.player)
+        return list(unique.values())
 
     async def get_rankings(self, tour: Tour) -> tuple[RankingEntry, ...]:
         payload = await self._request("get_standings", {"event_type": tour.value})

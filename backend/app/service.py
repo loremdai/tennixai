@@ -28,6 +28,12 @@ from app.domain import (
 )
 from app.errors import AppError
 from app.intelligence import IntelligencePacket, IntelligenceTopic, build_intelligence_packet
+from app.players.models import (
+    PlayerAliasKind,
+    PlayerCandidate,
+    PlayerResolution,
+    PlayerResolutionStatus,
+)
 from app.providers.base import TennisDataProvider
 from app.realtime.reducer import normalize_snapshot_quality, reduce_live_snapshot
 
@@ -150,6 +156,7 @@ class TennisService:
         *,
         snapshots=None,
         publisher=None,
+        resolver=None,
     ) -> None:
         self._provider = provider
         self._cache = cache
@@ -157,6 +164,57 @@ class TennisService:
         self._timezone = ZoneInfo(timezone)
         self._snapshots = snapshots
         self._publisher = publisher
+        self._resolver = resolver
+
+    async def resolve_player(
+        self, query: str, *, context_player_ids: tuple[str, ...] = ()
+    ):
+        """Shared deterministic resolution; legacy fallback only when no
+        resolver is injected (livetennis/replay unit contracts)."""
+        if self._resolver is not None:
+            return await self._resolver.resolve(
+                query, context_player_ids=context_player_ids
+            )
+        players = await self.search_players(query)
+        individuals = [
+            player for player in players if not _is_composite_player_name(player.name)
+        ]
+        unique: dict[str, Player] = {}
+        for player in individuals:
+            key = player.name.strip().casefold()
+            current = unique.get(key)
+            if current is None or _player_preference_key(player) < _player_preference_key(current):
+                unique[key] = player
+        normalized_players = list(unique.values())
+        exact = [
+            player
+            for player in normalized_players
+            if player.name.strip().casefold() == query.strip().casefold()
+        ]
+        selected = exact or normalized_players
+        candidates = tuple(
+            PlayerCandidate(
+                player=player,
+                matched_alias=player.name,
+                alias_kind=PlayerAliasKind.FULL,
+                current_rank=player.ranking,
+            )
+            for player in selected
+        )
+        if len(candidates) == 1:
+            return PlayerResolution(
+                status=PlayerResolutionStatus.RESOLVED,
+                query=query,
+                player=candidates[0].player,
+                candidates=candidates,
+            )
+        if not candidates:
+            return PlayerResolution(
+                status=PlayerResolutionStatus.NOT_FOUND, query=query
+            )
+        return PlayerResolution(
+            status=PlayerResolutionStatus.AMBIGUOUS, query=query, candidates=candidates
+        )
 
     async def search_players(self, query: str) -> list[Player]:
         normalized = query.strip()
@@ -175,32 +233,25 @@ class TennisService:
         return cast(list[Player], outcome.value)
 
     async def _resolve_player(self, query: str) -> Player:
-        players = await self.search_players(query)
-        individuals = [player for player in players if not _is_composite_player_name(player.name)]
-        unique: dict[str, Player] = {}
-        for player in individuals:
-            key = player.name.strip().casefold()
-            current = unique.get(key)
-            if current is None or _player_preference_key(player) < _player_preference_key(current):
-                unique[key] = player
-
-        normalized_players = list(unique.values())
-        exact = [
-            player
-            for player in normalized_players
-            if player.name.strip().casefold() == query.strip().casefold()
-        ]
-        candidates = exact or normalized_players
-        if not candidates:
-            raise AppError("not_found", "Player not found", 404)
-        if len(candidates) > 1:
+        resolution = await self.resolve_player(query)
+        if (
+            resolution.status is PlayerResolutionStatus.RESOLVED
+            and resolution.player is not None
+        ):
+            return resolution.player
+        if resolution.status is PlayerResolutionStatus.AMBIGUOUS:
             raise AppError(
                 "ambiguous_player",
                 "Player name is ambiguous",
                 409,
-                {"candidates": [{"id": player.id, "name": player.name} for player in candidates]},
+                {
+                    "candidates": [
+                        {"id": candidate.player.id, "name": candidate.player.name}
+                        for candidate in resolution.candidates
+                    ]
+                },
             )
-        return candidates[0]
+        raise AppError("not_found", "Player not found", 404)
 
     def _mark_matches(self, outcome: CacheOutcome[object]) -> list[Match]:
         matches = cast(list[Match], outcome.value)
@@ -239,15 +290,25 @@ class TennisService:
         player = await self._resolve_player(player_name) if player_name else None
         return await self._list_by_player_id(status, player.id if player else None)
 
+    async def list_matches_by_player_id(self, status: str, player_id: str) -> list[Match]:
+        return await self._list_by_player_id(status, player_id)
+
     async def find_player_matches(
         self,
         player_name: str,
         time_scope: MatchTimeScope,
     ) -> list[Match]:
         player = await self._resolve_player(player_name)
+        return await self.find_player_matches_by_id(player.id, time_scope)
+
+    async def find_player_matches_by_id(
+        self,
+        player_id: str,
+        time_scope: MatchTimeScope,
+    ) -> list[Match]:
         live, upcoming = await asyncio.gather(
-            self._list_by_player_id("live", player.id),
-            self._list_by_player_id("upcoming", player.id),
+            self._list_by_player_id("live", player_id),
+            self._list_by_player_id("upcoming", player_id),
         )
         matches = list({match.id: match for match in [*live, *upcoming]}.values())
         now_utc = self._now()
