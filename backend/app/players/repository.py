@@ -114,7 +114,12 @@ class MemoryPlayerDirectoryRepository:
             for row in self._rankings
             if (row.tour, row.ranking_date) not in tours_dates
         ]
-        self._rankings.extend(entries)
+        # Supplier standings can report tied ranks; one row per rank, first
+        # player in (rank, player id) order wins, every player stays discoverable.
+        unique: dict[tuple[Tour, object, int], RankingEntry] = {}
+        for entry in sorted(entries, key=lambda item: (item.rank, item.player.id)):
+            unique.setdefault((entry.tour, entry.ranking_date, entry.rank), entry)
+        self._rankings.extend(unique.values())
 
     async def upsert_aliases(self, aliases: tuple[PlayerAlias, ...]) -> int:
         inserted = 0

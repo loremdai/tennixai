@@ -300,3 +300,22 @@ async def test_directory_player_keeps_identity_without_ranking(
     assert await repository.get_player("ply_ghost") is None
     matches = await repository.find_aliases("ghost", limit=5)
     assert matches == ()
+
+
+@pytest.mark.asyncio
+async def test_tied_ranks_keep_one_row_per_rank_but_both_players(
+    repository: MemoryPlayerDirectoryRepository,
+) -> None:
+    # Real supplier standings can report tied ranks; the ranking snapshot keeps
+    # one row per rank while every tied player stays in the directory.
+    await repository.save_ranking_snapshot(
+        (
+            entry("ply_a", "Alpha", Tour.ATP, 780),
+            entry("ply_b", "Beta", Tour.ATP, 780),
+        )
+    )
+
+    entries, total = await repository.get_rankings(Tour.ATP, page=1, page_size=50, country_code=None)
+    assert total == 1
+    assert entries[0].player.id == "ply_a"
+    assert await repository.get_player("ply_b") is not None
