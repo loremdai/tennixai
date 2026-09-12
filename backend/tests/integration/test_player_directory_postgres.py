@@ -60,6 +60,50 @@ async def database():
     try:
         yield db
     finally:
+        # Tests write only into the `dir-` namespace (names and external IDs);
+        # identity-generated internal IDs are random, so clean via both keys.
+        # The data-mutating CTE drops external mappings and their players in a
+        # single statement because the two tables reference each other.
+        async with db.session() as session:
+            async with session.begin():
+                await session.execute(
+                    text("DELETE FROM match_state_snapshots WHERE match_id LIKE 'mat_dir-%'")
+                )
+                await session.execute(
+                    text("DELETE FROM match_external_ids WHERE internal_id LIKE 'mat_dir-%'")
+                )
+                await session.execute(
+                    text("DELETE FROM matches WHERE id LIKE 'mat_dir-%'")
+                )
+                await session.execute(
+                    text(
+                        "DELETE FROM player_aliases WHERE player_id IN "
+                        "(SELECT id FROM players WHERE name LIKE 'dir-%') OR player_id IN "
+                        "(SELECT internal_id FROM player_external_ids WHERE external_id LIKE 'dir-%')"
+                    )
+                )
+                await session.execute(
+                    text(
+                        "DELETE FROM player_rankings WHERE player_id IN "
+                        "(SELECT id FROM players WHERE name LIKE 'dir-%') OR player_id IN "
+                        "(SELECT internal_id FROM player_external_ids WHERE external_id LIKE 'dir-%')"
+                    )
+                )
+                await session.execute(
+                    text(
+                        "DELETE FROM player_external_ids WHERE internal_id IN "
+                        "(SELECT id FROM players WHERE name LIKE 'dir-%')"
+                    )
+                )
+                await session.execute(
+                    text(
+                        "WITH gone AS ("
+                        "DELETE FROM player_external_ids WHERE external_id LIKE 'dir-%' "
+                        "RETURNING internal_id) "
+                        "DELETE FROM players WHERE id IN (SELECT internal_id FROM gone) "
+                        "OR name LIKE 'dir-%'"
+                    )
+                )
         await db.dispose()
 
 
