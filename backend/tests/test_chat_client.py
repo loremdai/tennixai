@@ -87,6 +87,33 @@ async def test_choose_timeout_is_typed(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_choose_sends_explicit_parallel_tool_call_policy(monkeypatch) -> None:
+    request: dict[str, object] = {}
+
+    class FakeCompletions:
+        async def create(self, **kwargs):
+            request.update(kwargs)
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(tool_calls=[]))]
+            )
+
+    class FakeAsyncOpenAI:
+        def __init__(self, **kwargs):
+            self.chat = SimpleNamespace(completions=FakeCompletions())
+
+    monkeypatch.setattr(openai, "AsyncOpenAI", FakeAsyncOpenAI)
+    model = OpenAICompatibleChatModel(
+        api_key="test-key",
+        base_url="https://example.test/v1",
+        model="test-model",
+    )
+
+    await model.choose([], [], parallel_tool_calls=True)
+
+    assert request["parallel_tool_calls"] is True
+
+
+@pytest.mark.asyncio
 async def test_qwen_chat_requests_disable_thinking_for_responsive_factual_answers(monkeypatch) -> None:
     requests: list[dict[str, object]] = []
 

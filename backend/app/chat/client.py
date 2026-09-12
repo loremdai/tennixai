@@ -18,7 +18,11 @@ from app.errors import AppError
 
 class ChatModel(Protocol):
     async def choose(
-        self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        *,
+        parallel_tool_calls: bool = False,
     ) -> ModelTurn: ...
 
     def stream_text(
@@ -48,12 +52,18 @@ class FakeChatModel:
         self._choose_error = choose_error
         self._stream_error = stream_error
         self.choose_calls: list[list[dict[str, Any]]] = []
+        self.choose_parallel_calls: list[bool] = []
         self.stream_calls: list[list[dict[str, Any]]] = []
 
     async def choose(
-        self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        *,
+        parallel_tool_calls: bool = False,
     ) -> ModelTurn:
         self.choose_calls.append(messages)
+        self.choose_parallel_calls.append(parallel_tool_calls)
         if self._choose_error is not None:
             raise self._choose_error
         if self._turns is not None:
@@ -212,7 +222,11 @@ class OpenAICompatibleChatModel:
         self._timeout_seconds = timeout_seconds
 
     async def choose(
-        self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        *,
+        parallel_tool_calls: bool = False,
     ) -> ModelTurn:
         from openai import OpenAIError
 
@@ -223,6 +237,7 @@ class OpenAICompatibleChatModel:
                     messages=messages,
                     tools=tools,
                     tool_choice="auto",
+                    parallel_tool_calls=parallel_tool_calls,
                     extra_body={"enable_thinking": False},
                 )
         except (OpenAIError, TimeoutError) as error:

@@ -74,11 +74,15 @@ class CatalogRecordingModel(FakeChatModel):
         self.catalog_calls: list[list[str]] = []
         self.stream_catalog_calls: list[list[str]] = []
 
-    async def choose(self, messages, tools):
+    async def choose(self, messages, tools, *, parallel_tool_calls=False):
         self.catalog_calls.append(
             [item["function"]["name"] for item in tools]
         )
-        return await super().choose(messages, tools)
+        return await super().choose(
+            messages,
+            tools,
+            parallel_tool_calls=parallel_tool_calls,
+        )
 
     async def stream_text(self, messages, *, tools=None):
         self.stream_catalog_calls.append(
@@ -409,7 +413,7 @@ async def test_match_current_analysis_does_not_offer_unrequested_history_tools()
         ChatEventType.DONE,
     ]
     assert model.catalog_calls == [["get_match_intelligence"]]
-    assert model.stream_catalog_calls == [["get_match_intelligence"]]
+    assert model.stream_catalog_calls == [[]]
 
 
 @pytest.mark.asyncio

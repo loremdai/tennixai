@@ -212,7 +212,11 @@ class ChatOrchestrator:
 
         try:
             while True:
-                turn = await self._model.choose(messages, catalog)
+                turn = await self._model.choose(
+                    messages,
+                    catalog,
+                    parallel_tool_calls=True,
+                )
                 if not turn.tool_calls:
                     break
                 rounds += 1
@@ -300,7 +304,7 @@ class ChatOrchestrator:
             yield ChatEvent(
                 type=ChatEventType.STATUS, payload={"stage": "generating"}
             )
-            async for chunk in self._model.stream_text(messages, tools=catalog):
+            async for chunk in self._model.stream_text(messages):
                 yield ChatEvent(type=ChatEventType.TEXT_DELTA, payload={"delta": chunk})
         except Exception:
             if data_emitted:
