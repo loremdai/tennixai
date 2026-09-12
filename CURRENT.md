@@ -3,7 +3,7 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-12 08:31 CST
+**最后更新：** 2026-09-12 09:19 CST
 
 **当前任务：** T39 — 设计并实现作用域感知的多工具对话编排
 
@@ -74,6 +74,7 @@
 - T38 已完成产品提交 `ddaf24b`：保留 API-Tennis `World` 为 canonical `world`；目录接口复用详情档案补齐国家与排名；首页比赛卡显示国旗，详情页显示国旗+ISO 代码，`world` 使用 Globe 图标，缺失/未知值不请求国旗资源；真实浏览器 Home→Match→Home 鼠标流程已复核。
 - T39 已于 2026-09-12 08:25 领取：修复真实 Qwen 全局查询在首个工具成功后误调用 match-only 工具导致的 `invalid_request`；设计并实现作用域感知工具目录、多工具并行/依赖串行、非法调用重规划、部分失败降级和完整回归验收。
 - T39 书面设计已完成并推送：见 [作用域感知多工具对话编排规格](./docs/superpowers/specs/2026-09-12-tennixai-scope-aware-multi-tool-chat-design.md)（提交 `9b88c0e`）；等待用户评审后进入 TDD 实现，产品代码尚未修改。
+- T39 实施计划已完成并自审：见 [作用域感知多工具对话编排计划](./docs/superpowers/plans/2026-09-12-tennixai-scope-aware-multi-tool-chat.md)；按 inline execution 执行，下一步从 capability/catalog 的 RED 测试开始。
 - 已知非 T17 限制：LiveTennisAPI 的 `/players?search` 当前不能把中文显示名“郑钦文”直接映射到 `Qinwen Zheng`；canonical English name 查询已通过，中文别名/名称归一化需另立任务批准。
 - 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`（任务外）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`（next dev 自动生成）、`frontend/next-env.d.ts`（Next 工具链生成）；保留原样。
 
@@ -87,6 +88,7 @@
 - **起始提交：** `fcfcc55`
 - **领取时间：** 2026-09-12 08:25 CST
 - **当前节点：** 书面设计规格已完成并推送（`9b88c0e`），等待用户评审；产品代码尚未修改。
+- **当前节点：** 实施计划已完成并自审，准备执行 Task 1 的失败测试；产品代码尚未修改。
 - **范围：** 依据已批准的多工具编排设计，修复 global scope 暴露 match-only 工具的问题；建立工具能力/作用域/阶段/依赖声明；支持无依赖工具并行调用、有依赖工具串行调用、有限重规划、部分失败降级和真实 Qwen `parallel_tool_calls`；保持 match snapshot `state_version/as_of`、结构化数据优先、前端流式进度和 P2 能力边界。
 - **执行方式：** 先写 scope、并行批次、依赖顺序、非法调用和降级场景的失败测试，再按最小责任层实现；随后运行 backend/frontend 全量、typecheck/build、隔离 fake Playwright、真实 Qwen/API-Tennis smoke，并用真实浏览器验证全局查询和详情页复杂分析。
 - **验收门：** `tiafoe 的比赛如何了` 不再出现卡片成功后 `invalid_request`；global 不可调用 `get_match_intelligence`；一轮多个独立 tool call 全部执行且并行；依赖调用严格串行；可选工具失败不终止核心回答；非法工具自动重规划或给出明确降级；真实 SSE 阶段和浏览器 UI 可见；无凭据/供应商原始字段泄漏，未跟踪用户文件保持不变。
