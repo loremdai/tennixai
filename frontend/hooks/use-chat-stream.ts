@@ -3,7 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { streamChat } from '@/lib/api/client'
-import type { AnswerContextDto, StructuredData } from '@/lib/api/types'
+import type { AnswerContextDto, ChatWarning, StructuredData } from '@/lib/api/types'
+
+export type ChatProgress = {
+  completed: number
+  total: number
+  tool: string | null
+}
 
 export type ChatViewState = {
   phase: 'idle' | 'loading' | 'streaming' | 'success' | 'error'
@@ -13,6 +19,8 @@ export type ChatViewState = {
   data: StructuredData | null
   answerContext: AnswerContextDto | null
   error: { code: string; message: string; details: Record<string, unknown> } | null
+  warnings: ChatWarning[]
+  progress: ChatProgress | null
 }
 
 type HistoryMessage = { role: 'user' | 'assistant'; content: string }
@@ -27,6 +35,8 @@ const IDLE_STATE: ChatViewState = {
   data: null,
   answerContext: null,
   error: null,
+  warnings: [],
+  progress: null,
 }
 
 const CHAT_STAGE_LABELS: Record<string, string> = {
@@ -38,6 +48,34 @@ const CHAT_STAGE_LABELS: Record<string, string> = {
 
 export function chatStageLabel(stage: string | null): string {
   return (stage && CHAT_STAGE_LABELS[stage]) || '正在查询…'
+}
+
+export function chatProgressLabel(stage: string | null, progress: ChatProgress | null): string {
+  const label = chatStageLabel(stage)
+  if (!progress || progress.total <= 0 || progress.completed < 0) return label
+  return `${label}（${progress.completed}/${progress.total}）`
+}
+
+function chatProgressFromStatus(payload: {
+  completed?: number
+  total?: number
+  tool?: string | null
+}): ChatProgress | null {
+  if (
+    !Number.isInteger(payload.completed) ||
+    !Number.isInteger(payload.total) ||
+    payload.completed === undefined ||
+    payload.total === undefined ||
+    payload.completed < 0 ||
+    payload.total <= 0
+  ) {
+    return null
+  }
+  return {
+    completed: payload.completed,
+    total: payload.total,
+    tool: payload.tool ?? null,
+  }
 }
 
 function getErrorDetails(error: unknown): Record<string, unknown> {
@@ -87,6 +125,8 @@ export function useChatStream(scope: 'global' | 'match', matchId?: string): {
         data: null,
         answerContext: null,
         error: null,
+        warnings: [],
+        progress: null,
       })
 
       let text = ''
@@ -101,20 +141,37 @@ export function useChatStream(scope: 'global' | 'match', matchId?: string): {
           if (!mountedRef.current || controller.signal.aborted) return
           switch (event.type) {
             case 'status':
-              setState((current) => ({ ...current, stage: event.payload.stage }))
+              setState((current) => ({
+                ...current,
+                stage: event.payload.stage,
+                progress: chatProgressFromStatus(event.payload),
+              }))
               break
             case 'data':
               setState((current) => ({
                 ...current,
                 phase: 'streaming',
                 stage: 'fetching_data',
+                progress: null,
                 data: event.payload,
                 answerContext: current.answerContext ?? event.payload.answer_context ?? null,
               }))
               break
             case 'text_delta':
               text += event.payload.delta
-              setState((current) => ({ ...current, phase: 'streaming', stage: 'generating', text }))
+              setState((current) => ({
+                ...current,
+                phase: 'streaming',
+                stage: 'generating',
+                progress: null,
+                text,
+              }))
+              break
+            case 'warning':
+              setState((current) => ({
+                ...current,
+                warnings: [...current.warnings, event.payload],
+              }))
               break
             case 'error':
               terminated = true
@@ -122,6 +179,7 @@ export function useChatStream(scope: 'global' | 'match', matchId?: string): {
                 ...current,
                 phase: 'error',
                 stage: null,
+                progress: null,
                 error: {
                   code: event.payload.code,
                   message: event.payload.message,
@@ -131,7 +189,7 @@ export function useChatStream(scope: 'global' | 'match', matchId?: string): {
               break
             case 'done':
               terminated = true
-              setState((current) => ({ ...current, phase: 'success', stage: null }))
+              setState((current) => ({ ...current, phase: 'success', stage: null, progress: null }))
               break
           }
           if (terminated) break
@@ -139,7 +197,7 @@ export function useChatStream(scope: 'global' | 'match', matchId?: string): {
 
         if (!mountedRef.current || controller.signal.aborted) return
         if (!terminated) {
-          setState((current) => ({ ...current, phase: 'success', stage: null }))
+          setState((current) => ({ ...current, phase: 'success', stage: null, progress: null }))
         }
         if (text) {
           historyRef.current = [
@@ -159,6 +217,7 @@ export function useChatStream(scope: 'global' | 'match', matchId?: string): {
           ...current,
           phase: 'error',
           stage: null,
+          progress: null,
           error: { code, message, details: getErrorDetails(error) },
         }))
       }
@@ -170,7 +229,7 @@ export function useChatStream(scope: 'global' | 'match', matchId?: string): {
     abortRef.current?.abort()
     setState((current) =>
       current.phase === 'loading' || current.phase === 'streaming'
-        ? { ...current, phase: 'idle', stage: null }
+        ? { ...current, phase: 'idle', stage: null, warnings: [], progress: null }
         : current,
     )
   }, [])

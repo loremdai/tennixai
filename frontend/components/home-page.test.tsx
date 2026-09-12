@@ -139,12 +139,19 @@ function mockStream(options: {
   text?: string
   errorCode?: string
   errorDetails?: Record<string, unknown>
+  warningMessage?: string
 }) {
   streamChatMock.mockImplementation(() => {
     async function* generate(): AsyncGenerator<ChatEvent> {
       yield { type: 'status', payload: { stage: 'resolving' } }
       if (options.data) yield { type: 'data', payload: options.data }
       if (options.text) yield { type: 'text_delta', payload: { delta: options.text } }
+      if (options.warningMessage) {
+        yield {
+          type: 'warning',
+          payload: { code: 'optional_data_unavailable', message: options.warningMessage, details: {} },
+        }
+      }
       if (options.errorCode) {
         yield {
           type: 'error',
@@ -513,6 +520,21 @@ describe('HomePage chat', () => {
     expect(errorCopies.length).toBeGreaterThan(0)
     expect(errorCopies[0]).toBeVisible()
     expect(screen.getByRole('button', { name: '重试提问' })).toBeVisible()
+  })
+
+  it('renders optional data warnings without turning the answer into a terminal error', async () => {
+    mockStream({
+      data: { kind: 'matches', matches: [upcomingDto] },
+      text: '比赛信息已找到。',
+      warningMessage: '球员背景资料暂未提供。',
+    })
+    render(<HomePage />)
+    await screen.findByText('Jannik Sinner')
+
+    await askQuestion('分析这场比赛和球员特点')
+
+    expect(await screen.findByText('球员背景资料暂未提供。')).toBeVisible()
+    expect(screen.queryByText('查询未完成')).toBeNull()
   })
 
   it('renders a friendly quota message with the retry interval', async () => {

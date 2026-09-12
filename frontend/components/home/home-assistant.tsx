@@ -14,8 +14,9 @@ import {
 } from 'lucide-react'
 
 import { homeExampleQueries } from '@/components/home/home-data'
+import { ChatWarnings } from '@/components/chat-warnings'
 import { MarkdownAnswer } from '@/components/markdown-answer'
-import { chatStageLabel, type ChatViewState } from '@/hooks/use-chat-stream'
+import { chatProgressLabel, type ChatViewState } from '@/hooks/use-chat-stream'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import {
@@ -216,7 +217,8 @@ export function HomeAssistant({
 
   const cards = (chat.data?.matches ?? []).map((match) => toHomeMatch(match))
   const hasAnswer =
-    chat.phase !== 'idle' && (Boolean(chat.data) || Boolean(chat.text) || Boolean(chat.error))
+    chat.phase !== 'idle' &&
+    (Boolean(chat.data) || Boolean(chat.text) || Boolean(chat.error) || chat.warnings.length > 0)
   const summary =
     chat.text ||
     errorSummary(chat.error)
@@ -278,8 +280,11 @@ export function HomeAssistant({
                 <p className="mt-3 break-words text-xs text-muted-foreground">“{chat.question}”</p>
                 <h3 className="mt-2 text-balance text-lg font-semibold">{answerTitle(chat, cards)}</h3>
                 {summary ? <MarkdownAnswer content={summary} /> : null}
+                <ChatWarnings warnings={chat.warnings} />
                 {chat.phase === 'loading' || chat.phase === 'streaming' ? (
-                  <p className="mt-2 text-xs text-muted-foreground">{chatStageLabel(chat.stage)}</p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {chatProgressLabel(chat.stage, chat.progress)}
+                  </p>
                 ) : null}
               </article>
 
@@ -309,7 +314,7 @@ export function HomeAssistant({
               <div className="flex size-10 items-center justify-center rounded-full bg-secondary text-primary">
                 <BrainCircuit aria-hidden="true" className="size-5" />
               </div>
-              <p className="font-medium">{chatStageLabel(chat.stage)}</p>
+              <p className="font-medium">{chatProgressLabel(chat.stage, chat.progress)}</p>
             </div>
           ) : (
             <div className="flex min-h-36 flex-col items-center justify-center gap-3 rounded-xl border border-dashed bg-muted/15 p-5 text-center">

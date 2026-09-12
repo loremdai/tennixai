@@ -239,9 +239,22 @@ export type ChatRequest = {
   match_id?: string
   messages: Array<{ role: 'user' | 'assistant'; content: string }>
 }
+export type ChatStatusPayload = {
+  stage: string
+  phase?: string
+  completed?: number
+  total?: number
+  tool?: string | null
+}
+export type ChatWarning = {
+  code: string
+  message: string
+  details: Record<string, unknown>
+}
 export type ChatEvent =
-  | { type: 'status'; payload: { stage: string } }
+  | { type: 'status'; payload: ChatStatusPayload }
   | { type: 'data'; payload: StructuredData }
   | { type: 'text_delta'; payload: { delta: string } }
   | { type: 'done'; payload: { ok: boolean } }
+  | { type: 'warning'; payload: ChatWarning }
   | { type: 'error'; payload: { code: string; message: string; details: Record<string, unknown> } }

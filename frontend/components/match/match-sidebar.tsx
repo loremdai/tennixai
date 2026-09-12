@@ -11,6 +11,7 @@ import {
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { ChatWarnings } from '@/components/chat-warnings'
 import { MarkdownAnswer } from '@/components/markdown-answer'
 import {
   Card,
@@ -26,7 +27,7 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from '@/components/ui/input-group'
-import { chatStageLabel, type ChatViewState } from '@/hooks/use-chat-stream'
+import { chatProgressLabel, type ChatViewState } from '@/hooks/use-chat-stream'
 import { formatAsOf, type MatchViewModel } from '@/lib/view-models'
 
 import type { MatchStatus } from './match-data'
@@ -100,7 +101,9 @@ function AssistantPanel({
 
   const busy = !preview && (chat?.phase === 'loading' || chat?.phase === 'streaming')
   const chatHasContent =
-    !preview && chat !== null && (Boolean(chat.data) || Boolean(chat.text) || Boolean(chat.error))
+    !preview &&
+    chat !== null &&
+    (Boolean(chat.data) || Boolean(chat.text) || Boolean(chat.error) || chat.warnings.length > 0)
   const answerIsOutdated = Boolean(
     !chat?.error &&
     chat?.answerContext &&
@@ -180,6 +183,7 @@ function AssistantPanel({
               </div>
               <p className="mt-3 break-words text-sm font-medium">“{chat.question}”</p>
               <MarkdownAnswer content={chat.text || (chat.error ? `查询失败（${chat.error.code}），请重试。` : '')} />
+              <ChatWarnings warnings={chat.warnings} />
               {answerIsOutdated ? (
                 <p className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200" role="status">
                   比赛在回答期间更新；本回答固定基于提问时版本 {chat.answerContext?.state_version}
@@ -187,7 +191,9 @@ function AssistantPanel({
                 </p>
               ) : null}
               {chat.phase === 'loading' || chat.phase === 'streaming' ? (
-                <p className="mt-2 text-xs text-muted-foreground">{chatStageLabel(chat.stage)}</p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {chatProgressLabel(chat.stage, chat.progress)}
+                </p>
               ) : null}
               <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
                 <CircleCheck aria-hidden="true" className="size-4" />
@@ -199,7 +205,7 @@ function AssistantPanel({
               <div className="flex size-9 items-center justify-center rounded-full bg-secondary text-primary">
                 <BrainCircuit aria-hidden="true" className="size-4" />
               </div>
-              <p className="text-sm font-medium">{chatStageLabel(chat.stage)}</p>
+              <p className="text-sm font-medium">{chatProgressLabel(chat.stage, chat.progress)}</p>
             </div>
           ) : (
             <PreviewEmptyState />

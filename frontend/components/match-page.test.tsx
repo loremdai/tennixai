@@ -89,12 +89,23 @@ function makeMatch(overrides: Partial<MatchDto> = {}): MatchDto {
   }
 }
 
-function mockStream(options: { data?: StructuredData; text?: string; errorCode?: string }) {
+function mockStream(options: {
+  data?: StructuredData
+  text?: string
+  errorCode?: string
+  warningMessage?: string
+}) {
   streamChatMock.mockImplementation(() => {
     async function* generate(): AsyncGenerator<ChatEvent> {
       yield { type: 'status', payload: { stage: 'resolving' } }
       if (options.data) yield { type: 'data', payload: options.data }
       if (options.text) yield { type: 'text_delta', payload: { delta: options.text } }
+      if (options.warningMessage) {
+        yield {
+          type: 'warning',
+          payload: { code: 'optional_data_unavailable', message: options.warningMessage, details: {} },
+        }
+      }
       if (options.errorCode) {
         yield { type: 'error', payload: { code: options.errorCode, message: 'failed', details: {} } }
       } else {
@@ -342,6 +353,22 @@ describe('production match page', () => {
     await userEvent.keyboard('{Enter}')
 
     expect(await screen.findByText('Sinner 正在发球。')).toBeVisible()
+  })
+
+  it('renders optional data warnings without showing a terminal query error', async () => {
+    mockStream({
+      data: { kind: 'match', matches: [makeMatch()] },
+      text: '当前比赛分析已完成。',
+      warningMessage: '球员背景资料暂未提供。',
+    })
+    render(<MatchPage matchId="mat_1" />)
+    await screen.findByText('Jannik Sinner')
+
+    await userEvent.type(screen.getByLabelText('向 Tennix 询问本场比赛'), '分析当前比赛和球员特点')
+    await userEvent.keyboard('{Enter}')
+
+    expect(await screen.findByText('球员背景资料暂未提供。')).toBeVisible()
+    expect(screen.queryByText('查询未完成')).toBeNull()
   })
 
   it('keeps completed prose immutable and explains its frozen snapshot after a newer update', async () => {

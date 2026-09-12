@@ -2,7 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ChatEvent } from '@/lib/api/types'
-import { chatStageLabel, useChatStream } from './use-chat-stream'
+import { chatProgressLabel, chatStageLabel, useChatStream } from './use-chat-stream'
 
 const { streamChatMock } = vi.hoisted(() => ({ streamChatMock: vi.fn() }))
 
@@ -179,6 +179,12 @@ describe('useChatStream', () => {
     expect(chatStageLabel(stage)).toBe(label)
   })
 
+  it('adds batch progress to the stage label', () => {
+    expect(
+      chatProgressLabel('fetching_data', { completed: 2, total: 3, tool: 'get_match_intelligence' }),
+    ).toBe('正在读取比赛数据…（2/3）')
+  })
+
   it('sends match scope with the internal match id', async () => {
     streamChatMock.mockImplementation(scriptedStream([{ type: 'done', payload: { ok: true } }]))
 
@@ -264,6 +270,38 @@ describe('useChatStream', () => {
     expect(result.current.state.error?.code).toBe('llm_unavailable')
     expect(result.current.state.data).toEqual(dataEvent.payload)
     expect(result.current.state.text).toBe('比赛数据已找到，但 AI 说明暂时不可用。')
+  })
+
+  it('keeps optional warnings separate from terminal errors', async () => {
+    streamChatMock.mockImplementation(
+      scriptedStream([
+        {
+          type: 'warning',
+          payload: {
+            code: 'optional_data_unavailable',
+            message: '球员背景资料暂未提供。',
+            details: {},
+          },
+        },
+        { type: 'text_delta', payload: { delta: '当前比赛分析已完成。' } },
+        { type: 'done', payload: { ok: true } },
+      ]),
+    )
+
+    const { result } = renderHook(() => useChatStream('match', 'mat_42'))
+    await act(async () => {
+      await result.current.send('分析当前比赛和球员特点')
+    })
+
+    expect(result.current.state.phase).toBe('success')
+    expect(result.current.state.error).toBeNull()
+    expect(result.current.state.warnings).toEqual([
+      {
+        code: 'optional_data_unavailable',
+        message: '球员背景资料暂未提供。',
+        details: {},
+      },
+    ])
   })
 
   it('preserves provider error details for rate-limit UX', async () => {
@@ -369,6 +407,8 @@ describe('useChatStream', () => {
       answerContext: null,
       stage: null,
       error: null,
+      warnings: [],
+      progress: null,
     })
   })
 
