@@ -35,6 +35,7 @@ import {
 } from '@/components/ui/input-group'
 import type { HomeMatchViewModel } from '@/lib/view-models'
 import { toHomeMatch } from '@/lib/view-models'
+import { getChatAnswerLabel } from '@/lib/chat-answer'
 import { cn } from '@/lib/utils'
 
 const statusDetails = {
@@ -134,22 +135,6 @@ function MatchResultCard({
       </CardFooter>
     </Card>
   )
-}
-
-function answerLabel(chat: ChatViewState): string {
-  if (chat.error) return '查询未完成'
-  switch (chat.data?.kind) {
-    case 'match':
-      return '当前比赛'
-    case 'unsupported':
-      return '暂不支持'
-    case 'matches':
-      return '结构化比赛结果'
-    case 'intelligence':
-      return '本场比赛分析'
-    default:
-      return '回答'
-  }
 }
 
 function answerTitle(chat: ChatViewState, cards: HomeMatchViewModel[]): string {
@@ -271,7 +256,7 @@ export function HomeAssistant({
                 <div className="flex items-center justify-between gap-3">
                   <span className="flex items-center gap-2 text-xs font-semibold text-primary">
                     <BrainCircuit aria-hidden="true" className="size-4" />
-                    {answerLabel(chat)}
+                    {getChatAnswerLabel(chat, 'global')}
                   </span>
                   {chat.error ? null : (
                     <CheckCircle2 aria-label="结构化数据" className="size-4 text-muted-foreground" />
@@ -304,9 +289,7 @@ export function HomeAssistant({
                   <RefreshCw data-icon="inline-start" aria-hidden="true" />
                   重试提问
                 </Button>
-              ) : (
-                <p className="font-mono text-[11px] text-muted-foreground">结构化数据来自 Tennix 服务</p>
-              )}
+              ) : null}
             </>
           ) : chat.phase === 'loading' ? (
             <div className="flex min-h-36 flex-col items-center justify-center gap-3 rounded-xl border border-dashed bg-muted/15 p-5 text-center">

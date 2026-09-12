@@ -386,6 +386,56 @@ describe('HomePage facets', () => {
 })
 
 describe('HomePage chat', () => {
+  it('keeps internal prompt and implementation labels out of the Home answer card', async () => {
+    mockStream({
+      data: { kind: 'intelligence', matches: [] },
+      text: '本场比赛分析已完成。',
+    })
+    render(<HomePage />)
+    await screen.findByText('Jannik Sinner')
+
+    const question = '根据本场数据分析趋势。'
+    await askQuestion(question)
+
+    const answer = (await screen.findByText('本场比赛分析')).closest('article') as HTMLElement
+    expect(answer).toBeTruthy()
+    expect(screen.getByText('本场比赛分析已完成。')).toBeVisible()
+    expect(screen.queryByText(`“${question}”`)).toBeNull()
+    expect(screen.queryByText('本场比赛主题数据')).toBeNull()
+    expect(screen.queryByText('已连接本场比赛上下文')).toBeNull()
+    expect(screen.queryByText('结构化数据来自 Tennix 服务')).toBeNull()
+  })
+
+  it('keeps Home progress visible until done and then shows the complete answer', async () => {
+    let releaseDone = () => {}
+    const doneGate = new Promise<void>((resolve) => {
+      releaseDone = resolve
+    })
+    streamChatMock.mockImplementation(() => {
+      async function* generate(): AsyncGenerator<ChatEvent> {
+        yield { type: 'status', payload: { stage: 'generating' } }
+        yield { type: 'text_delta', payload: { delta: '正在整理事实。' } }
+        await doneGate
+        yield { type: 'text_delta', payload: { delta: '最终结论已完成。' } }
+        yield { type: 'done', payload: { ok: true } }
+      }
+      return generate()
+    })
+    render(<HomePage />)
+    await screen.findByText('Jannik Sinner')
+
+    await askQuestion('现在比赛情况如何？')
+
+    expect(await screen.findByText('正在整理事实。')).toBeVisible()
+    expect(screen.getByText('正在组织回答…')).toBeVisible()
+    expect(screen.queryByText('最终结论已完成。')).toBeNull()
+
+    releaseDone()
+
+    expect(await screen.findByText(/最终结论已完成。/)).toBeVisible()
+    await waitFor(() => expect(screen.queryByText('正在组织回答…')).toBeNull())
+  })
+
   it('renders structured stream data and never parses the prose into a card', async () => {
     mockStream({
       data: { kind: 'matches', matches: [upcomingDto] },

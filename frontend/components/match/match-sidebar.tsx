@@ -28,6 +28,7 @@ import {
   InputGroupInput,
 } from '@/components/ui/input-group'
 import { chatProgressLabel, type ChatViewState } from '@/hooks/use-chat-stream'
+import { getChatAnswerLabel } from '@/lib/chat-answer'
 import { formatAsOf, type MatchViewModel } from '@/lib/view-models'
 
 import type { MatchStatus } from './match-data'
@@ -173,13 +174,7 @@ function AssistantPanel({
             <article className="rounded-lg bg-muted/35 p-4">
               <div className="flex items-center gap-2 text-sm font-medium text-primary">
                 <BrainCircuit aria-hidden="true" className="size-4" />
-                {chat.error
-                  ? '查询未完成'
-                  : chat.data?.kind === 'unsupported'
-                    ? '暂不支持'
-                    : chat.data?.kind === 'intelligence'
-                      ? '本场比赛分析'
-                      : '本场比赛结构化结果'}
+                {getChatAnswerLabel(chat, 'match')}
               </div>
               <MarkdownAnswer content={chat.text || (chat.error ? `查询失败（${chat.error.code}），请重试。` : '')} />
               <ChatWarnings warnings={chat.warnings} />

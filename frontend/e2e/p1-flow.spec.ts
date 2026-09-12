@@ -1,6 +1,77 @@
 import { expect, test } from '@playwright/test'
 
 test.describe('P1 flow', () => {
+  test('Home answer follows the production user-facing policy through done', async ({ page }) => {
+    const match = {
+      id: 'mat_home_chat_policy',
+      status: 'scheduled',
+      players: [
+        { id: 'ply_home_sinner', name: 'Jannik Sinner', country_code: 'ita', ranking: 1 },
+        { id: 'ply_home_alcaraz', name: 'Carlos Alcaraz', country_code: 'esp', ranking: 2 },
+      ],
+      tournament: { id: 'trn_home_chat', name: 'ATP Finals', tour: 'atp' },
+      scheduled_at: '2026-09-08T12:30:00Z',
+      round: 'Semifinal',
+      surface: 'hard',
+      indoor: true,
+      format: 'BO3',
+      live_state: null,
+      winner_player_id: null,
+      freshness: {
+        provider: 'fake',
+        source_updated_at: null,
+        observed_at: '2026-09-08T10:00:00Z',
+        is_stale: false,
+        age_seconds: 0,
+      },
+    }
+    const catalog = (status: 'live' | 'upcoming') => ({
+      status,
+      matches: [match],
+      filters: { circuits: ['atp', 'wta'], genders: [], disciplines: ['singles'] },
+      facet_counts: {
+        circuits: { atp: 1, wta: 1, challenger: 0, itf: 0, other: 0 },
+        genders: { men: 1, women: 0, mixed: 0, unknown: 0 },
+        disciplines: { singles: 1, doubles: 0, team: 0, unknown: 0 },
+      },
+      featured_match_id: match.id,
+    })
+    const stream = [
+      'event: status\ndata: {"stage":"generating"}',
+      `event: data\ndata: ${JSON.stringify({ kind: 'matches', matches: [match] })}`,
+      `event: text_delta\ndata: ${JSON.stringify({ delta: '最终结果已经整理。' })}`,
+      'event: done\ndata: {"ok":true}',
+      '',
+    ].join('\n\n')
+
+    await page.route('**/api/matches/catalog**', (route) => {
+      const status = new URL(route.request().url()).searchParams.get('status') as 'live' | 'upcoming'
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ data: catalog(status) }),
+      })
+    })
+    await page.route('**/api/chat/stream', (route) =>
+      route.fulfill({
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+        body: stream,
+      }),
+    )
+
+    await page.goto('/')
+    await page.getByLabel('继续向 Tennix 提问').fill('分析这场比赛的趋势')
+    await page.getByLabel('继续向 Tennix 提问').press('Enter')
+
+    await expect(page.getByText('最终结果已经整理。')).toBeVisible()
+    await expect(page.getByRole('link', { name: '打开比赛：Sinner 对阵 Alcaraz' })).toBeVisible()
+    await expect(page.getByText('正在组织回答…')).toHaveCount(0)
+    await expect(page.getByText('“分析这场比赛的趋势”')).toHaveCount(0)
+    await expect(page.getByText('本场比赛主题数据')).toHaveCount(0)
+    await expect(page.getByText('结构化数据来自 Tennix 服务')).toHaveCount(0)
+  })
+
   test('home question renders a structured card that opens the internal match page', async ({ page }) => {
     await page.goto('/')
     await page.getByLabel('继续向 Tennix 提问').fill('Sinner 今晚几点比赛？')
