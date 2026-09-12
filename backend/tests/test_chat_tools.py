@@ -10,6 +10,7 @@ from app.chat.models import (
     ChatScope,
     StructuredToolResult,
 )
+from app.chat.orchestrator import _catalog_for_request
 from app.chat.tools import (
     BusinessTools,
     is_historical_query,
@@ -85,6 +86,29 @@ def test_catalog_items_have_function_shape_and_descriptions(tools: BusinessTools
 
     parameters = tools.catalog()[1]["function"]["parameters"]
     assert "player_name" in parameters["properties"]
+
+
+def test_global_catalog_hides_match_only_tool(tools: BusinessTools) -> None:
+    catalog = _catalog_for_request(
+        tools.catalog(),
+        ChatRequest(scope=ChatScope.GLOBAL, messages=[ChatMessage(role="user", content="现在有什么比赛？")]),
+        "现在有什么比赛？",
+    )
+    names = {item["function"]["name"] for item in catalog}
+
+    assert "get_match_intelligence" not in names
+
+
+def test_global_get_match_schema_requires_explicit_id(tools: BusinessTools) -> None:
+    item = next(
+        item for item in tools.catalog(
+            names=("get_match",),
+            scope=ChatScope.GLOBAL,
+        )
+        if item["function"]["name"] == "get_match"
+    )
+
+    assert item["function"]["parameters"]["required"] == ["match_id"]
 
 
 @pytest.mark.asyncio

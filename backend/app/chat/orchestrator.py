@@ -10,6 +10,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from app.chat.client import ChatModel
+from app.chat.capabilities import ChatPhase, allowed_tool_names
 from app.chat.models import (
     ChatContext,
     ChatEvent,
@@ -49,7 +50,6 @@ MATCH_SYSTEM_SUFFIX = (
 )
 
 OPTIONAL_MATCH_TOOLS = {"get_player_results", "get_head_to_head"}
-MATCH_CONTEXT_TOOLS = {"get_match_intelligence"}
 MATCH_HISTORY_PHRASES = (
     "近期",
     "recent",
@@ -71,11 +71,15 @@ def _requests_match_history(text: str) -> bool:
 def _catalog_for_request(
     tools: list[dict[str, Any]], request: ChatRequest, last_user: str
 ) -> list[dict[str, Any]]:
-    if request.scope is not ChatScope.MATCH:
-        return tools
-    allowed = set(MATCH_CONTEXT_TOOLS)
-    if _requests_match_history(last_user):
-        allowed.update(OPTIONAL_MATCH_TOOLS)
+    phase = ChatPhase.CONTEXT if request.scope is ChatScope.MATCH else ChatPhase.DISCOVERY
+    allowed = set(
+        allowed_tool_names(
+            request.scope,
+            phase,
+            history_requested=_requests_match_history(last_user),
+            has_discovered_matches=False,
+        )
+    )
     return [
         item
         for item in tools

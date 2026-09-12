@@ -6,9 +6,10 @@ calls the provider or the model.
 """
 
 import re
+from collections.abc import Iterable
 from typing import Any
 
-from pydantic import ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from app.chat.models import (
     AnswerContext,
@@ -44,6 +45,10 @@ TOOL_NAMES = (
     "get_player_results",
     "get_head_to_head",
 )
+
+
+class GlobalGetMatchArgs(BaseModel):
+    match_id: str = Field(min_length=1)
 
 ARGS_MODELS = {
     "find_player_matches": FindPlayerMatchesArgs,
@@ -117,17 +122,29 @@ class BusinessTools:
     def __init__(self, service: TennisService) -> None:
         self._service = service
 
-    def catalog(self) -> list[dict[str, Any]]:
+    def catalog(
+        self,
+        *,
+        names: Iterable[str] | None = None,
+        scope: ChatScope | None = None,
+    ) -> list[dict[str, Any]]:
+        selected_names = tuple(names) if names is not None else TOOL_NAMES
         return [
             {
                 "type": "function",
                 "function": {
                     "name": name,
                     "description": DESCRIPTIONS[name],
-                    "parameters": _inline_schema(ARGS_MODELS[name].model_json_schema()),
+                    "parameters": _inline_schema(
+                        (
+                            GlobalGetMatchArgs
+                            if name == "get_match" and scope is ChatScope.GLOBAL
+                            else ARGS_MODELS[name]
+                        ).model_json_schema()
+                    ),
                 },
             }
-            for name in TOOL_NAMES
+            for name in selected_names
         ]
 
     async def freeze_match_context(self, context: ChatContext) -> ChatContext:
