@@ -216,7 +216,7 @@ class MemoryPlayerDirectoryRepository:
         missing = [
             player
             for player in self._players.values()
-            if player.player.localized_name is None
+            if player.player.localized_name is None and player.player.name
         ]
         missing.sort(key=lambda player: player.player.id)
         return tuple(missing[:limit])

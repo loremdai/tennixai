@@ -28,6 +28,7 @@ markers = [
   "infrastructure: requires local Docker PostgreSQL/Redis from compose.yaml",
   "api_tennis_live: calls the real API-Tennis REST API (opt-in)",
   "realtime_live: calls the real API-Tennis WebSocket feed (opt-in)",
+  "player_alias_llm_live: calls the configured real LLM for offline Chinese-name enrichment (opt-in)",
 ]
 
 [tool.uv]
