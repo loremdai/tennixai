@@ -1,6 +1,6 @@
 import asyncio
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from app.domain import (
     CapabilityStatus,
@@ -18,6 +18,11 @@ from app.domain import (
 )
 from app.errors import AppError
 from app.identity import IdentityRepository
+from app.players.models import (
+    PlayerProfileData,
+    PlayerSeasonRecord,
+    SurfaceRecord,
+)
 from app.players.models import RankingEntry, RankingMovement, Tour
 
 SNAPSHOT_GAP_CAPABILITIES = ("point_by_point", "statistics", "momentum")
@@ -59,6 +64,8 @@ class FakeTennisProvider:
         self._built = False
         self._players: list[Player] = []
         self._matches: dict[str, Match] = {}
+        self.finished_results: tuple[Match, ...] = ()
+        self._birth_dates: dict[str, date] = {}
         self.sinner_alcaraz: Match | None = None
         self.live_match: Match | None = None
 
@@ -111,7 +118,36 @@ class FakeTennisProvider:
             country_code="nor",
             ranking=4,
         )
-        self._players = [sinner, alcaraz, djokovic, ruud]
+        zhang = Player(
+            id=await identities.get_or_create("player", "fake", "fake-zhang"),
+            name="Zhizhen Zhang",
+            country_code="chn",
+            ranking=200,
+        )
+        wong = Player(
+            id=await identities.get_or_create("player", "fake", "fake-wong"),
+            name="Coleman Wong",
+            country_code="hkg",
+            ranking=201,
+        )
+        zheng = Player(
+            id=await identities.get_or_create("player", "fake", "fake-zheng"),
+            name="Qinwen Zheng",
+            country_code="chn",
+            ranking=5,
+        )
+        swiatek = Player(
+            id=await identities.get_or_create("player", "fake", "fake-swiatek"),
+            name="Iga Swiatek",
+            country_code="pol",
+            ranking=2,
+        )
+        self._players = [sinner, alcaraz, djokovic, ruud, zhang, wong, zheng, swiatek]
+        self._birth_dates = {
+            sinner.id: date(2001, 8, 16),
+            zheng.id: date(2002, 10, 8),
+        }
+        self.finished_results = self._build_finished_results(now)
 
         atp_finals = Tournament(
             id=await identities.get_or_create("tournament", "fake", "fake-atp-finals"),
@@ -222,6 +258,80 @@ class FakeTennisProvider:
             if player.id == player_id:
                 return player
         raise AppError("not_found", "Player not found", 404)
+
+    async def get_player_profile(self, player_id: str) -> PlayerProfileData:
+        player = await self.get_player(player_id)
+        return PlayerProfileData(
+            player=player,
+            birth_date=self._birth_dates.get(player_id),
+            image_url=None,
+            seasons=tuple(
+                PlayerSeasonRecord(
+                    season=2026 - index,
+                    matches_won=30 - index * 3,
+                    matches_lost=10 + index,
+                    titles=max(0, 2 - index),
+                    hard=SurfaceRecord(won=20 - index * 2, lost=5 + index)
+                    if index < 4
+                    else None,
+                    clay=SurfaceRecord(won=8 - index, lost=3 + index)
+                    if index < 4
+                    else None,
+                    grass=SurfaceRecord(won=2, lost=2) if index < 3 else None,
+                )
+                for index in range(5)
+            ),
+        )
+
+    async def get_player_results_for_period(
+        self, player_id: str, *, start: date, end: date
+    ) -> tuple[Match, ...]:
+        await self.get_player(player_id)
+        return tuple(
+            match
+            for match in self.finished_results
+            if any(player.id == player_id for player in match.players)
+            and match.scheduled_at is not None
+            and start <= match.scheduled_at.date() <= end
+        )
+
+    def _build_finished_results(self, now: Callable[[], datetime]) -> tuple[Match, ...]:
+        """Deterministic finished singles matches per directory player."""
+        matches: list[Match] = []
+        for player in self._players:
+            opponent = next(
+                candidate for candidate in self._players if candidate.id != player.id
+            )
+            circuit = "wta" if player.id in {
+                self._players[6].id, self._players[7].id
+            } else "atp"
+            for season, count in ((2026, 23), (2025, 5)):
+                for index in range(count):
+                    if circuit == "wta":
+                        tier = "itf" if index % 10 == 8 else "challenger" if index % 10 == 9 else "wta"
+                    else:
+                        tier = "itf" if index % 10 == 8 else "challenger" if index % 10 == 9 else "atp"
+                    scheduled = datetime(season, 1, 5, 10, 0, tzinfo=timezone.utc) + timedelta(days=index * 3)
+                    winner = player if index % 3 != 2 else opponent
+                    matches.append(
+                        Match(
+                            id=f"mat_fin_{player.id[-6:]}_{season}_{index}",
+                            status=MatchStatus.FINISHED,
+                            players=(player, opponent),
+                            tournament=Tournament(
+                                id=f"trn_fin_{tier}_{index}",
+                                name=f"Fake {tier.upper()} Event {index}",
+                                tour=circuit,
+                                circuit=tier,
+                                gender="women" if circuit == "wta" else "men",
+                                discipline="singles",
+                            ),
+                            scheduled_at=scheduled,
+                            winner_player_id=winner.id,
+                            freshness=DataFreshness(provider="fake", observed_at=now()),
+                        )
+                    )
+        return tuple(matches)
 
     async def get_match(self, match_id: str) -> Match:
         await self.build()

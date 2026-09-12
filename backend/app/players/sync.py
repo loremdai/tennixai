@@ -24,6 +24,21 @@ class DirectorySyncReport(FrozenModel):
     failed: int = 0
 
 
+class DirectorySeeder:
+    """One-shot directory bootstrap for in-memory (fake) app modes."""
+
+    def __init__(self, sync: "PlayerDirectorySync") -> None:
+        self._sync = sync
+        self._done = False
+
+    async def ensure(self) -> None:
+        if self._done:
+            return
+        self._done = True
+        await self._sync.sync_rankings()
+        await self._sync.sync_known_player_aliases()
+
+
 class PlayerDirectorySync:
     def __init__(
         self,

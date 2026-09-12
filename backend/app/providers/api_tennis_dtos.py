@@ -116,6 +116,12 @@ class PlayerSeasonStatDto(VendorModel):
     titles: str | None = None
     matches_won: str | None = None
     matches_lost: str | None = None
+    hard_won: str | None = None
+    hard_lost: str | None = None
+    clay_won: str | None = None
+    clay_lost: str | None = None
+    grass_won: str | None = None
+    grass_lost: str | None = None
 
 
 class StandingDto(VendorModel):
@@ -134,6 +140,7 @@ class PlayerDto(VendorModel):
     player_full_name: str | None = None
     player_country: str | None = None
     player_bday: str | None = None
+    player_logo: str | None = None
     stats: list[PlayerSeasonStatDto] = Field(default_factory=list)
 
 

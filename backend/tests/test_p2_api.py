@@ -37,7 +37,11 @@ async def p2_env(catalog_provider: CatalogFakeProvider):
 async def _player_id(http_client: AsyncClient, query: str) -> str:
     response = await http_client.get("/api/v1/players/search", params={"q": query})
     assert response.status_code == 200
-    return response.json()["data"][0]["id"]
+    data = response.json()["data"]
+    if data["status"] == "resolved":
+        return data["player"]["id"]
+    assert data["status"] == "ambiguous"
+    return data["candidates"][0]["player"]["id"]
 
 
 @pytest.mark.asyncio
@@ -129,23 +133,23 @@ async def test_catalog_endpoint_rejects_invalid_inputs(p2_env) -> None:
 
 
 @pytest.mark.asyncio
-async def test_player_results_endpoint_yesterday_scope(p2_env) -> None:
+async def test_player_results_endpoint_season_page(p2_env) -> None:
     http_client, provider = p2_env
     sinner = await _player_id(http_client, "sinner")
 
     response = await http_client.get(
         f"/api/v1/players/{sinner}/results",
-        params={"scope": "yesterday", "limit": 5},
+        params={"season": 2026},
     )
 
     assert response.status_code == 200
     data = response.json()["data"]
-    assert data["player_id"] == sinner
-    assert data["scope"] == "yesterday"
+    assert data["player"]["id"] == sinner
+    assert data["season"] == 2026
+    assert data["page_size"] == 20
     assert data["availability"] == "available"
-    # 2026-09-08T12:00Z is yesterday in Asia/Macau; -4d is not.
-    assert [match["id"] for match in data["matches"]] == ["mat_hist_y"]
     assert all(match["status"] == "finished" for match in data["matches"])
+    assert data["total"] >= len(data["matches"]) >= 1
 
 
 @pytest.mark.asyncio
@@ -154,22 +158,22 @@ async def test_player_results_endpoint_validation(p2_env) -> None:
     sinner = await _player_id(http_client, "sinner")
 
     response = await http_client.get(
-        f"/api/v1/players/{sinner}/results", params={"scope": "lastyear"}
+        f"/api/v1/players/{sinner}/results", params={"season": 2019}
     )
     assert response.status_code == 422
 
     response = await http_client.get(
-        f"/api/v1/players/{sinner}/results", params={"scope": "recent", "limit": 0}
+        f"/api/v1/players/{sinner}/results", params={"season": 2026, "page": 0}
     )
     assert response.status_code == 422
 
     response = await http_client.get(
-        f"/api/v1/players/{sinner}/results", params={"scope": "recent", "limit": 11}
+        f"/api/v1/players/{sinner}/results", params={"season": 2026, "page_size": 25}
     )
     assert response.status_code == 422
 
     response = await http_client.get(
-        "/api/v1/players/ply_missing/results", params={"scope": "recent"}
+        "/api/v1/players/ply_missing/results", params={"season": 2026}
     )
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "not_found"
@@ -214,7 +218,7 @@ async def test_p2_responses_leak_no_vendor_or_fake_ids(p2_env) -> None:
     )
     sinner = await _player_id(http_client, "sinner")
     results = await http_client.get(
-        f"/api/v1/players/{sinner}/results", params={"scope": "recent"}
+        f"/api/v1/players/{sinner}/results", params={"season": 2026}
     )
 
     for body in (catalog.text, results.text):

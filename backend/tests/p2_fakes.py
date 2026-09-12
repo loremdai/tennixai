@@ -158,7 +158,8 @@ class CatalogFakeProvider(FakeTennisProvider):
             self._matches[match.id] = match
 
     def finished_match(self, key: str, scheduled_at: datetime) -> Match:
-        sinner, _, _, ruud = self._players
+        sinner = next(p for p in self._players if p.name == "Jannik Sinner")
+        ruud = next(p for p in self._players if p.name == "Casper Ruud")
         return Match(
             id=f"mat_hist_{key}",
             status=MatchStatus.FINISHED,

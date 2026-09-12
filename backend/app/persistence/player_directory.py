@@ -95,7 +95,15 @@ class PostgresPlayerDirectoryRepository:
                             PlayerRankingRow.ranking_date == ranking_date,
                         )
                     )
-                for entry in entries:
+                # Supplier standings can report tied ranks; the snapshot keeps
+                # one row per rank (first player in (rank, id) order) while
+                # every tied player remains in the directory via the upserts.
+                unique_entries: dict[tuple[str, date, int], RankingEntry] = {}
+                for entry in sorted(entries, key=lambda item: (item.rank, item.player.id)):
+                    unique_entries.setdefault(
+                        (entry.tour.value, entry.ranking_date, entry.rank), entry
+                    )
+                for entry in unique_entries.values():
                     session.add(
                         PlayerRankingRow(
                             player_id=entry.player.id,
@@ -282,7 +290,11 @@ class PostgresPlayerDirectoryRepository:
             rows = (
                 await session.execute(
                     select(PlayerRow)
-                    .where(PlayerRow.localized_name.is_(None))
+                    .where(
+                        PlayerRow.localized_name.is_(None),
+                        PlayerRow.name.is_not(None),
+                        PlayerRow.name != "",
+                    )
                     .order_by(PlayerRow.id)
                     .limit(limit)
                 )

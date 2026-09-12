@@ -3,11 +3,33 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from app.domain import Match, MatchSnapshot, Player
+from app.players.models import (
+    PlayerProfileView,
+    PlayerResolution,
+    PlayerResultPage,
+    RankingPage,
+)
 from app.service import HeadToHeadResult, MatchCatalog, PlayerResults
 
 
 class PlayerListResponse(BaseModel):
     data: list[Player]
+
+
+class RankingPageResponse(BaseModel):
+    data: RankingPage
+
+
+class PlayerResolutionResponse(BaseModel):
+    data: PlayerResolution
+
+
+class PlayerProfileViewResponse(BaseModel):
+    data: PlayerProfileView
+
+
+class PlayerResultPageResponse(BaseModel):
+    data: PlayerResultPage
 
 
 class MatchListResponse(BaseModel):

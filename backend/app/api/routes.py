@@ -13,12 +13,17 @@ from app.api.schemas import (
     MatchListResponse,
     MatchSnapshotResponse,
     PlayerListResponse,
+    PlayerProfileViewResponse,
+    PlayerResolutionResponse,
+    PlayerResultPageResponse,
     PlayerResultsResponse,
+    RankingPageResponse,
 )
 from app.chat.models import ChatEvent, ChatEventType, ChatRequest
 from app.chat.orchestrator import ChatOrchestrator
 from app.domain import CircuitTier, Discipline, Gender
 from app.errors import AppError
+from app.players.models import ResultOutcome, Tour
 from app.realtime.publisher import match_channel
 from app.service import MatchFilters, TennisService
 
@@ -40,12 +45,31 @@ async def health() -> dict[str, str]:
     return {"status": "ok", "service": "tennix-api"}
 
 
-@router.get("/players/search", response_model=PlayerListResponse)
+@router.get("/players/rankings", response_model=RankingPageResponse)
+async def player_rankings(
+    tour: Tour = Query(default=Tour.ATP),
+    page: int = Query(default=1, ge=1),
+    page_size: Literal[50] = Query(default=50),
+    country: str | None = Query(default=None),
+    service: TennisService = Depends(get_service),
+) -> RankingPageResponse:
+    return RankingPageResponse(
+        data=await service.get_rankings_page(
+            tour,
+            page=page,
+            page_size=page_size,
+            country_code=country.strip().casefold() if country else None,
+        )
+    )
+
+
+@router.get("/players/search", response_model=PlayerResolutionResponse)
 async def search_players(
     q: str = Query(min_length=1),
+    limit: int = Query(default=10, ge=1, le=50),
     service: TennisService = Depends(get_service),
-) -> PlayerListResponse:
-    return PlayerListResponse(data=await service.search_players(q))
+) -> PlayerResolutionResponse:
+    return PlayerResolutionResponse(data=await service.resolve_player(q, limit=limit))
 
 
 @router.get("/matches", response_model=MatchListResponse)
@@ -166,15 +190,31 @@ def _frame(event: str, data: dict, frame_id: str | None = None) -> str:
     return f"{head}event: {event}\ndata: {json.dumps(data)}\n\n"
 
 
-@router.get("/players/{player_id}/results", response_model=PlayerResultsResponse)
+@router.get("/players/{player_id}", response_model=PlayerProfileViewResponse)
+async def player_profile(
+    player_id: str,
+    season: int | None = Query(default=None),
+    service: TennisService = Depends(get_service),
+) -> PlayerProfileViewResponse:
+    return PlayerProfileViewResponse(
+        data=await service.get_player_profile_view(player_id, season=season)
+    )
+
+
+@router.get("/players/{player_id}/results", response_model=PlayerResultPageResponse)
 async def player_results(
     player_id: str,
-    scope: Literal["yesterday", "recent"] = Query(),
-    limit: int = Query(default=5, ge=1, le=10),
+    season: int = Query(),
+    tier: list[CircuitTier] = Query(default_factory=list),
+    outcome: ResultOutcome = Query(default=ResultOutcome.ALL),
+    page: int = Query(default=1, ge=1),
+    page_size: Literal[20] = Query(default=20),
     service: TennisService = Depends(get_service),
-) -> PlayerResultsResponse:
-    return PlayerResultsResponse(
-        data=await service.get_player_results(player_id, scope, limit)
+) -> PlayerResultPageResponse:
+    return PlayerResultPageResponse(
+        data=await service.get_player_result_page(
+            player_id, season=season, tiers=tuple(tier), outcome=outcome, page=page
+        )
     )
 
 

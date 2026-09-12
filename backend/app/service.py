@@ -7,7 +7,7 @@ rather than prompt instructions.
 
 import asyncio
 from collections.abc import Callable
-from datetime import datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from enum import StrEnum
 from typing import cast
 from zoneinfo import ZoneInfo
@@ -31,8 +31,14 @@ from app.intelligence import IntelligencePacket, IntelligenceTopic, build_intell
 from app.players.models import (
     PlayerAliasKind,
     PlayerCandidate,
+    PlayerProfileData,
+    PlayerProfileView,
     PlayerResolution,
     PlayerResolutionStatus,
+    PlayerResultPage,
+    RankingPage,
+    ResultOutcome,
+    Tour,
 )
 from app.providers.base import TennisDataProvider
 from app.realtime.reducer import normalize_snapshot_quality, reduce_live_snapshot
@@ -157,6 +163,8 @@ class TennisService:
         snapshots=None,
         publisher=None,
         resolver=None,
+        directory=None,
+        seeder=None,
     ) -> None:
         self._provider = provider
         self._cache = cache
@@ -165,15 +173,27 @@ class TennisService:
         self._snapshots = snapshots
         self._publisher = publisher
         self._resolver = resolver
+        self._directory = directory
+        self._seeder = seeder
+        self._seeded = seeder is None
+
+    async def _ensure_seeded(self) -> None:
+        if not self._seeded:
+            self._seeded = True
+            await self._seeder()
 
     async def resolve_player(
-        self, query: str, *, context_player_ids: tuple[str, ...] = ()
+        self,
+        query: str,
+        *,
+        context_player_ids: tuple[str, ...] = (),
+        limit: int = 5,
     ):
         """Shared deterministic resolution; legacy fallback only when no
         resolver is injected (livetennis/replay unit contracts)."""
         if self._resolver is not None:
             return await self._resolver.resolve(
-                query, context_player_ids=context_player_ids
+                query, context_player_ids=context_player_ids, limit=limit
             )
         players = await self.search_players(query)
         individuals = [
@@ -231,6 +251,160 @@ class TennisService:
             stale_ttl=0,
         )
         return cast(list[Player], outcome.value)
+
+    async def get_rankings_page(
+        self,
+        tour: Tour,
+        *,
+        page: int,
+        page_size: int,
+        country_code: str | None,
+    ) -> RankingPage:
+        if self._directory is None:
+            raise AppError("unsupported", "Rankings require the player directory", 501)
+        await self._ensure_seeded()
+        entries, total = await self._directory.get_rankings(
+            tour, page=page, page_size=page_size, country_code=country_code
+        )
+        _, tour_total = await self._directory.get_rankings(
+            tour, page=1, page_size=1, country_code=None
+        )
+        as_of = max((entry.fetched_at for entry in entries), default=self._now())
+        return RankingPage(
+            tour=tour,
+            page=page,
+            page_size=page_size,
+            total=total,
+            entries=entries,
+            as_of=as_of,
+            availability=CapabilityStatus.AVAILABLE
+            if tour_total
+            else CapabilityStatus.UNAVAILABLE,
+        )
+
+    async def get_player_profile_view(
+        self, player_id: str, *, season: int | None = None
+    ) -> PlayerProfileView:
+        await self._ensure_seeded()
+        current_year = self._now().year
+        selected = season if season is not None else current_year
+        if not current_year - 4 <= selected <= current_year:
+            raise AppError("invalid_request", "Season outside the five-season window", 422)
+        directory_player = None
+        if self._directory is not None:
+            directory_player = await self._directory.get_player(player_id)
+            if directory_player is None:
+                raise AppError("not_found", "Player not found", 404)
+        profile = await self._load_profile(player_id)
+        season_record = next(
+            (record for record in profile.seasons if record.season == selected), None
+        )
+        current_match: Match | None = None
+        live = await self._list_by_player_id("live", player_id)
+        if live:
+            current_match = live[0]
+        else:
+            upcoming = await self._list_by_player_id("upcoming", player_id)
+            if upcoming:
+                current_match = upcoming[0]
+        return PlayerProfileView(
+            profile=profile,
+            selected_season=selected,
+            season_record=season_record,
+            current_match=current_match,
+        )
+
+    async def _load_profile(self, player_id: str) -> PlayerProfileData:
+        async def load() -> object:
+            try:
+                return await self._provider.get_player_profile(player_id)
+            except AppError as error:
+                if error.code == "not_found":
+                    return _UNSUPPORTED
+                raise
+
+        outcome = await self._cache.get_or_load(
+            f"profile:{player_id}",
+            load,
+            ttl=lambda value: 60 if value is _UNSUPPORTED else 3600,
+            stale_ttl=0,
+        )
+        if outcome.value is _UNSUPPORTED:
+            raise AppError("not_found", "Player not found", 404)
+        return cast(PlayerProfileData, outcome.value)
+
+    async def get_player_result_page(
+        self,
+        player_id: str,
+        *,
+        season: int,
+        tiers: tuple[CircuitTier, ...],
+        outcome: ResultOutcome,
+        page: int,
+    ) -> PlayerResultPage:
+        await self._ensure_seeded()
+        current_year = self._now().year
+        if not current_year - 4 <= season <= current_year:
+            raise AppError("invalid_request", "Season outside the five-season window", 422)
+        player: Player | None = None
+        if self._directory is not None:
+            directory_player = await self._directory.get_player(player_id)
+            if directory_player is None:
+                raise AppError("not_found", "Player not found", 404)
+            player = directory_player.player
+        raw = await self._load_season_results(player_id, season)
+        filtered = [
+            match
+            for match in raw
+            if (not tiers or match.tournament.circuit in tiers)
+            and (
+                outcome is ResultOutcome.ALL
+                or (outcome is ResultOutcome.WON) == (match.winner_player_id == player_id)
+            )
+        ]
+        filtered.sort(
+            key=lambda match: match.scheduled_at
+            or datetime.max.replace(tzinfo=timezone.utc),
+            reverse=True,
+        )
+        page_size = 20
+        start = (max(1, page) - 1) * page_size
+        if player is None:
+            player = raw[0].players[0] if raw else Player(id=player_id, name="Unknown player")
+        return PlayerResultPage(
+            player=player,
+            season=season,
+            tiers=tiers,
+            outcome=outcome,
+            page=page,
+            page_size=page_size,
+            total=len(filtered),
+            matches=tuple(filtered[start : start + page_size]),
+            availability=CapabilityStatus.AVAILABLE
+            if raw
+            else CapabilityStatus.UNAVAILABLE,
+        )
+
+    async def _load_season_results(self, player_id: str, season: int) -> tuple[Match, ...]:
+        async def load() -> object:
+            try:
+                return await self._provider.get_player_results_for_period(
+                    player_id, start=date(season, 1, 1), end=date(season, 12, 31)
+                )
+            except AppError as error:
+                if error.code == "not_found":
+                    return _UNSUPPORTED
+                raise
+
+        outcome = await self._cache.get_or_load(
+            f"results:{player_id}:{season}",
+            load,
+            ttl=lambda value: 60 if value is _UNSUPPORTED or not value else 600,
+            stale_ttl=0,
+        )
+        if outcome.value is _UNSUPPORTED:
+            raise AppError("not_found", "Player not found", 404)
+        return cast(tuple[Match, ...], outcome.value)
 
     async def _resolve_player(self, query: str) -> Player:
         resolution = await self.resolve_player(query)

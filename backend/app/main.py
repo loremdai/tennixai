@@ -25,7 +25,7 @@ from app.persistence.player_directory import PostgresPlayerDirectoryRepository
 from app.persistence.repositories import PostgresIdentityRepository
 from app.players.repository import MemoryPlayerDirectoryRepository
 from app.players.resolver import PlayerResolver
-from app.players.sync import PlayerDirectorySync
+from app.players.sync import DirectorySeeder, PlayerDirectorySync
 from app.providers.api_tennis import ApiTennisProvider
 from app.providers.api_tennis_live import ApiTennisLiveFeedProvider
 from app.providers.base import TennisDataProvider
@@ -63,6 +63,7 @@ def create_app(
     database: Database | None = None
     directory: object | None = None
     resolver: PlayerResolver | None = None
+    seeder: DirectorySeeder | None = None
     redis_client = None
     owns_realtime = realtime is None
     provider_identity = identities
@@ -117,14 +118,11 @@ def create_app(
         if settings.provider_mode == "fake":
             # Deterministic in-memory directory so fake-mode pages and Chat
             # resolve names without touching any vendor or the database. The
-            # one-shot seeder runs on first resolution, server or test alike.
-            sync = PlayerDirectorySync(provider, directory, now=clock)
-
-            async def _seed_directory() -> None:
-                await sync.sync_rankings()
-                await sync.sync_known_player_aliases()
-
-            resolver = PlayerResolver(directory, seeder=_seed_directory)
+            # one-shot seeder runs on first use, server or test alike.
+            seeder = DirectorySeeder(
+                PlayerDirectorySync(provider, directory, now=clock)
+            )
+            resolver = PlayerResolver(directory, seeder=seeder.ensure)
         else:
             resolver = PlayerResolver(directory)
 
@@ -203,6 +201,8 @@ def create_app(
         snapshots=realtime.store,
         publisher=realtime.publisher,
         resolver=resolver,
+        directory=directory,
+        seeder=seeder.ensure if seeder is not None else None,
     )
 
     if chat_orchestrator is None:

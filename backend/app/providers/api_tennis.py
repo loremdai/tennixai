@@ -11,7 +11,7 @@ import hashlib
 import json
 import re
 from collections.abc import Callable
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 import httpx
@@ -37,7 +37,14 @@ from app.domain import (
 )
 from app.errors import AppError
 from app.identity import IdentityRepository
-from app.players.models import RankingEntry, RankingMovement, Tour
+from app.players.models import (
+    PlayerProfileData,
+    PlayerSeasonRecord,
+    RankingEntry,
+    RankingMovement,
+    SurfaceRecord,
+    Tour,
+)
 from app.players.normalization import normalize_player_name
 from app.providers.api_tennis_classification import classify_event_type
 from app.providers.api_tennis_dtos import (
@@ -46,6 +53,7 @@ from app.providers.api_tennis_dtos import (
     HeadToHeadDto,
     MatchDto,
     PlayerDto,
+    PlayerSeasonStatDto,
     StandingDto,
 )
 
@@ -883,6 +891,57 @@ class ApiTennisProvider:
             ranking=_latest_ranking(dto),
         )
 
+    async def get_player_profile(self, player_id: str) -> PlayerProfileData:
+        external_id = await self._identities.external_id(
+            "player", PROVIDER_NAME, player_id
+        )
+        if external_id is None:
+            raise AppError("not_found", "Player not found", 404)
+        payload = await self._request("get_players", {"player_key": external_id})
+        parsed = self._validate(ApiTennisResponse[list[PlayerDto]], payload)
+        rows = parsed.result or []
+        if not rows:
+            raise AppError("not_found", "Player not found", 404)
+        dto = rows[0]
+        return PlayerProfileData(
+            player=Player(
+                id=player_id,
+                name=(dto.player_full_name or dto.player_name or "").strip()
+                or "Unknown player",
+                country_code=country_code_from_name(dto.player_country),
+                ranking=_latest_ranking(dto),
+            ),
+            birth_date=parse_birthday(dto.player_bday),
+            image_url=(dto.player_logo or "").strip() or None,
+            seasons=map_season_stats(dto.stats),
+        )
+
+    async def get_player_results_for_period(
+        self, player_id: str, *, start: date, end: date
+    ) -> tuple[Match, ...]:
+        external_id = await self._identities.external_id(
+            "player", PROVIDER_NAME, player_id
+        )
+        if external_id is None:
+            raise AppError("not_found", "Player not found", 404)
+        rows = await self._match_rows(
+            "get_fixtures",
+            {
+                "player_key": external_id,
+                "date_start": start.isoformat(),
+                "date_stop": end.isoformat(),
+                "timezone": "GMT",
+            },
+        )
+        matches = [
+            match
+            for dto in rows
+            if (match := await map_match(dto, self._identities, self._now)) is not None
+            and match.status is MatchStatus.FINISHED
+        ]
+        matches.sort(key=lambda match: match.scheduled_at or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+        return tuple(matches)
+
     async def get_match(self, match_id: str) -> Match:
         external_id = await self._identities.external_id(
             "match", PROVIDER_NAME, match_id
@@ -1017,3 +1076,51 @@ def _latest_ranking(dto: PlayerDto) -> int | None:
         if stat.season.strip() == latest and (stat.rank or "").strip().isdigit():
             return int(stat.rank.strip())
     return None
+
+
+def parse_birthday(raw: str | None) -> date | None:
+    """Vendor birthdays arrive as DD.MM.YYYY; anything else stays unavailable."""
+    text = (raw or "").strip()
+    if not text:
+        return None
+    try:
+        return datetime.strptime(text, "%d.%m.%Y").date()
+    except ValueError:
+        return None
+
+
+def _parse_count(raw: str | None) -> int:
+    text = (raw or "").strip()
+    return int(text) if text.isdigit() else 0
+
+
+def _parse_surface(raw_won: str | None, raw_lost: str | None) -> SurfaceRecord | None:
+    won = (raw_won or "").strip()
+    lost = (raw_lost or "").strip()
+    if not won and not lost:
+        return None
+    return SurfaceRecord(won=_parse_count(won), lost=_parse_count(lost))
+
+
+def map_season_stats(stats: list[PlayerSeasonStatDto]) -> tuple[PlayerSeasonRecord, ...]:
+    """Singles-only season records; blank surfaces stay unavailable (None)."""
+    records: list[PlayerSeasonRecord] = []
+    for stat in stats:
+        if (stat.type or "").strip().casefold() != "singles":
+            continue
+        season = (stat.season or "").strip()
+        if not season.isdigit():
+            continue
+        records.append(
+            PlayerSeasonRecord(
+                season=int(season),
+                matches_won=_parse_count(stat.matches_won),
+                matches_lost=_parse_count(stat.matches_lost),
+                titles=_parse_count(stat.titles),
+                hard=_parse_surface(stat.hard_won, stat.hard_lost),
+                clay=_parse_surface(stat.clay_won, stat.clay_lost),
+                grass=_parse_surface(stat.grass_won, stat.grass_lost),
+            )
+        )
+    records.sort(key=lambda record: record.season, reverse=True)
+    return tuple(records)

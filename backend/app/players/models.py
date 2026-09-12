@@ -5,7 +5,7 @@ from enum import StrEnum
 
 from pydantic import Field, field_validator
 
-from app.domain import FrozenModel, Gender, Player
+from app.domain import CapabilityStatus, CircuitTier, FrozenModel, Gender, Match, Player
 
 
 class Tour(StrEnum):
@@ -105,3 +105,60 @@ class PlayerResolution(FrozenModel):
     query: str
     player: Player | None = None
     candidates: tuple[PlayerCandidate, ...] = ()
+
+
+class ResultOutcome(StrEnum):
+    ALL = "all"
+    WON = "won"
+    LOST = "lost"
+
+
+class SurfaceRecord(FrozenModel):
+    won: int = Field(ge=0)
+    lost: int = Field(ge=0)
+
+
+class PlayerSeasonRecord(FrozenModel):
+    season: int
+    matches_won: int = Field(ge=0)
+    matches_lost: int = Field(ge=0)
+    titles: int = Field(ge=0)
+    hard: SurfaceRecord | None = None
+    clay: SurfaceRecord | None = None
+    grass: SurfaceRecord | None = None
+
+
+class PlayerProfileData(FrozenModel):
+    player: Player
+    birth_date: date | None = None
+    image_url: str | None = None
+    seasons: tuple[PlayerSeasonRecord, ...] = ()
+
+
+class PlayerProfileView(FrozenModel):
+    profile: PlayerProfileData
+    selected_season: int
+    season_record: PlayerSeasonRecord | None = None
+    current_match: Match | None = None
+
+
+class RankingPage(FrozenModel):
+    tour: Tour
+    page: int
+    page_size: int
+    total: int
+    entries: tuple[RankingEntry, ...]
+    as_of: datetime
+    availability: CapabilityStatus
+
+
+class PlayerResultPage(FrozenModel):
+    player: Player
+    season: int
+    tiers: tuple[CircuitTier, ...]
+    outcome: ResultOutcome
+    page: int
+    page_size: int
+    total: int
+    matches: tuple[Match, ...]
+    availability: CapabilityStatus

@@ -127,8 +127,9 @@ async def test_player_search_returns_canonical_players(client: AsyncClient) -> N
     body = response.json()
 
     assert response.status_code == 200
-    assert [player["name"] for player in body["data"]] == ["Jannik Sinner"]
-    assert body["data"][0]["id"].startswith("ply_")
+    assert body["data"]["status"] == "resolved"
+    assert body["data"]["player"]["name"] == "Jannik Sinner"
+    assert body["data"]["player"]["id"].startswith("ply_")
     assert "fake-sinner" not in response.text
 
 
