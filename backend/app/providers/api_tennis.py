@@ -37,6 +37,7 @@ from app.domain import (
 )
 from app.errors import AppError
 from app.identity import IdentityRepository
+from app.players.models import RankingEntry, RankingMovement, Tour
 from app.providers.api_tennis_classification import classify_event_type
 from app.providers.api_tennis_dtos import (
     ApiTennisResponse,
@@ -44,6 +45,7 @@ from app.providers.api_tennis_dtos import (
     HeadToHeadDto,
     MatchDto,
     PlayerDto,
+    StandingDto,
 )
 
 PROVIDER_NAME = "api_tennis"
@@ -195,6 +197,36 @@ def normalize_surface(raw: str | None) -> str | None:
 def country_code_from_name(country: str | None) -> str | None:
     normalized = " ".join((country or "").strip().casefold().split())
     return COUNTRY_CODES.get(normalized)
+
+
+def map_ranking_movement(raw: str | None) -> RankingMovement:
+    """Vendor standings movement is a loose string; anything we cannot read
+    with certainty stays UNKNOWN instead of being guessed."""
+    text = (raw or "").strip()
+    if not text:
+        return RankingMovement.UNKNOWN
+    lowered = text.casefold()
+    if lowered in {"same", "=", "0", "no change", "nc"}:
+        return RankingMovement.SAME
+    if lowered in {"up", "new"} or lowered.startswith(("+", "↑")):
+        return RankingMovement.UP
+    if lowered in {"down"} or lowered.startswith(("-", "↓")):
+        return RankingMovement.DOWN
+    return RankingMovement.UNKNOWN
+
+
+def parse_positive_int(raw: int | str | None) -> int | None:
+    if isinstance(raw, int):
+        return raw if raw >= 1 else None
+    text = (raw or "").strip()
+    return int(text) if text.isdigit() and int(text) >= 1 else None
+
+
+def parse_non_negative_int(raw: int | str | None) -> int | None:
+    if isinstance(raw, int):
+        return raw if raw >= 0 else None
+    text = (raw or "").strip()
+    return int(text) if text.isdigit() else None
 
 
 def parse_int_pair(raw: str | None) -> tuple[int, int] | None:
@@ -801,6 +833,38 @@ class ApiTennisProvider:
                     seen.add(player.id)
                     results.append(player)
         return results[:SEARCH_RESULT_LIMIT]
+
+    async def get_rankings(self, tour: Tour) -> tuple[RankingEntry, ...]:
+        payload = await self._request("get_standings", {"event_type": tour.value})
+        parsed = self._validate(ApiTennisResponse[list[StandingDto]], payload)
+        now = self._now()
+        entries: list[RankingEntry] = []
+        for dto in parsed.result or []:
+            rank = parse_positive_int(dto.place)
+            points = parse_non_negative_int(dto.points)
+            name = (dto.player or "").strip()
+            if rank is None or points is None or dto.player_key is None or not name:
+                continue
+            entries.append(
+                RankingEntry(
+                    player=Player(
+                        id=await self._identities.get_or_create(
+                            "player", PROVIDER_NAME, str(dto.player_key)
+                        ),
+                        name=name,
+                        country_code=country_code_from_name(dto.country),
+                        ranking=rank,
+                    ),
+                    tour=tour,
+                    rank=rank,
+                    points=points,
+                    movement=map_ranking_movement(dto.movement),
+                    ranking_date=now.date(),
+                    fetched_at=now,
+                )
+            )
+        entries.sort(key=lambda entry: (entry.rank, entry.player.id))
+        return tuple(entries)
 
     async def get_player(self, player_id: str) -> Player:
         external_id = await self._identities.external_id(

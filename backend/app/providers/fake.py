@@ -18,8 +18,26 @@ from app.domain import (
 )
 from app.errors import AppError
 from app.identity import IdentityRepository
+from app.players.models import RankingEntry, RankingMovement, Tour
 
 SNAPSHOT_GAP_CAPABILITIES = ("point_by_point", "statistics", "momentum")
+
+# Deterministic standings seeds: (external id, name, country, rank, points,
+# movement). Reuses the fake match players' identity rows and adds bounded
+# directory-only players; no vendor-shaped IDs anywhere.
+_RANKING_SEEDS: dict[Tour, tuple[tuple[str, str, str | None, int, int, RankingMovement], ...]] = {
+    Tour.ATP: (
+        ("fake-sinner", "Jannik Sinner", "ita", 1, 11780, RankingMovement.SAME),
+        ("fake-alcaraz", "Carlos Alcaraz", "esp", 2, 8580, RankingMovement.UP),
+        ("fake-djokovic", "Novak Djokovic", "srb", 3, 6500, RankingMovement.DOWN),
+        ("fake-zhang", "Zhizhen Zhang", "chn", 200, 302, RankingMovement.SAME),
+        ("fake-wong", "Coleman Wong", "hkg", 201, 296, RankingMovement.DOWN),
+    ),
+    Tour.WTA: (
+        ("fake-swiatek", "Iga Swiatek", "pol", 2, 9320, RankingMovement.SAME),
+        ("fake-zheng", "Qinwen Zheng", "chn", 5, 5315, RankingMovement.UP),
+    ),
+}
 
 
 class FakeTennisProvider:
@@ -149,6 +167,31 @@ class FakeTennisProvider:
             self.sinner_alcaraz.id: self.sinner_alcaraz,
             self.live_match.id: self.live_match,
         }
+
+    async def get_rankings(self, tour: Tour) -> tuple[RankingEntry, ...]:
+        await self.build()
+        now = self._now()
+        entries: list[RankingEntry] = []
+        for external, name, country_code, rank, points, movement in _RANKING_SEEDS[tour]:
+            player_id = await self._identities.get_or_create("player", "fake", external)
+            entries.append(
+                RankingEntry(
+                    player=Player(
+                        id=player_id,
+                        name=name,
+                        country_code=country_code,
+                        ranking=rank,
+                    ),
+                    tour=tour,
+                    rank=rank,
+                    points=points,
+                    movement=movement,
+                    ranking_date=now.date(),
+                    fetched_at=now,
+                )
+            )
+        entries.sort(key=lambda entry: (entry.rank, entry.player.id))
+        return tuple(entries)
 
     async def get_live_matches(self, *, player_id: str | None = None) -> list[Match]:
         await self.build()

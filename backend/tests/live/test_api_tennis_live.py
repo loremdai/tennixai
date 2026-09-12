@@ -16,6 +16,7 @@ import pytest
 
 from app.config import Settings
 from app.identity import MemoryIdentityRepository
+from app.players.models import Tour
 from app.providers.api_tennis import ApiTennisProvider
 
 pytestmark = pytest.mark.api_tennis_live
@@ -86,5 +87,44 @@ async def test_api_tennis_rest_capability_and_canonical_shape() -> None:
                 else 0
             )
             assert api_key not in snapshot.model_dump_json()
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_api_tennis_standings_authenticate_and_map_canonical_entries() -> None:
+    settings, api_key = _require_enabled_key()
+
+    client = httpx.AsyncClient(base_url=settings.api_tennis_base_url, timeout=20.0)
+    provider = ApiTennisProvider(
+        client=client,
+        identities=MemoryIdentityRepository(),
+        api_key=api_key,
+        now=lambda: datetime.now(timezone.utc),
+    )
+    try:
+        populated_tours = 0
+        for tour in (Tour.ATP, Tour.WTA):
+            entries = await provider.get_rankings(tour)
+            if not entries:
+                # A supplier-declared empty tour is honest; authentication
+                # already happened inside get_rankings.
+                continue
+            populated_tours += 1
+            ranks = [entry.rank for entry in entries]
+            assert ranks == sorted(ranks)
+            for entry in entries[:10]:
+                assert entry.player.id.startswith("ply_")
+                assert entry.rank >= 1
+                assert entry.points >= 0
+                assert entry.fetched_at.tzinfo is not None
+            dumped = "".join(entry.model_dump_json() for entry in entries[:5])
+            assert "player_key" not in dumped
+            assert api_key not in dumped
+        if populated_tours == 0:
+            pytest.skip(
+                "API-Tennis standings returned no rows for either tour; "
+                "authentication verified"
+            )
     finally:
         await client.aclose()

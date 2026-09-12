@@ -79,6 +79,18 @@ def test_models_are_frozen_and_forbid_extra_fields() -> None:
         Player(id="ply_a", name="Jannik Sinner, ", unknown_field="x")  # type: ignore[call-arg]
 
 
+def test_player_localized_name_is_optional_and_serializes_for_old_consumers() -> None:
+    legacy = Player(id="ply_a", name="Jannik Sinner")
+    assert legacy.localized_name is None
+    assert legacy.model_dump()["localized_name"] is None
+
+    localized = Player(id="ply_a", name="Qinwen Zheng", localized_name="郑钦文")
+    assert localized.localized_name == "郑钦文"
+
+    with pytest.raises(ValidationError):
+        Player(id="ply_a", name="Jannik Sinner", localized_name=123)  # type: ignore[arg-type]
+
+
 def test_live_match_state_defaults_and_score_shape() -> None:
     score = MatchScore(
         sets_won=(1, 1),

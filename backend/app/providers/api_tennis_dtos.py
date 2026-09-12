@@ -118,6 +118,16 @@ class PlayerSeasonStatDto(VendorModel):
     matches_lost: str | None = None
 
 
+class StandingDto(VendorModel):
+    place: int | str | None = None
+    player: str | None = None
+    player_key: int | str | None = None
+    league: str | None = None
+    movement: str | None = None
+    country: str | None = None
+    points: int | str | None = None
+
+
 class PlayerDto(VendorModel):
     player_key: int | str
     player_name: str | None = None

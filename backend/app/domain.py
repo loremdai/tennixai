@@ -103,6 +103,7 @@ class DataFreshness(FrozenModel):
 class Player(FrozenModel):
     id: str
     name: str
+    localized_name: str | None = None
     country_code: str | None = None
     ranking: int | None = None
 
