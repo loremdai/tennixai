@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-12 10:51 CST
+**最后更新：** 2026-09-12 11:02 CST
 
-**总体状态：** `done`（T39 已完成作用域感知的多工具对话编排与回答质量加固）
+**总体状态：** `in_progress`（T40 正在修复真实服务回答未完成并完成 Markdown 渲染复验）
 
 **当前里程碑：** P2 — Live Match Intelligence（`done`）
 
-**当前阶段：** P2.5 — Acceptance and hardening（`done`）
+**当前阶段：** P2.5 — Acceptance and hardening（`in_progress`）
 
 ## 状态说明
 
