@@ -3,23 +3,19 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-12 16:23 CST
+**最后更新：** 2026-09-12 16:41 CST
 
-**当前任务：** T44 — 增加 canonical 排名模型与 API-Tennis standings adapter
+**当前任务：** T45 — 持久化球员目录、别名与排名快照（`ready`，待领取）
 
-**任务状态：** `in_progress`
+**任务状态：** 无 `in_progress`（T44 已完成并推送）
 
 **当前执行者 / ADE：** Claude Code / Claude Code
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**最近完成任务提交：** `42c7a36`
+**最近完成任务提交：** `4e882b9`
 
-**最后验证的产品提交：** `42c7a36`
-
-**本次任务起始提交：** `91b180c`
-
-**本次任务领取时间：** 2026-09-12 16:23 CST
+**最后验证的产品提交：** `4e882b9`
 
 **本次任务起始提交：** `44cd9d5`（v0 原型已入库；本执行者从该提交继续 T43 工程收口）
 
@@ -91,13 +87,14 @@
 
 ### T44 — 增加 canonical 排名模型与 API-Tennis standings adapter
 
-- **状态：** `in_progress`
+- **状态：** `done`
 - **执行者 / ADE：** Claude Code / Claude Code
 - **分支：** `main`
-- **起始提交：** `91b180c`
+- **起始提交：** `91b180c`（领取记录 `974c523`）
 - **领取时间：** 2026-09-12 16:23 CST
-- **范围：** 按 [P2.6 实施计划 T44](./docs/superpowers/plans/2026-09-12-tennixai-player-directory-multilingual-identity-implementation.md#t44-add-canonical-ranking-models-and-the-api-tennis-standings-adapter)：`backend/app/players/`（models/providers）、`Player.localized_name` 兼容扩展、`StandingDto` permissive vendor DTO、`ApiTennisProvider.get_rankings()`、fake provider 确定性排名、opt-in 真实 standings smoke；现有 Match/Player API 保持兼容。
-- **验收门：** TDD 先红后绿；时区感知 `fetched_at`、正 rank、非负积分、`localized_name=None` 兼容、ATP/WTA 参数映射、movement 回退、坏数值行跳过、仅内部 ID、序列化零供应商字段；fake 至少 6 条跨 tour/中国/升降/200 边界/200 外；全套确定性 backend 不回归；真实 `TENNIX_RUN_API_TENNIS_LIVE=1` standings smoke 两 tour 认证且零泄漏（403/429 如实失败）。
+- **完成提交：** `4e882b9`
+- **完成事实：** 新增 `backend/app/players/`（`Tour`/`RankingMovement`/`RankingEntry`/`PlayerCatalogProvider`）；`Player` 兼容增加可选 `localized_name`；permissive `StandingDto`（容忍未知字段、仅文档化 wire 字段）；`ApiTennisProvider.get_rankings()` 调 `get_standings(event_type=ATP|WTA)`，跳过缺 key/name/rank/points 的坏行，movement 读不懂时回退 UNKNOWN，国家名走既有 `country_code_from_name`，内部 ID 经 identity repository，按 `(rank, player.id)` 排序，`fetched_at` tz-aware；fake provider 确定性 7 条排名（跨 ATP/WTA、中国、up/down/same、rank 200 边界与 201 外），复用 fake 球员内部 ID；未把 standings 加入 `TennisDataProvider`。
+- **验证门：** TDD 先红（`ModuleNotFoundError: app.players`）后绿；focused `tests/test_domain.py tests/test_player_ranking_provider.py tests/test_provider_contract.py tests/test_api_tennis_provider.py` 75 passed；全确定性 backend 382 passed/14 deselected；opt-in 真实门 `TENNIX_RUN_API_TENNIS_LIVE=1 uv run pytest -m api_tennis_live tests/live/test_api_tennis_live.py -q` 2 passed（两 tour 认证、canonical 排序映射、`player_key`/key 零泄漏；403/429 为如实失败路径）。
 - **阻塞：** 无。
 
 ### T43 — 生成、导入并冻结 v0 球员页面视觉真相
@@ -417,6 +414,7 @@
 
 | 日期 | 提交 | 验证 | 结果 |
 |---|---|---|---|
+| 2026-09-12 | `4e882b9` | TDD 先红（缺 `app.players`）后绿；focused 75 passed；全确定性 backend 382 passed/14 deselected；真实 `TENNIX_RUN_API_TENNIS_LIVE=1` api_tennis_live 2 passed（standings 两 tour 认证与 canonical 映射、零泄漏） | T44 完成；canonical 排名模型与 standings adapter 就绪 |
 | 2026-09-12 | `42c7a36` | TDD：28 项 player 组件测试先红（定向 10 项失败）后绿；`pnpm test` 179 passed、typecheck、build exit 0；`player-directory.visual` 双视口 4/4（update 后 plain 复跑）；四张 PNG 逐张审阅无裁切/横向溢出/dev overlay/双语层级问题；回归 `--grep "player directory visual\|prototype\|visual"` 16 passed/4 skipped/10 failed，10 项 prototype.visual 失败在 `44cd9d5` 干净 worktree 复跑相同（旧债，未重录）；p1-home-result mobile 抖动复跑通过 | T43 完成；v0 球员页工程收口与四张双视口视觉基线冻结 |
 | 2026-09-12 | `5c3d469` | TDD：Home 内部实现文字泄漏与完整流式结果回归先失败后通过；frontend `pnpm test` 151 passed、typecheck/build；隔离 fake Home 流程 desktop+mobile 2 passed、P1 视觉 12 passed；真实服务重启后浏览器等待 Home 回答至 `done`，10 张结构化比赛卡与资料缺失提示可见，progress/internal footer/原问题回显均为 0；full e2e 28 passed/14 skipped/14 failed（既有 P2 gender query 断言与 prototype 基线问题）；health/home 200；`git diff --check` 通过 | T41 完成；首页与详情页用户展示策略同步 |
 | 2026-09-11 | `ddaf24b` | TDD focused provider/service/view-model/component 先红后绿；backend 确定性 `352 passed, 2 skipped, 9 deselected`；frontend `140 passed` + typecheck + build；隔离 fake 服务 P1 功能 `12 passed`、视觉 `12 passed`；真实 API-Tennis REST smoke `1 passed`；真实 catalog/detail 国家数据一致；真实浏览器鼠标 Home→Match→Home 确认德国国旗+`DEU`、World Globe+`WORLD`，error/warn 为空；`git diff --check` 通过 | T38 完成；首页比赛卡展示国旗，详情页展示国旗+国家代码，`World` 语义保留 |
@@ -469,11 +467,11 @@
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-12 | T44 完成：canonical 排名模型、API-Tennis standings adapter 与真实 standings smoke | `4e882b9` |
 | 2026-09-12 | T43 完成：v0 球员页工程收口（全目录搜索、固定文案、内部 matchId 链接、分场地胜负、样例日期）与四张双视口视觉基线冻结 | `42c7a36` |
 | 2026-09-12 | T41 完成：首页与详情页共享回答标签，移除 Home 生产内部来源 footer，补齐完整流式/Home 双视口回归 | `5c3d469` |
 | 2026-09-12 | T39 完成：作用域感知编排、综合事实质量门与 CommonMark/GFM 渲染 | `61d8fee` |
 | 2026-09-11 | T38 完成：保留 `World` 国家语义，首页显示国旗、详情页显示国旗与国家代码 | `ddaf24b` |
-| 2026-09-11 | T37 完成：详情页适配官方赛事场地与安全国家代码，并解释所有不可用字段 | `54059fe` |
 
 ## 接手与更新规则
 
