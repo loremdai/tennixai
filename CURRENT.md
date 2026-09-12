@@ -3,11 +3,11 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-12 19:26 CST
+**最后更新：** 2026-09-12 19:35 CST
 
-**当前任务：** T49 — Rankings/Profile/五赛季赛果 API（`ready`，待领取）
+**当前任务：** T49 — Rankings/Profile/五赛季赛果 API
 
-**任务状态：** 无 `in_progress`（T48 已完成并推送）
+**任务状态：** `in_progress`
 
 **当前执行者 / ADE：** Claude Code / Claude Code
 
@@ -16,6 +16,10 @@
 **最近完成任务提交：** `1f480df`
 
 **最后验证的产品提交：** `1f480df`
+
+**本次任务起始提交：** `f3e0161`
+
+**本次任务领取时间：** 2026-09-12 19:35 CST
 
 **本次任务起始提交：** `44cd9d5`（v0 原型已入库；本执行者从该提交继续 T43 工程收口）
 
@@ -84,6 +88,17 @@
 - 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`、`REALTIME_LATENCY_INVESTIGATION.md`（任务外调查文档）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`、`frontend/next-env.d.ts`；保留原样，不纳入 T42A。
 
 ## 当前任务
+
+### T49 — Rankings/Profile/五赛季赛果 API
+
+- **状态：** `in_progress`
+- **执行者 / ADE：** Claude Code / Claude Code
+- **分支：** `main`
+- **起始提交：** `f3e0161`
+- **领取时间：** 2026-09-12 19:35 CST
+- **范围：** 按 [P2.6 实施计划 T49](./docs/superpowers/plans/2026-09-12-tennixai-player-directory-multilingual-identity-implementation.md#t49-expose-rankings-profile-and-five-season-result-apis)：canonical profile/season/result 模型与 `PlayerProfileProvider`；API-Tennis profile（logo + 分场地胜负）与按年有界赛果；fake 对应能力；service 组合与缓存（profile 1h/负 60s、赛果 10min/空 60s、live/next 复用）；四个 REST 路由（rankings/search/profile/results，page_size 固定 50/20，路由先注册 rankings/search）；search 返回 `PlayerResolution` 信封。
+- **验收门：** 静态路由优先、tour enum、page 边界、Top 200 上限、中国筛选、Top 200 外搜索、未知 ID 404、可选 profile 字段、选中赛季、live 优先 next、`current_match=None` 空文案语义、五年边界、tier/outcome 筛选、结果分页与无 surface 参数；真实 profile/history smoke（Top 200 与 Top 200 外各一）。
+- **阻塞：** 无。
 
 ### T48 — 确定性 PlayerResolver 与按内部 ID 的运行时查询
 
