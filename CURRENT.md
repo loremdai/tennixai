@@ -3,23 +3,19 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-12 16:43 CST
+**最后更新：** 2026-09-12 17:06 CST
 
-**当前任务：** T45 — 持久化球员目录、别名与排名快照
+**当前任务：** T46 — 幂等目录同步与英文别名派生（`ready`，待领取）
 
-**任务状态：** `in_progress`
+**任务状态：** 无 `in_progress`（T45 已完成并推送）
 
 **当前执行者 / ADE：** Claude Code / Claude Code
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**最近完成任务提交：** `4e882b9`
+**最近完成任务提交：** `fb77d80`
 
-**最后验证的产品提交：** `4e882b9`
-
-**本次任务起始提交：** `fdd39b4`
-
-**本次任务领取时间：** 2026-09-12 16:43 CST
+**最后验证的产品提交：** `fb77d80`
 
 **本次任务起始提交：** `44cd9d5`（v0 原型已入库；本执行者从该提交继续 T43 工程收口）
 
@@ -91,13 +87,14 @@
 
 ### T45 — 持久化球员目录、别名与排名快照
 
-- **状态：** `in_progress`
+- **状态：** `done`
 - **执行者 / ADE：** Claude Code / Claude Code
 - **分支：** `main`
-- **起始提交：** `fdd39b4`
+- **起始提交：** `fdd39b4`（领取记录 `9a7aa76`）
 - **领取时间：** 2026-09-12 16:43 CST
-- **范围：** 按 [P2.6 实施计划 T45](./docs/superpowers/plans/2026-09-12-tennixai-player-directory-multilingual-identity-implementation.md#t45-persist-the-player-directory-aliases-and-ranking-snapshots)：migration `0003`（players 扩列 + `player_aliases` + `player_rankings`，不替换 identity 表）、`PlayerDirectoryRepository` protocol 与 `MemoryPlayerDirectoryRepository`、`PostgresPlayerDirectoryRepository`、`MatchSnapshotRepository.player_or_placeholder` 双名映射、integration 门与 alembic 往返。
-- **验收门：** schema 约束、alias 重复幂等、同 alias 多球员、最新排名快照选择、国家筛选、50 行分页、并发 external-ID 收敛、`localized_name` 快照重建；alembic upgrade→downgrade 0002→upgrade 往返 exit 0 且旧行无损；全套确定性 backend 不回归。
+- **完成提交：** `fb77d80`
+- **完成事实：** migration `0003`：players 增加 `localized_name/gender/birth_date/image_url/first_seen_at/last_seen_at`（先用 created_at/updated_at backfill 再非空 + server default），新建 `player_aliases`（唯一 `(player_id,locale,normalized_alias,kind)`、normalized_alias B-tree 索引、is_active）与 `player_rankings`（唯一 `(tour,ranking_date,rank)` 与 `(tour,ranking_date,player_id)`、查询/球员索引）；downgrade 只删新表与新列，identity 表不动。新增 `PlayerDirectoryRepository` protocol、`MemoryPlayerDirectoryRepository`、`PostgresPlayerDirectoryRepository`（alias 幂等 do-nothing、排名快照按 (tour,date) 原子替换、localized batch 全有或全无、find_aliases 按 kind 优先级/null-rank 最后/rank/id 排序、prune 每 tour 保留 8 个快照）；`player_or_placeholder` 携带 `localized_name`。
+- **验证门：** TDD 先红（缺 DirectoryPlayer/rows）后绿；memory 契约 10 项 + schema 单测 3 项（合计 30 passed）；integration 5 项 + 既有 postgres integration 7 项合计 12 passed（20 路并发 get_or_create 收敛单一内部 ID 且 players 单行、快照重建携带中文名、原子 batch 零写入）；`uv run alembic upgrade head` → `downgrade 0002` → `upgrade head` 均 exit 0，往返后 integration 复跑 5 passed；确定性 backend（不含 infrastructure）379 passed。
 - **阻塞：** 无。
 
 ### T44 — 增加 canonical 排名模型与 API-Tennis standings adapter
@@ -429,6 +426,7 @@
 
 | 日期 | 提交 | 验证 | 结果 |
 |---|---|---|---|
+| 2026-09-12 | `fb77d80` | TDD 先红后绿；memory 契约+schema 单测 30 passed；integration 12 passed（含并发收敛与快照重建）；alembic 0003 往返 exit 0 且复跑通过；确定性 backend（不含 infrastructure）379 passed | T45 完成；球员目录/别名/排名快照持久化就绪 |
 | 2026-09-12 | `4e882b9` | TDD 先红（缺 `app.players`）后绿；focused 75 passed；全确定性 backend 382 passed/14 deselected；真实 `TENNIX_RUN_API_TENNIS_LIVE=1` api_tennis_live 2 passed（standings 两 tour 认证与 canonical 映射、零泄漏） | T44 完成；canonical 排名模型与 standings adapter 就绪 |
 | 2026-09-12 | `42c7a36` | TDD：28 项 player 组件测试先红（定向 10 项失败）后绿；`pnpm test` 179 passed、typecheck、build exit 0；`player-directory.visual` 双视口 4/4（update 后 plain 复跑）；四张 PNG 逐张审阅无裁切/横向溢出/dev overlay/双语层级问题；回归 `--grep "player directory visual\|prototype\|visual"` 16 passed/4 skipped/10 failed，10 项 prototype.visual 失败在 `44cd9d5` 干净 worktree 复跑相同（旧债，未重录）；p1-home-result mobile 抖动复跑通过 | T43 完成；v0 球员页工程收口与四张双视口视觉基线冻结 |
 | 2026-09-12 | `5c3d469` | TDD：Home 内部实现文字泄漏与完整流式结果回归先失败后通过；frontend `pnpm test` 151 passed、typecheck/build；隔离 fake Home 流程 desktop+mobile 2 passed、P1 视觉 12 passed；真实服务重启后浏览器等待 Home 回答至 `done`，10 张结构化比赛卡与资料缺失提示可见，progress/internal footer/原问题回显均为 0；full e2e 28 passed/14 skipped/14 failed（既有 P2 gender query 断言与 prototype 基线问题）；health/home 200；`git diff --check` 通过 | T41 完成；首页与详情页用户展示策略同步 |
@@ -482,11 +480,11 @@
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-12 | T45 完成：migration 0003、目录 repository（memory+Postgres）与 identity 无损门 | `fb77d80` |
 | 2026-09-12 | T44 完成：canonical 排名模型、API-Tennis standings adapter 与真实 standings smoke | `4e882b9` |
 | 2026-09-12 | T43 完成：v0 球员页工程收口（全目录搜索、固定文案、内部 matchId 链接、分场地胜负、样例日期）与四张双视口视觉基线冻结 | `42c7a36` |
 | 2026-09-12 | T41 完成：首页与详情页共享回答标签，移除 Home 生产内部来源 footer，补齐完整流式/Home 双视口回归 | `5c3d469` |
 | 2026-09-12 | T39 完成：作用域感知编排、综合事实质量门与 CommonMark/GFM 渲染 | `61d8fee` |
-| 2026-09-11 | T38 完成：保留 `World` 国家语义，首页显示国旗、详情页显示国旗与国家代码 | `ddaf24b` |
 
 ## 接手与更新规则
 
