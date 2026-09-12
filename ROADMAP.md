@@ -90,7 +90,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | T41 | P2.5 | Sync Home Chat User-Facing Answer Policy | `done` | `5c3d469` | 将 T40 的生产回答展示策略同步到 Home：去除内部实现来源 footer，统一用户可见状态话术，保留结构化比赛卡、友好资料 warning、进度和重试；TDD 先覆盖内部文字泄漏与完整流式结果，再通过前端 151 passed、typecheck/build、隔离 fake Home desktop/mobile 2 passed、P1 视觉 12 passed 和真实浏览器等待 `done` 验证；完整 e2e 28 passed/14 skipped/14 failed 为既有 P2 gender query 断言与 prototype 视觉基线问题；不扩大 Home 工具能力，不改预览原型 |
 | T42 | P2.6 | Freeze Player Directory, Multilingual Identity, and Historical Results Design | `done` | `c8c7c24` | 740 行规格 + 1317 行 T43–T52 实施计划 + 222 行 v0 Prompt；占位符/敏感模式扫描零命中、8 个本地链接存在、接口与范围自审、`git diff --check` 通过；用户已免除设计审阅停点，本任务未写产品代码 |
 | T42A | P2.6 | Correct the P2.6 Roadmap to Prototype-First Delivery | `done` | `60543ea` | 规格、实施计划和总控已一致改为 v0→backend/data/Chat→真实前端；T43–T52 编号、前置依赖和视觉基线引用已重排，未改产品代码 |
-| T43 | P2.6 | Generate, Import, and Freeze the v0 Player Pages as Visual Truth | `ready` | — | 下一任务；先用已备 Prompt 生成并确认两页原型，再导入 preview 并冻结双视口视觉基线，后端不得提前开始 |
+| T43 | P2.6 | Generate, Import, and Freeze the v0 Player Pages as Visual Truth | `in_progress` | — | v0 原型已以 `44cd9d5` 入库（用户确认的视觉输入）；2026-09-12 15:38 CST 交接给 Claude Code 继续工程收口：TDD 修复搜索跨 tour/固定文案/内部 matchId 链接/分场地胜负/样例日期，并补组件测试、视觉规格与四张双视口基线 |
 | T44 | P2.6 | Add Canonical Ranking Models and the API-Tennis Standings Adapter | `planned` | — | 等待 T43；供应商排名字段冻结、canonical ranking、真实 standings smoke |
 | T45 | P2.6 | Persist the Player Directory, Aliases, and Ranking Snapshots | `planned` | — | 等待 T44；兼容 migration、PostgreSQL repository、identity 无损门 |
 | T46 | P2.6 | Build Idempotent Directory Sync and English Alias Derivation | `planned` | — | 等待 T45；显式本地 sync、重复运行幂等、失败保留旧快照 |
