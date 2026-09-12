@@ -7,6 +7,7 @@ import pytest
 
 from app.cache import AsyncTTLCache
 from app.chat.client import FakeChatModel
+from app.chat.executor import ToolBatchExecutor
 from app.chat.models import (
     ChatContext,
     ChatEvent,
@@ -130,6 +131,16 @@ class ConcurrentBusinessTools:
             self.in_flight -= 1
 
 
+class MixedOutcomeBusinessTools(ConcurrentBusinessTools):
+    async def execute(
+        self, name: str, arguments: dict, context: ChatContext
+    ) -> StructuredToolResult:
+        if name == "find_player_matches":
+            self.executed.append(name)
+            raise AppError("not_found", "Player not found", 404)
+        return await super().execute(name, arguments, context)
+
+
 def build_orchestrator(model: FakeChatModel, provider_type=RecordingProvider):
     fake = FakeTennisProvider(identities=MemoryIdentityRepository(), now=lambda: NOW)
     recording = provider_type(fake)
@@ -249,6 +260,96 @@ async def test_independent_tool_calls_execute_in_parallel() -> None:
     ]
 
     assert tools.max_in_flight == 2
+    assert events[-1].type is ChatEventType.DONE
+
+
+@pytest.mark.asyncio
+async def test_duplicate_tool_calls_in_one_batch_execute_once() -> None:
+    model = FakeChatModel(
+        turns=[
+            ModelTurn(
+                tool_calls=[
+                    ToolCall(id="call_1", name="get_live_matches", arguments={}),
+                    ToolCall(id="call_2", name="get_live_matches", arguments={}),
+                ]
+            ),
+            ModelTurn(),
+        ],
+        text_chunks=["已完成。"],
+    )
+    tools = ConcurrentBusinessTools()
+
+    events = [
+        event
+        async for event in ChatOrchestrator(tools, model).stream(
+            global_request("现在有什么比赛？")
+        )
+    ]
+
+    assert tools.executed.count("get_live_matches") == 1
+    tool_messages = [message for message in model.choose_calls[-1] if message["role"] == "tool"]
+    assert len(tool_messages) == 2
+    assert json.loads(tool_messages[0]["content"]) == json.loads(tool_messages[1]["content"])
+    assert events[-1].type is ChatEventType.DONE
+
+
+@pytest.mark.asyncio
+async def test_mixed_batch_keeps_independent_calls_parallel() -> None:
+    tools = ConcurrentBusinessTools()
+    executor = ToolBatchExecutor(tools, ChatContext(scope="global"))
+    calls = [
+        ToolCall(id="call_match", name="get_match", arguments={"match_id": "mat_known"}),
+        ToolCall(id="call_live", name="get_live_matches", arguments={}),
+        ToolCall(
+            id="call_player",
+            name="find_player_matches",
+            arguments={"player_name": "Sinner", "time_scope": "tonight"},
+        ),
+    ]
+
+    outcomes = await executor.execute(
+        calls,
+        allowed_names={"get_match", "get_live_matches", "find_player_matches"},
+        known_match_ids={"mat_known"},
+    )
+
+    assert tools.max_in_flight == 2
+    assert [outcome.call_id for outcome in outcomes] == [
+        "call_match",
+        "call_live",
+        "call_player",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_core_batch_success_survives_another_core_call_failure() -> None:
+    model = FakeChatModel(
+        turns=[
+            ModelTurn(
+                tool_calls=[
+                    ToolCall(
+                        id="call_missing",
+                        name="find_player_matches",
+                        arguments={"player_name": "Unknown", "time_scope": "tonight"},
+                    ),
+                    ToolCall(id="call_live", name="get_live_matches", arguments={}),
+                ]
+            ),
+            ModelTurn(),
+        ],
+        text_chunks=["已使用可用比赛数据完成回答。"],
+    )
+    tools = MixedOutcomeBusinessTools()
+
+    events = [
+        event
+        async for event in ChatOrchestrator(tools, model).stream(
+            global_request("Unknown 和现在的比赛？")
+        )
+    ]
+
+    assert any(event.type is ChatEventType.DATA for event in events)
+    assert not any(event.type is ChatEventType.ERROR for event in events)
     assert events[-1].type is ChatEventType.DONE
 
 
@@ -658,6 +759,44 @@ async def test_match_current_analysis_does_not_offer_unrequested_history_tools()
     ]
     assert model.catalog_calls == [["get_match_intelligence"]]
     assert model.stream_catalog_calls == [[]]
+
+
+@pytest.mark.asyncio
+async def test_match_scope_rejects_unrequested_history_tool_calls() -> None:
+    model = FakeChatModel(
+        turns=[
+            tool_turn(
+                "get_player_results",
+                {"player_name": "Sinner", "scope": "recent", "limit": 5},
+                "call_history",
+            ),
+            ModelTurn(),
+        ],
+        text_chunks=["已基于当前比赛上下文完成回答。"],
+    )
+    orchestrator, recording = build_orchestrator(model)
+    await recording.inner.build()
+    match_id = recording.inner.live_match.id
+
+    events = [
+        event
+        async for event in orchestrator.stream(
+            ChatRequest(
+                scope="match",
+                match_id=match_id,
+                messages=[ChatMessage(role="user", content="当前比分是多少？")],
+            )
+        )
+    ]
+
+    assert recording.calls["get_recent_results"] == 0
+    assert any(
+        event.type is ChatEventType.WARNING
+        and event.payload["code"] == "optional_data_unavailable"
+        for event in events
+    )
+    assert not any(event.type is ChatEventType.ERROR for event in events)
+    assert events[-1].type is ChatEventType.DONE
 
 
 @pytest.mark.asyncio

@@ -342,6 +342,13 @@ class ChatOrchestrator:
                 )
                 rejected_count = 0
                 received_data = False
+                batch_has_core_data = any(
+                    outcome.result is not None
+                    and outcome.status
+                    in {ToolOutcomeStatus.SUCCESS, ToolOutcomeStatus.PARTIAL}
+                    and outcome.requiredness is ToolRequiredness.CORE
+                    for outcome in outcomes
+                )
                 for outcome in outcomes:
                     messages.append(
                         {
@@ -384,6 +391,7 @@ class ChatOrchestrator:
                             ToolOutcomeStatus.FAILED,
                         }
                         and not core_data_emitted
+                        and not batch_has_core_data
                     ):
                         raise AppError(
                             outcome.code or "tool_failed",

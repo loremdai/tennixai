@@ -41,6 +41,8 @@ class ToolBatchExecutor:
     ) -> list[ToolOutcome]:
         outcomes: list[ToolOutcome | None] = [None] * len(calls)
         runnable: list[tuple[int, ToolCall, Any, str]] = []
+        pending_by_signature: dict[str, int] = {}
+        duplicate_refs: list[tuple[int, int]] = []
 
         for index, call in enumerate(calls):
             capability = capability_for(call.name)
@@ -52,7 +54,13 @@ class ToolBatchExecutor:
                     call, "tool_not_allowed", "scope_not_allowed", capability.requiredness
                 )
                 continue
-            if self._context.scope is ChatScope.GLOBAL and call.name not in allowed_names:
+            if (
+                call.name not in allowed_names
+                and not (
+                    self._context.scope is ChatScope.MATCH
+                    and call.name == "get_match"
+                )
+            ):
                 outcomes[index] = self._rejected(
                     call, "tool_not_allowed", "catalog_scope_mismatch", capability.requiredness
                 )
@@ -73,6 +81,10 @@ class ToolBatchExecutor:
                     update={"call_id": call.id, "duplicate_of": cached.call_id}
                 )
                 continue
+            pending_index = pending_by_signature.get(signature)
+            if pending_index is not None:
+                duplicate_refs.append((index, pending_index))
+                continue
             if self._unique_calls >= self._max_calls:
                 outcomes[index] = self._rejected(
                     call,
@@ -82,21 +94,37 @@ class ToolBatchExecutor:
                 )
                 continue
             self._unique_calls += 1
+            pending_by_signature[signature] = index
             runnable.append((index, call, capability, signature))
 
         for start in range(0, len(runnable), self._max_batch_size):
             batch = runnable[start : start + self._max_batch_size]
-            if all(item[2].parallel_safe for item in batch):
+            parallel_batch = [item for item in batch if item[2].parallel_safe]
+            serial_batch = [item for item in batch if not item[2].parallel_safe]
+            if parallel_batch:
                 results = await asyncio.gather(
-                    *(self._run(call, capability) for _, call, capability, _ in batch)
+                    *(self._run(call, capability) for _, call, capability, _ in parallel_batch)
                 )
-            else:
-                results = []
-                for _, call, capability, _ in batch:
-                    results.append(await self._run(call, capability))
-            for (index, call, _, signature), outcome in zip(batch, results, strict=True):
+                for (index, _, _, signature), outcome in zip(
+                    parallel_batch, results, strict=True
+                ):
+                    outcomes[index] = outcome
+                    self._cache[signature] = outcome
+            for index, call, capability, signature in serial_batch:
+                outcome = await self._run(call, capability)
                 outcomes[index] = outcome
                 self._cache[signature] = outcome
+
+        for duplicate_index, primary_index in duplicate_refs:
+            primary = outcomes[primary_index]
+            if primary is None:
+                continue
+            outcomes[duplicate_index] = primary.model_copy(
+                update={
+                    "call_id": calls[duplicate_index].id,
+                    "duplicate_of": primary.call_id,
+                }
+            )
 
         return [outcome for outcome in outcomes if outcome is not None]
 

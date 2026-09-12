@@ -14,7 +14,7 @@ from app.chat.models import ChatEventType, ChatMessage, ChatRequest
 from app.chat.orchestrator import ChatOrchestrator
 from app.chat.tools import BusinessTools
 from app.config import Settings
-from app.domain import DataFreshness, Match, MatchStatus, Tournament
+from app.domain import DataFreshness, LiveMatchState, Match, MatchStatus, Player, Tournament
 from app.identity import MemoryIdentityRepository
 from app.providers.fake import FakeTennisProvider
 from app.service import TennisService
@@ -53,6 +53,28 @@ class LiveGateFakeProvider(FakeTennisProvider):
             freshness=DataFreshness(provider="fake", observed_at=now()),
         )
         self._matches[match.id] = match
+
+        tiafoe = Player(
+            id=await self._identities.get_or_create("player", "fake", "fake-tiafoe"),
+            name="Frances Tiafoe",
+            country_code="usa",
+            ranking=17,
+        )
+        self._players.append(tiafoe)
+        tiafoe_match = Match(
+            id=await self._identities.get_or_create("match", "fake", "fake-tiafoe-next"),
+            status=MatchStatus.LIVE,
+            players=(tiafoe, ruud),
+            tournament=match.tournament,
+            scheduled_at=datetime(2026, 9, 8, 10, 30, tzinfo=timezone.utc),
+            round="Quarterfinal",
+            surface="hard",
+            indoor=True,
+            format="BO3",
+            live_state=LiveMatchState(),
+            freshness=DataFreshness(provider="fake", observed_at=now()),
+        )
+        self._matches[tiafoe_match.id] = tiafoe_match
 
 
 class RecordingBusinessTools(BusinessTools):
@@ -142,6 +164,31 @@ async def test_qwen_selects_get_live_matches_for_live_question() -> None:
         f"prose should mention a live player, got: {text!r}"
     )
     assert events[-1].type is ChatEventType.DONE
+
+
+@pytest.mark.asyncio
+async def test_qwen_global_question_never_fails_after_structured_data() -> None:
+    orchestrator, tools, _ = _build()
+
+    request = ChatRequest(
+        scope="global",
+        messages=[ChatMessage(role="user", content="tiafoe 的比赛如何了")],
+    )
+    events = [event async for event in orchestrator.stream(request)]
+
+    data = [event.payload for event in events if event.type is ChatEventType.DATA]
+    assert data and data[0]["matches"]
+    assert any(
+        player["name"] == "Frances Tiafoe"
+        for match in data[0]["matches"]
+        for player in match["players"]
+    )
+    assert tools.executed
+    assert events[-1].type is ChatEventType.DONE
+    assert not any(
+        event.type is ChatEventType.ERROR and event.payload.get("code") == "invalid_request"
+        for event in events
+    )
 
 
 @pytest.mark.parametrize(
