@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-11 15:59 CST
+**最后更新：** 2026-09-12 08:25 CST
 
-**总体状态：** `done`（T38 已完成 World 国家代码与原型国旗展示）
+**总体状态：** `in_progress`（T39 正在实现作用域感知的多工具对话编排）
 
 **当前里程碑：** P2 — Live Match Intelligence（`done`）
 
-**当前阶段：** P2.5 — Acceptance and hardening（`done`）
+**当前阶段：** P2.5 — Acceptance and hardening（`in_progress`）
 
 ## 状态说明
 
@@ -56,7 +56,7 @@
 | P2.2 — Unified data and discovery | `done` | API-Tennis REST、历史/H2H、赛事分类和 Home 叠加筛选 | T23–T25 完成（`015ff7f`、`dddb734`、`e904485`）；P2.3 可开始 |
 | P2.3 — Realtime pipeline | `done` | Reducer、WebSocket worker、租约、持久化、snapshot + SSE | T26–T28 完成（`98a1a22`、`d354aba`、`f03985b`）；T29/T30 已在 P2.4 完成 |
 | P2.4 — Match intelligence | `done` | 完整 PBP、22 项统计、近期控制指数、版本化上下文 Chat | T29（`ecd916b`）、T30（`8c9e161`）、T31（`128518f`）完成；P2.5 可开始 |
-| P2.5 — Acceptance and hardening | `done` | Replay、恢复门、真实 smoke、双视口视觉、本地 runbook 与真实数据回归修复 | T32 `ac9c6e5`、T33 `b60217e`、T34 `84eb146`、T35 `054062b`、T36 `28b316d`、T37 `54059fe`、T38 `ddaf24b` 已完成；真实 catalog/detail 数据一致，原型国旗展示已复核 |
+| P2.5 — Acceptance and hardening | `in_progress` | Replay、恢复门、真实 smoke、双视口视觉、本地 runbook 与真实数据回归修复 | T32 `ac9c6e5`、T33 `b60217e`、T34 `84eb146`、T35 `054062b`、T36 `28b316d`、T37 `54059fe`、T38 `ddaf24b` 已完成；T39 正在实现作用域感知的多工具对话编排与真实查询失败回归修复 |
 
 详细产品、架构和数据语义见 [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md)，逐任务实施步骤见 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md)。
 
@@ -84,6 +84,7 @@
 | T36 | P2.5 | Expose Match Chat Streaming Progress Stages | `done` | `28b316d` | Match Chat SSE 暴露 `resolving`、`planning`、`fetching_data`、`generating` 阶段；Home/Match 将阶段映射为可见进度文案，并在完成、失败、取消时清理状态。TDD 后确定性 backend `355 passed, 2 skipped`、frontend `135 passed` + typecheck/build；隔离假服务关键 Playwright 4/4；真实 SSE 顺序与真实浏览器阶段文案均已复核。 |
 | T37 | P2.5 | Adapt Available Match Metadata and Explain Unavailable Fields | `done` | `54059fe` | 依据 [API-Tennis REST 文档](https://api-tennis.com/documentation) 的 `get_draw`/`get_players` 官方响应补齐详情场地与安全国家代码映射；短 TTL 缓存并持久化可获得元数据，reducer 发出元数据版本事件；官方未返回或赛前才产生的轮次、室内外、赛制、开赛时间、比分、PBP、统计、动量等字段均显示解释性文案。TDD focused provider/service/reducer 91 passed；确定性 backend 349 passed/2 skipped/9 deselected；frontend 136 passed + typecheck/build；隔离 fake 服务 P1 Playwright 24 passed；真实 REST smoke 1 passed；真实浏览器鼠标复核与错误/警告检查通过。 |
 | T38 | P2.5 | Preserve World Country Code and Render Prototype Flags | `done` | `ddaf24b` | 按用户提供的原型截图保留 `World` 为 canonical `world`；catalog 对筛选后的比赛复用 player profile cache，补齐首页此前缺失的国家与排名；统一适配国家代码、国旗、中文名称和无障碍文本；首页比赛卡显示国旗，详情页显示国旗+国家代码，`world` 使用 Globe/WORLD；TDD 后 backend 确定性 `352 passed, 2 skipped, 9 deselected`，frontend `140 passed` + typecheck/build，隔离 fake P1 功能/视觉 `12/12`，真实 REST smoke `1 passed`，真实浏览器鼠标流程和 error/warn 检查通过 |
+| T39 | P2.5 | Design and Implement Scope-Aware Multi-Tool Chat Orchestration | `in_progress` | — | 修复 global 查询在结构化数据成功后误调用 match-only 工具导致的 `invalid_request`；按官方 Qwen Function Calling 语义实现 scope/phase/依赖声明、无依赖并行、有依赖串行、非法调用重规划和部分失败降级；待 spec、TDD、全量回归与真实浏览器复核完成 |
 
 ## P2 完成门摘要
 
