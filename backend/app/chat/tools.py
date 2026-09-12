@@ -5,7 +5,6 @@ chat layer because deterministic REST has no history endpoint; it never
 calls the provider or the model.
 """
 
-import re
 from collections.abc import Iterable
 from typing import Any
 
@@ -26,6 +25,7 @@ from app.chat.models import (
 from app.domain import MatchSnapshot, Player
 from app.errors import AppError
 from app.intelligence import build_intelligence_packet
+from app.players.models import PlayerResolutionStatus
 from app.service import TennisService
 
 DESCRIPTIONS = {
@@ -158,6 +158,22 @@ class BusinessTools:
         snapshot = await self._service.resolve_match_snapshot(context.match_id)
         return context.model_copy(update={"snapshot": snapshot})
 
+    async def _resolve_player_query(
+        self, query: str, context: ChatContext
+    ) -> Player | StructuredToolResult:
+        """Shared resolver entry point for every name-bearing tool."""
+        context_ids = (
+            tuple(player.id for player in context.snapshot.match.players)
+            if context.snapshot is not None
+            else ()
+        )
+        result = await self._service.resolve_player(
+            query, context_player_ids=context_ids
+        )
+        if result.status is PlayerResolutionStatus.RESOLVED and result.player is not None:
+            return result.player
+        return StructuredToolResult(kind="player_resolution", resolution=result)
+
     async def execute(
         self,
         name: str,
@@ -178,11 +194,24 @@ class BusinessTools:
         try:
             if name == "find_player_matches":
                 args = FindPlayerMatchesArgs.model_validate(arguments)
-                matches = await self._service.find_player_matches(args.player_name, args.time_scope)
+                resolved = await self._resolve_player_query(args.player_name, context)
+                if isinstance(resolved, StructuredToolResult):
+                    return with_context(resolved)
+                matches = await self._service.find_player_matches_by_id(
+                    resolved.id, args.time_scope
+                )
                 return with_context(StructuredToolResult(kind="matches", matches=matches))
             if name == "get_live_matches":
                 args = GetLiveMatchesArgs.model_validate(arguments)
-                matches = await self._service.list_matches("live", args.player_name)
+                if args.player_name:
+                    resolved = await self._resolve_player_query(args.player_name, context)
+                    if isinstance(resolved, StructuredToolResult):
+                        return with_context(resolved)
+                    matches = await self._service.list_matches_by_player_id(
+                        "live", resolved.id
+                    )
+                else:
+                    matches = await self._service.list_matches("live", None)
                 return with_context(StructuredToolResult(kind="matches", matches=matches))
             if name == "get_match":
                 args = GetMatchArgs.model_validate(arguments)
@@ -230,15 +259,11 @@ class BusinessTools:
                 ))
             if name == "get_player_results":
                 args = GetPlayerResultsArgs.model_validate(arguments)
-                player = _context_player(context, args.player_name)
-                results = (
-                    await self._service.get_player_results(
-                        player.id, args.scope.value, args.limit
-                    )
-                    if player is not None
-                    else await self._service.get_player_results_by_name(
-                        args.player_name, args.scope, args.limit
-                    )
+                resolved = await self._resolve_player_query(args.player_name, context)
+                if isinstance(resolved, StructuredToolResult):
+                    return with_context(resolved)
+                results = await self._service.get_player_results(
+                    resolved.id, args.scope.value, args.limit
                 )
                 return with_context(StructuredToolResult(
                     kind="matches",
@@ -250,16 +275,14 @@ class BusinessTools:
                 ))
             if name == "get_head_to_head":
                 args = GetHeadToHeadArgs.model_validate(arguments)
-                first_player = _context_player(context, args.first_player_name)
-                second_player = _context_player(context, args.second_player_name)
-                results = (
-                    await self._service.get_head_to_head(
-                        first_player.id, second_player.id, args.limit
-                    )
-                    if first_player is not None and second_player is not None
-                    else await self._service.get_head_to_head_by_name(
-                        args.first_player_name, args.second_player_name, args.limit
-                    )
+                first = await self._resolve_player_query(args.first_player_name, context)
+                second = await self._resolve_player_query(args.second_player_name, context)
+                if isinstance(first, StructuredToolResult):
+                    return with_context(first)
+                if isinstance(second, StructuredToolResult):
+                    return with_context(second)
+                results = await self._service.get_head_to_head(
+                    first.id, second.id, args.limit
                 )
                 meetings = list(results.head_to_head.meetings) if results.head_to_head else []
                 return with_context(StructuredToolResult(
@@ -302,32 +325,3 @@ def _snapshot_answer_context(snapshot: MatchSnapshot) -> AnswerContext:
         state_version=snapshot.state_version,
         as_of=snapshot.as_of,
     )
-
-
-def _context_player(context: ChatContext, query: str) -> Player | None:
-    snapshot = context.snapshot
-    if context.scope is not ChatScope.MATCH or snapshot is None:
-        return None
-
-    normalized_query = query.strip().casefold()
-    if not normalized_query:
-        return None
-    players = list(snapshot.match.players)
-    exact = [player for player in players if player.name.strip().casefold() == normalized_query]
-    if len(exact) == 1:
-        return exact[0]
-
-    def tokens(value: str) -> list[str]:
-        return re.findall(r"[a-z]+", value.casefold())
-
-    query_tokens = tokens(query)
-    candidates = []
-    for player in players:
-        player_tokens = tokens(player.name)
-        if not query_tokens or not player_tokens:
-            continue
-        if query_tokens[-1] != player_tokens[-1]:
-            continue
-        if query_tokens[0][0] == player_tokens[0][0]:
-            candidates.append(player)
-    return candidates[0] if len(candidates) == 1 else None

@@ -76,6 +76,11 @@ GLOBAL_SYSTEM_PROMPT = (
     "如果字段为 null、空数组或质量状态为 unavailable，必须明确标注暂不可用；不得从赛事名称、轮次、网球常识或当前比分推断未返回的赛制、场地属性、统计、逐分数据或球员事实。"
     "特别是 format 未返回时，禁止写 BO3、BO5、三盘两胜、五盘三胜、第五盘或任何基于未知赛制的最终盘数比分；预测只说明胜者倾向和依据。"
     "趋势和控制指数只能做描述性分析，不得编造赔率、概率或确定性的胜负结论。"
+    "工具返回 kind=player_resolution 时：status 为 ambiguous 表示多名候选，"
+    "必须用自然语言列出候选（英文名、中文名、国家、排名）并请用户选择，不得自行猜测；"
+    "status 为 not_found 表示目录未命中，请用户补充英文或中文全名、国家或赛事；"
+    "两者都是正常业务结果，直接据此组织回答并正常结束，不得输出系统错误话术。"
+    "已解析球员同时有英文名和中文名时，第一次提及使用“英文名（中文名）”格式，之后可只用英文全名或姓氏。"
 )
 MATCH_SYSTEM_SUFFIX = (
     "当前比赛已由页面上下文确定（current match id: {match_id}），"
@@ -303,6 +308,23 @@ def _model_intelligence_packet(packet: IntelligencePacket) -> dict[str, Any]:
     return payload
 
 
+def _model_player_display(player, *, rank: int | None = None) -> dict[str, Any]:
+    """Public candidate fields only; bilingual display name for first mention."""
+    display = (
+        f"{player.name}（{player.localized_name}）"
+        if player.localized_name
+        else player.name
+    )
+    return {
+        "id": player.id,
+        "display_name": display,
+        "name": player.name,
+        "localized_name": player.localized_name,
+        "country_code": player.country_code,
+        "ranking": rank if rank is not None else player.ranking,
+    }
+
+
 def _model_tool_result(result: StructuredToolResult) -> dict[str, Any]:
     matches = result.matches
     payload: dict[str, Any] = {
@@ -313,6 +335,21 @@ def _model_tool_result(result: StructuredToolResult) -> dict[str, Any]:
     }
     if result.packet is not None:
         payload["packet"] = _model_intelligence_packet(result.packet)
+    if result.resolution is not None:
+        resolution = result.resolution
+        payload["resolution"] = {
+            "status": resolution.status.value,
+            "query": resolution.query,
+            "player": (
+                _model_player_display(resolution.player)
+                if resolution.player is not None
+                else None
+            ),
+            "candidates": [
+                _model_player_display(candidate.player, rank=candidate.current_rank)
+                for candidate in resolution.candidates
+            ],
+        }
     if result.metadata:
         payload["metadata"] = result.metadata
     if result.answer_context is not None:

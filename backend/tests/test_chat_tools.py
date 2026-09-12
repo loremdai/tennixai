@@ -16,7 +16,7 @@ from app.chat.tools import (
     is_historical_query,
     is_unsupported_historical_query,
 )
-from app.domain import Match
+from app.domain import Match, Player
 from app.errors import AppError
 from app.identity import MemoryIdentityRepository
 from app.intelligence import IntelligenceTopic
@@ -271,14 +271,17 @@ async def test_unknown_tool_is_rejected(tools: BusinessTools) -> None:
 
 
 @pytest.mark.asyncio
-async def test_service_errors_propagate_through_tools(tools: BusinessTools) -> None:
-    with pytest.raises(AppError) as error_info:
-        await tools.execute(
-            "find_player_matches",
-            {"player_name": "Federer", "time_scope": "next"},
-            GLOBAL,
-        )
-    assert error_info.value.code == "not_found"
+async def test_unknown_name_without_resolver_is_recoverable_resolution(
+    tools: BusinessTools,
+) -> None:
+    result = await tools.execute(
+        "find_player_matches",
+        {"player_name": "Federer", "time_scope": "next"},
+        GLOBAL,
+    )
+    assert result.kind == "player_resolution"
+    assert result.resolution is not None
+    assert result.resolution.status.value == "not_found"
 
 
 def test_historical_query_is_rejected_without_calling_model() -> None:
@@ -335,3 +338,155 @@ def test_chat_request_bounds() -> None:
 
     with pytest.raises(Exception):
         ChatMessage(role="user", content="x" * 4001)
+
+
+# ---------------------------------------------------------------- T50 resolver
+
+
+@pytest.fixture()
+async def resolver_service(fake_provider: FakeTennisProvider):
+    from app.players.models import RankingEntry, RankingMovement, Tour
+    from app.players.normalization import derive_english_aliases
+    from app.players.repository import MemoryPlayerDirectoryRepository
+    from app.players.resolver import PlayerResolver
+
+    directory = MemoryPlayerDirectoryRepository()
+    entries = []
+    for index, player in enumerate(fake_provider._players):
+        entries.append(
+            RankingEntry(
+                player=player,
+                tour=Tour.WTA if player.id in {
+                    fake_provider._players[6].id, fake_provider._players[7].id
+                } else Tour.ATP,
+                rank=player.ranking or 900 + index,
+                points=100,
+                movement=RankingMovement.SAME,
+                ranking_date=NOW.date(),
+                fetched_at=NOW,
+            )
+        )
+    wang_a = Player(id="ply_wang_a", name="Xinyu Wang", ranking=25)
+    wang_b = Player(id="ply_wang_b", name="Xiyu Wang", ranking=50)
+    entries.append(
+        RankingEntry(player=wang_a, tour=Tour.WTA, rank=25, points=90,
+                     movement=RankingMovement.SAME, ranking_date=NOW.date(), fetched_at=NOW)
+    )
+    entries.append(
+        RankingEntry(player=wang_b, tour=Tour.WTA, rank=50, points=80,
+                     movement=RankingMovement.SAME, ranking_date=NOW.date(), fetched_at=NOW)
+    )
+    await directory.save_ranking_snapshot(tuple(entries))
+    for directory_player in await directory.list_players_for_alias_sync(limit=100):
+        await directory.upsert_aliases(derive_english_aliases(directory_player))
+    cache: AsyncTTLCache[str, object] = AsyncTTLCache(max_entries=256)
+    service = TennisService(
+        fake_provider,
+        cache,
+        now=lambda: NOW,
+        timezone="Asia/Macau",
+        directory=directory,
+        resolver=PlayerResolver(directory),
+    )
+    return service, directory
+
+
+def _match_context(directory_players: tuple[Player, ...], match_id: str) -> ChatContext:
+    from app.domain import DataFreshness, MatchStatus, Tournament
+    from app.domain import MatchSnapshot
+
+    match = Match(
+        id=match_id,
+        status=MatchStatus.LIVE,
+        players=directory_players,
+        tournament=Tournament(id="trn_ctx", name="Context Event", tour="wta"),
+        scheduled_at=NOW,
+        freshness=DataFreshness(provider="fake", observed_at=NOW),
+    )
+    snapshot = MatchSnapshot(match=match, quality=(), state_version=0, as_of=NOW)
+    return ChatContext(scope=ChatScope.MATCH, match_id=match_id, snapshot=snapshot)
+
+
+@pytest.mark.asyncio
+async def test_unknown_name_returns_recoverable_resolution(resolver_service) -> None:
+    service, _ = resolver_service
+    tools = BusinessTools(service)
+
+    result = await tools.execute(
+        "find_player_matches", {"player_name": "Federer", "time_scope": "next"}, GLOBAL
+    )
+
+    assert result.kind == "player_resolution"
+    assert result.resolution is not None
+    assert result.resolution.status.value == "not_found"
+
+
+@pytest.mark.asyncio
+async def test_ambiguous_surname_returns_candidates_result(resolver_service) -> None:
+    service, _ = resolver_service
+    tools = BusinessTools(service)
+
+    result = await tools.execute(
+        "find_player_matches", {"player_name": "Wang", "time_scope": "next"}, GLOBAL
+    )
+
+    assert result.kind == "player_resolution"
+    assert result.resolution is not None
+    assert result.resolution.status.value == "ambiguous"
+    assert {c.player.id for c in result.resolution.candidates} == {
+        "ply_wang_a",
+        "ply_wang_b",
+    }
+
+
+@pytest.mark.asyncio
+async def test_match_context_resolves_unique_participant(resolver_service, fake_provider) -> None:
+    service, directory = resolver_service
+    tools = BusinessTools(service)
+    wang_a = Player(id="ply_wang_a", name="Xinyu Wang", ranking=25)
+    wang_b = Player(id="ply_wang_b", name="Xiyu Wang", ranking=50)
+    context = _match_context((wang_a, wang_b), fake_provider.live_match.id)
+
+    result = await tools.execute(
+        "find_player_matches", {"player_name": "Wang", "time_scope": "next"}, context
+    )
+
+    # Both players participate, so the surname stays ambiguous even in context.
+    assert result.kind == "player_resolution"
+
+    single = _match_context((wang_a, fake_provider._players[0]), fake_provider.live_match.id)
+    resolved = await tools.execute(
+        "find_player_matches", {"player_name": "Wang", "time_scope": "next"}, single
+    )
+    assert resolved.kind == "matches"
+
+
+@pytest.mark.asyncio
+async def test_live_matches_filter_uses_resolver(resolver_service) -> None:
+    service, _ = resolver_service
+    tools = BusinessTools(service)
+
+    result = await tools.execute(
+        "get_live_matches", {"player_name": "Sinner"}, GLOBAL
+    )
+    assert result.kind == "matches"
+
+    missing = await tools.execute(
+        "get_live_matches", {"player_name": "Federer"}, GLOBAL
+    )
+    assert missing.kind == "player_resolution"
+
+
+@pytest.mark.asyncio
+async def test_head_to_head_stops_on_first_unresolved_side(resolver_service) -> None:
+    service, _ = resolver_service
+    tools = BusinessTools(service)
+
+    result = await tools.execute(
+        "get_head_to_head",
+        {"first_player_name": "Sinner", "second_player_name": "Federer", "limit": 2},
+        GLOBAL,
+    )
+    assert result.kind == "player_resolution"
+    assert result.resolution is not None
+    assert result.resolution.status.value == "not_found"

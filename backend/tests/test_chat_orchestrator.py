@@ -19,6 +19,7 @@ from app.chat.models import (
     ToolCall,
 )
 from app.chat.orchestrator import ChatOrchestrator
+from app.domain import Player
 from app.chat.tools import BusinessTools
 from app.errors import AppError
 from app.identity import MemoryIdentityRepository
@@ -515,8 +516,12 @@ async def test_optional_failure_emits_warning_and_still_completes() -> None:
         )
     ]
 
-    warning = next(event for event in events if event.type == "warning")
-    assert warning.payload["code"] == "optional_data_unavailable"
+    data_events = [event for event in events if event.type == ChatEventType.DATA]
+    resolution_data = next(
+        event for event in data_events
+        if event.payload.get("kind") == "player_resolution"
+    )
+    assert resolution_data.payload["resolution"]["status"] == "not_found"
     assert not any(event.type is ChatEventType.ERROR for event in events)
     assert events[-1].type is ChatEventType.DONE
 
@@ -625,14 +630,19 @@ async def test_provider_exception_emits_only_status_and_error() -> None:
     model = FakeChatModel(
         turns=[
             tool_turn("find_player_matches", {"player_name": "Federer", "time_scope": "next"}),
+            ModelTurn(),
         ],
+        text_chunks=["未找到该球员，请补充英文或中文全名、国家或赛事。"],
     )
     orchestrator, _ = build_orchestrator(model)
 
     events = [event async for event in orchestrator.stream(global_request("Federer 下一场对谁？"))]
 
-    assert [event.type for event in events] == ["status", "status", "status", "error"]
-    assert events[-1].payload["code"] == "not_found"
+    data_events = [event for event in events if event.type == ChatEventType.DATA]
+    assert data_events[0].payload["kind"] == "player_resolution"
+    assert data_events[0].payload["resolution"]["status"] == "not_found"
+    assert not any(event.type is ChatEventType.ERROR for event in events)
+    assert events[-1].type is ChatEventType.DONE
 
 
 @pytest.mark.asyncio
@@ -1114,32 +1124,22 @@ async def test_match_scope_optional_player_lookup_does_not_abort_existing_answer
     )
     events = [event async for event in orchestrator.stream(request)]
 
-    assert [event.type for event in events] == [
-        ChatEventType.STATUS,
-        ChatEventType.STATUS,
-        ChatEventType.STATUS,
-        ChatEventType.DATA,
-        ChatEventType.STATUS,
-        ChatEventType.STATUS,
-        ChatEventType.WARNING,
-        ChatEventType.STATUS,
-        ChatEventType.STATUS,
-        ChatEventType.TEXT_DELTA,
-        ChatEventType.DONE,
-    ]
-    assert events[-2].payload["delta"].endswith("暂未提供。")
+    assert not any(event.type is ChatEventType.ERROR for event in events)
+    assert events[-1].type is ChatEventType.DONE
+    data_events = [event for event in events if event.type == ChatEventType.DATA]
+    kinds = [event.payload.get("kind") for event in data_events]
+    assert "intelligence" in kinds
+    assert "player_resolution" in kinds
     last_choose = model.choose_calls[-1]
-    unavailable_tool = next(
+    resolution_tool = next(
         message
         for message in last_choose
         if message.get("role") == "tool"
         and "call_player_results" == message.get("tool_call_id")
     )
-    assert json.loads(unavailable_tool["content"]) == {
-        "kind": "unavailable",
-        "tool": "get_player_results",
-        "code": "not_found",
-    }
+    content = json.loads(resolution_tool["content"])
+    assert content["kind"] == "player_resolution"
+    assert content["resolution"]["status"] == "not_found"
 
 
 @pytest.mark.asyncio
@@ -1237,3 +1237,92 @@ async def test_runtime_default_heuristics_drive_fake_model() -> None:
     data = next(event for event in events if event.type == "data")
     assert data.payload["kind"] == "matches"
     assert data.payload["matches"], "heuristic should resolve Sinner tonight via the fake provider"
+
+
+# ---------------------------------------------------------------- T50 resolver
+
+
+def _resolver_orchestrator(model: FakeChatModel):
+    from app.players.models import RankingEntry, RankingMovement, Tour
+    from app.players.normalization import derive_english_aliases
+    from app.players.repository import MemoryPlayerDirectoryRepository
+    from app.players.resolver import PlayerResolver
+
+    fake = FakeTennisProvider(identities=MemoryIdentityRepository(), now=lambda: NOW)
+    directory = MemoryPlayerDirectoryRepository()
+    wang_a = Player(id="ply_wang_a", name="Xinyu Wang", ranking=25)
+    wang_b = Player(id="ply_wang_b", name="Xiyu Wang", ranking=50)
+    entries = [
+        RankingEntry(player=wang_a, tour=Tour.WTA, rank=25, points=90,
+                     movement=RankingMovement.SAME, ranking_date=NOW.date(), fetched_at=NOW),
+        RankingEntry(player=wang_b, tour=Tour.WTA, rank=50, points=80,
+                     movement=RankingMovement.SAME, ranking_date=NOW.date(), fetched_at=NOW),
+    ]
+    cache: AsyncTTLCache[str, object] = AsyncTTLCache(max_entries=256)
+    service = TennisService(
+        fake, cache, now=lambda: NOW, timezone="Asia/Macau",
+        directory=directory, resolver=PlayerResolver(directory),
+    )
+    return ChatOrchestrator(BusinessTools(service), model), directory, entries
+
+
+async def _seed(directory, entries) -> None:
+    from app.players.normalization import derive_english_aliases
+
+    await directory.save_ranking_snapshot(tuple(entries))
+    for directory_player in await directory.list_players_for_alias_sync(limit=50):
+        await directory.upsert_aliases(derive_english_aliases(directory_player))
+
+
+@pytest.mark.asyncio
+async def test_not_found_resolution_ends_done_without_error() -> None:
+    model = FakeChatModel(
+        turns=[
+            ModelTurn(tool_calls=[ToolCall(
+                id="call_1",
+                name="find_player_matches",
+                arguments={"player_name": "Federer", "time_scope": "next"},
+            )]),
+            ModelTurn(),
+        ],
+        text_chunks=["未找到该球员，请补充全名或国家。"],
+    )
+    orchestrator, directory, entries = _resolver_orchestrator(model)
+    await _seed(directory, entries)
+
+    events = [
+        event async for event in orchestrator.stream(global_request("Federer 下一场？"))
+    ]
+
+    data_events = [e for e in events if e.type is ChatEventType.DATA]
+    assert data_events and data_events[0].payload["kind"] == "player_resolution"
+    assert data_events[0].payload["resolution"]["status"] == "not_found"
+    assert all(e.type is not ChatEventType.ERROR for e in events)
+    assert events[-1].type is ChatEventType.DONE
+
+
+@pytest.mark.asyncio
+async def test_ambiguous_resolution_ends_done_with_candidates() -> None:
+    model = FakeChatModel(
+        turns=[
+            ModelTurn(tool_calls=[ToolCall(
+                id="call_1",
+                name="find_player_matches",
+                arguments={"player_name": "Wang", "time_scope": "next"},
+            )]),
+            ModelTurn(),
+        ],
+        text_chunks=["有多位 Wang，请选择其中一位。"],
+    )
+    orchestrator, directory, entries = _resolver_orchestrator(model)
+    await _seed(directory, entries)
+
+    events = [
+        event async for event in orchestrator.stream(global_request("Wang 下一场？"))
+    ]
+
+    data_events = [e for e in events if e.type is ChatEventType.DATA]
+    assert data_events and data_events[0].payload["resolution"]["status"] == "ambiguous"
+    assert len(data_events[0].payload["resolution"]["candidates"]) == 2
+    assert all(e.type is not ChatEventType.ERROR for e in events)
+    assert events[-1].type is ChatEventType.DONE

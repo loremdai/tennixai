@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.domain import Match, MatchSnapshot
 from app.intelligence import IntelligencePacket, IntelligenceTopic
+from app.players.models import PlayerResolution
 from app.service import MatchTimeScope, PlayerResultsScope
 
 
@@ -51,9 +52,10 @@ class AnswerContext(BaseModel):
 
 
 class StructuredToolResult(BaseModel):
-    kind: Literal["matches", "match", "intelligence", "unsupported"]
+    kind: Literal["matches", "match", "intelligence", "player_resolution", "unsupported"]
     matches: list[Match] = Field(default_factory=list)
     packet: IntelligencePacket | None = None
+    resolution: PlayerResolution | None = None
     metadata: dict[str, object] = Field(default_factory=dict)
     answer_context: AnswerContext | None = None
 
