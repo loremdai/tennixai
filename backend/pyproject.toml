@@ -29,6 +29,7 @@ markers = [
   "api_tennis_live: calls the real API-Tennis REST API (opt-in)",
   "realtime_live: calls the real API-Tennis WebSocket feed (opt-in)",
   "player_alias_llm_live: calls the configured real LLM for offline Chinese-name enrichment (opt-in)",
+  "player_directory_e2e_live: real API-Tennis sync plus enriched local directory end-to-end gate (opt-in)",
 ]
 
 [tool.uv]

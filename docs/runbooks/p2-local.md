@@ -95,7 +95,54 @@ cd frontend && TENNIX_E2E_REAL_PROVIDER=1 TENNIX_E2E_REAL_LLM=1 pnpm exec playwr
 
 真实门缺少凭据时按测试标记 skip；provider 或模型供应商拒绝当前账号时记录 HTTP 状态与错误码，不打印 key，也不把真实响应写入 fixture。P2 不包含赔率、预测、edge、交易或市场写入。
 
-## 5. 故障排查
+## 5. P2.6 球员目录本地门
+
+基础设施与迁移同 §1；目录同步与中文 enrichment 都是**本地显式执行**的命令，真实 API 启动不会自动同步，也不存在 cron/队列/daemon。
+
+```bash
+docker compose up -d --wait postgres redis
+cd backend && uv run alembic upgrade head
+```
+
+正常启动（fake 模式，确定性）：
+
+```bash
+cd backend && uv run uvicorn app.main:app --host 127.0.0.1:8000   # 根 .env 决定模式
+cd frontend && TENNIX_BACKEND_URL=http://127.0.0.1:8000 pnpm dev --hostname 127.0.0.1:3100
+```
+
+真实目录同步与中文 enrichment（**配额敏感**：sync 每次调用供应商 standings 两次；enrich-zh 只对缺失中文名的成员调用 LLM，重复运行零模型调用）：
+
+```bash
+cd backend
+uv run python -m app.players.cli sync
+uv run python -m app.players.cli enrich-zh --batch-size 25
+uv run python -m app.players.cli status
+```
+
+`status` 报告两 tour、可发布成员的英文/中文首选名覆盖率；batch 校验失败时整批零写入，重跑安全。
+
+确定性门（含目录单测与 integration）：
+
+```bash
+cd backend && uv run pytest -m "not llm_live and not provider_live and not end_to_end_live and not api_tennis_live and not realtime_live and not infrastructure and not player_alias_llm_live and not player_directory_e2e_live" -q
+cd backend && uv run pytest -m infrastructure -q
+cd frontend && pnpm test && pnpm typecheck && pnpm build
+cd frontend && pnpm test:e2e --grep "player directory"        # 功能 + 四张 v0 基线（不更新）
+```
+
+Opt-in 真实目录门（凭据缺失即 skip，不以 skip 充数）：
+
+```bash
+cd backend && TENNIX_RUN_API_TENNIS_LIVE=1 uv run pytest -m api_tennis_live -q
+cd backend && TENNIX_RUN_PLAYER_ALIAS_LLM_LIVE=1 uv run pytest -m player_alias_llm_live -q
+cd backend && TENNIX_RUN_PLAYER_DIRECTORY_E2E_LIVE=1 uv run pytest -m player_directory_e2e_live tests/live/test_player_directory_end_to_end_live.py -q
+cd frontend && TENNIX_E2E_API_TENNIS=1 TENNIX_E2E_REAL_LLM=1 pnpm exec playwright test e2e/player-directory-live.spec.ts
+```
+
+`TENNIX_E2E_API_TENNIS=1` 会让 Playwright 以 `TENNIX_PROVIDER_MODE=api_tennis` 启动独立后端（不复用已有 fake 服务）；浏览器旅程与 payload 检查只允许内部 ID，禁止供应商 key/外部 ID 出现在网络响应中。
+
+## 6. 故障排查
 
 | 症状 | 处理 |
 |---|---|

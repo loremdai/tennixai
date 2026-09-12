@@ -43,16 +43,29 @@ export default defineConfig({
       command: 'uv run uvicorn app.main:app --host 127.0.0.1 --port 8000',
       url: 'http://127.0.0.1:8000/api/v1/health',
       env: (() => {
+        // TENNIX_E2E_API_TENNIS=1 selects the real API-Tennis directory mode
+        // for the bounded live directory gate; TENNIX_E2E_REAL_PROVIDER=1 keeps
+        // the legacy P1 LiveTennisAPI selection.
+        const apiTennis =
+          configuredEnvironment.TENNIX_E2E_API_TENNIS === '1' &&
+          Boolean(configuredEnvironment.TENNIX_API_TENNIS_API_KEY)
         const realProvider =
-          configuredEnvironment.TENNIX_E2E_REAL_PROVIDER === '1' &&
-          Boolean(configuredEnvironment.TENNIX_LIVETENNIS_API_KEY)
+          (configuredEnvironment.TENNIX_E2E_REAL_PROVIDER === '1' &&
+            Boolean(configuredEnvironment.TENNIX_LIVETENNIS_API_KEY)) ||
+          apiTennis
         const realLlm =
           configuredEnvironment.TENNIX_E2E_REAL_LLM === '1' &&
           Boolean(configuredEnvironment.TENNIX_LLM_API_KEY) &&
           Boolean(configuredEnvironment.TENNIX_LLM_BASE_URL)
         return {
           ...configuredEnvironment,
-          TENNIX_PROVIDER_MODE: replayEnabled ? 'replay' : realProvider ? 'live' : 'fake',
+          TENNIX_PROVIDER_MODE: replayEnabled
+            ? 'replay'
+            : apiTennis
+              ? 'api_tennis'
+              : realProvider
+                ? 'live'
+                : 'fake',
           TENNIX_LLM_MODE: realLlm ? 'openai_compatible' : 'fake',
           ...(replayEnabled
             ? {
@@ -65,7 +78,10 @@ export default defineConfig({
           ...(realProvider ? {} : { TENNIX_FIXED_NOW: '2026-09-08T10:00:00Z' }),
         }
       })(),
-      reuseExistingServer: !process.env.CI && !replayEnabled,
+      reuseExistingServer:
+        !process.env.CI &&
+        !replayEnabled &&
+        process.env.TENNIX_E2E_API_TENNIS !== '1',
     },
     {
       command: 'pnpm dev --hostname 127.0.0.1 --port 3100',
