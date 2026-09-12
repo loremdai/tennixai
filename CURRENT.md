@@ -3,23 +3,19 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-12 20:16 CST
+**最后更新：** 2026-09-13 00:30 CST
 
-**当前任务：** T50 — Home/Match Chat 共用 resolver
+**当前任务：** T51 — v0 球员页接入真实结构化 API（`ready`，待领取）
 
-**任务状态：** `in_progress`
+**任务状态：** 无 `in_progress`（T50 已完成，待推送总控）
 
 **当前执行者 / ADE：** Claude Code / Claude Code
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**最近完成任务提交：** `ae0fa44`
+**最近完成任务提交：** `c593f36`
 
-**最后验证的产品提交：** `ae0fa44`
-
-**本次任务起始提交：** `6114a5c`
-
-**本次任务领取时间：** 2026-09-12 20:16 CST
+**最后验证的产品提交：** `c593f36`
 
 **本次任务起始提交：** `44cd9d5`（v0 原型已入库；本执行者从该提交继续 T43 工程收口）
 
@@ -91,13 +87,14 @@
 
 ### T50 — Home/Match Chat 共用 resolver
 
-- **状态：** `in_progress`
+- **状态：** `done`
 - **执行者 / ADE：** Claude Code / Claude Code
 - **分支：** `main`
-- **起始提交：** `6114a5c`
+- **起始提交：** `6114a5c`（领取记录 `0a3cfdc`）
 - **领取时间：** 2026-09-12 20:16 CST
-- **范围：** 按 [P2.6 实施计划 T50](./docs/superpowers/plans/2026-09-12-tennixai-player-directory-multilingual-identity-implementation.md#t50-route-home-and-match-chat-through-the-shared-resolver)：`StructuredToolResult` 增加 `player_resolution` kind 与 `resolution` 字段；`BusinessTools._resolve_player_query`（Match context 传入 snapshot 球员 ID）；所有按名分支改走 resolver + by-id service 方法；executor 视 resolution 为 SUCCESS、模型只见公共候选字段；system guidance（ambiguous 请用户选择、not_found 请补充信息）；前端 `StructuredData.resolution` 与 Home 候选列表；双语首提 `English（中文）`。
-- **验收门：** 每个按名工具（find_player_matches、get_live_matches 过滤、get_player_results、get_head_to_head 双方）经 resolver；Match context 唯一消歧；Home ambiguous 候选；not_found/ambiguous 以 SSE `done` 结束且无终止 error；真实 LLM 门：Ben Shelton/Shelton/谢尔顿/郑钦文 + 歧义 + 未知名字均 done；frontend 单测/typecheck/build 不回归。
+- **完成提交：** `7f78c33`（backend）+ `c593f36`（frontend）
+- **完成事实：** `StructuredToolResult` 新增 `player_resolution` kind 与 `resolution` 字段；`BusinessTools._resolve_player_query` 统一入口（Match context 传入快照球员 ID），find_player_matches/get_live_matches 过滤/get_player_results/get_head_to_head 全部先解析再按内部 ID 查询，删除 `_context_player` 正则逻辑；executor 将 resolution 视为 SUCCESS；`_model_tool_result` 只暴露公共候选字段（id/display_name/name/localized_name/country_code/ranking）；system prompt 增加 ambiguous 请用户选择、not_found 请补充信息、首提双语格式指引；前端 `StructuredData.resolution` 类型与 Home 候选列表（链接 `/players/{id}`、显示“暂无当前排名”）。
+- **验证门：** TDD 先红后绿；chat tools 28 passed（含 not_found/ambiguous 可恢复、context 唯一消歧、h2h 单侧未解析即停）；orchestrator 38 passed（not_found/ambiguous 均 data+done 无 error；旧 not_found 终止语义测试更新为 T50 语义）；chat api 7 passed；后端确定性 460 passed/41 deselected（test_match_stream_api 单例在高负载下时序抖动，单跑 9/9 通过）；真实 LLM 门 `TENNIX_RUN_LLM_LIVE=1` 14 passed：Ben Shelton/Shelton/谢尔顿 解析出结构化数据并 done，郑钦文赛季战绩 done（赛季记录尚非 Chat 能力，诚实无工具回答被允许），Wang 歧义与 Zzz Nobody 未找到均以 resolution 数据 + done 结束、无终止 error；frontend typecheck/build exit 0，vitest 全量 174/179（5 个 match-page waitFor 失败在干净 HEAD worktree 同样复现，属机器高负载时序问题，非 T50 回归；players 13/13 在放宽超时后通过）。
 - **阻塞：** 无。
 
 ### T49 — Rankings/Profile/五赛季赛果 API
@@ -489,6 +486,7 @@
 
 | 日期 | 提交 | 验证 | 结果 |
 |---|---|---|---|
+| 2026-09-13 | `7f78c33`+`c593f36` | chat tools 28 + orchestrator 38 + chat api 7 passed；真实 LLM 门 14 passed（歧义/未找到 resolution+done）；后端确定性 460 passed/41 deselected（stream 单例高负载抖动单跑 9/9）；frontend typecheck/build exit 0、vitest 174/179（match-page 5 失败=干净 HEAD 同样复现的负载时序） | T50 完成；Chat 全链路共用 resolver |
 | 2026-09-12 | `ae0fa44` | TDD 先红（13 失败）后绿；player API/profile service 23 passed；p2/api 契约更新全绿；确定性 454 passed/36 deselected；infrastructure 21 passed；真实 smoke Top 200 与 Top 200 外 profile/赛果诚实映射 | T49 完成；rankings/profile/五赛季赛果 API 就绪 |
 | 2026-09-12 | `1f480df` | TDD 先红后绿；resolver 26 项 + focused 111 passed；确定性 441 passed/36 deselected；infrastructure 21 passed；真实目录五形式同内部 ID、按 ID 取赛程成功、零供应商扫描 | T48 完成；共享 resolver 与内部 ID 运行时查询就绪 |
 | 2026-09-12 | `2a1a488` | TDD 先红后绿 14 passed；真实 LLM smoke 1 passed（二次 enrich 零模型调用）；CLI 边界 exit 2；确定性 411 passed/36 deselected；infrastructure 21 passed 自清洁双轮零漂移；真实 enrichment 全量完成、有名成员覆盖 4186/4186=100% | T47 完成；离线中文名 enrichment 与 100% 发布覆盖门就绪 |
@@ -547,11 +545,11 @@
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-13 | T50 完成：Chat 全链路共用 resolver、resolution 信封与 Home 候选列表 | `7f78c33`+`c593f36` |
 | 2026-09-12 | T49 完成：rankings/profile/五赛季赛果 REST API 与真实 profile/history smoke | `ae0fa44` |
 | 2026-09-12 | T48 完成：确定性 PlayerResolver、内部 ID 运行时查询与目录委托搜索 | `1f480df` |
 | 2026-09-12 | T47 完成：离线中文名 enrichment、严格 batch 零写入与 100% 发布覆盖门 | `2a1a488` |
 | 2026-09-12 | T46 完成：幂等目录同步、英文别名派生与本地 sync/status CLI | `e68e09e` |
-| 2026-09-12 | T45 完成：migration 0003、目录 repository（memory+Postgres）与 identity 无损门 | `fb77d80` |
 
 ## 接手与更新规则
 
