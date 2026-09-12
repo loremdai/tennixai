@@ -3,17 +3,17 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-12 14:03 CST
+**最后更新：** 2026-09-12 14:09 CST
 
 **当前任务：** T42 — 冻结球员目录、多语言身份与历史赛果设计
 
-**任务状态：** `in_progress`
+**任务状态：** `done`
 
 **当前执行者 / ADE：** Codex / Codex
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**最近完成任务提交：** `5c3d469`
+**最近完成任务提交：** `c8c7c24`
 
 **最后验证的产品提交：** `5c3d469`
 
@@ -77,7 +77,7 @@
 - Markdown 已升级为 CommonMark + GFM：表格、任务列表、删除线、脚注、自动链接、标题、引用、代码块等由共享 `MarkdownAnswer` 渲染；原始 HTML 保持关闭。
 - T40 已完成并提交 `17ccdb7`：修复真实服务未知赛制回答的二次生成失败路径，保留结构化数据并以 `done` 正常结束；用户正文移除原问题回显、内部 `format`/工具/质量校验话术和“重要说明”模板，赛制缺口改为独立的友好资料提示；补齐 CommonMark + GFM 语义回归与浏览器断言。
 - 已知非 T17 限制：LiveTennisAPI 的 `/players?search` 当前不能把中文显示名“郑钦文”直接映射到 `Qinwen Zheng`；canonical English name 查询已通过，中文别名/名称归一化需另立任务批准。
-- P2.6 设计已冻结：[球员目录设计规格](./docs/superpowers/specs/2026-09-12-tennixai-player-directory-multilingual-identity-design.md) 明确 Top 200 排名、全目录双语搜索、profile、五赛季历史、离线中文名和共享 resolver；[实施计划](./docs/superpowers/plans/2026-09-12-tennixai-player-directory-multilingual-identity-implementation.md) 已拆为 T43–T52。
+- T42 已于 2026-09-12 完成并推送（`c8c7c24`）：[球员目录设计规格](./docs/superpowers/specs/2026-09-12-tennixai-player-directory-multilingual-identity-design.md) 明确 Top 200 排名、全目录双语搜索、profile、五赛季历史、离线中文名和共享 resolver；[实施计划](./docs/superpowers/plans/2026-09-12-tennixai-player-directory-multilingual-identity-implementation.md) 已拆为 T43–T52，T43 为下一可领取任务。
 - v0 交付入口已准备：[球员页面 v0 Prompt](./docs/v0/2026-09-12-player-pages-prompt.md)；T50 必须等待用户提供的 v0 输出，ADE 不得自行重设计。
 - P2.6 当前代码事实仍是：API-Tennis `search_players` 扫 live + 3 天 fixtures 并字符串匹配，`Ben Shelton` 对 `B. Shelton` 会 `not_found`；修复尚未实施，T47/T49 负责关闭。
 - 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`、`REALTIME_LATENCY_INVESTIGATION.md`（任务外调查文档）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`、`frontend/next-env.d.ts`；保留原样，不纳入 T42。
@@ -86,7 +86,7 @@
 
 ### T42 — 冻结球员目录、多语言身份与历史赛果设计
 
-- **状态：** `in_progress`
+- **状态：** `done`
 - **执行者 / ADE：** Codex / Codex
 - **分支：** `main`
 - **起始提交：** `ee71605`
@@ -94,7 +94,9 @@
 - **范围：** 将已批准的 `/players` Top 200 排名页、球员详情页、历史赛果、多语言球员主数据、离线中文别名生成、确定性 PlayerResolver、Home/Match Chat 共用解析与 v0 交付边界写成唯一设计规格和可执行实施计划；同步 `PROJECT.md`、`ROADMAP.md`、`CURRENT.md`。本任务不实现产品代码、不引入运行时翻译 LLM、RAG、向量库、双打或 Player Chat。
 - **执行方式：** 先基于最新代码与 API-Tennis 已验证能力固化领域模型、数据流、API/Chat/UI 契约、迁移和回滚边界；规格自审通过后，按用户免审授权直接编写逐任务 TDD 实施计划和 v0 交付要求，再完成三份总控的一致性更新。
 - **验收门：** 规格与计划不得包含未决产品选择或占位项；每个实施任务必须写清文件、接口、测试、真实门和提交边界；总控必须只有 T42 一个 `in_progress`；所有链接可解析；文档泄漏扫描与 `git diff --check` 通过；既有未跟踪文件保持不变。
-- **当前进展：** 已写入 740 行设计规格、1317 行 T43–T52 逐任务实施计划和 222 行可直接交给 v0 的两页设计 Prompt；已完成规格与计划的占位符、类型名和范围覆盖自审，正在进行总控/链接/泄漏/Git 最终门。
+- **完成提交：** `c8c7c24`
+- **完成事实：** 已写入 740 行设计规格、1317 行 T43–T52 逐任务实施计划和 222 行可直接交给 v0 的两页设计 Prompt；三份总控已同步 P2.6 长期边界、任务顺序和 T50 外部输入门；本任务未修改产品代码。
+- **验证门：** 规格/计划占位符扫描零命中；类型与接口自审补齐整批中文名原子写入、fake 内存目录和 8 份/巡回赛排名快照上限；8 个本地文档链接均存在；ROADMAP 任务表当时仅 T42 一个 `in_progress`；新增文档未命中 64 位十六进制、`sk-` 或凭据赋值模式；`git diff --check` 通过；已知未跟踪文件保持不变。
 - **阻塞：** 无。
 
 ### T41 — 同步首页问答用户展示策略
