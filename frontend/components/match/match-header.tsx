@@ -44,7 +44,7 @@ const navItems: Array<{ key: ProductNavKey; label: string; href: string; beta?: 
   { key: 'home', label: '首页', href: '/' },
   { key: 'live', label: '直播', href: '/#live' },
   { key: 'schedule', label: '赛程', href: '/#upcoming' },
-  { key: 'players', label: '球员', href: '/#players' },
+  { key: 'players', label: '球员', href: '/players' },
   { key: 'markets', label: '市场', href: '/#markets', beta: true },
 ]
 
