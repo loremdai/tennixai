@@ -141,6 +141,27 @@ class MixedOutcomeBusinessTools(ConcurrentBusinessTools):
         return await super().execute(name, arguments, context)
 
 
+class RepairingStreamModel(FakeChatModel):
+    def __init__(self, responses: list[list[str]], **kwargs):
+        super().__init__(**kwargs)
+        self.responses = list(responses)
+
+    async def stream_text(self, messages, *, tools=None):
+        self.stream_calls.append(messages)
+        for chunk in self.responses.pop(0):
+            yield chunk
+
+
+class UnknownFormatRecordingProvider(RecordingProvider):
+    async def get_match_snapshot(self, match_id: str):
+        snapshot = await super().get_match_snapshot(match_id)
+        return snapshot.model_copy(
+            update={
+                "match": snapshot.match.model_copy(update={"format": None}),
+            }
+        )
+
+
 def build_orchestrator(model: FakeChatModel, provider_type=RecordingProvider):
     fake = FakeTennisProvider(identities=MemoryIdentityRepository(), now=lambda: NOW)
     recording = provider_type(fake)
@@ -744,7 +765,7 @@ async def test_match_current_analysis_does_not_offer_unrequested_history_tools()
         messages=[
             ChatMessage(
                 role="user",
-                content="分析当前比赛的每盘统计、趋势和原因。",
+                content="当前比分是多少？",
             )
         ],
     )
@@ -759,6 +780,153 @@ async def test_match_current_analysis_does_not_offer_unrequested_history_tools()
     ]
     assert model.catalog_calls == [["get_match_intelligence"]]
     assert model.stream_catalog_calls == [[]]
+
+
+@pytest.mark.asyncio
+async def test_match_comprehensive_analysis_plans_all_context_topics_before_synthesis() -> None:
+    model = FakeChatModel(
+        turns=[ModelTurn()],
+        text_chunks=["已根据冻结快照完成逐盘统计、逐分走势和动量分析。"],
+    )
+    orchestrator, recording = build_orchestrator(model)
+    await recording.inner.build()
+    match_id = recording.inner.live_match.id
+
+    events = [
+        event
+        async for event in orchestrator.stream(
+            ChatRequest(
+                scope="match",
+                match_id=match_id,
+                messages=[
+                    ChatMessage(
+                        role="user",
+                        content="根据当前比赛的每盘技术统计详细信息，分析逐分趋势和原因，并预测谁获胜。",
+                    )
+                ],
+            )
+        )
+    ]
+
+    topics = {
+        event.payload["packet"]["topic"]
+        for event in events
+        if event.type is ChatEventType.DATA
+        and event.payload.get("kind") == "intelligence"
+    }
+    assert {"overview", "statistics", "points", "momentum"} <= topics
+    fetching = [
+        event
+        for event in events
+        if event.type is ChatEventType.STATUS
+        and event.payload.get("stage") == "fetching_data"
+    ]
+    assert any(event.payload["total"] >= 4 for event in fetching)
+    assert not any(event.type is ChatEventType.ERROR for event in events)
+    text = "".join(
+        event.payload["delta"]
+        for event in events
+        if event.type is ChatEventType.TEXT_DELTA
+    )
+    assert text.strip()
+    synthesis_facts = next(
+        message["content"]
+        for message in model.stream_calls[-1]
+        if message.get("role") == "user"
+        and "以下是提问时冻结并已核验的事实" in message.get("content", "")
+    )
+    for topic in ("overview", "statistics", "points", "momentum"):
+        assert f'"topic": "{topic}"' in synthesis_facts
+    assert events[-1].type is ChatEventType.DONE
+
+
+@pytest.mark.asyncio
+async def test_unknown_format_answer_is_repaired_before_text_is_emitted() -> None:
+    model = RepairingStreamModel(
+        responses=[
+            ["无法确定本场是否为 BO3。"],
+            ["赛制信息暂未提供，无法推断盘数结构。"],
+        ],
+        turns=[ModelTurn()],
+    )
+    orchestrator, recording = build_orchestrator(model, UnknownFormatRecordingProvider)
+    await recording.inner.build()
+    match_id = recording.inner.live_match.id
+
+    events = [
+        event
+        async for event in orchestrator.stream(
+            ChatRequest(
+                scope="match",
+                match_id=match_id,
+                messages=[
+                    ChatMessage(
+                        role="user",
+                        content="根据当前比赛的每盘技术统计详细信息，分析趋势和原因，并预测谁能获胜。",
+                    )
+                ],
+            )
+        )
+    ]
+
+    text = "".join(
+        event.payload["delta"]
+        for event in events
+        if event.type is ChatEventType.TEXT_DELTA
+    )
+    assert text == "赛制信息暂未提供，无法推断盘数结构。"
+    assert "BO3" not in text
+    assert any(
+        event.type is ChatEventType.WARNING
+        and event.payload["code"] == "llm_response_repaired"
+        for event in events
+    )
+    assert len(model.stream_calls) == 2
+    assert events[-1].type is ChatEventType.DONE
+
+
+@pytest.mark.asyncio
+async def test_unknown_format_answer_never_emits_a_second_invalid_generation() -> None:
+    model = RepairingStreamModel(
+        responses=[
+            ["本场可能是 BO3。"],
+            ["本场可能是 BO5。"],
+        ],
+        turns=[ModelTurn()],
+    )
+    orchestrator, recording = build_orchestrator(model, UnknownFormatRecordingProvider)
+    await recording.inner.build()
+    match_id = recording.inner.live_match.id
+
+    events = [
+        event
+        async for event in orchestrator.stream(
+            ChatRequest(
+                scope="match",
+                match_id=match_id,
+                messages=[
+                    ChatMessage(
+                        role="user",
+                        content="根据当前比赛的每盘技术统计详细信息，分析趋势和原因，并预测谁能获胜。",
+                    )
+                ],
+            )
+        )
+    ]
+
+    text = "".join(
+        event.payload["delta"]
+        for event in events
+        if event.type is ChatEventType.TEXT_DELTA
+    )
+    assert "BO" not in text
+    assert "无法推断盘数结构" in text
+    assert any(
+        event.type is ChatEventType.WARNING
+        and event.payload["code"] == "llm_response_rejected"
+        for event in events
+    )
+    assert events[-1].type is ChatEventType.DONE
 
 
 @pytest.mark.asyncio

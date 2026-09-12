@@ -6,6 +6,7 @@ even when the model later fails.
 """
 
 import json
+import re
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -18,7 +19,9 @@ from app.chat.models import (
     ChatEventType,
     ChatRequest,
     ChatScope,
+    ModelTurn,
     StructuredToolResult,
+    ToolCall,
     ToolOutcome,
     ToolOutcomeStatus,
 )
@@ -29,10 +32,20 @@ from app.chat.tools import (
 )
 from app.domain import Match
 from app.errors import AppError
+from app.intelligence import IntelligencePacket, IntelligenceTopic
 
 HISTORICAL_REPLY = "P2 暂不支持大范围历史查询。"
 LLM_FALLBACK_REPLY = "比赛数据已找到，但 AI 说明暂时不可用。"
 LLM_EMPTY_REPLY = "暂时没有生成可展示的回答，请稍后重试。"
+UNKNOWN_FORMAT_REPLY = (
+    "当前快照未提供赛制信息，无法推断盘数结构；本次未展示未经核验的胜负结论。"
+)
+UNKNOWN_FORMAT_TERMS = re.compile(
+    r"(?:\bbo\s*[35]\b|\bbest[ -]+of[ -]+(?:three|five|[35])\b|"
+    r"三盘两胜|五盘三胜|第\s*(?:5|５|五)\s*盘|第五盘|"
+    r"\b3\s*[-–—]\s*1\b)",
+    flags=re.IGNORECASE,
+)
 MAX_TOOL_ROUNDS = 3
 MAX_REPLANS = 1
 MAX_MODEL_MATCHES = 12
@@ -45,12 +58,17 @@ GLOBAL_SYSTEM_PROMPT = (
     "本场综合分析只能使用比赛快照和工具返回的事实；球员特点或历史资料未提供时说明暂未提供，不要让可选资料缺失中止已有分析。"
     "昨天、最近有限场结果和两位球员的有限交手记录使用对应 P2 工具；大范围历史查询不支持。"
     "Match scope 的主题问题使用 get_match_intelligence，topic 只能是 overview、score、statistics、points 或 momentum。"
+    "统计结果中的 player_values 已明确标注球员姓名，必须按姓名读取，不能交换两列。"
+    "如果字段为 null、空数组或质量状态为 unavailable，必须明确标注暂不可用；不得从赛事名称、轮次、网球常识或当前比分推断未返回的赛制、场地属性、统计、逐分数据或球员事实。"
+    "特别是 format 未返回时，禁止写 BO3、BO5、三盘两胜、五盘三胜、第五盘或任何基于未知赛制的最终盘数比分；预测只说明胜者倾向和依据。"
     "趋势和控制指数只能做描述性分析，不得编造赔率、概率或确定性的胜负结论。"
 )
 MATCH_SYSTEM_SUFFIX = (
     "当前比赛已由页面上下文确定（current match id: {match_id}），"
     "本次问答以提问开始时冻结的同一份比赛快照为事实基线；所有上下文事实问题先调用 get_match_intelligence，"
     "综合问题可按需调用 overview、score、statistics、points、momentum，调用 get_match 时无需提供参数，"
+    "如果问题要求每盘技术统计、逐分趋势、原因或胜负预测，必须综合已返回的 overview、statistics、points、momentum；"
+    "某一主题为空时只说明该主题不可用，不得用推测补齐；统计必须以球员姓名对应的值为准。"
     "不要用回答期间的新版本覆盖或否定这份基线。"
 )
 
@@ -71,12 +89,85 @@ MATCH_HISTORY_PHRASES = (
     "weaknesses",
 )
 
+MATCH_COMPREHENSIVE_PHRASES = (
+    "技术统计",
+    "每盘",
+    "每一盘",
+    "逐分",
+    "关键分",
+    "趋势",
+    "走势",
+    "动量",
+    "控制指数",
+    "momentum",
+    "statistics",
+    "详细分析",
+    "详细信息",
+    "预测",
+    "谁能获胜",
+    "谁会赢",
+)
+
 
 def _requests_match_history(text: str) -> bool:
     normalized = text.casefold()
     return is_historical_query(text) or any(
         phrase in normalized for phrase in MATCH_HISTORY_PHRASES
     )
+
+
+def _requested_match_topics(text: str) -> tuple[IntelligenceTopic, ...]:
+    """Return deterministic context coverage for questions that need synthesis."""
+    normalized = text.casefold()
+    if not any(phrase in normalized for phrase in MATCH_COMPREHENSIVE_PHRASES):
+        return ()
+    return (
+        IntelligenceTopic.OVERVIEW,
+        IntelligenceTopic.STATISTICS,
+        IntelligenceTopic.POINTS,
+        IntelligenceTopic.MOMENTUM,
+    )
+
+
+def _has_unknown_format(snapshot: Any, facts: list[dict[str, Any]]) -> bool:
+    if snapshot is not None and snapshot.match.format is None:
+        return True
+    for fact in facts:
+        packet = fact.get("packet")
+        if isinstance(packet, dict) and packet.get("format") is None:
+            return True
+        for match in fact.get("matches", []):
+            if isinstance(match, dict) and match.get("format") is None:
+                return True
+    return False
+
+
+def _contains_unknown_format_term(text: str) -> bool:
+    return bool(UNKNOWN_FORMAT_TERMS.search(text))
+
+
+def _planned_match_context_calls(
+    required_topics: tuple[IntelligenceTopic, ...],
+    completed_topics: set[IntelligenceTopic],
+    calls: list[ToolCall],
+) -> list[ToolCall]:
+    selected_topics = {
+        call.arguments.get("topic")
+        for call in calls
+        if call.name == "get_match_intelligence"
+    }
+    planned: list[ToolCall] = []
+    for topic in required_topics:
+        if topic in completed_topics or topic.value in selected_topics:
+            continue
+        planned.append(
+            ToolCall(
+                id=f"planned_context_{topic.value}",
+                name="get_match_intelligence",
+                arguments={"topic": topic.value},
+            )
+        )
+    return planned
 
 
 def _catalog_for_request(
@@ -145,6 +236,37 @@ def _model_match_summary(match: Match) -> dict[str, Any]:
     }
 
 
+def _model_intelligence_packet(packet: IntelligencePacket) -> dict[str, Any]:
+    payload = packet.model_dump(mode="json")
+    players = packet.players
+    for statistic in payload["statistics"]:
+        statistic["player_values"] = [
+            {"player": players[0], "value": statistic["player1_value"]},
+            {"player": players[1], "value": statistic["player2_value"]},
+        ]
+    if packet.score is not None:
+        payload["score_by_player"] = [
+            {
+                "player": players[index],
+                "sets_won": packet.score.sets_won[index],
+                "sets": [
+                    {
+                        "number": set_score.number,
+                        "games": (
+                            set_score.player1_games
+                            if index == 0
+                            else set_score.player2_games
+                        ),
+                    }
+                    for set_score in packet.score.sets
+                ],
+                "current_point": packet.score.points[index],
+            }
+            for index in range(2)
+        ]
+    return payload
+
+
 def _model_tool_result(result: StructuredToolResult) -> dict[str, Any]:
     matches = result.matches
     payload: dict[str, Any] = {
@@ -154,7 +276,7 @@ def _model_tool_result(result: StructuredToolResult) -> dict[str, Any]:
         "matches": [_model_match_summary(match) for match in matches[:MAX_MODEL_MATCHES]],
     }
     if result.packet is not None:
-        payload["packet"] = result.packet.model_dump(mode="json")
+        payload["packet"] = _model_intelligence_packet(result.packet)
     if result.metadata:
         payload["metadata"] = result.metadata
     if result.answer_context is not None:
@@ -201,12 +323,53 @@ def _synthesis_messages(
             "role": "user",
             "content": (
                 "现在请直接回答原问题，不要调用工具。以下是提问时冻结并已核验的事实；"
-                "只能根据这些事实回答，缺失字段请明确说明：\n"
+                "只能根据这些事实回答，缺失字段请明确说明。统计值必须按 player_values 中的球员姓名读取，"
+                "不能交换两列。若任何事实中的 format 为 null，整篇回答严禁出现 BO3、BO5、三盘两胜、"
+                "五盘三胜、第五盘或最终盘数比分（例如 3-1）；只能预测胜者倾向，不得补猜赛制：\n"
                 f"{json.dumps(verified_facts, ensure_ascii=False)}"
             ),
         }
     )
     return clean_messages
+
+
+def _repair_synthesis_messages(
+    messages: list[dict[str, Any]], verified_facts: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    repaired = _synthesis_messages(messages, verified_facts)
+    repaired.append(
+        {
+            "role": "user",
+            "content": (
+                "上一版回答未通过事实安全校验。请从头重写，不要复述或讨论校验过程；"
+                "赛制字段为空时只写‘赛制信息暂未提供，无法推断盘数结构’，不要写任何具体赛制名称、"
+                "盘数结构、最终盘数比分或相关英文缩写。其余内容仍只能使用上面的冻结事实。"
+            ),
+        }
+    )
+    return repaired
+
+
+def _response_repaired_warning() -> ChatEvent:
+    return ChatEvent(
+        type=ChatEventType.WARNING,
+        payload={
+            "code": "llm_response_repaired",
+            "message": "AI 回答已按提问时冻结的事实重新校验并重写。",
+            "details": {},
+        },
+    )
+
+
+def _response_rejected_warning() -> ChatEvent:
+    return ChatEvent(
+        type=ChatEventType.WARNING,
+        payload={
+            "code": "llm_response_rejected",
+            "message": "AI 原始回答未通过事实校验，已改为保守说明。",
+            "details": {},
+        },
+    )
 
 
 def _optional_warning(outcome: ToolOutcome) -> ChatEvent:
@@ -322,6 +485,8 @@ class ChatOrchestrator:
         has_discovered_matches = bool(known_match_ids)
         replan_count = 0
         verified_facts: list[dict[str, Any]] = []
+        required_topics = _requested_match_topics(last_user)
+        completed_topics: set[IntelligenceTopic] = set()
 
         try:
             while True:
@@ -338,6 +503,19 @@ class ChatOrchestrator:
                     parallel_tool_calls=phase
                     in {ChatPhase.DISCOVERY, ChatPhase.CONTEXT},
                 )
+                if request.scope is ChatScope.MATCH and phase is ChatPhase.CONTEXT:
+                    turn = turn.model_copy(
+                        update={
+                            "tool_calls": [
+                                *turn.tool_calls,
+                                *_planned_match_context_calls(
+                                    required_topics,
+                                    completed_topics,
+                                    turn.tool_calls,
+                                ),
+                            ]
+                        }
+                    )
                 if not turn.tool_calls:
                     break
                 rounds += 1
@@ -420,6 +598,11 @@ class ChatOrchestrator:
                             has_discovered_matches = has_discovered_matches or bool(
                                 outcome.result.matches
                             )
+                        if (
+                            outcome.result.packet is not None
+                            and outcome.result.kind == "intelligence"
+                        ):
+                            completed_topics.add(outcome.result.packet.topic)
                     elif outcome.status is ToolOutcomeStatus.REJECTED:
                         rejected_count += 1
                         if outcome.requiredness is ToolRequiredness.OPTIONAL:
@@ -469,6 +652,16 @@ class ChatOrchestrator:
                         "total": len(turn.tool_calls),
                     },
                 )
+                if (
+                    request.scope is ChatScope.MATCH
+                    and phase is ChatPhase.CONTEXT
+                    and received_data
+                    and (
+                        not required_topics
+                        or set(required_topics) <= completed_topics
+                    )
+                ):
+                    break
         except AppError as error:
             yield ChatEvent(
                 type=ChatEventType.ERROR,
@@ -485,18 +678,44 @@ class ChatOrchestrator:
                 type=ChatEventType.STATUS,
                 payload={"stage": "generating", "phase": "synthesis"},
             )
-            generated_text = False
-            async for chunk in self._model.stream_text(
-                _synthesis_messages(messages, verified_facts)
-            ):
-                generated_text = generated_text or bool(chunk)
-                yield ChatEvent(type=ChatEventType.TEXT_DELTA, payload={"delta": chunk})
-            if not generated_text:
-                yield ChatEvent(
-                    type=ChatEventType.TEXT_DELTA,
-                    payload={"delta": LLM_FALLBACK_REPLY if data_emitted else LLM_EMPTY_REPLY},
-                )
-                yield _empty_generation_warning()
+            synthesis_messages = _synthesis_messages(messages, verified_facts)
+            if _has_unknown_format(context.snapshot, verified_facts):
+                generated = ""
+                async for chunk in self._model.stream_text(synthesis_messages):
+                    generated += chunk
+                if _contains_unknown_format_term(generated):
+                    generated = ""
+                    async for chunk in self._model.stream_text(
+                        _repair_synthesis_messages(messages, verified_facts)
+                    ):
+                        generated += chunk
+                    if _contains_unknown_format_term(generated):
+                        generated = UNKNOWN_FORMAT_REPLY
+                        yield _response_rejected_warning()
+                    else:
+                        yield _response_repaired_warning()
+                if generated.strip():
+                    yield ChatEvent(
+                        type=ChatEventType.TEXT_DELTA,
+                        payload={"delta": generated},
+                    )
+                else:
+                    yield ChatEvent(
+                        type=ChatEventType.TEXT_DELTA,
+                        payload={"delta": LLM_FALLBACK_REPLY if data_emitted else LLM_EMPTY_REPLY},
+                    )
+                    yield _empty_generation_warning()
+            else:
+                generated_text = False
+                async for chunk in self._model.stream_text(synthesis_messages):
+                    generated_text = generated_text or bool(chunk.strip())
+                    yield ChatEvent(type=ChatEventType.TEXT_DELTA, payload={"delta": chunk})
+                if not generated_text:
+                    yield ChatEvent(
+                        type=ChatEventType.TEXT_DELTA,
+                        payload={"delta": LLM_FALLBACK_REPLY if data_emitted else LLM_EMPTY_REPLY},
+                    )
+                    yield _empty_generation_warning()
         except Exception:
             if data_emitted:
                 yield ChatEvent(

@@ -4,6 +4,7 @@ Run with: uv run pytest -m llm_live
 Reads TENNIX_LLM_API_KEY and TENNIX_LLM_BASE_URL from the repository-root .env.
 """
 
+import re
 from datetime import datetime, timezone
 
 import pytest
@@ -29,6 +30,7 @@ class LiveGateFakeProvider(FakeTennisProvider):
 
     def __init__(self, now) -> None:
         super().__init__(identities=MemoryIdentityRepository(), now=now)
+        self.unknown_format_match: Match | None = None
 
     async def _post_build(self) -> None:
         now = self._now
@@ -75,6 +77,8 @@ class LiveGateFakeProvider(FakeTennisProvider):
             freshness=DataFreshness(provider="fake", observed_at=now()),
         )
         self._matches[tiafoe_match.id] = tiafoe_match
+        self.unknown_format_match = tiafoe_match.model_copy(update={"format": None})
+        self._matches[tiafoe_match.id] = self.unknown_format_match
 
 
 class RecordingBusinessTools(BusinessTools):
@@ -233,3 +237,60 @@ async def test_qwen_selects_topic_intelligence_for_match_question() -> None:
     assert data["kind"] == "intelligence"
     assert data["answer_context"]["match_id"] == provider.live_match.id
     assert events[-1].type is ChatEventType.DONE
+
+
+@pytest.mark.asyncio
+async def test_qwen_comprehensive_match_answer_waits_for_all_requested_context() -> None:
+    orchestrator, tools, provider = _build()
+    await provider.build()
+    assert provider.unknown_format_match is not None
+    match = provider.unknown_format_match
+
+    request = ChatRequest(
+        scope="match",
+        match_id=match.id,
+        messages=[
+            ChatMessage(
+                role="user",
+                content="根据当前比赛的每盘技术统计详细信息，分析趋势和原因，并大胆预测谁能获胜。",
+            )
+        ],
+    )
+    events = [event async for event in orchestrator.stream(request)]
+
+    packets = [
+        event.payload["packet"]
+        for event in events
+        if event.type is ChatEventType.DATA
+        and event.payload.get("kind") == "intelligence"
+    ]
+    assert {packet["topic"] for packet in packets} >= {
+        "overview",
+        "statistics",
+        "points",
+        "momentum",
+    }
+    assert len({
+        (packet["match_id"], packet["state_version"], packet["as_of"])
+        for packet in packets
+    }) == 1
+    text = "".join(
+        event.payload["delta"]
+        for event in events
+        if event.type is ChatEventType.TEXT_DELTA
+    ).strip()
+    assert len(text) >= 40
+    player_names = [player.name for player in match.players]
+    assert all(
+        name in text or name.split()[-1] in text
+        for name in player_names
+    )
+    assert "AI 说明暂时不可用" not in text
+    assert not re.search(
+        r"(?:BO[35]|三盘两胜|五盘三胜|第\s*5\s*盘|第五盘|\b3-1\b)",
+        text,
+        flags=re.IGNORECASE,
+    )
+    assert not any(event.type is ChatEventType.ERROR for event in events)
+    assert events[-1].type is ChatEventType.DONE
+    assert tools.executed.count("get_match_intelligence") >= 4

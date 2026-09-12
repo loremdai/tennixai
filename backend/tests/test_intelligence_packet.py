@@ -3,6 +3,8 @@
 import json
 from datetime import UTC, datetime, timedelta
 
+from app.chat.models import StructuredToolResult
+from app.chat.orchestrator import _model_tool_result
 from app.domain import (
     CapabilityStatus,
     DataFreshness,
@@ -173,3 +175,17 @@ def test_packet_bounds_key_points_when_determinate_points_are_missing() -> None:
     assert packet.recent_points == ()
     assert len(packet.key_points) == 20
     assert [item.sequence for item in packet.key_points] == list(range(6, 26))
+
+
+def test_model_intelligence_result_labels_stat_values_with_player_names() -> None:
+    packet = build_intelligence_packet(snapshot(), topic=IntelligenceTopic.STATISTICS)
+
+    result = _model_tool_result(
+        StructuredToolResult(kind="intelligence", packet=packet)
+    )
+
+    statistic = result["packet"]["statistics"][0]
+    assert statistic["player_values"] == [
+        {"player": "Jannik Sinner", "value": 8.0},
+        {"player": "Carlos Alcaraz", "value": 5.0},
+    ]
