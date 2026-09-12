@@ -3,11 +3,11 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-13 05:35 CST
+**最后更新：** 2026-09-13 05:50 CST
 
 **当前任务：** T52 — P2.6 真实服务完成门与里程碑关闭
 
-**任务状态：** `planned`（待领取）
+**任务状态：** `in_progress`
 
 **当前执行者 / ADE：** Claude Code / Claude Code
 
@@ -16,6 +16,10 @@
 **最近完成任务提交：** `501f229`
 
 **最后验证的产品提交：** `501f229`
+
+**本次任务起始提交：** `ff279a7`
+
+**本次任务领取时间：** 2026-09-13 05:50 CST
 
 **本次任务起始提交：** `51b62d2`
 
@@ -89,6 +93,17 @@
 - 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`、`REALTIME_LATENCY_INVESTIGATION.md`（任务外调查文档）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`、`frontend/next-env.d.ts`；保留原样，不纳入 T42A。
 
 ## 当前任务
+
+### T52 — P2.6 真实服务完成门与里程碑关闭
+
+- **状态：** `in_progress`
+- **执行者 / ADE：** Claude Code / Claude Code
+- **分支：** `main`
+- **起始提交：** `ff279a7`
+- **领取时间：** 2026-09-13 05:50 CST
+- **范围：** 按 [P2.6 实施计划 T52](./docs/superpowers/plans/2026-09-12-tennixai-player-directory-multilingual-identity-implementation.md#t52-run-the-p26-real-service-completion-gate-and-close-the-milestone)：真实目录端到端 live 测试（Shelton/Zheng/Djokovic 同内部 ID 矩阵）、frontend live 目录 e2e、runbook 与 opt-in flag 文档、干净本地库 sync/enrich/status 覆盖门、全部后端/前端/浏览器门、泄漏与仓库卫生检查、总控收尾（P3 仅设计待用户授权）。
+- **验收门：** 完成矩阵 18 项 Final P2.6 Completion Gate 全真；任何真实门不得以 skip/配额失败充数。
+- **阻塞：** 无。
 
 ### T51 — v0 球员页接入真实结构化 API
 
