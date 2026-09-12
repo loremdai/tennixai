@@ -3,11 +3,11 @@
 > 本文件回答“这个项目是什么、为什么做、哪些原则不能被破坏”。
 > 全局进度见 [ROADMAP.md](./ROADMAP.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-10 01:30 CST
+**最后更新：** 2026-09-12 14:03 CST
 
-**产品阶段：** P1 — 比赛信息查询助手（已完成，2026-09-08）；P2 — Live Match Intelligence（已完成，2026-09-10：PBP、22 项统计、近期控制指数、版本化 Chat、Replay 恢复门与双视口验收均已闭环；真实 LLM smoke 因 endpoint entitlement 留有诚实的重跑缺口）
+**产品阶段：** P1 — 比赛信息查询助手（已完成，2026-09-08）；P2.0–P2.5 — Live Match Intelligence（已完成，2026-09-12）；P2.6 — Player Discovery and Multilingual Identity（设计已冻结，等待 T43–T52 实施）
 
-**详细基线：** [产品与架构上下文](./docs/product-context.md) · [产品路线设计](./docs/superpowers/specs/2026-09-08-tennixai-product-roadmap-design.md) · [P1 实施计划](./docs/superpowers/plans/2026-09-08-tennixai-p1-implementation.md) · [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) · [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md)
+**详细基线：** [产品与架构上下文](./docs/product-context.md) · [产品路线设计](./docs/superpowers/specs/2026-09-08-tennixai-product-roadmap-design.md) · [P1 实施计划](./docs/superpowers/plans/2026-09-08-tennixai-p1-implementation.md) · [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) · [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md) · [P2.6 球员目录设计](./docs/superpowers/specs/2026-09-12-tennixai-player-directory-multilingual-identity-design.md) · [P2.6 实施计划](./docs/superpowers/plans/2026-09-12-tennixai-player-directory-multilingual-identity-implementation.md) · [v0 球员页面 Prompt](./docs/v0/2026-09-12-player-pages-prompt.md)
 
 ## 5 分钟恢复入口
 
@@ -18,6 +18,9 @@
 - P2 设计已冻结：API-Tennis WebSocket 是实时主路径，PostgreSQL 保存长期 canonical 事实，Redis 负责租约、热状态和 pub/sub，FastAPI 通过版本化 SSE 服务浏览器。
 - Home 默认展示 ATP + WTA、全部性别、单打，并允许赛事级别、性别、单双打叠加筛选；赛事按 ATP/WTA → Challenger → ITF → other 排序。
 - Match Page 将提供完整 PBP、尽可能多的可信技术统计、近期控制指数和带 `state_version/as_of` 的上下文问答。
+- P2.6 将增加 `/players` ATP/WTA 单打 Top 200、`/players/[playerId]` 球员详情和当前+前四赛季历史赛果；默认排名页与全目录搜索是两种明确模式。
+- 球员身份统一为“英文主名 + 中文辅名 + aliases → 内部 `player_id`”；中文名离线批量补齐，Home/Match Chat 运行时只使用确定性 PlayerResolver，不调用翻译 LLM。
+- 当前 `Ben Shelton` 对供应商 `B. Shelton` 的字符串匹配失败是 P2.6 的首要回归；`ambiguous` / `not_found` 将成为正常可恢复结果，而不是终止 SSE error。
 - P2 仍严格排除 odds、预测、Polymarket、交易、认证和云部署；完成目标是本地完整运行与少量好友私人测试。
 - 不要从本文件猜当前做到哪里；以 [ROADMAP.md](./ROADMAP.md) 和 [CURRENT.md](./CURRENT.md) 为准。
 
@@ -39,12 +42,16 @@ LLM 负责理解意图、选择业务工具和组织表达，不是网球事实�
 
 承担单场 Investigation：比分、状态、发球方、上下文问答，以及 P2/P3 才会进入的统计、PBP、走势、市场和决策支持。页面必须携带内部 `match_id`，用户无需重复比赛上下文。
 
+### Players
+
+承担 Ranking Discovery 和 Player Investigation：`/players` 默认展示 ATP/WTA 单打 Top 200，可搜索本地目录中的全部已知单打球员；`/players/[playerId]` 展示英文主名/中文辅名、档案、当前排名、赛季统计、live/next 状态和按需历史赛果。第一版不做双打或独立 Player Chat。
+
 ## 三阶段产品路线
 
 | 阶段 | 目标 | 主要数据能力 | 明确边界 |
 |---|---|---|---|
 | P1 | 比赛信息查询助手 | 今日/今晚/下一场、赛事、轮次、场地、状态、比分、发球方 | 不做任意历史结果、技术统计和自动轮询 |
-| P2 | Live Match Intelligence | API-Tennis live/PBP/statistics、近期控制指数、轻量历史/H2H，多进程持久化与协调 | 不接 odds、预测、市场或交易；不镜像完整供应商历史 |
+| P2 | Live Match Intelligence | API-Tennis live/PBP/statistics、近期控制指数、轻量历史/H2H、多进程持久化与协调，以及球员目录、多语言身份和历史赛果入口 | 不接 odds、预测、市场或交易；不镜像完整供应商历史 |
 | P3 | Market & Decision Support | Polymarket 市场、预测概率、edge、confidence、paper trading | 不自动下单；自动执行必须另立阶段并单独批准 |
 
 ## 稳定架构
@@ -87,6 +94,23 @@ FastAPI snapshot/SSE + TennisService
 Next.js structured UI + Chat
 ```
 
+P2.6 的球员身份依赖方向固定为：
+
+```text
+API-Tennis rankings / players / fixtures
+                  ↓
+        PlayerDirectorySync
+                  ↓
+Player + External IDs + Ranking + Aliases
+                  ↓
+           PlayerResolver
+   resolved | ambiguous | not_found
+                  ↓
+TennisService → REST DTO / Home Chat / Match Chat
+```
+
+前端、Chat 和比赛数据只能共享同一份球员主数据与 resolver，不能各自维护中文名或名字匹配表。解析成功后必须按内部 `player_id` 查 external ID，再调用 provider；不得让业务层按供应商字符串反查身份。
+
 ## P1 已批准方案
 
 - 前端：Next.js、TypeScript、Tailwind CSS、现有 v0 原型；原型是视觉真源。
@@ -113,6 +137,19 @@ Next.js structured UI + Chat
 - 走势：Recent Control v1 使用发球校正残差、校准参数和 EWMA；最近 20 分只是展示窗口，关键分不使用固定倍率。
 - 测试：确定性 Replay 为主要实时门；真实 API-Tennis REST/WebSocket 和真实 LLM 为 opt-in smoke；Playwright 覆盖功能与双视口视觉。
 - 配置：仓库根目录 `.env` 是 FastAPI、Next.js、Playwright 和真实测试的唯一本地配置入口；安全变量模板只保留根目录 `.env.example`。
+
+## P2.6 已批准方案
+
+- 排名页：ATP/WTA 单打 Top 200、官方顺序、每页 50、国家筛选和中国球员快捷筛选；不做双打。
+- 搜索：无 query 时只展示 Top 200；有 query 时搜索全部本地已知单打球员，允许 Top 200 外或暂无当前排名的结果。
+- Profile：英文主名、中文辅名、可用档案、当前排名/积分/变动、赛季胜负/胜率/冠军/分场地胜负，以及 live 优先、next 次之、否则“暂无比赛信息”的当前状态。
+- 历史：默认当前赛季，可选当前及前四赛季，每页 20，按赛事级别和胜/负筛选；不提供场地筛选，不复制完整供应商历史。
+- 身份：PostgreSQL 保存内部 Player、API-Tennis external ID、aliases 和有限排名快照；第三方 ID 不作为主键且不进入公共响应。
+- 中文名：可信来源优先，缺失时使用现有 OpenAI-compatible LLM 离线批量生成；重复运行只补缺，严格 batch 校验失败时零写入，UI 不展示生成来源。
+- 解析：同一 PlayerResolver 支持完整英文名、姓氏、供应商缩写、中文名、姓名顺序、大小写、标点和重音差异；Match context 可唯一消歧，其余冲突返回候选。
+- Chat：Home/Match tools 先得到 resolver 领域结果再按内部 ID 查询；`ambiguous` 和 `not_found` 以自然澄清 + SSE `done` 结束。
+- 页面：v0 补齐 `/players` 与 `/players/[playerId]` 视觉，ADE 严格接真实数据；桌面 `1440×1000`、移动 `390×844`。
+- 运行：本地显式执行目录同步与中文 enrichment；真实 API 启动不自动同步，不新增 cron、队列、daemon 或云部署。
 
 ## P1 成功标准
 
