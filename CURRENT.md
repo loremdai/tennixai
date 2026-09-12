@@ -3,11 +3,11 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-12 16:41 CST
+**最后更新：** 2026-09-12 16:43 CST
 
-**当前任务：** T45 — 持久化球员目录、别名与排名快照（`ready`，待领取）
+**当前任务：** T45 — 持久化球员目录、别名与排名快照
 
-**任务状态：** 无 `in_progress`（T44 已完成并推送）
+**任务状态：** `in_progress`
 
 **当前执行者 / ADE：** Claude Code / Claude Code
 
@@ -16,6 +16,10 @@
 **最近完成任务提交：** `4e882b9`
 
 **最后验证的产品提交：** `4e882b9`
+
+**本次任务起始提交：** `fdd39b4`
+
+**本次任务领取时间：** 2026-09-12 16:43 CST
 
 **本次任务起始提交：** `44cd9d5`（v0 原型已入库；本执行者从该提交继续 T43 工程收口）
 
@@ -84,6 +88,17 @@
 - 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`、`REALTIME_LATENCY_INVESTIGATION.md`（任务外调查文档）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`、`frontend/next-env.d.ts`；保留原样，不纳入 T42A。
 
 ## 当前任务
+
+### T45 — 持久化球员目录、别名与排名快照
+
+- **状态：** `in_progress`
+- **执行者 / ADE：** Claude Code / Claude Code
+- **分支：** `main`
+- **起始提交：** `fdd39b4`
+- **领取时间：** 2026-09-12 16:43 CST
+- **范围：** 按 [P2.6 实施计划 T45](./docs/superpowers/plans/2026-09-12-tennixai-player-directory-multilingual-identity-implementation.md#t45-persist-the-player-directory-aliases-and-ranking-snapshots)：migration `0003`（players 扩列 + `player_aliases` + `player_rankings`，不替换 identity 表）、`PlayerDirectoryRepository` protocol 与 `MemoryPlayerDirectoryRepository`、`PostgresPlayerDirectoryRepository`、`MatchSnapshotRepository.player_or_placeholder` 双名映射、integration 门与 alembic 往返。
+- **验收门：** schema 约束、alias 重复幂等、同 alias 多球员、最新排名快照选择、国家筛选、50 行分页、并发 external-ID 收敛、`localized_name` 快照重建；alembic upgrade→downgrade 0002→upgrade 往返 exit 0 且旧行无损；全套确定性 backend 不回归。
+- **阻塞：** 无。
 
 ### T44 — 增加 canonical 排名模型与 API-Tennis standings adapter
 
