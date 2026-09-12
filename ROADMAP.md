@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-12 12:25 CST
+**最后更新：** 2026-09-12 13:29 CST
 
-**总体状态：** `done`
+**总体状态：** `in_progress`
 
-**当前里程碑：** P2 — Live Match Intelligence（`done`）
+**当前里程碑：** P2.6 — Player Discovery and Multilingual Identity（`in_progress`）
 
-**当前阶段：** P2.5 — Acceptance and hardening（`done`）
+**当前阶段：** P2.6 — Player Discovery and Multilingual Identity（`in_progress`）
 
 ## 状态说明
 
@@ -29,7 +29,7 @@
 | 里程碑 | 状态 | 目标 | 进入/完成条件 |
 |---|---|---|---|
 | P1 — Match Information Assistant | `done` | 跑通真实结构化比赛查询、卡片、Match Page 与上下文 Chat | T17/T18/T19 均已完成（`69c8238`、`5572960`、`fdb0131`）；P1 已关闭 |
-| P2 — Live Match Intelligence | `in_progress` | 技术统计、PBP、近期控制指数、持久化和多进程实时协调 | T20–T40 已完成；T41 正在同步 Home 与 Match 的用户可见 Chat 展示策略，完成后恢复里程碑状态 |
+| P2 — Live Match Intelligence | `in_progress` | 技术统计、PBP、近期控制指数、持久化、多进程实时协调，以及球员目录、多语言身份与历史赛果入口 | T20–T41 已完成；T42 正在冻结 P2.6 设计与实施路线 |
 | P3 — Market & Decision Support | `planned` | 市场状态、预测、edge、confidence 和 paper trading | P2 数据可信；映射、模型评估和风控设计另行批准 |
 | Optional — Automated Execution | `deferred` | 在满足法律、风控、安全和可审计条件后考虑自动下单 | 不属于 P3 默认范围，必须单独批准 |
 
@@ -57,6 +57,7 @@
 | P2.3 — Realtime pipeline | `done` | Reducer、WebSocket worker、租约、持久化、snapshot + SSE | T26–T28 完成（`98a1a22`、`d354aba`、`f03985b`）；T29/T30 已在 P2.4 完成 |
 | P2.4 — Match intelligence | `done` | 完整 PBP、22 项统计、近期控制指数、版本化上下文 Chat | T29（`ecd916b`）、T30（`8c9e161`）、T31（`128518f`）完成；P2.5 可开始 |
 | P2.5 — Acceptance and hardening | `done` | Replay、恢复门、真实 smoke、双视口视觉、本地 runbook 与真实数据回归修复 | T32 `ac9c6e5`–T41 `5c3d469` 已完成；Home 与 Match 详情页的问答用户展示策略已同步 |
+| P2.6 — Player Discovery and Multilingual Identity | `in_progress` | ATP/WTA 单打 Top 200 目录、球员详情与历史赛果、共享多语言球员主数据和确定性名称解析 | T42 正在冻结设计与实施计划；产品实现尚未开始 |
 
 详细产品、架构和数据语义见 [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md)，逐任务实施步骤见 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md)。
 
@@ -87,6 +88,7 @@
 | T39 | P2.5 | Design and Implement Scope-Aware Multi-Tool Chat Orchestration | `done` | `61d8fee` | 作用域感知工具目录、多工具并行/依赖串行、非法调用重规划、部分失败降级、完整综合上下文规划与冻结事实质量门；CommonMark + GFM 表格等语义渲染；backend 确定性 `373 passed, 2 skipped, 11 deselected`，真实 Qwen `9 passed`，frontend `147 passed` + typecheck/build，隔离 fake Playwright `12 passed/6 skipped`，真实 LLM 浏览器桌面/移动 `6 passed`；真实质量门曾捕获 `BO3` 泄漏并在修复后全通过 |
 | T40 | P2.5 | Repair Real Chat Completion and Polish User-Facing Markdown Answers | `done` | `17ccdb7` | 修复未知赛制回答的二次生成失败导致 `查询未完成`；已有结构化数据时生成异常/空结果仍以可读正文、warning 和 `done` 完成；正文移除原问题回显、内部 `format`/工具/质量校验话术和“重要说明”模板，缺失赛制改为独立友好提示；backend 确定性 `374 passed, 2 skipped, 11 deselected`，真实 Qwen `9 passed`，frontend `149 passed` + typecheck/build，隔离 fake Playwright `12 passed/6 skipped`，真实浏览器复杂分析等待完整结果并通过质量断言，浏览器 error/warn 为空 |
 | T41 | P2.5 | Sync Home Chat User-Facing Answer Policy | `done` | `5c3d469` | 将 T40 的生产回答展示策略同步到 Home：去除内部实现来源 footer，统一用户可见状态话术，保留结构化比赛卡、友好资料 warning、进度和重试；TDD 先覆盖内部文字泄漏与完整流式结果，再通过前端 151 passed、typecheck/build、隔离 fake Home desktop/mobile 2 passed、P1 视觉 12 passed 和真实浏览器等待 `done` 验证；完整 e2e 28 passed/14 skipped/14 failed 为既有 P2 gender query 断言与 prototype 视觉基线问题；不扩大 Home 工具能力，不改预览原型 |
+| T42 | P2.6 | Freeze Player Directory, Multilingual Identity, and Historical Results Design | `in_progress` | — | 已领取；固化已批准的产品、数据、解析、API、Chat、v0 与验收边界，并拆解后续 TDD 实施任务；本任务不写产品代码 |
 
 ## P2 完成门摘要
 
