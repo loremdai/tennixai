@@ -84,7 +84,8 @@ test.describe('P1 flow', () => {
     await page.getByLabel('向 Tennix 询问本场比赛').fill('谁在发球？')
     await page.getByLabel('向 Tennix 询问本场比赛').press('Enter')
 
-    await expect(page.getByText(/已获取本场比赛的主题数据/)).toBeVisible()
+    await expect(page.getByText('本场比赛分析')).toBeVisible()
+    await expect(page.getByText('“谁在发球？”')).toHaveCount(0)
     const serverIndicator = page.locator('#server-indicator')
     await expect(serverIndicator).toBeVisible()
   })

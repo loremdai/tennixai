@@ -83,7 +83,7 @@ test.describe('P2 Replay realtime business flow', () => {
     await page.getByLabel('向 Tennix 询问本场比赛').fill('当前比分是多少？')
     await page.getByLabel('向 Tennix 询问本场比赛').press('Enter')
     const answerBody = page.getByTestId('markdown-answer')
-    await expect(page.getByText(/已连接本场比赛上下文/)).toBeVisible({ timeout: 5_000 })
+    await expect(answerBody).not.toBeEmpty({ timeout: 5_000 })
     const answerText = await answerBody.textContent()
 
     await expect(page.getByText('数据已校准')).toBeVisible({ timeout: 5_000 })

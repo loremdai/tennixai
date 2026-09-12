@@ -146,7 +146,7 @@ function answerLabel(chat: ChatViewState): string {
     case 'matches':
       return '结构化比赛结果'
     case 'intelligence':
-      return '本场比赛主题数据'
+      return '本场比赛分析'
     default:
       return '回答'
   }
@@ -277,7 +277,6 @@ export function HomeAssistant({
                     <CheckCircle2 aria-label="结构化数据" className="size-4 text-muted-foreground" />
                   )}
                 </div>
-                <p className="mt-3 break-words text-xs text-muted-foreground">“{chat.question}”</p>
                 <h3 className="mt-2 text-balance text-lg font-semibold">{answerTitle(chat, cards)}</h3>
                 {summary ? <MarkdownAnswer content={summary} /> : null}
                 <ChatWarnings warnings={chat.warnings} />

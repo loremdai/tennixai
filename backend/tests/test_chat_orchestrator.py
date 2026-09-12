@@ -141,17 +141,6 @@ class MixedOutcomeBusinessTools(ConcurrentBusinessTools):
         return await super().execute(name, arguments, context)
 
 
-class RepairingStreamModel(FakeChatModel):
-    def __init__(self, responses: list[list[str]], **kwargs):
-        super().__init__(**kwargs)
-        self.responses = list(responses)
-
-    async def stream_text(self, messages, *, tools=None):
-        self.stream_calls.append(messages)
-        for chunk in self.responses.pop(0):
-            yield chunk
-
-
 class UnknownFormatRecordingProvider(RecordingProvider):
     async def get_match_snapshot(self, match_id: str):
         snapshot = await super().get_match_snapshot(match_id)
@@ -574,11 +563,14 @@ async def test_llm_failure_after_data_keeps_structured_result() -> None:
         "status",
         "status",
         "text_delta",
-        "error",
+        "warning",
+        "done",
     ]
     text = next(event for event in events if event.type is ChatEventType.TEXT_DELTA)
     assert text.payload["delta"] == "比赛数据已找到，但 AI 说明暂时不可用。"
-    assert events[-1].payload["code"] == "llm_unavailable"
+    warning = next(event for event in events if event.type is ChatEventType.WARNING)
+    assert warning.payload["code"] == "llm_response_unavailable"
+    assert events[-1].type is ChatEventType.DONE
 
 
 @pytest.mark.asyncio
@@ -841,12 +833,9 @@ async def test_match_comprehensive_analysis_plans_all_context_topics_before_synt
 
 
 @pytest.mark.asyncio
-async def test_unknown_format_answer_is_repaired_before_text_is_emitted() -> None:
-    model = RepairingStreamModel(
-        responses=[
-            ["无法确定本场是否为 BO3。"],
-            ["赛制信息暂未提供，无法推断盘数结构。"],
-        ],
+async def test_unknown_format_answer_is_sanitized_before_text_is_emitted() -> None:
+    model = FakeChatModel(
+        text_chunks=["无法确定本场是否为 BO3，盘数比分可能是 3-1。"],
         turns=[ModelTurn()],
     )
     orchestrator, recording = build_orchestrator(model, UnknownFormatRecordingProvider)
@@ -874,24 +863,27 @@ async def test_unknown_format_answer_is_repaired_before_text_is_emitted() -> Non
         for event in events
         if event.type is ChatEventType.TEXT_DELTA
     )
-    assert text == "赛制信息暂未提供，无法推断盘数结构。"
+    assert "无法推断盘数结构" not in text
     assert "BO3" not in text
+    assert "3-1" not in text
     assert any(
         event.type is ChatEventType.WARNING
-        and event.payload["code"] == "llm_response_repaired"
+        and event.payload["code"] == "llm_response_sanitized"
         for event in events
     )
-    assert len(model.stream_calls) == 2
+    assert any(
+        event.type is ChatEventType.WARNING
+        and event.payload["code"] == "match_format_unavailable"
+        for event in events
+    )
+    assert len(model.stream_calls) == 1
     assert events[-1].type is ChatEventType.DONE
 
 
 @pytest.mark.asyncio
-async def test_unknown_format_answer_never_emits_a_second_invalid_generation() -> None:
-    model = RepairingStreamModel(
-        responses=[
-            ["本场可能是 BO3。"],
-            ["本场可能是 BO5。"],
-        ],
+async def test_unknown_format_answer_sanitizes_all_forbidden_format_terms() -> None:
+    model = FakeChatModel(
+        text_chunks=["本场可能是 BO5，接下来是第五盘，盘数比分为 3–1。"],
         turns=[ModelTurn()],
     )
     orchestrator, recording = build_orchestrator(model, UnknownFormatRecordingProvider)
@@ -920,10 +912,71 @@ async def test_unknown_format_answer_never_emits_a_second_invalid_generation() -
         if event.type is ChatEventType.TEXT_DELTA
     )
     assert "BO" not in text
-    assert "无法推断盘数结构" in text
+    assert "第五盘" not in text
+    assert "3–1" not in text
+    assert "无法推断盘数结构" not in text
     assert any(
         event.type is ChatEventType.WARNING
-        and event.payload["code"] == "llm_response_rejected"
+        and event.payload["code"] == "llm_response_sanitized"
+        for event in events
+    )
+    assert any(
+        event.type is ChatEventType.WARNING
+        and event.payload["code"] == "match_format_unavailable"
+        for event in events
+    )
+    assert len(model.stream_calls) == 1
+    assert events[-1].type is ChatEventType.DONE
+
+
+@pytest.mark.asyncio
+async def test_unknown_format_answer_drops_internal_quality_rule_text() -> None:
+    model = FakeChatModel(
+        text_chunks=[
+            "**重要说明：** 本场比赛状态为“finished”（已结束），胜者为 **Ben Shelton**。"
+            "因此以下结论为对已发生比赛结果的事实复盘与原因分析，而非预测。"
+            "由于工具未返回赛制字段（format 为 null），本文不推断具体赛制盘数。"
+            "同时，两位球员的历史特点、优缺点资料暂未提供，以下分析完全基于本场各盘技术统计事实。"
+        ],
+        turns=[ModelTurn()],
+    )
+    orchestrator, recording = build_orchestrator(model, UnknownFormatRecordingProvider)
+    await recording.inner.build()
+    match_id = recording.inner.live_match.id
+
+    events = [
+        event
+        async for event in orchestrator.stream(
+            ChatRequest(
+                scope="match",
+                match_id=match_id,
+                messages=[
+                    ChatMessage(
+                        role="user",
+                        content="根据当前比赛的技术统计分析趋势。",
+                    )
+                ],
+            )
+        )
+    ]
+
+    text = "".join(
+        event.payload["delta"]
+        for event in events
+        if event.type is ChatEventType.TEXT_DELTA
+    )
+    assert "重要说明" not in text
+    assert "无法推断盘数结构" not in text
+    assert "format 字段" not in text
+    assert "format 为 null" not in text
+    assert "工具未返回赛制字段" not in text
+    assert "不推断具体赛制盘数" not in text
+    assert "两位球员的历史特点、优缺点资料暂未提供" not in text
+    assert "以下分析主要依据本场比赛已记录的比分和技术统计" in text
+    assert "历史特点和优缺点资料当前不可用" not in text
+    assert any(
+        event.type is ChatEventType.WARNING
+        and event.payload["code"] == "match_format_unavailable"
         for event in events
     )
     assert events[-1].type is ChatEventType.DONE
@@ -1025,7 +1078,7 @@ async def test_empty_synthesis_does_not_silently_complete_after_data() -> None:
     assert text and text[-1].payload["delta"] == "比赛数据已找到，但 AI 说明暂时不可用。"
     assert any(
         event.type is ChatEventType.WARNING
-        and event.payload["code"] == "llm_empty_response"
+        and event.payload["code"] == "llm_response_empty"
         for event in events
     )
     assert not any(event.type is ChatEventType.ERROR for event in events)

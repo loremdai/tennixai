@@ -178,10 +178,9 @@ function AssistantPanel({
                   : chat.data?.kind === 'unsupported'
                     ? '暂不支持'
                     : chat.data?.kind === 'intelligence'
-                      ? '本场比赛主题数据'
-                    : '本场比赛结构化结果'}
+                      ? '本场比赛分析'
+                      : '本场比赛结构化结果'}
               </div>
-              <p className="mt-3 break-words text-sm font-medium">“{chat.question}”</p>
               <MarkdownAnswer content={chat.text || (chat.error ? `查询失败（${chat.error.code}），请重试。` : '')} />
               <ChatWarnings warnings={chat.warnings} />
               {answerIsOutdated ? (
@@ -195,10 +194,6 @@ function AssistantPanel({
                   {chatProgressLabel(chat.stage, chat.progress)}
                 </p>
               ) : null}
-              <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-                <CircleCheck aria-hidden="true" className="size-4" />
-                已连接本场比赛上下文
-              </div>
             </article>
           ) : chat && (chat.phase === 'loading' || chat.phase === 'streaming') ? (
             <div className="flex min-h-32 flex-col items-center justify-center gap-3 rounded-lg border border-dashed bg-muted/15 p-4 text-center">

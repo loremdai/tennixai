@@ -355,6 +355,25 @@ describe('production match page', () => {
     expect(await screen.findByText('Sinner 正在发球。')).toBeVisible()
   })
 
+  it('keeps internal prompt and context labels out of the user-facing analysis card', async () => {
+    mockStream({
+      data: { kind: 'intelligence', matches: [] },
+      text: '本场比赛分析已完成。',
+    })
+    render(<MatchPage matchId="mat_1" />)
+    await screen.findByText('Jannik Sinner')
+
+    const question = '根据本场数据分析趋势。'
+    await userEvent.type(screen.getByLabelText('向 Tennix 询问本场比赛'), question)
+    await userEvent.keyboard('{Enter}')
+
+    expect(await screen.findByText('本场比赛分析')).toBeVisible()
+    expect(screen.getByText('本场比赛分析已完成。')).toBeVisible()
+    expect(screen.queryByText(`“${question}”`)).toBeNull()
+    expect(screen.queryByText('本场比赛主题数据')).toBeNull()
+    expect(screen.queryByText('已连接本场比赛上下文')).toBeNull()
+  })
+
   it('renders optional data warnings without showing a terminal query error', async () => {
     mockStream({
       data: { kind: 'match', matches: [makeMatch()] },

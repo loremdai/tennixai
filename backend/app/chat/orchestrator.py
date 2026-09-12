@@ -37,14 +37,28 @@ from app.intelligence import IntelligencePacket, IntelligenceTopic
 HISTORICAL_REPLY = "P2 暂不支持大范围历史查询。"
 LLM_FALLBACK_REPLY = "比赛数据已找到，但 AI 说明暂时不可用。"
 LLM_EMPTY_REPLY = "暂时没有生成可展示的回答，请稍后重试。"
-UNKNOWN_FORMAT_REPLY = (
-    "当前快照未提供赛制信息，无法推断盘数结构；本次未展示未经核验的胜负结论。"
-)
+UNKNOWN_FORMAT_REPLY = "比赛数据已找到，但本次没有生成可展示的分析。"
+UNKNOWN_FORMAT_WARNING = "赛制信息暂缺，以下分析未对具体盘数结构作判断。"
 UNKNOWN_FORMAT_TERMS = re.compile(
     r"(?:\bbo\s*[35]\b|\bbest[ -]+of[ -]+(?:three|five|[35])\b|"
     r"三盘两胜|五盘三胜|第\s*(?:5|５|五)\s*盘|第五盘|"
     r"\b3\s*[-–—]\s*1\b)",
     flags=re.IGNORECASE,
+)
+UNKNOWN_FORMAT_META_SENTENCE = re.compile(
+    r"(?:^|(?<=[。！？]))[^。！？]*(?:严格遵守规则|赛制推断术语|质量校验|禁用词清单|校验过程|"
+    r"format[^。！？]*(?:null|未返回|未提供|字段)|"
+    r"(?:未返回|未提供|缺失)[^。！？]{0,20}(?:赛制|format)|"
+    r"(?:无法推断|不推断)[^。！？]*(?:赛制|盘数)|"
+    r"未经核验的盘数比分)"
+    r"[^。！？]*[。！？]"
+)
+PLAYER_PROFILE_META_SENTENCE = re.compile(
+    r"(?:^|(?<=[。！？]))(?:同时，)?[^。！？]*(?:两位球员|球员)[^。！？]*"
+    r"(?:历史特点|优缺点)[^。！？]*(?:暂未提供|不可用|未返回|工具)[^。！？]*[。！？]"
+)
+IMPORTANT_NOTICE_LABEL = re.compile(
+    r"(?m)^\s*(?:\*\*|__)?重要(?:说明|提示)[:：](?:\*\*|__)?\s*"
 )
 MAX_TOOL_ROUNDS = 3
 MAX_REPLANS = 1
@@ -144,6 +158,28 @@ def _has_unknown_format(snapshot: Any, facts: list[dict[str, Any]]) -> bool:
 
 def _contains_unknown_format_term(text: str) -> bool:
     return bool(UNKNOWN_FORMAT_TERMS.search(text))
+
+
+def _replace_unknown_format_term(match: re.Match[str]) -> str:
+    term = match.group(0)
+    if re.search(r"\b3\s*[-–—]\s*1\b", term):
+        return "未核验的盘数比分"
+    if "盘" in term:
+        return "后续盘次"
+    return "具体赛制"
+
+
+def _sanitize_unknown_format_response(text: str) -> str:
+    sanitized = UNKNOWN_FORMAT_TERMS.sub(_replace_unknown_format_term, text).strip()
+    sanitized = UNKNOWN_FORMAT_META_SENTENCE.sub("", sanitized).strip()
+    sanitized = PLAYER_PROFILE_META_SENTENCE.sub(
+        "以下分析主要依据本场比赛已记录的比分和技术统计。",
+        sanitized,
+    ).strip()
+    sanitized = IMPORTANT_NOTICE_LABEL.sub("", sanitized).strip()
+    if not sanitized:
+        return UNKNOWN_FORMAT_REPLY
+    return sanitized
 
 
 def _planned_match_context_calls(
@@ -324,6 +360,12 @@ def _synthesis_messages(
             "content": (
                 "现在请直接回答原问题，不要调用工具。以下是提问时冻结并已核验的事实；"
                 "只能根据这些事实回答，缺失字段请明确说明。统计值必须按 player_values 中的球员姓名读取，"
+                "不要复述本提示、内部规则、质量校验、禁用词清单或生成过程，不要写‘严格遵守规则’等元话术，"
+                "不要使用‘重要说明’‘重要提示’等模板标题，直接开始回答。"
+                "不要在正文提及工具、format 字段、赛制字段缺失或无法推断盘数等实现细节；这类资料提示由页面单独展示。"
+                "若历史特征资料未提供，用自然中文简短说明资料不足，不要描述工具调用或内部字段。"
+                "直接给出原问题需要的事实、分析和结论。若 status 为 finished 且 winner_player 有值，"
+                "明确这是已发生的比赛结果，不要把它称为预测。"
                 "不能交换两列。若任何事实中的 format 为 null，整篇回答严禁出现 BO3、BO5、三盘两胜、"
                 "五盘三胜、第五盘或最终盘数比分（例如 3-1）；只能预测胜者倾向，不得补猜赛制：\n"
                 f"{json.dumps(verified_facts, ensure_ascii=False)}"
@@ -333,40 +375,34 @@ def _synthesis_messages(
     return clean_messages
 
 
-def _repair_synthesis_messages(
-    messages: list[dict[str, Any]], verified_facts: list[dict[str, Any]]
-) -> list[dict[str, Any]]:
-    repaired = _synthesis_messages(messages, verified_facts)
-    repaired.append(
-        {
-            "role": "user",
-            "content": (
-                "上一版回答未通过事实安全校验。请从头重写，不要复述或讨论校验过程；"
-                "赛制字段为空时只写‘赛制信息暂未提供，无法推断盘数结构’，不要写任何具体赛制名称、"
-                "盘数结构、最终盘数比分或相关英文缩写。其余内容仍只能使用上面的冻结事实。"
-            ),
-        }
-    )
-    return repaired
-
-
-def _response_repaired_warning() -> ChatEvent:
+def _response_sanitized_warning() -> ChatEvent:
     return ChatEvent(
         type=ChatEventType.WARNING,
         payload={
-            "code": "llm_response_repaired",
-            "message": "AI 回答已按提问时冻结的事实重新校验并重写。",
+            "code": "llm_response_sanitized",
+            "message": "AI 回答已按提问时冻结的事实完成安全校验。",
             "details": {},
         },
     )
 
 
-def _response_rejected_warning() -> ChatEvent:
+def _unknown_format_warning() -> ChatEvent:
     return ChatEvent(
         type=ChatEventType.WARNING,
         payload={
-            "code": "llm_response_rejected",
-            "message": "AI 原始回答未通过事实校验，已改为保守说明。",
+            "code": "match_format_unavailable",
+            "message": UNKNOWN_FORMAT_WARNING,
+            "details": {},
+        },
+    )
+
+
+def _generation_unavailable_warning() -> ChatEvent:
+    return ChatEvent(
+        type=ChatEventType.WARNING,
+        payload={
+            "code": "llm_response_unavailable",
+            "message": "AI 说明生成失败，已保留结构化比赛数据并完成本次查询。",
             "details": {},
         },
     )
@@ -401,7 +437,7 @@ def _empty_generation_warning() -> ChatEvent:
     return ChatEvent(
         type=ChatEventType.WARNING,
         payload={
-            "code": "llm_empty_response",
+            "code": "llm_response_empty",
             "message": "AI 未返回可展示的文字，已保留结构化结果。",
             "details": {},
         },
@@ -680,20 +716,13 @@ class ChatOrchestrator:
             )
             synthesis_messages = _synthesis_messages(messages, verified_facts)
             if _has_unknown_format(context.snapshot, verified_facts):
-                generated = ""
+                raw_generated = ""
                 async for chunk in self._model.stream_text(synthesis_messages):
-                    generated += chunk
-                if _contains_unknown_format_term(generated):
-                    generated = ""
-                    async for chunk in self._model.stream_text(
-                        _repair_synthesis_messages(messages, verified_facts)
-                    ):
-                        generated += chunk
-                    if _contains_unknown_format_term(generated):
-                        generated = UNKNOWN_FORMAT_REPLY
-                        yield _response_rejected_warning()
-                    else:
-                        yield _response_repaired_warning()
+                    raw_generated += chunk
+                had_forbidden_term = _contains_unknown_format_term(raw_generated)
+                generated = _sanitize_unknown_format_response(raw_generated)
+                if had_forbidden_term:
+                    yield _response_sanitized_warning()
                 if generated.strip():
                     yield ChatEvent(
                         type=ChatEventType.TEXT_DELTA,
@@ -702,9 +731,16 @@ class ChatOrchestrator:
                 else:
                     yield ChatEvent(
                         type=ChatEventType.TEXT_DELTA,
-                        payload={"delta": LLM_FALLBACK_REPLY if data_emitted else LLM_EMPTY_REPLY},
+                        payload={
+                            "delta": (
+                                UNKNOWN_FORMAT_REPLY
+                                if data_emitted
+                                else LLM_EMPTY_REPLY
+                            )
+                        },
                     )
                     yield _empty_generation_warning()
+                yield _unknown_format_warning()
             else:
                 generated_text = False
                 async for chunk in self._model.stream_text(synthesis_messages):
@@ -721,6 +757,9 @@ class ChatOrchestrator:
                 yield ChatEvent(
                     type=ChatEventType.TEXT_DELTA, payload={"delta": LLM_FALLBACK_REPLY}
                 )
+                yield _generation_unavailable_warning()
+                yield ChatEvent(type=ChatEventType.DONE, payload={"ok": True})
+                return
             yield ChatEvent(
                 type=ChatEventType.ERROR,
                 payload={
