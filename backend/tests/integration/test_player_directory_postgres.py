@@ -5,7 +5,7 @@ Requires: `docker compose up -d --wait postgres redis` and
 """
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from uuid import uuid4
 
 import pytest
@@ -33,6 +33,9 @@ from app.players.models import (
 pytestmark = pytest.mark.infrastructure
 
 FIXED_NOW = datetime(2026, 9, 12, 9, 0, tzinfo=timezone.utc)
+# Ranking snapshots written by tests use a dedicated synthetic future date:
+# always the latest snapshot for assertions, never colliding with real syncs.
+TEST_RANKING_DATE = date(2030, 1, 5)
 
 
 @pytest.fixture()
@@ -76,7 +79,7 @@ def _entry(namespace: str, index: int, tour: Tour, rank: int, *, country: str = 
         rank=rank,
         points=1000 - index,
         movement=RankingMovement.SAME,
-        ranking_date=FIXED_NOW.date(),
+        ranking_date=TEST_RANKING_DATE,
         fetched_at=FIXED_NOW,
     )
 
@@ -215,7 +218,7 @@ async def test_concurrent_external_ids_converge_to_one_directory_player(
                 rank=77,
                 points=777,
                 movement=RankingMovement.SAME,
-                ranking_date=FIXED_NOW.date(),
+                ranking_date=TEST_RANKING_DATE,
                 fetched_at=FIXED_NOW,
             ),
         )
@@ -249,7 +252,7 @@ async def test_match_snapshot_rebuild_carries_localized_name(database: Database)
                 rank=1,
                 points=100,
                 movement=RankingMovement.SAME,
-                ranking_date=FIXED_NOW.date(),
+                ranking_date=TEST_RANKING_DATE,
                 fetched_at=FIXED_NOW,
             ),
         )
