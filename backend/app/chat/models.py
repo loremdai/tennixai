@@ -15,6 +15,11 @@ class ChatScope(StrEnum):
     MATCH = "match"
 
 
+class ToolRequiredness(StrEnum):
+    CORE = "core"
+    OPTIONAL = "optional"
+
+
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant"]
     content: str = Field(min_length=1, max_length=4000)
@@ -92,6 +97,27 @@ class ModelTurn(BaseModel):
     tool_calls: list[ToolCall] = Field(default_factory=list)
 
 
+class ToolOutcomeStatus(StrEnum):
+    SUCCESS = "success"
+    PARTIAL = "partial"
+    UNAVAILABLE = "unavailable"
+    FAILED = "failed"
+    REJECTED = "rejected"
+
+
+class ToolOutcome(BaseModel):
+    tool_name: str
+    call_id: str
+    status: ToolOutcomeStatus
+    requiredness: ToolRequiredness
+    result: StructuredToolResult | None = None
+    code: str | None = None
+    reason: str | None = None
+    retryable: bool = False
+    duration_ms: int = Field(ge=0)
+    duplicate_of: str | None = None
+
+
 class ChatEventType(StrEnum):
     STATUS = "status"
     DATA = "data"
@@ -127,4 +153,7 @@ __all__ = [
     "ModelTurn",
     "StructuredToolResult",
     "ToolCall",
+    "ToolOutcome",
+    "ToolOutcomeStatus",
+    "ToolRequiredness",
 ]

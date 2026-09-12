@@ -11,6 +11,7 @@ from typing import Any
 
 from app.chat.client import ChatModel
 from app.chat.capabilities import ChatPhase, allowed_tool_names
+from app.chat.executor import ToolBatchExecutor
 from app.chat.models import (
     ChatContext,
     ChatEvent,
@@ -18,6 +19,8 @@ from app.chat.models import (
     ChatRequest,
     ChatScope,
     StructuredToolResult,
+    ToolOutcome,
+    ToolOutcomeStatus,
 )
 from app.chat.tools import (
     BusinessTools,
@@ -49,7 +52,6 @@ MATCH_SYSTEM_SUFFIX = (
     "不要用回答期间的新版本覆盖或否定这份基线。"
 )
 
-OPTIONAL_MATCH_TOOLS = {"get_player_results", "get_head_to_head"}
 MATCH_HISTORY_PHRASES = (
     "近期",
     "recent",
@@ -144,6 +146,26 @@ def _model_tool_result(result: StructuredToolResult) -> dict[str, Any]:
     return payload
 
 
+def _model_tool_outcome(outcome: ToolOutcome) -> dict[str, Any]:
+    if outcome.result is not None and outcome.status in {
+        ToolOutcomeStatus.SUCCESS,
+        ToolOutcomeStatus.PARTIAL,
+    }:
+        return _model_tool_result(outcome.result)
+    if outcome.status is ToolOutcomeStatus.REJECTED:
+        return {
+            "kind": "rejected",
+            "tool": outcome.tool_name,
+            "code": outcome.code,
+            "reason": outcome.reason,
+        }
+    return {
+        "kind": "unavailable",
+        "tool": outcome.tool_name,
+        "code": outcome.code,
+    }
+
+
 class ChatOrchestrator:
     def __init__(self, tools: BusinessTools, model: ChatModel) -> None:
         self._tools = tools
@@ -209,6 +231,8 @@ class ChatOrchestrator:
         data_emitted = False
         rounds = 0
         catalog = _catalog_for_request(self._tools.catalog(), request, last_user)
+        executor = ToolBatchExecutor(self._tools, context)
+        known_match_ids = {request.match_id} if request.match_id else set()
 
         try:
             while True:
@@ -247,45 +271,49 @@ class ChatOrchestrator:
                         ],
                     }
                 )
-                for call in turn.tool_calls:
-                    try:
-                        result = await self._tools.execute(call.name, call.arguments, context)
-                    except AppError as error:
-                        if (
-                            data_emitted
-                            and request.scope is ChatScope.MATCH
-                            and call.name in OPTIONAL_MATCH_TOOLS
-                            and error.code in {"not_found", "unsupported"}
-                        ):
-                            messages.append(
-                                {
-                                    "role": "tool",
-                                    "tool_call_id": call.id,
-                                    "content": json.dumps(
-                                        {
-                                            "kind": "unavailable",
-                                            "tool": call.name,
-                                            "code": error.code,
-                                        },
-                                        ensure_ascii=False,
-                                    ),
-                                }
-                            )
-                            continue
-                        raise
+                outcomes = await executor.execute(
+                    turn.tool_calls,
+                    allowed_names={item["function"]["name"] for item in catalog},
+                    known_match_ids=known_match_ids,
+                )
+                for outcome in outcomes:
                     messages.append(
                         {
                             "role": "tool",
-                            "tool_call_id": call.id,
+                            "tool_call_id": outcome.call_id,
                             "content": json.dumps(
-                                _model_tool_result(result), ensure_ascii=False
+                                _model_tool_outcome(outcome), ensure_ascii=False
                             ),
                         }
                     )
-                    yield ChatEvent(
-                        type=ChatEventType.DATA, payload=result.model_dump(mode="json")
-                    )
-                    data_emitted = True
+                    if (
+                        outcome.result is not None
+                        and outcome.status
+                        in {ToolOutcomeStatus.SUCCESS, ToolOutcomeStatus.PARTIAL}
+                    ):
+                        known_match_ids.update(
+                            match.id for match in outcome.result.matches
+                        )
+                        if outcome.duplicate_of is None:
+                            yield ChatEvent(
+                                type=ChatEventType.DATA,
+                                payload=outcome.result.model_dump(mode="json"),
+                            )
+                        data_emitted = True
+                    elif (
+                        outcome.requiredness.value == "core"
+                        and outcome.status
+                        in {
+                            ToolOutcomeStatus.UNAVAILABLE,
+                            ToolOutcomeStatus.FAILED,
+                        }
+                        and not data_emitted
+                    ):
+                        raise AppError(
+                            outcome.code or "tool_failed",
+                            "Tool execution failed",
+                            503,
+                        )
                 yield ChatEvent(
                     type=ChatEventType.STATUS, payload={"stage": "planning"}
                 )

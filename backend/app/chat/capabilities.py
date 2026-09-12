@@ -1,18 +1,13 @@
 from dataclasses import dataclass
 from enum import StrEnum
 
-from app.chat.models import ChatScope
+from app.chat.models import ChatScope, ToolRequiredness
 
 
 class ChatPhase(StrEnum):
     DISCOVERY = "discovery"
     CONTEXT = "context"
     ENRICHMENT = "enrichment"
-
-
-class ToolRequiredness(StrEnum):
-    CORE = "core"
-    OPTIONAL = "optional"
 
 
 @dataclass(frozen=True)

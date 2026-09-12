@@ -1,3 +1,4 @@
+import asyncio
 import json
 from collections import Counter
 from datetime import datetime, timezone
@@ -7,11 +8,13 @@ import pytest
 from app.cache import AsyncTTLCache
 from app.chat.client import FakeChatModel
 from app.chat.models import (
+    ChatContext,
     ChatEvent,
     ChatEventType,
     ChatMessage,
     ChatRequest,
     ModelTurn,
+    StructuredToolResult,
     ToolCall,
 )
 from app.chat.orchestrator import ChatOrchestrator
@@ -90,6 +93,41 @@ class CatalogRecordingModel(FakeChatModel):
         )
         async for chunk in super().stream_text(messages, tools=tools):
             yield chunk
+
+
+class ConcurrentBusinessTools:
+    def __init__(self) -> None:
+        self.in_flight = 0
+        self.max_in_flight = 0
+        self.executed: list[str] = []
+
+    def catalog(self, **kwargs):
+        return [
+            {
+                "type": "function",
+                "function": {
+                    "name": name,
+                    "description": name,
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+            for name in ("find_player_matches", "get_live_matches")
+        ]
+
+    async def freeze_match_context(self, context: ChatContext) -> ChatContext:
+        return context
+
+    async def execute(
+        self, name: str, arguments: dict, context: ChatContext
+    ) -> StructuredToolResult:
+        self.executed.append(name)
+        self.in_flight += 1
+        self.max_in_flight = max(self.max_in_flight, self.in_flight)
+        try:
+            await asyncio.sleep(0.01)
+            return StructuredToolResult(kind="matches")
+        finally:
+            self.in_flight -= 1
 
 
 def build_orchestrator(model: FakeChatModel, provider_type=RecordingProvider):
@@ -181,6 +219,80 @@ async def test_bounded_model_context_keeps_full_sse_data() -> None:
     assert model_result["match_count"] == 30
     assert model_result["truncated"] is True
     assert "freshness" not in model_result["matches"][0]
+
+
+@pytest.mark.asyncio
+async def test_independent_tool_calls_execute_in_parallel() -> None:
+    model = FakeChatModel(
+        turns=[
+            ModelTurn(
+                tool_calls=[
+                    ToolCall(
+                        id="call_a",
+                        name="find_player_matches",
+                        arguments={"player_name": "Sinner", "time_scope": "tonight"},
+                    ),
+                    ToolCall(id="call_b", name="get_live_matches", arguments={}),
+                ]
+            ),
+            ModelTurn(),
+        ],
+        text_chunks=["已完成。"],
+    )
+    tools = ConcurrentBusinessTools()
+
+    events = [
+        event
+        async for event in ChatOrchestrator(tools, model).stream(
+            global_request("今晚和现在的比赛？")
+        )
+    ]
+
+    assert tools.max_in_flight == 2
+    assert events[-1].type is ChatEventType.DONE
+
+
+@pytest.mark.asyncio
+async def test_duplicate_tool_call_reuses_the_first_result() -> None:
+    model = FakeChatModel(
+        turns=[
+            tool_turn("get_live_matches", {}, "call_1"),
+            tool_turn("get_live_matches", {}, "call_2"),
+            ModelTurn(),
+        ],
+        text_chunks=["已完成。"],
+    )
+    tools = ConcurrentBusinessTools()
+
+    events = [
+        event
+        async for event in ChatOrchestrator(tools, model).stream(
+            global_request("现在有什么比赛？")
+        )
+    ]
+
+    assert tools.executed.count("get_live_matches") == 1
+    assert events[-1].type is ChatEventType.DONE
+
+
+@pytest.mark.asyncio
+async def test_invalid_global_match_tool_is_rejected_without_execution() -> None:
+    model = FakeChatModel(
+        turns=[
+            tool_turn("get_match", {}, "call_invalid"),
+            ModelTurn(),
+        ],
+        text_chunks=["没有足够的比赛 ID。"],
+    )
+    orchestrator, recording = build_orchestrator(model)
+
+    events = [
+        event
+        async for event in orchestrator.stream(global_request("查一下比赛详情"))
+    ]
+
+    assert recording.calls["get_match"] == 0
+    assert events[-1].type is ChatEventType.DONE
 
 
 @pytest.mark.asyncio
@@ -293,7 +405,6 @@ async def test_third_tool_round_is_rejected() -> None:
         "data",
         "status",
         "status",
-        "data",
         "status",
         "error",
     ]
