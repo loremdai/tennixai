@@ -10,7 +10,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from app.chat.client import ChatModel
-from app.chat.capabilities import ChatPhase, allowed_tool_names
+from app.chat.capabilities import ChatPhase, ToolRequiredness, allowed_tool_names
 from app.chat.executor import ToolBatchExecutor
 from app.chat.models import (
     ChatContext,
@@ -32,7 +32,8 @@ from app.errors import AppError
 
 HISTORICAL_REPLY = "P2 暂不支持大范围历史查询。"
 LLM_FALLBACK_REPLY = "比赛数据已找到，但 AI 说明暂时不可用。"
-MAX_TOOL_ROUNDS = 2
+MAX_TOOL_ROUNDS = 3
+MAX_REPLANS = 1
 MAX_MODEL_MATCHES = 12
 
 GLOBAL_SYSTEM_PROMPT = (
@@ -60,6 +61,13 @@ MATCH_HISTORY_PHRASES = (
     "h2h",
     "head-to-head",
     "head to head",
+    "球员特点",
+    "球员背景",
+    "近期状态",
+    "近期表现",
+    "优缺点",
+    "strengths",
+    "weaknesses",
 )
 
 
@@ -71,15 +79,22 @@ def _requests_match_history(text: str) -> bool:
 
 
 def _catalog_for_request(
-    tools: list[dict[str, Any]], request: ChatRequest, last_user: str
+    tools: list[dict[str, Any]],
+    request: ChatRequest,
+    last_user: str,
+    *,
+    phase: ChatPhase | None = None,
+    has_discovered_matches: bool = False,
 ) -> list[dict[str, Any]]:
-    phase = ChatPhase.CONTEXT if request.scope is ChatScope.MATCH else ChatPhase.DISCOVERY
+    phase = phase or (
+        ChatPhase.CONTEXT if request.scope is ChatScope.MATCH else ChatPhase.DISCOVERY
+    )
     allowed = set(
         allowed_tool_names(
             request.scope,
             phase,
             history_requested=_requests_match_history(last_user),
-            has_discovered_matches=False,
+            has_discovered_matches=has_discovered_matches,
         )
     )
     return [
@@ -166,6 +181,31 @@ def _model_tool_outcome(outcome: ToolOutcome) -> dict[str, Any]:
     }
 
 
+def _optional_warning(outcome: ToolOutcome) -> ChatEvent:
+    return ChatEvent(
+        type=ChatEventType.WARNING,
+        payload={
+            "code": "optional_data_unavailable",
+            "message": "部分辅助资料暂未提供，已继续使用可用的比赛事实。",
+            "details": {
+                "tool": outcome.tool_name,
+                "reason": outcome.reason,
+            },
+        },
+    )
+
+
+def _replan_warning() -> ChatEvent:
+    return ChatEvent(
+        type=ChatEventType.WARNING,
+        payload={
+            "code": "tool_replan_exhausted",
+            "message": "部分辅助资料未能读取，已继续使用可用的比赛事实。",
+            "details": {},
+        },
+    )
+
+
 class ChatOrchestrator:
     def __init__(self, tools: BusinessTools, model: ChatModel) -> None:
         self._tools = tools
@@ -202,7 +242,11 @@ class ChatOrchestrator:
             yield ChatEvent(type=ChatEventType.DONE, payload={"ok": True})
             return
 
-        yield ChatEvent(type=ChatEventType.STATUS, payload={"stage": "resolving"})
+        phase = ChatPhase.CONTEXT if request.scope is ChatScope.MATCH else ChatPhase.DISCOVERY
+        yield ChatEvent(
+            type=ChatEventType.STATUS,
+            payload={"stage": "resolving", "phase": phase.value},
+        )
 
         context = ChatContext(scope=request.scope, match_id=request.match_id)
         try:
@@ -217,7 +261,10 @@ class ChatOrchestrator:
                 },
             )
             return
-        yield ChatEvent(type=ChatEventType.STATUS, payload={"stage": "planning"})
+        yield ChatEvent(
+            type=ChatEventType.STATUS,
+            payload={"stage": "planning", "phase": phase.value},
+        )
         system = GLOBAL_SYSTEM_PROMPT
         if request.scope is ChatScope.MATCH:
             system = f"{system}\n{MATCH_SYSTEM_SUFFIX.format(match_id=request.match_id)}"
@@ -229,28 +276,45 @@ class ChatOrchestrator:
         )
 
         data_emitted = False
+        core_data_emitted = False
         rounds = 0
-        catalog = _catalog_for_request(self._tools.catalog(), request, last_user)
         executor = ToolBatchExecutor(self._tools, context)
         known_match_ids = {request.match_id} if request.match_id else set()
+        has_discovered_matches = bool(known_match_ids)
+        replan_count = 0
 
         try:
             while True:
+                catalog = _catalog_for_request(
+                    self._tools.catalog(scope=request.scope),
+                    request,
+                    last_user,
+                    phase=phase,
+                    has_discovered_matches=has_discovered_matches,
+                )
                 turn = await self._model.choose(
                     messages,
                     catalog,
-                    parallel_tool_calls=True,
+                    parallel_tool_calls=phase
+                    in {ChatPhase.DISCOVERY, ChatPhase.CONTEXT},
                 )
                 if not turn.tool_calls:
                     break
                 rounds += 1
                 if rounds > MAX_TOOL_ROUNDS:
-                    raise AppError(
-                        "invalid_request", "Too many tool-call rounds requested", 422
-                    )
+                    if core_data_emitted:
+                        yield _replan_warning()
+                        break
+                    raise AppError("tool_budget_exhausted", "Tool planning limit reached", 503)
 
                 yield ChatEvent(
-                    type=ChatEventType.STATUS, payload={"stage": "fetching_data"}
+                    type=ChatEventType.STATUS,
+                    payload={
+                        "stage": "fetching_data",
+                        "phase": phase.value,
+                        "completed": 0,
+                        "total": len(turn.tool_calls),
+                    },
                 )
                 messages.append(
                     {
@@ -276,6 +340,8 @@ class ChatOrchestrator:
                     allowed_names={item["function"]["name"] for item in catalog},
                     known_match_ids=known_match_ids,
                 )
+                rejected_count = 0
+                received_data = False
                 for outcome in outcomes:
                     messages.append(
                         {
@@ -300,22 +366,59 @@ class ChatOrchestrator:
                                 payload=outcome.result.model_dump(mode="json"),
                             )
                         data_emitted = True
+                        received_data = True
+                        if outcome.requiredness is ToolRequiredness.CORE:
+                            core_data_emitted = True
+                            has_discovered_matches = has_discovered_matches or bool(
+                                outcome.result.matches
+                            )
+                    elif outcome.status is ToolOutcomeStatus.REJECTED:
+                        rejected_count += 1
+                        if outcome.requiredness is ToolRequiredness.OPTIONAL:
+                            yield _optional_warning(outcome)
                     elif (
-                        outcome.requiredness.value == "core"
+                        outcome.requiredness is ToolRequiredness.CORE
                         and outcome.status
                         in {
                             ToolOutcomeStatus.UNAVAILABLE,
                             ToolOutcomeStatus.FAILED,
                         }
-                        and not data_emitted
+                        and not core_data_emitted
                     ):
                         raise AppError(
                             outcome.code or "tool_failed",
                             "Tool execution failed",
                             503,
                         )
+                    elif outcome.requiredness is ToolRequiredness.OPTIONAL and outcome.status in {
+                        ToolOutcomeStatus.UNAVAILABLE,
+                        ToolOutcomeStatus.FAILED,
+                    }:
+                        yield _optional_warning(outcome)
+                if rejected_count:
+                    replan_count += 1
+                    if replan_count > MAX_REPLANS:
+                        if core_data_emitted:
+                            yield _replan_warning()
+                            break
+                        raise AppError(
+                            "tool_replan_exhausted",
+                            "Tool planning could not find a valid request",
+                            503,
+                        )
+                if received_data and (
+                    request.scope is ChatScope.GLOBAL
+                    or (_requests_match_history(last_user) and request.scope is ChatScope.MATCH)
+                ):
+                    phase = ChatPhase.ENRICHMENT
                 yield ChatEvent(
-                    type=ChatEventType.STATUS, payload={"stage": "planning"}
+                    type=ChatEventType.STATUS,
+                    payload={
+                        "stage": "planning",
+                        "phase": phase.value,
+                        "completed": len(outcomes),
+                        "total": len(turn.tool_calls),
+                    },
                 )
         except AppError as error:
             yield ChatEvent(
@@ -330,7 +433,8 @@ class ChatOrchestrator:
 
         try:
             yield ChatEvent(
-                type=ChatEventType.STATUS, payload={"stage": "generating"}
+                type=ChatEventType.STATUS,
+                payload={"stage": "generating", "phase": "synthesis"},
             )
             async for chunk in self._model.stream_text(messages):
                 yield ChatEvent(type=ChatEventType.TEXT_DELTA, payload={"delta": chunk})

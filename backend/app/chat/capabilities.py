@@ -89,7 +89,12 @@ def allowed_tool_names(
     names: list[str] = []
     for name in TOOL_ORDER:
         capability = _CAPABILITIES[name]
-        if scope not in capability.allowed_scopes or phase not in capability.phases:
+        phase_allowed = phase in capability.phases or (
+            scope is ChatScope.GLOBAL
+            and phase is ChatPhase.ENRICHMENT
+            and name in {"find_player_matches", "get_live_matches"}
+        )
+        if scope not in capability.allowed_scopes or not phase_allowed:
             continue
         if capability.requiredness is ToolRequiredness.OPTIONAL and not history_requested:
             continue

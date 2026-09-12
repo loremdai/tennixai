@@ -121,6 +121,7 @@ class ToolOutcome(BaseModel):
 class ChatEventType(StrEnum):
     STATUS = "status"
     DATA = "data"
+    WARNING = "warning"
     TEXT_DELTA = "text_delta"
     DONE = "done"
     ERROR = "error"

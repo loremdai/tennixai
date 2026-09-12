@@ -296,6 +296,142 @@ async def test_invalid_global_match_tool_is_rejected_without_execution() -> None
 
 
 @pytest.mark.asyncio
+async def test_global_illegal_match_tool_replans_without_invalid_request() -> None:
+    model = CatalogRecordingModel(
+        turns=[
+            tool_turn(
+                "find_player_matches",
+                {"player_name": "Sinner", "time_scope": "tonight"},
+                "call_find",
+            ),
+            tool_turn(
+                "get_match_intelligence",
+                {"topic": "overview"},
+                "call_illegal",
+            ),
+            ModelTurn(),
+        ],
+        text_chunks=["已找到 Sinner 的比赛。"],
+    )
+    orchestrator, _ = build_orchestrator(model)
+
+    events = [
+        event
+        async for event in orchestrator.stream(
+            global_request("Sinner 的比赛如何了")
+        )
+    ]
+
+    assert any(event.type is ChatEventType.DATA for event in events)
+    assert events[-1].type is ChatEventType.DONE
+    assert not any(
+        event.type is ChatEventType.ERROR
+        and event.payload.get("code") == "invalid_request"
+        for event in events
+    )
+    rejected = next(
+        message
+        for message in model.choose_calls[-1]
+        if message.get("tool_call_id") == "call_illegal"
+    )
+    assert json.loads(rejected["content"])["kind"] == "rejected"
+
+
+@pytest.mark.asyncio
+async def test_status_events_include_phase_and_batch_progress() -> None:
+    model = FakeChatModel(
+        turns=[
+            ModelTurn(
+                tool_calls=[
+                    ToolCall(
+                        id="call_a",
+                        name="find_player_matches",
+                        arguments={"player_name": "Sinner", "time_scope": "tonight"},
+                    ),
+                    ToolCall(id="call_b", name="get_live_matches", arguments={}),
+                ]
+            ),
+            ModelTurn(),
+        ],
+        text_chunks=["已完成。"],
+    )
+    orchestrator, _ = build_orchestrator(model)
+
+    events = [
+        event
+        async for event in orchestrator.stream(
+            global_request("今晚和现在的比赛？")
+        )
+    ]
+    statuses = [event for event in events if event.type is ChatEventType.STATUS]
+
+    assert all("phase" in event.payload for event in statuses)
+    fetching = next(event for event in statuses if event.payload["stage"] == "fetching_data")
+    assert fetching.payload["completed"] == 0
+    assert fetching.payload["total"] == 2
+
+
+@pytest.mark.asyncio
+async def test_optional_failure_emits_warning_and_still_completes() -> None:
+    model = FakeChatModel(
+        turns=[
+            tool_turn(
+                "get_match_intelligence",
+                {"topic": "statistics"},
+                "call_statistics",
+            ),
+            tool_turn(
+                "get_player_results",
+                {"player_name": "Unknown Player", "scope": "recent", "limit": 5},
+                "call_player_results",
+            ),
+            ModelTurn(),
+        ],
+        text_chunks=["已完成当前比赛分析。"],
+    )
+    orchestrator, recording = build_orchestrator(model)
+    await recording.inner.build()
+    match_id = recording.inner.live_match.id
+
+    events = [
+        event
+        async for event in orchestrator.stream(
+            ChatRequest(
+                scope="match",
+                match_id=match_id,
+                messages=[ChatMessage(role="user", content="分析当前比赛和球员特点。")],
+            )
+        )
+    ]
+
+    warning = next(event for event in events if event.type == "warning")
+    assert warning.payload["code"] == "optional_data_unavailable"
+    assert not any(event.type is ChatEventType.ERROR for event in events)
+    assert events[-1].type is ChatEventType.DONE
+
+
+@pytest.mark.asyncio
+async def test_three_planning_rounds_are_allowed_with_a_bounded_loop() -> None:
+    model = FakeChatModel(
+        turns=[
+            tool_turn("get_live_matches", {}, "call_1"),
+            tool_turn("get_live_matches", {}, "call_2"),
+            tool_turn("get_live_matches", {}, "call_3"),
+            ModelTurn(),
+        ],
+        text_chunks=["已完成。"],
+    )
+    orchestrator, _ = build_orchestrator(model)
+
+    events = [
+        event
+        async for event in orchestrator.stream(global_request("现在有什么比赛？"))
+    ]
+
+    assert events[-1].type is ChatEventType.DONE
+
+
+@pytest.mark.asyncio
 async def test_llm_failure_after_data_keeps_structured_result() -> None:
     model = FakeChatModel(
         turns=[
@@ -386,29 +522,26 @@ async def test_provider_exception_emits_only_status_and_error() -> None:
 
 
 @pytest.mark.asyncio
-async def test_third_tool_round_is_rejected() -> None:
+async def test_fourth_tool_round_degrades_after_core_data() -> None:
     model = FakeChatModel(
         turns=[
             tool_turn("get_live_matches", {}, "call_1"),
             tool_turn("get_live_matches", {}, "call_2"),
             tool_turn("get_live_matches", {}, "call_3"),
+            tool_turn("get_live_matches", {}, "call_4"),
         ],
     )
     orchestrator, _ = build_orchestrator(model)
 
     events = [event async for event in orchestrator.stream(global_request("现在有什么比赛？"))]
 
-    assert [event.type for event in events] == [
-        "status",
-        "status",
-        "status",
-        "data",
-        "status",
-        "status",
-        "status",
-        "error",
-    ]
-    assert events[-1].payload["code"] == "invalid_request"
+    assert events[-1].type is ChatEventType.DONE
+    assert any(
+        event.type is ChatEventType.WARNING
+        and event.payload["code"] == "tool_replan_exhausted"
+        for event in events
+    )
+    assert not any(event.type is ChatEventType.ERROR for event in events)
 
 
 @pytest.mark.asyncio
@@ -563,6 +696,7 @@ async def test_match_scope_optional_player_lookup_does_not_abort_existing_answer
         ChatEventType.DATA,
         ChatEventType.STATUS,
         ChatEventType.STATUS,
+        ChatEventType.WARNING,
         ChatEventType.STATUS,
         ChatEventType.STATUS,
         ChatEventType.TEXT_DELTA,

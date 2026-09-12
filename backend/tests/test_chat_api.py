@@ -3,6 +3,7 @@ import json
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from app.chat.models import ChatEvent, ChatEventType
 from app.config import Settings
 from app.main import create_app
 
@@ -149,3 +150,36 @@ async def test_chat_stream_frames_end_with_two_newlines(client: AsyncClient) -> 
     for frame in text.split("\n\n"):
         if frame.strip():
             assert frame.startswith("event: ")
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_preserves_warning_events() -> None:
+    class WarningOrchestrator:
+        async def stream(self, payload):
+            yield ChatEvent(
+                type=ChatEventType.WARNING,
+                payload={
+                    "code": "optional_data_unavailable",
+                    "message": "部分辅助资料暂未提供。",
+                    "details": {},
+                },
+            )
+            yield ChatEvent(type=ChatEventType.DONE, payload={"ok": True})
+
+    app = create_app(
+        Settings(_env_file=None, fixed_now=FIXED_NOW),
+        chat_orchestrator=WarningOrchestrator(),
+    )
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as http_client:
+        response = await http_client.post(
+            "/api/v1/chat/stream",
+            json={
+                "scope": "global",
+                "messages": [{"role": "user", "content": "现在有什么比赛？"}],
+            },
+        )
+
+    events = parse_sse(response.text)
+    assert [event_type for event_type, _ in events] == ["warning", "done"]
+    assert events[0][1]["code"] == "optional_data_unavailable"
