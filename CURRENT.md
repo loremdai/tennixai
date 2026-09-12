@@ -3,19 +3,19 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-12 12:08 CST
+**最后更新：** 2026-09-12 12:25 CST
 
 **当前任务：** T41 — 同步首页问答用户展示策略
 
-**任务状态：** `in_progress`
+**任务状态：** `done`
 
 **当前执行者 / ADE：** Codex / Codex
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**最近完成任务提交：** `17ccdb7`
+**最近完成任务提交：** `5c3d469`
 
-**最后验证的产品提交：** `17ccdb7`
+**最后验证的产品提交：** `5c3d469`
 
 **本次任务起始提交：** `096dce9`
 
@@ -83,7 +83,7 @@
 
 ### T41 — 同步首页问答用户展示策略
 
-- **状态：** `in_progress`
+- **状态：** `done`
 - **执行者 / ADE：** Codex / Codex
 - **分支：** `main`
 - **起始提交：** `096dce9`
@@ -91,6 +91,10 @@
 - **范围：** 将 T40 已验证的用户可见回答策略同步到 Home 生产问答卡：去除内部实现提示、统一用户可见状态话术、保留结构化比赛卡与资料缺失提示；不扩大 Home 的工具能力，不改变预览原型。
 - **执行方式：** 先为 Home 补充完整流式回答的失败回归测试，再做最小前端展示层修复；随后运行前端单测、类型检查、构建、隔离服务 Playwright，并用真实浏览器等待首页回答完整结束后检查内容质量。
 - **验收门：** Home 回答必须收到 `done` 后才判定通过；原问题、内部上下文/工具/字段说明和实现来源 footer 不得出现在生产回答卡；结构化比赛卡、友好 warning、失败重试和进度文案保持可用；预览内容不变；已知未跟踪文件保持不变。
+- **完成提交：** `5c3d469`
+- **完成事实：** Home 生产回答卡已移除结构化数据来源 footer；Home 与 Match 详情页共享用户可见回答标签；结构化比赛卡、资料缺失提示、失败重试和流式进度保持可用；预览内容未改。
+- **验证门：** 前端 `pnpm test` 151 passed；`pnpm typecheck`、`pnpm build` 通过；隔离 fake Home 流程 desktop/mobile 2 passed、P1 视觉 12 passed；真实浏览器重启服务后等待首页回答至完成，`progress=0`、`internalFooter=0`、`quotedQuestion=0`、`availabilityNotice=1`、`structuredCards=10`；完整 `pnpm test:e2e` 为 28 passed/14 skipped/14 failed，失败集中于既有 P2 默认 `gender=*` 断言不一致和过期 prototype 视觉基线，未归因于 T41；backend 未改动；已知未跟踪文件保持不变；服务 health 与首页 HTTP 均为 200；`git diff --check` 通过。
+- **阻塞：** 无。
 
 ### T40 — 修复真实服务回答未完成并完善 Markdown 渲染验收
 
@@ -353,6 +357,7 @@
 
 | 日期 | 提交 | 验证 | 结果 |
 |---|---|---|---|
+| 2026-09-12 | `5c3d469` | TDD：Home 内部实现文字泄漏与完整流式结果回归先失败后通过；frontend `pnpm test` 151 passed、typecheck/build；隔离 fake Home 流程 desktop+mobile 2 passed、P1 视觉 12 passed；真实服务重启后浏览器等待 Home 回答至 `done`，10 张结构化比赛卡与资料缺失提示可见，progress/internal footer/原问题回显均为 0；full e2e 28 passed/14 skipped/14 failed（既有 P2 gender query 断言与 prototype 基线问题）；health/home 200；`git diff --check` 通过 | T41 完成；首页与详情页用户展示策略同步 |
 | 2026-09-11 | `ddaf24b` | TDD focused provider/service/view-model/component 先红后绿；backend 确定性 `352 passed, 2 skipped, 9 deselected`；frontend `140 passed` + typecheck + build；隔离 fake 服务 P1 功能 `12 passed`、视觉 `12 passed`；真实 API-Tennis REST smoke `1 passed`；真实 catalog/detail 国家数据一致；真实浏览器鼠标 Home→Match→Home 确认德国国旗+`DEU`、World Globe+`WORLD`，error/warn 为空；`git diff --check` 通过 | T38 完成；首页比赛卡展示国旗，详情页展示国旗+国家代码，`World` 语义保留 |
 | 2026-09-11 | `54059fe` | TDD focused provider/service/reducer `91 passed`；backend 确定性 `349 passed, 2 skipped, 9 deselected`；frontend `136 passed` + typecheck + build；隔离 fake 服务 P1 Playwright 功能+视觉 `24 passed`；真实 API-Tennis REST smoke 1 passed；真实服务 health 200、目标 Match API 200；真实浏览器鼠标进入并刷新目标页，浏览器 error/warn 为空；`git diff --check` 通过 | T37 完成；详情页补齐官方可获得场地与安全国家代码，所有仍缺失的元数据/实时能力均改为字段级解释 |
 | 2026-09-11 | `28b316d` | TDD focused 用例先失败后通过；backend `355 passed, 2 skipped`；frontend `135 passed` + typecheck + build；隔离假服务关键 Playwright 4 passed；真实 SSE 阶段顺序与真实浏览器阶段文案复核通过；backend health 200、Match Page HTTP 200；`git diff --check` 通过 | T36 完成；Chat 长等待期间可见解析/规划/取数/生成进度，真实耗时未被掩盖 |
@@ -379,6 +384,10 @@
 
 ## 最近交接
 
+**状态：** T41 已由 Codex 于 2026-09-12 12:25 在 `main` 完成；领取提交为 `86f931b`，实现提交为 `5c3d469`，起始提交为 `096dce9`。Home 与 Match 详情页已共享用户可见回答策略；真实浏览器等待首页回答至 `done` 后完成质量核对。
+
+**交接说明：** T41 只修复 Home 生产问答卡的展示层策略：移除内部来源 footer，集中回答标签映射，并保留结构化卡片、资料缺失提示、失败重试和进度文案；Home 的工具能力与预览原型未扩大或改动。前端确定性测试、类型检查、构建、隔离 Playwright 和真实浏览器门已通过；完整 e2e 的既有 P2 默认 `gender=*` 断言与 prototype 视觉基线失败未混入本任务。所有 ADE 只使用根目录 `.env`；凭据不得写入代码、文档、fixture、日志、提交或聊天输出。
+
 **状态：** T39 已由 Codex 于 2026-09-12 08:25 在 `main` 领取并于 `61d8fee` 完成；起始提交为 `fcfcc55`，工作区保留用户已有未跟踪文件。
 
 **交接说明：** T30 接管时原执行者因额度耗尽中断，项目所有者明确批准 Codex 接管；T30–T38 已在 `main` 串行完成并推送。T39 的真实故障曾复现：global 请求先返回结构化比赛，随后模型调用 match-only `get_match_intelligence`，后端按设计返回 `invalid_request`；根因是工具目录未按 global scope 裁剪，且没有多工具依赖/非法调用的编排协议。实现后又通过真实 Qwen 门禁发现未知 `format` 时模型会复述 `BO3`，已增加完整正文质量校验与安全重写/降级。依据阿里云 Function Calling 与 OpenAI 兼容接口官方文档：并行仅用于无依赖调用，依赖调用串行，工具目录实行最小权限。所有 ADE 只使用根目录 `.env`；API-Tennis/LLM 凭据不得写入代码、文档、fixture、日志、提交或聊天输出。
@@ -395,11 +404,11 @@
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-12 | T41 完成：首页与详情页共享回答标签，移除 Home 生产内部来源 footer，补齐完整流式/Home 双视口回归 | `5c3d469` |
 | 2026-09-12 | T39 完成：作用域感知编排、综合事实质量门与 CommonMark/GFM 渲染 | `61d8fee` |
 | 2026-09-11 | T38 完成：保留 `World` 国家语义，首页显示国旗、详情页显示国旗与国家代码 | `ddaf24b` |
 | 2026-09-11 | T37 完成：详情页适配官方赛事场地与安全国家代码，并解释所有不可用字段 | `54059fe` |
 | 2026-09-11 | T36 完成：Match Chat 显示 SSE 解析、规划、取数和生成阶段 | `28b316d` |
-| 2026-09-10 | T33 完成：真实 API-Tennis 直播发现、状态、档案与持久化 hardening | `b60217e` |
 
 ## 接手与更新规则
 

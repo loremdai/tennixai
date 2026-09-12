@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-12 12:08 CST
+**最后更新：** 2026-09-12 12:25 CST
 
-**总体状态：** `in_progress`（T41 首页问答展示策略同步）
+**总体状态：** `done`
 
-**当前里程碑：** P2 — Live Match Intelligence（`in_progress`）
+**当前里程碑：** P2 — Live Match Intelligence（`done`）
 
-**当前阶段：** P2.5 — Acceptance and hardening（`in_progress`）
+**当前阶段：** P2.5 — Acceptance and hardening（`done`）
 
 ## 状态说明
 
@@ -56,7 +56,7 @@
 | P2.2 — Unified data and discovery | `done` | API-Tennis REST、历史/H2H、赛事分类和 Home 叠加筛选 | T23–T25 完成（`015ff7f`、`dddb734`、`e904485`）；P2.3 可开始 |
 | P2.3 — Realtime pipeline | `done` | Reducer、WebSocket worker、租约、持久化、snapshot + SSE | T26–T28 完成（`98a1a22`、`d354aba`、`f03985b`）；T29/T30 已在 P2.4 完成 |
 | P2.4 — Match intelligence | `done` | 完整 PBP、22 项统计、近期控制指数、版本化上下文 Chat | T29（`ecd916b`）、T30（`8c9e161`）、T31（`128518f`）完成；P2.5 可开始 |
-| P2.5 — Acceptance and hardening | `in_progress` | Replay、恢复门、真实 smoke、双视口视觉、本地 runbook 与真实数据回归修复 | T32 `ac9c6e5`–T40 `17ccdb7` 已完成；T41 正在补齐 Home 问答展示层的同策略回归与真实浏览器验收 |
+| P2.5 — Acceptance and hardening | `done` | Replay、恢复门、真实 smoke、双视口视觉、本地 runbook 与真实数据回归修复 | T32 `ac9c6e5`–T41 `5c3d469` 已完成；Home 与 Match 详情页的问答用户展示策略已同步 |
 
 详细产品、架构和数据语义见 [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md)，逐任务实施步骤见 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md)。
 
@@ -86,7 +86,7 @@
 | T38 | P2.5 | Preserve World Country Code and Render Prototype Flags | `done` | `ddaf24b` | 按用户提供的原型截图保留 `World` 为 canonical `world`；catalog 对筛选后的比赛复用 player profile cache，补齐首页此前缺失的国家与排名；统一适配国家代码、国旗、中文名称和无障碍文本；首页比赛卡显示国旗，详情页显示国旗+国家代码，`world` 使用 Globe/WORLD；TDD 后 backend 确定性 `352 passed, 2 skipped, 9 deselected`，frontend `140 passed` + typecheck/build，隔离 fake P1 功能/视觉 `12/12`，真实 REST smoke `1 passed`，真实浏览器鼠标流程和 error/warn 检查通过 |
 | T39 | P2.5 | Design and Implement Scope-Aware Multi-Tool Chat Orchestration | `done` | `61d8fee` | 作用域感知工具目录、多工具并行/依赖串行、非法调用重规划、部分失败降级、完整综合上下文规划与冻结事实质量门；CommonMark + GFM 表格等语义渲染；backend 确定性 `373 passed, 2 skipped, 11 deselected`，真实 Qwen `9 passed`，frontend `147 passed` + typecheck/build，隔离 fake Playwright `12 passed/6 skipped`，真实 LLM 浏览器桌面/移动 `6 passed`；真实质量门曾捕获 `BO3` 泄漏并在修复后全通过 |
 | T40 | P2.5 | Repair Real Chat Completion and Polish User-Facing Markdown Answers | `done` | `17ccdb7` | 修复未知赛制回答的二次生成失败导致 `查询未完成`；已有结构化数据时生成异常/空结果仍以可读正文、warning 和 `done` 完成；正文移除原问题回显、内部 `format`/工具/质量校验话术和“重要说明”模板，缺失赛制改为独立友好提示；backend 确定性 `374 passed, 2 skipped, 11 deselected`，真实 Qwen `9 passed`，frontend `149 passed` + typecheck/build，隔离 fake Playwright `12 passed/6 skipped`，真实浏览器复杂分析等待完整结果并通过质量断言，浏览器 error/warn 为空 |
-| T41 | P2.5 | Sync Home Chat User-Facing Answer Policy | `in_progress` | — | 将 T40 的生产回答展示策略同步到 Home：去除内部实现来源 footer，统一用户可见状态话术，保留结构化比赛卡、友好资料 warning、进度和重试；先补完整流式回答回归测试，再用隔离服务与真实浏览器等待 `done` 验证；不扩大 Home 工具能力，不改预览原型 |
+| T41 | P2.5 | Sync Home Chat User-Facing Answer Policy | `done` | `5c3d469` | 将 T40 的生产回答展示策略同步到 Home：去除内部实现来源 footer，统一用户可见状态话术，保留结构化比赛卡、友好资料 warning、进度和重试；TDD 先覆盖内部文字泄漏与完整流式结果，再通过前端 151 passed、typecheck/build、隔离 fake Home desktop/mobile 2 passed、P1 视觉 12 passed 和真实浏览器等待 `done` 验证；完整 e2e 28 passed/14 skipped/14 failed 为既有 P2 gender query 断言与 prototype 视觉基线问题；不扩大 Home 工具能力，不改预览原型 |
 
 ## P2 完成门摘要
 
@@ -99,6 +99,7 @@
 - T39 已将 Chat 编排收紧为最小权限的 scope/phase 工具目录；无依赖调用并行、有依赖调用串行，非法调用可重规划，综合问题固定覆盖 overview/statistics/points/momentum；统计事实按球员姓名标注，未知赛制回答经过完整正文校验和安全重写/降级。
 - Chat 回答已统一支持 CommonMark + GFM，包括表格、任务列表、删除线、脚注、自动链接、标题、引用和代码块；原始 HTML 保持禁用。
 - T40 已完成真实服务回归：复杂比赛分析完整等待至 `done`，正文不再暴露原问题、内部字段、工具过程或“重要说明”模板；缺失赛制以独立友好提示呈现，已有结构化数据不会因生成异常变成查询失败。
+- T41 已将同一用户展示策略同步到 Home：生产回答不再显示结构化数据来源 footer 或内部上下文，回答标签由 Home/Match 共享映射；完整流式回答仍保留进度、结构化卡片、资料缺失提示和失败重试，真实浏览器在服务重启后等待至 `done` 并确认 10 张结构化比赛卡可见。
 - History/H2H 按需来自 API-Tennis；raw payload 14 天，canonical observations 长期；无完整供应商历史镜像。
 - P2 schema/API/UI 中不存在 odds、prediction、market、edge 或 trading 能力。
 - 用户追加验收门（2026-09-09）已完成：使用真实浏览器和鼠标逐项核对 Home 筛选→Featured→Match Page 实时更新→PBP/统计/控制指数→版本化 Chat→终态；发现的问题已修复并复验至无 bug。
