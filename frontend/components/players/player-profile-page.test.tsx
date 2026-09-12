@@ -145,9 +145,11 @@ describe('PlayerProfilePage history results', () => {
 
   it('never dates finished results after the ranking snapshot', () => {
     for (const scenario of bundle.scenarios) {
-      const snapshotDate = scenario.profile.rankUpdatedAt.slice(0, 10)
+      const snapshotDate = scenario.profile.rankUpdatedAt
+      expect(snapshotDate).toBeTruthy()
       for (const result of scenario.results) {
-        expect(result.date <= snapshotDate).toBe(true)
+        expect(result.date).toBeTruthy()
+        expect((result.date ?? '') <= (snapshotDate ?? '').slice(0, 10)).toBe(true)
       }
     }
   })

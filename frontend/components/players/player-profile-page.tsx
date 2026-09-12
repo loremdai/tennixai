@@ -85,7 +85,10 @@ export function PlayerProfilePage({
     setStatusKey(nextScenario.defaultStatus)
     setHistoryState(nextScenario.defaultHistoryState)
     setSeason(2026)
-    window.history.replaceState(null, '', `/players/${playerId}`)
+    // Keep the preview switch sticky so scenario jumps stay in preview mode.
+    const search =
+      new URLSearchParams(window.location.search).get('preview') === '1' ? '?preview=1' : ''
+    window.history.replaceState(null, '', `/players/${playerId}${search}`)
   }
 
   return (

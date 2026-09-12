@@ -21,7 +21,9 @@ function formatBirthDate(value: string) {
 }
 
 function MovementValue({ movement, unavailable }: { movement: RankMovement; unavailable: boolean }) {
-  if (unavailable) return <span className="text-sm font-medium text-muted-foreground">暂无变动</span>
+  if (unavailable || movement.direction === 'unknown') {
+    return <span className="text-sm font-medium text-muted-foreground">暂无变动</span>
+  }
   if (movement.direction === 'flat') {
     return <span className="inline-flex items-center gap-1.5 font-mono font-semibold"><Minus aria-hidden="true" className="size-4" />持平</span>
   }
@@ -29,7 +31,7 @@ function MovementValue({ movement, unavailable }: { movement: RankMovement; unav
   return (
     <span className={up ? 'inline-flex items-center gap-1.5 font-mono font-semibold text-live' : 'inline-flex items-center gap-1.5 font-mono font-semibold text-muted-foreground'}>
       {up ? <ArrowUp aria-hidden="true" className="size-4" /> : <ArrowDown aria-hidden="true" className="size-4" />}
-      {movement.places} 位
+      {movement.places !== null ? `${movement.places} 位` : up ? '上升' : '下降'}
     </span>
   )
 }
@@ -39,7 +41,7 @@ export function PlayerProfileHeader({ profile }: { profile: PlayerProfilePreview
     <Card aria-labelledby="player-profile-name" className="[--card-spacing:--spacing(6)]">
       <CardHeader className="border-b">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge>{profile.tour}</Badge>
+          {profile.tour ? <Badge>{profile.tour}</Badge> : null}
           <Badge variant="outline">单打</Badge>
         </div>
         <CardTitle className="sr-only">球员资料</CardTitle>
@@ -84,7 +86,7 @@ export function PlayerProfileHeader({ profile }: { profile: PlayerProfilePreview
           </div>
         </div>
 
-        <p className="font-mono text-xs text-muted-foreground">排名快照：{profile.rankUpdatedAt}</p>
+        <p className="font-mono text-xs text-muted-foreground">排名快照：{profile.rankUpdatedAt ?? '暂无'}</p>
       </CardContent>
     </Card>
   )

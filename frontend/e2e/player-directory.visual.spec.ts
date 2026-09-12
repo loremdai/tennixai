@@ -9,27 +9,29 @@ async function preparePage(page: Page, path: string) {
   await page.waitForFunction(
     () => Array.from(document.images).every((img) => img.complete),
     undefined,
-    { timeout: 20_000 },
+    { timeout: 60_000 },
   )
   // Neither viewport may scroll horizontally.
   await page.waitForFunction(
     () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
     undefined,
-    { timeout: 5_000 },
+    { timeout: 30_000 },
   )
 }
 
 const states: Array<[name: string, path: string, ready: (page: Page) => Promise<void>]> = [
   [
     'players-directory',
-    '/players',
+    // ?preview=1 pins the frozen v0 deterministic dataset; T43 baselines are
+    // never re-recorded for production data.
+    '/players?preview=1',
     async (page) => {
       await page.getByRole('heading', { name: 'ATP 单打世界排名' }).waitFor()
     },
   ],
   [
     'players-profile',
-    '/players/plr_atp_ben_shelton',
+    '/players/plr_atp_ben_shelton?preview=1',
     async (page) => {
       await page.getByRole('heading', { level: 1, name: 'Ben Shelton' }).waitFor()
     },

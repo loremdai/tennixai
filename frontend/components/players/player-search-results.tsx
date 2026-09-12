@@ -62,7 +62,7 @@ export function PlayerSearchResults({
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="truncate font-medium text-foreground">{player.name}</p>
-                      <Badge variant="outline">{player.tour}</Badge>
+                      {player.tour ? <Badge variant="outline">{player.tour}</Badge> : null}
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                       {player.nameZh ? <span>{player.nameZh}</span> : null}

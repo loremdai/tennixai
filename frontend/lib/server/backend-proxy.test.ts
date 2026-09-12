@@ -158,6 +158,26 @@ describe('proxyBackend', () => {
     }
   })
 
+  it('forwards encoded player directory paths and queries without credentials', async () => {
+    const fetch = fetchMock().mockResolvedValue(Response.json({ data: {} }))
+    vi.stubGlobal('fetch', fetch)
+
+    await proxyBackend(
+      new Request('http://local/api/players/ply_1%2F2/results?season=2026&tier=atp&tier=itf&page=1', {
+        headers: { Authorization: 'Bearer secret-token', Cookie: 'session=abc' },
+      }),
+      '/api/v1/players/ply_1%2F2/results',
+    )
+
+    const [target, init] = fetch.mock.calls[0]
+    expect(String(target)).toBe(
+      `${BASE_URL}/api/v1/players/ply_1%2F2/results?season=2026&tier=atp&tier=itf&page=1`,
+    )
+    const headers = new Headers(init.headers)
+    expect(headers.get('authorization')).toBeNull()
+    expect(headers.get('cookie')).toBeNull()
+  })
+
   it('streams POST bodies without buffering', async () => {
     const fetch = fetchMock().mockResolvedValue(Response.json({ ok: true }))
     vi.stubGlobal('fetch', fetch)

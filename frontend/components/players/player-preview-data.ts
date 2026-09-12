@@ -1,5 +1,5 @@
 export type TourKey = 'ATP' | 'WTA'
-export type MovementDirection = 'up' | 'down' | 'flat'
+export type MovementDirection = 'up' | 'down' | 'flat' | 'unknown'
 export type ProfileStatusKey = 'live' | 'next' | 'none'
 export type PlayerHistoryState =
   | 'ready'
@@ -9,12 +9,14 @@ export type PlayerHistoryState =
   | 'loading'
   | 'error'
   | 'stale'
-export type CompetitionTier = TourKey | 'Challenger' | 'ITF'
+export type CompetitionTier = TourKey | 'Challenger' | 'ITF' | 'Other'
 export type MatchOutcome = 'win' | 'loss'
 
 export type RankMovement = {
   direction: MovementDirection
-  places: number
+  // `places` is null whenever the structured feed only reports a direction;
+  // production never invents a place count.
+  places: number | null
 }
 
 export type CountryPreview = {
@@ -25,7 +27,8 @@ export type CountryPreview = {
 
 export type PlayerDirectoryEntry = {
   id: string
-  tour: TourKey
+  // Null when the structured search feed does not report the player's tour.
+  tour: TourKey | null
   name: string
   nameZh: string | null
   shortName: string
@@ -42,7 +45,7 @@ export type PlayerDirectoryEntry = {
 export type PlayerProfilePreview = PlayerDirectoryEntry & {
   birthDate: string | null
   age: number | null
-  rankUpdatedAt: string
+  rankUpdatedAt: string | null
 }
 
 export type SurfaceRecordPreview = {
@@ -66,12 +69,12 @@ export type PlayerResultPreview = {
   id: string
   matchId: string
   season: number
-  date: string
+  date: string | null
   tournament: string
-  tournamentZh: string
+  tournamentZh: string | null
   tier: CompetitionTier
-  surface: '硬地' | '红土' | '草地'
-  round: string
+  surface: string | null
+  round: string | null
   opponent: {
     name: string
     nameZh: string | null
@@ -80,7 +83,7 @@ export type PlayerResultPreview = {
     flagUrl: string | null
   }
   outcome: MatchOutcome
-  score: string
+  score: string | null
 }
 
 export type PlayerCurrentStatusPreview =
@@ -487,7 +490,7 @@ function resultsFor(profile: PlayerProfilePreview): PlayerResultPreview[] {
       const opponentCountry = country(opponentCountryCode)
       const [tournament, tournamentZh, surface] = tournamentSeeds[(index + season) % tournamentSeeds.length]
       const outcome: MatchOutcome = index % 3 === 2 ? 'loss' : 'win'
-      let tier: CompetitionTier = profile.tour
+      let tier: CompetitionTier = profile.tour ?? 'Other'
       if (index % 11 === 10) tier = 'ITF'
       else if (index % 7 === 6) tier = 'Challenger'
       // Finished sample results must never post-date the preview snapshot
@@ -496,7 +499,7 @@ function resultsFor(profile: PlayerProfilePreview): PlayerResultPreview[] {
       const day = 10 - (index % 3) * 3
       return {
         id: `result_${profile.id}_${season}_${String(index + 1).padStart(2, '0')}`,
-        matchId: `mtch_${profile.tour.toLowerCase()}_${season}_${String(index + 1).padStart(3, '0')}`,
+        matchId: `mtch_${(profile.tour ?? 'atp').toLowerCase()}_${season}_${String(index + 1).padStart(3, '0')}`,
         season,
         date: `${season}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
         tournament,

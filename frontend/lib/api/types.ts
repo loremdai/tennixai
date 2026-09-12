@@ -12,7 +12,13 @@ export type ConnectionStatus =
   | 'ended'
   | 'unavailable'
 
-export type PlayerDto = { id: string; name: string; country_code: string | null; ranking: number | null }
+export type PlayerDto = {
+  id: string
+  name: string
+  country_code: string | null
+  ranking: number | null
+  localized_name?: string | null
+}
 export type TournamentDto = {
   id: string
   name: string
@@ -273,3 +279,88 @@ export type ChatEvent =
   | { type: 'done'; payload: { ok: boolean } }
   | { type: 'warning'; payload: ChatWarning }
   | { type: 'error'; payload: { code: string; message: string; details: Record<string, unknown> } }
+
+// ---------------------------------------------------------------------------
+// P2.6 player directory DTOs (backend /api/v1/players/*)
+// ---------------------------------------------------------------------------
+
+export type PlayerSummaryDto = {
+  id: string
+  name: string
+  localized_name: string | null
+  country_code: string | null
+  ranking: number | null
+}
+
+export type RankingEntryDto = {
+  player: PlayerSummaryDto
+  tour: 'ATP' | 'WTA'
+  rank: number
+  points: number
+  movement: 'up' | 'down' | 'same' | 'unknown'
+  ranking_date: string
+  fetched_at: string
+}
+
+export type RankingPageDto = {
+  tour: 'ATP' | 'WTA'
+  page: number
+  page_size: number
+  total: number
+  entries: RankingEntryDto[]
+  as_of: string
+  availability: CapabilityStatus
+}
+
+/** REST `/api/players/search` resolution envelope (nested domain shape). */
+export type PlayerSearchCandidateDto = {
+  player: PlayerSummaryDto
+  matched_alias: string
+  alias_kind: string
+  current_rank: number | null
+}
+
+export type PlayerSearchResolutionDto = {
+  status: 'resolved' | 'ambiguous' | 'not_found'
+  query: string
+  player: PlayerSummaryDto | null
+  candidates: PlayerSearchCandidateDto[]
+}
+
+export type SurfaceRecordDto = { won: number; lost: number }
+
+export type PlayerSeasonRecordDto = {
+  season: number
+  matches_won: number
+  matches_lost: number
+  titles: number
+  hard: SurfaceRecordDto | null
+  clay: SurfaceRecordDto | null
+  grass: SurfaceRecordDto | null
+}
+
+export type PlayerProfileDataDto = {
+  player: PlayerSummaryDto
+  birth_date: string | null
+  image_url: string | null
+  seasons: PlayerSeasonRecordDto[]
+}
+
+export type PlayerProfileViewDto = {
+  profile: PlayerProfileDataDto
+  selected_season: number
+  season_record: PlayerSeasonRecordDto | null
+  current_match: MatchDto | null
+}
+
+export type PlayerResultPageDto = {
+  player: PlayerSummaryDto
+  season: number
+  tiers: CircuitTier[]
+  outcome: 'all' | 'won' | 'lost'
+  page: number
+  page_size: number
+  total: number
+  matches: MatchDto[]
+  availability: CapabilityStatus
+}

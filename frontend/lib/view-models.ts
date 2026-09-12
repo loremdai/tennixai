@@ -94,7 +94,7 @@ type CountryMetadata = {
 // Keep this map limited to countries currently emitted by the provider. It
 // gives the UI a deterministic Chinese label and FlagCDN resource without
 // guessing from a player's name or an unrecognized provider value.
-const COUNTRY_METADATA: Record<string, CountryMetadata> = {
+export const COUNTRY_METADATA: Record<string, CountryMetadata> = {
   arg: { name: '阿根廷', alpha2: 'ar' },
   aus: { name: '澳大利亚', alpha2: 'au' },
   aut: { name: '奥地利', alpha2: 'at' },
@@ -116,6 +116,7 @@ const COUNTRY_METADATA: Record<string, CountryMetadata> = {
   geo: { name: '格鲁吉亚', alpha2: 'ge' },
   deu: { name: '德国', alpha2: 'de' },
   grc: { name: '希腊', alpha2: 'gr' },
+  hkg: { name: '中国香港', alpha2: 'hk' },
   hun: { name: '匈牙利', alpha2: 'hu' },
   ind: { name: '印度', alpha2: 'in' },
   idn: { name: '印度尼西亚', alpha2: 'id' },
@@ -198,7 +199,7 @@ function initials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
-function countryPresentation(countryCode: string | null): Pick<PlayerViewModel, 'countryCode' | 'countryName' | 'flagUrl'> {
+export function countryPresentation(countryCode: string | null): Pick<PlayerViewModel, 'countryCode' | 'countryName' | 'flagUrl'> {
   const normalized = (countryCode ?? '').trim().toLowerCase()
   if (!normalized) {
     return {

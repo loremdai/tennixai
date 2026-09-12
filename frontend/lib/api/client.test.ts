@@ -1,7 +1,19 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ApiError, getMatchCatalog, getMatches, getMatchSnapshot, getPlayers, parseSse, streamChat } from './client'
+import {
+  ApiError,
+  getMatchCatalog,
+  getMatches,
+  getMatchSnapshot,
+  getPlayerProfile,
+  getPlayerRankings,
+  getPlayerResults,
+  getPlayers,
+  parseSse,
+  searchPlayerDirectory,
+  streamChat,
+} from './client'
 import type { ChatEvent } from './types'
 
 afterEach(() => {
@@ -179,6 +191,76 @@ describe('REST helpers', () => {
     expect(error).toBeInstanceOf(ApiError)
     expect((error as ApiError).status).toBe(503)
     expect((error as ApiError).code).toBe('internal_error')
+  })
+})
+
+describe('P2.6 player directory clients', () => {
+  it('forwards rankings tour, page and optional country verbatim', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => jsonResponse({ data: {} }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getPlayerRankings({ tour: 'WTA', page: 2, country: 'CHN' })
+    await getPlayerRankings({ tour: 'ATP', page: 1 })
+
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/players/rankings?tour=WTA&page=2&country=CHN')
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/players/rankings?tour=ATP&page=1')
+  })
+
+  it('forwards the encoded directory search query and limit', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ data: { status: 'not_found', query: '谢尔顿', player: null, candidates: [] } }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const resolution = await searchPlayerDirectory('谢尔顿', 20)
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      `/api/players/search?q=${encodeURIComponent('谢尔顿')}&limit=20`,
+    )
+    expect(resolution.status).toBe('not_found')
+  })
+
+  it('encodes the player id and appends the optional season for profiles', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => jsonResponse({ data: {} }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getPlayerProfile('ply_1/2')
+    await getPlayerProfile('ply_1', 2025)
+
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/players/ply_1%2F2')
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/players/ply_1?season=2025')
+  })
+
+  it('repeats tier params and forwards outcome, season and page for results', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => jsonResponse({ data: {} }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getPlayerResults('ply_1/2', {
+      season: 2026,
+      tiers: ['atp', 'itf'],
+      outcome: 'won',
+      page: 3,
+    })
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      '/api/players/ply_1%2F2/results?season=2026&page=3&tier=atp&tier=itf&outcome=won',
+    )
+  })
+
+  it('maps backend player failures onto ApiError', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(
+        { error: { code: 'not_found', message: 'Player not found', details: {} } },
+        { status: 404 },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const error = await getPlayerProfile('ply_missing').catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(ApiError)
+    expect((error as ApiError).status).toBe(404)
+    expect((error as ApiError).code).toBe('not_found')
   })
 })
 

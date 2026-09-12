@@ -1,12 +1,17 @@
 import type {
   ChatEvent,
   ChatRequest,
+  CircuitTier,
   MatchCatalogDto,
   MatchDto,
   MatchFiltersDto,
   MatchSnapshotDto,
   MatchStreamFrame,
   PlayerDto,
+  PlayerProfileViewDto,
+  PlayerResultPageDto,
+  PlayerSearchResolutionDto,
+  RankingPageDto,
 } from './types'
 import {
   CIRCUIT_ORDER,
@@ -233,4 +238,62 @@ export async function* streamChat(
   }
 
   yield* parseSse(response.body)
+}
+
+// ---------------------------------------------------------------------------
+// P2.6 player directory clients
+// ---------------------------------------------------------------------------
+
+export function getPlayerRankings(
+  params: { tour: 'ATP' | 'WTA'; page: number; country?: string },
+  signal?: AbortSignal,
+): Promise<RankingPageDto> {
+  const search = new URLSearchParams({ tour: params.tour, page: String(params.page) })
+  if (params.country) search.set('country', params.country)
+  return requestJson<RankingPageDto>(`/api/players/rankings?${search.toString()}`, signal)
+}
+
+export function searchPlayerDirectory(
+  query: string,
+  limit = 10,
+  signal?: AbortSignal,
+): Promise<PlayerSearchResolutionDto> {
+  const search = new URLSearchParams({ q: query, limit: String(limit) })
+  return requestJson<PlayerSearchResolutionDto>(`/api/players/search?${search.toString()}`, signal)
+}
+
+export function getPlayerProfile(
+  playerId: string,
+  season?: number,
+  signal?: AbortSignal,
+): Promise<PlayerProfileViewDto> {
+  const search = new URLSearchParams()
+  if (season !== undefined) search.set('season', String(season))
+  const query = search.toString()
+  return requestJson<PlayerProfileViewDto>(
+    `/api/players/${encodeURIComponent(playerId)}${query ? `?${query}` : ''}`,
+    signal,
+  )
+}
+
+export function getPlayerResults(
+  playerId: string,
+  params: {
+    season: number
+    tiers?: CircuitTier[]
+    outcome?: 'all' | 'won' | 'lost'
+    page: number
+  },
+  signal?: AbortSignal,
+): Promise<PlayerResultPageDto> {
+  const search = new URLSearchParams({
+    season: String(params.season),
+    page: String(params.page),
+  })
+  for (const tier of params.tiers ?? []) search.append('tier', tier)
+  if (params.outcome) search.set('outcome', params.outcome)
+  return requestJson<PlayerResultPageDto>(
+    `/api/players/${encodeURIComponent(playerId)}/results?${search.toString()}`,
+    signal,
+  )
 }

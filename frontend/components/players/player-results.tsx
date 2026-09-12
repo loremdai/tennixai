@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
   AlertTriangle,
@@ -47,6 +47,7 @@ const tierOptions: Array<{ value: 'ALL' | CompetitionTier; label: string }> = [
   { value: 'WTA', label: 'WTA' },
   { value: 'Challenger', label: 'Challenger' },
   { value: 'ITF', label: 'ITF' },
+  { value: 'Other', label: 'Other' },
 ]
 const outcomeOptions: Array<{ value: 'ALL' | MatchOutcome; label: string }> = [
   { value: 'ALL', label: '全部结果' },
@@ -143,39 +144,86 @@ export function PlayerResults({
   season,
   onSeasonChange,
   onRetry,
+  seasons,
+  tier,
+  onTierChange,
+  outcome,
+  onOutcomeChange,
+  page,
+  onPageChange,
+  total,
 }: {
   playerName: string
-  playerTour: TourKey
+  playerTour: TourKey | null
   results: PlayerResultPreview[]
   historyState: PlayerHistoryState
   season: number
   onSeasonChange: (season: number) => void
   onRetry: () => void
+  /** Season selector values; defaults to the frozen v0 five-season list. */
+  seasons?: number[]
+  /**
+   * Server-driven mode: the container owns tier/outcome/page state and
+   * `results`/`total` are exactly the fetched page. Without `onPageChange`
+   * the component keeps its v0 client-side filtering behavior.
+   */
+  tier?: 'ALL' | CompetitionTier
+  onTierChange?: (tier: 'ALL' | CompetitionTier) => void
+  outcome?: 'ALL' | MatchOutcome
+  onOutcomeChange?: (outcome: 'ALL' | MatchOutcome) => void
+  page?: number
+  onPageChange?: (page: number) => void
+  total?: number
 }) {
-  const [tier, setTier] = useState<'ALL' | CompetitionTier>('ALL')
-  const [outcome, setOutcome] = useState<'ALL' | MatchOutcome>('ALL')
-  const [page, setPage] = useState(1)
+  const [tierState, setTierState] = useState<'ALL' | CompetitionTier>('ALL')
+  const [outcomeState, setOutcomeState] = useState<'ALL' | MatchOutcome>('ALL')
+  const [pageState, setPageState] = useState(1)
   const pageSize = 20
 
+  const serverMode = onPageChange !== undefined
+  const activeTier = tier ?? tierState
+  const activeOutcome = outcome ?? outcomeState
+  const seasonList = seasons ?? seasonOptions
+
+  function changeTier(next: 'ALL' | CompetitionTier) {
+    if (onTierChange) onTierChange(next)
+    else setTierState(next)
+    changePage(1)
+  }
+
+  function changeOutcome(next: 'ALL' | MatchOutcome) {
+    if (onOutcomeChange) onOutcomeChange(next)
+    else setOutcomeState(next)
+    changePage(1)
+  }
+
+  function changePage(next: number) {
+    if (onPageChange) onPageChange(next)
+    else setPageState(next)
+  }
+
   const filteredResults = useMemo(() => {
+    if (serverMode) return results
     const stateResults = historyState === 'partial' ? results.slice(0, 8) : results
     return stateResults.filter((result) => (
       result.season === season
-      && (tier === 'ALL' || result.tier === tier)
-      && (outcome === 'ALL' || result.outcome === outcome)
+      && (tierState === 'ALL' || result.tier === tierState)
+      && (outcomeState === 'ALL' || result.outcome === outcomeState)
     ))
-  }, [historyState, outcome, results, season, tier])
+  }, [historyState, outcomeState, results, season, serverMode, tierState])
 
-  const totalPages = Math.max(1, Math.ceil(filteredResults.length / pageSize))
-  const currentPage = Math.min(page, totalPages)
+  const totalCount = serverMode ? (total ?? filteredResults.length) : filteredResults.length
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
+  const currentPage = Math.min(serverMode ? (page ?? 1) : pageState, totalPages)
   const start = (currentPage - 1) * pageSize
-  const visibleResults = filteredResults.slice(start, start + pageSize)
+  const visibleResults = serverMode ? filteredResults : filteredResults.slice(start, start + pageSize)
   const showResults = historyState === 'ready' || historyState === 'partial' || historyState === 'stale'
 
   function resetResultFilters() {
-    setTier('ALL')
-    setOutcome('ALL')
-    setPage(1)
+    changeTier('ALL')
+    if (onOutcomeChange) onOutcomeChange('ALL')
+    else setOutcomeState('ALL')
+    changePage(1)
   }
 
   return (
@@ -193,29 +241,30 @@ export function PlayerResults({
           <FilterMenu
             label="赛季"
             value={season}
-            options={seasonOptions.map((value) => ({ value, label: `${value} 赛季` }))}
-            onChange={(value) => { onSeasonChange(value); setPage(1) }}
+            options={seasonList.map((value) => ({ value, label: `${value} 赛季` }))}
+            onChange={(value) => { onSeasonChange(value); changePage(1) }}
           />
           <FilterMenu
             label="赛事级别"
-            value={tier}
+            value={activeTier}
             options={tierOptions}
-            onChange={(value) => { setTier(value); setPage(1) }}
+            onChange={changeTier}
           />
           <FilterMenu
             label="赛果"
-            value={outcome}
+            value={activeOutcome}
             options={outcomeOptions}
-            onChange={(value) => { setOutcome(value); setPage(1) }}
+            onChange={changeOutcome}
           />
-          {(tier !== 'ALL' || outcome !== 'ALL') ? (
+          {(activeTier !== 'ALL' || activeOutcome !== 'ALL') ? (
             <Button type="button" variant="ghost" size="lg" onClick={resetResultFilters}>
               <RotateCcw data-icon="inline-start" aria-hidden="true" />
               重置赛果筛选
             </Button>
           ) : null}
           <p className="text-xs leading-relaxed text-muted-foreground md:ml-auto">
-            {playerTour} 档案 · 不提供场地筛选
+            {playerTour ?? ''}
+            {playerTour ? ' 档案 · 不提供场地筛选' : '档案 · 不提供场地筛选'}
           </p>
         </div>
 
@@ -278,10 +327,25 @@ export function PlayerResults({
                     aria-label={`查看 ${result.date} 对阵 ${result.opponent.name} 的比赛详情`}
                     className="group flex flex-col gap-3 border-b px-4 py-4 transition-colors last:border-b-0 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring md:grid md:grid-cols-[6rem_minmax(0,1.35fr)_minmax(0,1fr)_6rem_9rem_1.5rem] md:items-center md:gap-4 md:py-3"
                   >
-                    <time dateTime={result.date} className="font-mono text-xs text-muted-foreground">{formatDate(result.date)}</time>
+                    <time dateTime={result.date ?? undefined} className="font-mono text-xs text-muted-foreground">
+                      {result.date ? formatDate(result.date) : '日期暂无'}
+                    </time>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">{result.tournament}</p>
-                      <p className="mt-0.5 truncate text-xs text-muted-foreground">{result.tournamentZh} · {result.round} · {result.surface} · {result.tier}</p>
+                      {/* Keep v0's exact text-node split (part, separator, part, ...)
+                          so glyph fallback and the visual baseline stay identical. */}
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                        {(() => {
+                          const parts = [result.tournamentZh, result.round, result.surface, result.tier]
+                            .filter((part): part is string => Boolean(part))
+                          return parts.map((part, index) => (
+                            <Fragment key={index}>
+                              {index > 0 ? ' · ' : ''}
+                              {part}
+                            </Fragment>
+                          ))
+                        })()}
+                      </p>
                     </div>
                     <div className="flex min-w-0 items-center gap-2">
                       <PlayerCountry player={result.opponent} />
@@ -296,7 +360,7 @@ export function PlayerResults({
                     >
                       {result.outcome === 'win' ? '胜' : '负'}
                     </Badge>
-                    <span className="font-mono text-sm font-semibold tabular-nums">{result.score}</span>
+                    <span className="font-mono text-sm font-semibold tabular-nums">{result.score ?? '比分暂无'}</span>
                     <ChevronRight aria-hidden="true" className="hidden size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground md:block" />
                   </Link>
                 </li>
@@ -306,17 +370,17 @@ export function PlayerResults({
         ) : null}
       </CardContent>
 
-      {showResults && filteredResults.length > 0 ? (
+      {showResults && totalCount > 0 ? (
         <CardFooter className="flex-col gap-3 bg-muted/35 md:flex-row md:justify-between">
           <p className="font-mono text-xs text-muted-foreground" aria-live="polite">
-            {start + 1}–{Math.min(start + pageSize, filteredResults.length)} / 共 {filteredResults.length} 场
+            {start + 1}–{Math.min(start + pageSize, totalCount)} / 共 {totalCount} 场
           </p>
           <nav className="flex items-center gap-1" aria-label="历史赛果分页">
-            <Button type="button" variant="ghost" size="sm" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>
+            <Button type="button" variant="ghost" size="sm" disabled={currentPage === 1} onClick={() => changePage(currentPage - 1)}>
               <ChevronLeft data-icon="inline-start" aria-hidden="true" />上一页
             </Button>
             <span className="px-2 font-mono text-xs text-muted-foreground">{currentPage} / {totalPages}</span>
-            <Button type="button" variant="ghost" size="sm" disabled={currentPage === totalPages} onClick={() => setPage(currentPage + 1)}>
+            <Button type="button" variant="ghost" size="sm" disabled={currentPage === totalPages} onClick={() => changePage(currentPage + 1)}>
               下一页<ChevronRight data-icon="inline-end" aria-hidden="true" />
             </Button>
           </nav>

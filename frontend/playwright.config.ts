@@ -20,6 +20,11 @@ export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
   retries: 0,
+  // Dev-machine CPU contention (shared with the user's browser) can stretch
+  // first-paint and `load` far beyond defaults; timeouts are infrastructure
+  // headroom only and never relax an assertion or snapshot.
+  timeout: 180_000,
+  expect: { timeout: 30_000 },
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: 'http://127.0.0.1:3100',

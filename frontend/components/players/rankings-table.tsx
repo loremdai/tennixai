@@ -26,14 +26,23 @@ function Movement({ movement }: { movement: RankMovement }) {
       </span>
     )
   }
+  if (movement.direction === 'unknown') {
+    return (
+      <span className="inline-flex items-center gap-1 text-muted-foreground" aria-label="排名变动未知">
+        <Minus aria-hidden="true" className="size-3.5" />
+      </span>
+    )
+  }
   const up = movement.direction === 'up'
   return (
     <span
       className={up ? 'inline-flex items-center gap-1 text-live' : 'inline-flex items-center gap-1 text-muted-foreground'}
-      aria-label={`排名${up ? '上升' : '下降'} ${movement.places} 位`}
+      aria-label={`排名${up ? '上升' : '下降'}${movement.places !== null ? ` ${movement.places} 位` : ''}`}
     >
       {up ? <ArrowUp aria-hidden="true" className="size-3.5" /> : <ArrowDown aria-hidden="true" className="size-3.5" />}
-      <span className="font-mono text-xs tabular-nums">{movement.places}</span>
+      {movement.places !== null ? (
+        <span className="font-mono text-xs tabular-nums">{movement.places}</span>
+      ) : null}
     </span>
   )
 }
@@ -44,17 +53,24 @@ export function RankingsTable({
   page,
   pageSize,
   onPageChange,
+  total,
+  dataSourceNote = '排名与积分为确定性预览数据',
 }: {
   tour: TourKey
   players: PlayerDirectoryEntry[]
   page: number
   pageSize: number
   onPageChange: (page: number) => void
+  /** Server-driven mode: `players` is already the current page and `total` the full count. */
+  total?: number
+  dataSourceNote?: string | null
 }) {
-  const totalPages = Math.max(1, Math.ceil(players.length / pageSize))
+  const serverMode = total !== undefined
+  const totalCount = serverMode ? total : players.length
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
   const currentPage = Math.min(page, totalPages)
   const start = (currentPage - 1) * pageSize
-  const visiblePlayers = players.slice(start, start + pageSize)
+  const visiblePlayers = serverMode ? players : players.slice(start, start + pageSize)
   const pageNumbers = Array.from({ length: totalPages }, (_, index) => index + 1)
 
   return (
@@ -65,7 +81,7 @@ export function RankingsTable({
             <h2 id="rankings-title">{tour} 单打世界排名</h2>
           </CardTitle>
           <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-            官方前 200 · 每页 50 位 · 排名与积分为确定性预览数据
+            官方前 200 · 每页 50 位{dataSourceNote ? ` · ${dataSourceNote}` : ''}
           </p>
         </div>
         <CardAction>
@@ -124,7 +140,7 @@ export function RankingsTable({
 
       <CardFooter className="flex-col gap-3 bg-muted/35 md:flex-row md:justify-between">
         <p className="font-mono text-xs text-muted-foreground" aria-live="polite">
-          {players.length ? `${start + 1}–${Math.min(start + pageSize, players.length)} / 共 ${players.length} 位` : '共 0 位'}
+          {totalCount ? `${start + 1}–${Math.min(start + pageSize, totalCount)} / 共 ${totalCount} 位` : '共 0 位'}
         </p>
         <nav className="flex flex-wrap items-center justify-center gap-1" aria-label="排名分页">
           <Button
