@@ -3,11 +3,11 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-13 00:30 CST
+**最后更新：** 2026-09-13 00:46 CST
 
-**当前任务：** T51 — v0 球员页接入真实结构化 API（`ready`，待领取）
+**当前任务：** T51 — v0 球员页接入真实结构化 API
 
-**任务状态：** 无 `in_progress`（T50 已完成，待推送总控）
+**任务状态：** `in_progress`
 
 **当前执行者 / ADE：** Claude Code / Claude Code
 
@@ -16,6 +16,10 @@
 **最近完成任务提交：** `c593f36`
 
 **最后验证的产品提交：** `c593f36`
+
+**本次任务起始提交：** `51b62d2`
+
+**本次任务领取时间：** 2026-09-13 00:46 CST
 
 **本次任务起始提交：** `44cd9d5`（v0 原型已入库；本执行者从该提交继续 T43 工程收口）
 
@@ -84,6 +88,17 @@
 - 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`、`REALTIME_LATENCY_INVESTIGATION.md`（任务外调查文档）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`、`frontend/next-env.d.ts`；保留原样，不纳入 T42A。
 
 ## 当前任务
+
+### T51 — v0 球员页接入真实结构化 API
+
+- **状态：** `in_progress`
+- **执行者 / ADE：** Claude Code / Claude Code
+- **分支：** `main`
+- **起始提交：** `51b62d2`
+- **领取时间：** 2026-09-13 00:46 CST
+- **范围：** 按 [P2.6 实施计划 T51](./docs/superpowers/plans/2026-09-12-tennixai-player-directory-multilingual-identity-implementation.md#t51-connect-the-v0-player-pages-to-real-structured-apis)：Next 代理路由（rankings/profile/results，search 转发 resolution）、typed client 四方法、`player-view-models.ts` DTO→v0 视图形状映射、`/players` 与 `/players/[playerId]` 生产数据/URL 状态/全状态处理（loading/empty/partial/error/stale）、preview 开关保留 v0 视觉真相供视觉基线；新增 `e2e/player-directory.spec.ts` 功能门。
+- **验收门：** pnpm test/typecheck/build；`--grep "player directory"` 功能门双视口（ATP→WTA、中国筛选、中文搜索、Top 200 外、profile、赛季/筛选/分页、Finished Match 导航、空当前状态）；`--grep "player directory visual"` 四张 T43 基线不更新通过；`--grep "P1|P2|prototype"` 回归。
+- **阻塞：** 无。
 
 ### T50 — Home/Match Chat 共用 resolver
 
