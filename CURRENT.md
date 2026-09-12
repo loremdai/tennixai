@@ -3,19 +3,19 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-12 09:19 CST
+**最后更新：** 2026-09-12 10:51 CST
 
 **当前任务：** T39 — 设计并实现作用域感知的多工具对话编排
 
-**任务状态：** `in_progress`
+**任务状态：** `done`
 
 **当前执行者 / ADE：** Codex / Codex
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**最近完成任务提交：** `ddaf24b`
+**最近完成任务提交：** `61d8fee`
 
-**最后验证的产品提交：** `ddaf24b`
+**最后验证的产品提交：** `61d8fee`
 
 **本次任务起始提交：** `fcfcc55`
 
@@ -72,9 +72,9 @@
 - T36 已完成并推送产品提交 `28b316d`：Match Chat SSE 暴露 resolving/planning/fetching_data/generating 阶段，Home 与 Match 详情页显示阶段文案，完成/失败/取消时清理进度状态；真实 SSE 和真实浏览器流程均已复核。
 - T33 已完成并推送产品提交 `b60217e`：按 [API-Tennis REST 文档](https://api-tennis.com/documentation) 与 [WebSocket 文档](https://api-tennis.com/documentation_websocket) 修复 livescore 终态过滤、`event_live` 状态映射、默认筛选下直播发现、统计多周期 key、实时推送覆盖球员全名、重复 PBP identity 和 PostgreSQL 重排冲突；官方未返回的场地/室内外/赛制/ISO 国家代码继续显示诚实缺失。
 - T38 已完成产品提交 `ddaf24b`：保留 API-Tennis `World` 为 canonical `world`；目录接口复用详情档案补齐国家与排名；首页比赛卡显示国旗，详情页显示国旗+ISO 代码，`world` 使用 Globe 图标，缺失/未知值不请求国旗资源；真实浏览器 Home→Match→Home 鼠标流程已复核。
-- T39 已于 2026-09-12 08:25 领取：修复真实 Qwen 全局查询在首个工具成功后误调用 match-only 工具导致的 `invalid_request`；设计并实现作用域感知工具目录、多工具并行/依赖串行、非法调用重规划、部分失败降级和完整回归验收。
-- T39 书面设计已完成并推送：见 [作用域感知多工具对话编排规格](./docs/superpowers/specs/2026-09-12-tennixai-scope-aware-multi-tool-chat-design.md)（提交 `9b88c0e`）；等待用户评审后进入 TDD 实现，产品代码尚未修改。
-- T39 实施计划已完成并自审：见 [作用域感知多工具对话编排计划](./docs/superpowers/plans/2026-09-12-tennixai-scope-aware-multi-tool-chat.md)；按 inline execution 执行，下一步从 capability/catalog 的 RED 测试开始。
+- T39 已完成并提交 `61d8fee`：作用域感知工具目录、多工具并行/依赖串行、非法调用重规划、部分失败降级、冻结事实综合分析与可见进度均已落地；真实 Qwen 全局查询不再误调用 match-only 工具。
+- T39 质量修复：综合分析强制覆盖 overview/statistics/points/momentum；统计值向模型按球员姓名标注；未知 `format` 的正文先完整校验，违规时自动重写，仍违规则保守降级，避免把 `BO3` 等未经事实支持的赛制泄漏给用户。
+- Markdown 已升级为 CommonMark + GFM：表格、任务列表、删除线、脚注、自动链接、标题、引用、代码块等由共享 `MarkdownAnswer` 渲染；原始 HTML 保持关闭。
 - 已知非 T17 限制：LiveTennisAPI 的 `/players?search` 当前不能把中文显示名“郑钦文”直接映射到 `Qinwen Zheng`；canonical English name 查询已通过，中文别名/名称归一化需另立任务批准。
 - 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`（任务外）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`（next dev 自动生成）、`frontend/next-env.d.ts`（Next 工具链生成）；保留原样。
 
@@ -82,16 +82,17 @@
 
 ### T39 — 设计并实现作用域感知的多工具对话编排
 
-- **状态：** `in_progress`
+- **状态：** `done`
 - **执行者 / ADE：** Codex / Codex
 - **分支：** `main`
 - **起始提交：** `fcfcc55`
 - **领取时间：** 2026-09-12 08:25 CST
-- **当前节点：** 书面设计规格已完成并推送（`9b88c0e`），等待用户评审；产品代码尚未修改。
-- **当前节点：** 实施计划已完成并自审，准备执行 Task 1 的失败测试；产品代码尚未修改。
+- **当前节点：** 已完成实现、质量修复和真实浏览器复验；完成提交为 `61d8fee`。
 - **范围：** 依据已批准的多工具编排设计，修复 global scope 暴露 match-only 工具的问题；建立工具能力/作用域/阶段/依赖声明；支持无依赖工具并行调用、有依赖工具串行调用、有限重规划、部分失败降级和真实 Qwen `parallel_tool_calls`；保持 match snapshot `state_version/as_of`、结构化数据优先、前端流式进度和 P2 能力边界。
-- **执行方式：** 先写 scope、并行批次、依赖顺序、非法调用和降级场景的失败测试，再按最小责任层实现；随后运行 backend/frontend 全量、typecheck/build、隔离 fake Playwright、真实 Qwen/API-Tennis smoke，并用真实浏览器验证全局查询和详情页复杂分析。
-- **验收门：** `tiafoe 的比赛如何了` 不再出现卡片成功后 `invalid_request`；global 不可调用 `get_match_intelligence`；一轮多个独立 tool call 全部执行且并行；依赖调用严格串行；可选工具失败不终止核心回答；非法工具自动重规划或给出明确降级；真实 SSE 阶段和浏览器 UI 可见；无凭据/供应商原始字段泄漏，未跟踪用户文件保持不变。
+- **执行方式：** 先写 scope、并行批次、依赖顺序、非法调用和降级场景的失败测试，再按最小责任层实现；综合问题补齐四类比赛上下文，最终正文增加事实质量门；Markdown 渲染补齐 CommonMark + GFM；随后运行 backend/frontend 全量、typecheck/build、隔离 fake Playwright、真实 Qwen 和真实浏览器矩阵。
+- **验收门：** `tiafoe 的比赛如何了` 不再出现卡片成功后 `invalid_request`；global 不可调用 `get_match_intelligence`；一轮多个独立 tool call 全部执行且并行；依赖调用严格串行；可选工具失败不终止核心回答；非法工具自动重规划或给出明确降级；复杂 match 问题覆盖 overview/statistics/points/momentum；完整回答无空结果、未知赛制臆测和统计错位；真实 SSE 阶段和浏览器 UI 可见；Markdown 表格等 GFM 结构按语义元素渲染；无凭据/供应商原始字段泄漏，未跟踪用户文件保持不变。
+- **完成提交：** `61d8fee`
+- **验证门：** backend 确定性 `373 passed, 2 skipped, 11 deselected`；真实 Qwen `9 passed, 377 deselected`；frontend `147 passed`、`pnpm exec tsc --noEmit`、`pnpm build`；隔离 fake Playwright `12 passed, 6 skipped`；真实 LLM 浏览器桌面/移动 `6 passed`；质量回归覆盖首次违规重写和二次违规保守降级；`git diff --check` 通过。
 
 ### T38 — 保留 World 国家代码并适配球员国旗展示
 
@@ -352,9 +353,9 @@
 
 ## 最近交接
 
-**状态：** T39 已由 Codex 于 2026-09-12 08:25 在 `main` 领取；起始提交为 `fcfcc55`，工作区保留用户已有未跟踪文件，真实 backend/frontend 保持运行。
+**状态：** T39 已由 Codex 于 2026-09-12 08:25 在 `main` 领取并于 `61d8fee` 完成；起始提交为 `fcfcc55`，工作区保留用户已有未跟踪文件。
 
-**交接说明：** T30 接管时原执行者因额度耗尽中断，项目所有者明确批准 Codex 接管；T30–T38 已在 `main` 串行完成并推送。T39 的真实故障已复现：global 请求先返回结构化比赛，随后模型调用 match-only `get_match_intelligence`，后端按设计返回 `invalid_request`；根因是工具目录未按 global scope 裁剪，且没有多工具依赖/非法调用的编排协议。T39 按阿里云 Function Calling 与 OpenAI 兼容接口官方文档设计：并行仅用于无依赖调用，依赖调用串行，工具目录实行最小权限。所有 ADE 只使用根目录 `.env`；API-Tennis/LLM 凭据不得写入代码、文档、fixture、日志、提交或聊天输出。
+**交接说明：** T30 接管时原执行者因额度耗尽中断，项目所有者明确批准 Codex 接管；T30–T38 已在 `main` 串行完成并推送。T39 的真实故障曾复现：global 请求先返回结构化比赛，随后模型调用 match-only `get_match_intelligence`，后端按设计返回 `invalid_request`；根因是工具目录未按 global scope 裁剪，且没有多工具依赖/非法调用的编排协议。实现后又通过真实 Qwen 门禁发现未知 `format` 时模型会复述 `BO3`，已增加完整正文质量校验与安全重写/降级。依据阿里云 Function Calling 与 OpenAI 兼容接口官方文档：并行仅用于无依赖调用，依赖调用串行，工具目录实行最小权限。所有 ADE 只使用根目录 `.env`；API-Tennis/LLM 凭据不得写入代码、文档、fixture、日志、提交或聊天输出。
 
 **旧交接（T29）：** 接手 T29 前完整阅读 [P2 设计规格 §14](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) 和 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#t29-render-full-pbp-and-available-match-statistics)。所有 ADE 只使用根目录 `.env`；API-Tennis 凭据变量为 `TENNIX_API_TENNIS_API_KEY`，不得写入代码、文档、fixture、日志、提交或聊天输出。T28 起 MatchPage 经 `useMatchStream` 消费 `/api/matches/{id}` + `/stream`（snapshot 含 points/statistics/quality/state_version）；SSE 测试用进程内 uvicorn（ASGITransport 缓冲）；用户已追加要求：P2 收尾时用真实浏览器按业务流程逐项人工验收直到无 bug。
 
@@ -368,7 +369,7 @@
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
-| 2026-09-12 | T39 领取：作用域感知的多工具对话编排与真实查询失败回归修复 | `fcfcc55` |
+| 2026-09-12 | T39 完成：作用域感知编排、综合事实质量门与 CommonMark/GFM 渲染 | `61d8fee` |
 | 2026-09-11 | T38 完成：保留 `World` 国家语义，首页显示国旗、详情页显示国旗与国家代码 | `ddaf24b` |
 | 2026-09-11 | T37 完成：详情页适配官方赛事场地与安全国家代码，并解释所有不可用字段 | `54059fe` |
 | 2026-09-11 | T36 完成：Match Chat 显示 SSE 解析、规划、取数和生成阶段 | `28b316d` |
