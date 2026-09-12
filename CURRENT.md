@@ -3,11 +3,11 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-12 18:59 CST
+**最后更新：** 2026-09-12 19:02 CST
 
-**当前任务：** T48 — 确定性 PlayerResolver 与按内部 ID 的运行时查询（`ready`，待领取）
+**当前任务：** T48 — 确定性 PlayerResolver 与按内部 ID 的运行时查询
 
-**任务状态：** 无 `in_progress`（T47 已完成并推送）
+**任务状态：** `in_progress`
 
 **当前执行者 / ADE：** Claude Code / Claude Code
 
@@ -16,6 +16,10 @@
 **最近完成任务提交：** `2a1a488`
 
 **最后验证的产品提交：** `f720f2b`
+
+**本次任务起始提交：** `49c2ce1`
+
+**本次任务领取时间：** 2026-09-12 19:02 CST
 
 **本次任务起始提交：** `44cd9d5`（v0 原型已入库；本执行者从该提交继续 T43 工程收口）
 
@@ -84,6 +88,17 @@
 - 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`、`REALTIME_LATENCY_INVESTIGATION.md`（任务外调查文档）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`、`frontend/next-env.d.ts`；保留原样，不纳入 T42A。
 
 ## 当前任务
+
+### T48 — 确定性 PlayerResolver 与按内部 ID 的运行时查询
+
+- **状态：** `in_progress`
+- **执行者 / ADE：** Claude Code / Claude Code
+- **分支：** `main`
+- **起始提交：** `49c2ce1`
+- **领取时间：** 2026-09-12 19:02 CST
+- **范围：** 按 [P2.6 实施计划 T48](./docs/superpowers/plans/2026-09-12-tennixai-player-directory-multilingual-identity-implementation.md#t48-add-the-deterministic-playerresolver-and-cut-runtime-queries-to-internal-ids)：`resolver.py`（resolved/ambiguous/not_found 领域结果、kind 优先级排序、Match context 唯一消歧）；`TennisService.resolve_player/list_matches_by_player_id/find_player_matches_by_id`；`ApiTennisProvider.search_players` 委托本地目录、无目录时 typed unsupported，删除三日扫描；`create_app` 装配（api_tennis→Postgres 目录、fake→Memory 目录 + lifespan 一次性内存 sync、livetennis/replay→旧 fallback）。
+- **验收门：** Shelton/Zheng/Djokovic 三组别名矩阵同 ID；大小写/标点/重音/空白变体；同姓 ambiguous 候选；Match context 唯一解析；空 query invalid_request、未知 not_found 且零 provider 调用；runtime 解析零 LLM 调用；API-Tennis 运行时不再扫 live/fixtures 做身份发现；P1 验收矩阵与全套确定性不回归。
+- **阻塞：** 无。
 
 ### T47 — 离线 LLM 中文名 enrichment
 
