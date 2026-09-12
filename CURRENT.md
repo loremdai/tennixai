@@ -3,11 +3,11 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-12 17:34 CST
+**最后更新：** 2026-09-12 17:30 CST
 
-**当前任务：** T47 — 离线 LLM 中文名 enrichment（`ready`，待领取）
+**当前任务：** T47 — 离线 LLM 中文名 enrichment
 
-**任务状态：** 无 `in_progress`（T46 已完成并推送）
+**任务状态：** `in_progress`
 
 **当前执行者 / ADE：** Claude Code / Claude Code
 
@@ -16,6 +16,10 @@
 **最近完成任务提交：** `e68e09e`
 
 **最后验证的产品提交：** `e68e09e`
+
+**本次任务起始提交：** `c570b87`
+
+**本次任务领取时间：** 2026-09-12 17:30 CST
 
 **本次任务起始提交：** `44cd9d5`（v0 原型已入库；本执行者从该提交继续 T43 工程收口）
 
@@ -84,6 +88,17 @@
 - 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`、`REALTIME_LATENCY_INVESTIGATION.md`（任务外调查文档）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`、`frontend/next-env.d.ts`；保留原样，不纳入 T42A。
 
 ## 当前任务
+
+### T47 — 离线 LLM 中文名 enrichment
+
+- **状态：** `in_progress`
+- **执行者 / ADE：** Claude Code / Claude Code
+- **分支：** `main`
+- **起始提交：** `c570b87`
+- **领取时间：** 2026-09-12 17:30 CST
+- **范围：** 按 [P2.6 实施计划 T47](./docs/superpowers/plans/2026-09-12-tennixai-player-directory-multilingual-identity-implementation.md#t47-add-offline-llm-chinese-name-enrichment)：`enrichment.py`（`PlayerNameTranslator` protocol + OpenAI-compatible adapter + 严格 batch 校验 + `PlayerAliasEnricher.enrich_missing`）、CLI `enrich-zh --batch-size --max-batches`（1..50 校验）、`player_alias_llm_live` marker 与 opt-in live 测试、web runtime 不实例化 translator 的 spy 测试；中文 alias 派生（完整名/去间隔/姓氏）。
+- **验收门：** 非法 batch（未知/重复/缺失/多余 ID、空名、坏 JSON、translator 异常）零写入并报错；重跑跳过已有名字且零模型调用；无名占位球员不进入 enrichment；真实 LLM 小批 smoke 通过；本地目录 enrichment 至 `localized == players`（有英文名成员）100%；web runtime spy 证明 fake/replay/api_tennis 模式不构造 AsyncOpenAI/translator。
+- **阻塞：** 无。
 
 ### T46 — 幂等目录同步与英文别名派生
 
