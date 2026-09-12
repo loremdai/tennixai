@@ -3,7 +3,7 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-12 14:09 CST
+**最后更新：** 2026-09-12 14:14 CST
 
 **总体状态：** `in_progress`
 
@@ -29,7 +29,7 @@
 | 里程碑 | 状态 | 目标 | 进入/完成条件 |
 |---|---|---|---|
 | P1 — Match Information Assistant | `done` | 跑通真实结构化比赛查询、卡片、Match Page 与上下文 Chat | T17/T18/T19 均已完成（`69c8238`、`5572960`、`fdb0131`）；P1 已关闭 |
-| P2 — Live Match Intelligence | `in_progress` | 技术统计、PBP、近期控制指数、持久化、多进程实时协调，以及球员目录、多语言身份与历史赛果入口 | T20–T42 已完成；T43 已 ready，等待领取 canonical ranking 与 standings adapter |
+| P2 — Live Match Intelligence | `in_progress` | 技术统计、PBP、近期控制指数、持久化、多进程实时协调，以及球员目录、多语言身份与历史赛果入口 | T42A 正在把 P2.6 修正为“先 v0 原型、后工程实现”的执行顺序 |
 | P3 — Market & Decision Support | `planned` | 市场状态、预测、edge、confidence 和 paper trading | P2 数据可信；映射、模型评估和风控设计另行批准 |
 | Optional — Automated Execution | `deferred` | 在满足法律、风控、安全和可审计条件后考虑自动下单 | 不属于 P3 默认范围，必须单独批准 |
 
@@ -57,7 +57,7 @@
 | P2.3 — Realtime pipeline | `done` | Reducer、WebSocket worker、租约、持久化、snapshot + SSE | T26–T28 完成（`98a1a22`、`d354aba`、`f03985b`）；T29/T30 已在 P2.4 完成 |
 | P2.4 — Match intelligence | `done` | 完整 PBP、22 项统计、近期控制指数、版本化上下文 Chat | T29（`ecd916b`）、T30（`8c9e161`）、T31（`128518f`）完成；P2.5 可开始 |
 | P2.5 — Acceptance and hardening | `done` | Replay、恢复门、真实 smoke、双视口视觉、本地 runbook 与真实数据回归修复 | T32 `ac9c6e5`–T41 `5c3d469` 已完成；Home 与 Match 详情页的问答用户展示策略已同步 |
-| P2.6 — Player Discovery and Multilingual Identity | `in_progress` | ATP/WTA 单打 Top 200 目录、球员详情与历史赛果、共享多语言球员主数据和确定性名称解析 | T42 `c8c7c24` 已冻结设计、v0 Prompt 与 T43–T52 实施路线；T43 ready |
+| P2.6 — Player Discovery and Multilingual Identity | `in_progress` | ATP/WTA 单打 Top 200 目录、球员详情与历史赛果、共享多语言球员主数据和确定性名称解析 | T42 `c8c7c24` 已冻结功能；T42A 正在修正任务顺序，产品实现尚未开始 |
 
 P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md)，逐任务步骤见 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md)。P2.6 的唯一详细基线是 [球员目录设计规格](./docs/superpowers/specs/2026-09-12-tennixai-player-directory-multilingual-identity-design.md)、[P2.6 实施计划](./docs/superpowers/plans/2026-09-12-tennixai-player-directory-multilingual-identity-implementation.md) 和 [v0 球员页面 Prompt](./docs/v0/2026-09-12-player-pages-prompt.md)。
 
@@ -89,7 +89,8 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | T40 | P2.5 | Repair Real Chat Completion and Polish User-Facing Markdown Answers | `done` | `17ccdb7` | 修复未知赛制回答的二次生成失败导致 `查询未完成`；已有结构化数据时生成异常/空结果仍以可读正文、warning 和 `done` 完成；正文移除原问题回显、内部 `format`/工具/质量校验话术和“重要说明”模板，缺失赛制改为独立友好提示；backend 确定性 `374 passed, 2 skipped, 11 deselected`，真实 Qwen `9 passed`，frontend `149 passed` + typecheck/build，隔离 fake Playwright `12 passed/6 skipped`，真实浏览器复杂分析等待完整结果并通过质量断言，浏览器 error/warn 为空 |
 | T41 | P2.5 | Sync Home Chat User-Facing Answer Policy | `done` | `5c3d469` | 将 T40 的生产回答展示策略同步到 Home：去除内部实现来源 footer，统一用户可见状态话术，保留结构化比赛卡、友好资料 warning、进度和重试；TDD 先覆盖内部文字泄漏与完整流式结果，再通过前端 151 passed、typecheck/build、隔离 fake Home desktop/mobile 2 passed、P1 视觉 12 passed 和真实浏览器等待 `done` 验证；完整 e2e 28 passed/14 skipped/14 failed 为既有 P2 gender query 断言与 prototype 视觉基线问题；不扩大 Home 工具能力，不改预览原型 |
 | T42 | P2.6 | Freeze Player Directory, Multilingual Identity, and Historical Results Design | `done` | `c8c7c24` | 740 行规格 + 1317 行 T43–T52 实施计划 + 222 行 v0 Prompt；占位符/敏感模式扫描零命中、8 个本地链接存在、接口与范围自审、`git diff --check` 通过；用户已免除设计审阅停点，本任务未写产品代码 |
-| T43 | P2.6 | Add Canonical Ranking Models and the API-Tennis Standings Adapter | `ready` | — | canonical ranking + 真实 standings capability gate；按实施计划领取后开始 |
+| T42A | P2.6 | Correct the P2.6 Roadmap to Prototype-First Delivery | `in_progress` | — | 将 v0 原型生成/冻结提升为 T43，后端与 Chat 顺延；不改变功能范围 |
+| T43 | P2.6 | Freeze the v0 Player Pages as Visual Truth | `planned` | — | 等待 T42A；先完成两页原型与双视口视觉基线，再开始后端实现 |
 | T44 | P2.6 | Persist the Player Directory, Aliases, and Ranking Snapshots | `planned` | — | 等待 T43；兼容 migration、PostgreSQL repository、identity 无损门 |
 | T45 | P2.6 | Build Idempotent Directory Sync and English Alias Derivation | `planned` | — | 等待 T44；显式本地 sync、重复运行幂等、失败保留旧快照 |
 | T46 | P2.6 | Add Offline LLM Chinese-Name Enrichment | `planned` | — | 等待 T45；只补缺、严格 batch、零运行时翻译、100% 发布覆盖门 |
