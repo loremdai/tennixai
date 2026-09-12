@@ -3,11 +3,11 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-12 16:18 CST
+**最后更新：** 2026-09-12 16:23 CST
 
-**当前任务：** T44 — 增加 canonical 排名模型与 API-Tennis standings adapter（`ready`，待领取）
+**当前任务：** T44 — 增加 canonical 排名模型与 API-Tennis standings adapter
 
-**任务状态：** 无 `in_progress`（T43 已完成并推送）
+**任务状态：** `in_progress`
 
 **当前执行者 / ADE：** Claude Code / Claude Code
 
@@ -16,6 +16,10 @@
 **最近完成任务提交：** `42c7a36`
 
 **最后验证的产品提交：** `42c7a36`
+
+**本次任务起始提交：** `91b180c`
+
+**本次任务领取时间：** 2026-09-12 16:23 CST
 
 **本次任务起始提交：** `44cd9d5`（v0 原型已入库；本执行者从该提交继续 T43 工程收口）
 
@@ -84,6 +88,17 @@
 - 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`、`REALTIME_LATENCY_INVESTIGATION.md`（任务外调查文档）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`、`frontend/next-env.d.ts`；保留原样，不纳入 T42A。
 
 ## 当前任务
+
+### T44 — 增加 canonical 排名模型与 API-Tennis standings adapter
+
+- **状态：** `in_progress`
+- **执行者 / ADE：** Claude Code / Claude Code
+- **分支：** `main`
+- **起始提交：** `91b180c`
+- **领取时间：** 2026-09-12 16:23 CST
+- **范围：** 按 [P2.6 实施计划 T44](./docs/superpowers/plans/2026-09-12-tennixai-player-directory-multilingual-identity-implementation.md#t44-add-canonical-ranking-models-and-the-api-tennis-standings-adapter)：`backend/app/players/`（models/providers）、`Player.localized_name` 兼容扩展、`StandingDto` permissive vendor DTO、`ApiTennisProvider.get_rankings()`、fake provider 确定性排名、opt-in 真实 standings smoke；现有 Match/Player API 保持兼容。
+- **验收门：** TDD 先红后绿；时区感知 `fetched_at`、正 rank、非负积分、`localized_name=None` 兼容、ATP/WTA 参数映射、movement 回退、坏数值行跳过、仅内部 ID、序列化零供应商字段；fake 至少 6 条跨 tour/中国/升降/200 边界/200 外；全套确定性 backend 不回归；真实 `TENNIX_RUN_API_TENNIS_LIVE=1` standings smoke 两 tour 认证且零泄漏（403/429 如实失败）。
+- **阻塞：** 无。
 
 ### T43 — 生成、导入并冻结 v0 球员页面视觉真相
 
