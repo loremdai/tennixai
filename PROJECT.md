@@ -3,7 +3,7 @@
 > 本文件回答“这个项目是什么、为什么做、哪些原则不能被破坏”。
 > 全局进度见 [ROADMAP.md](./ROADMAP.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-12 14:03 CST
+**最后更新：** 2026-09-12 14:19 CST
 
 **产品阶段：** P1 — 比赛信息查询助手（已完成，2026-09-08）；P2.0–P2.5 — Live Match Intelligence（已完成，2026-09-12）；P2.6 — Player Discovery and Multilingual Identity（设计已冻结，等待 T43–T52 实施）
 
@@ -18,7 +18,7 @@
 - P2 设计已冻结：API-Tennis WebSocket 是实时主路径，PostgreSQL 保存长期 canonical 事实，Redis 负责租约、热状态和 pub/sub，FastAPI 通过版本化 SSE 服务浏览器。
 - Home 默认展示 ATP + WTA、全部性别、单打，并允许赛事级别、性别、单双打叠加筛选；赛事按 ATP/WTA → Challenger → ITF → other 排序。
 - Match Page 将提供完整 PBP、尽可能多的可信技术统计、近期控制指数和带 `state_version/as_of` 的上下文问答。
-- P2.6 将增加 `/players` ATP/WTA 单打 Top 200、`/players/[playerId]` 球员详情和当前+前四赛季历史赛果；默认排名页与全目录搜索是两种明确模式。
+- P2.6 将增加 `/players` ATP/WTA 单打 Top 200、`/players/[playerId]` 球员详情和当前+前四赛季历史赛果；默认排名页与全目录搜索是两种明确模式。交付顺序固定为先由 v0 冻结两页原型，再开发数据层并接真实数据。
 - 球员身份统一为“英文主名 + 中文辅名 + aliases → 内部 `player_id`”；中文名离线批量补齐，Home/Match Chat 运行时只使用确定性 PlayerResolver，不调用翻译 LLM。
 - 当前 `Ben Shelton` 对供应商 `B. Shelton` 的字符串匹配失败是 P2.6 的首要回归；`ambiguous` / `not_found` 将成为正常可恢复结果，而不是终止 SSE error。
 - P2 仍严格排除 odds、预测、Polymarket、交易、认证和云部署；完成目标是本地完整运行与少量好友私人测试。
@@ -148,7 +148,7 @@ TennisService → REST DTO / Home Chat / Match Chat
 - 中文名：可信来源优先，缺失时使用现有 OpenAI-compatible LLM 离线批量生成；重复运行只补缺，严格 batch 校验失败时零写入，UI 不展示生成来源。
 - 解析：同一 PlayerResolver 支持完整英文名、姓氏、供应商缩写、中文名、姓名顺序、大小写、标点和重音差异；Match context 可唯一消歧，其余冲突返回候选。
 - Chat：Home/Match tools 先得到 resolver 领域结果再按内部 ID 查询；`ambiguous` 和 `not_found` 以自然澄清 + SSE `done` 结束。
-- 页面：v0 补齐 `/players` 与 `/players/[playerId]` 视觉，ADE 严格接真实数据；桌面 `1440×1000`、移动 `390×844`。
+- 页面：先由 v0 补齐并冻结 `/players` 与 `/players/[playerId]` 视觉，再由 ADE 严格按原型接真实数据；桌面 `1440×1000`、移动 `390×844`。
 - 运行：本地显式执行目录同步与中文 enrichment；真实 API 启动不自动同步，不新增 cron、队列、daemon 或云部署。
 
 ## P1 成功标准

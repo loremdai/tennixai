@@ -665,15 +665,16 @@ v0 使用确定性展示数据，但不能把样例数据引入生产数据路�
 
 ### 16.1 发布顺序
 
-1. 探测并冻结 API-Tennis 排名枚举和字段边界；
-2. 增加 player master、external IDs、aliases、rankings schema；
-3. 迁移现有 player identity，保持旧 API 可运行；
-4. 实现目录同步与离线 enrichment；
-5. 实现 PlayerResolver，但先不切换生产 Chat；
-6. 接 rankings/profile/results REST；
-7. 将 Home/Match Chat 切到共享 resolver；
-8. 冻结 v0 页面视觉并接真实前端；
-9. 运行确定性、真实供应商、真实 LLM 与双视口浏览器总门。
+1. 先由 v0 生成 `/players` 与 `/players/[playerId]`，导入 preview 并冻结桌面/移动视觉基线；
+2. 探测并冻结 API-Tennis 排名枚举、字段边界和 canonical ranking adapter；
+3. 增加 player master、external IDs、aliases、rankings schema，并无损迁移现有 player identity；
+4. 实现幂等目录同步与英文 alias 派生；
+5. 用离线 enrichment 补齐中文名；
+6. 实现 PlayerResolver 和按内部 ID 的 service/provider 路径，但先不切换生产 Chat；
+7. 接 rankings/profile/results REST；
+8. 将 Home/Match Chat 切到共享 resolver；
+9. 把真实 API 与状态接入已冻结的 v0 组件，不改变视觉结构；
+10. 运行确定性、真实供应商、真实 LLM 与双视口浏览器总门。
 
 每一步都应是独立可提交任务，后一步不通过时可停在仍兼容 P2.5 的状态。
 
@@ -698,14 +699,14 @@ v0 使用确定性展示数据，但不能把样例数据引入生产数据路�
 
 后续实施计划按以下依赖方向拆分，具体任务 ID、文件和命令以计划为准：
 
-1. 供应商能力 probe 与 schema/domain；
-2. 目录 repository 和同步；
-3. 离线中文名 enrichment；
-4. PlayerResolver 与按 ID 的 service/provider 路径；
-5. rankings/profile/results API；
-6. Home/Match Chat 切换与非终止消歧；
-7. v0 视觉冻结；
-8. 前端真实数据集成；
+1. v0 生成、导入并冻结两页视觉真相；
+2. 供应商能力 probe 与 canonical ranking domain/adapter；
+3. 目录 repository、迁移和幂等同步；
+4. 离线中文名 enrichment；
+5. PlayerResolver 与按 ID 的 service/provider 路径；
+6. rankings/profile/results API；
+7. Home/Match Chat 切换与非终止消歧；
+8. 已冻结 v0 组件的真实数据集成；
 9. 全量验收和总控关闭。
 
 不得跨任务提前加入双打、运行时 LLM 搜索、全量历史镜像、Sportradar 依赖或 P3 能力。

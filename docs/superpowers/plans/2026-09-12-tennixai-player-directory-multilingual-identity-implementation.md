@@ -72,7 +72,109 @@
 
 ---
 
-### T43: Add Canonical Ranking Models and the API-Tennis Standings Adapter
+### T43: Generate, Import, and Freeze the v0 Player Pages as Visual Truth
+
+**Outcome:** 用户提供的 v0 `/players` 与 `/players/[playerId]` 设计被整理成仓库内 preview 页面和桌面/移动视觉基线；不接真实 API。
+
+**Input gate:** 使用 [v0 球员页面交付提示](../../v0/2026-09-12-player-pages-prompt.md) 生成并导出代码。若仓库中没有用户确认的 v0 输出或可访问的 v0 项目，本任务必须保持 `ready` 并在 `CURRENT.md` 记录这一项外部输入，不得由 ADE 自行发明视觉稿。
+
+**Files:**
+
+- Create: `frontend/app/players/page.tsx`
+- Create: `frontend/app/players/[playerId]/page.tsx`
+- Create: `frontend/components/players/players-page.tsx`
+- Create: `frontend/components/players/rankings-table.tsx`
+- Create: `frontend/components/players/player-search-results.tsx`
+- Create: `frontend/components/players/player-profile-page.tsx`
+- Create: `frontend/components/players/player-profile-header.tsx`
+- Create: `frontend/components/players/player-season-summary.tsx`
+- Create: `frontend/components/players/player-current-status.tsx`
+- Create: `frontend/components/players/player-results.tsx`
+- Create: `frontend/components/players/player-preview-data.ts`
+- Create: `frontend/components/players/players-page.test.tsx`
+- Create: `frontend/components/players/player-profile-page.test.tsx`
+- Create: `frontend/e2e/player-directory.visual.spec.ts`
+- Create: approved screenshots under `frontend/e2e/__screenshots__/{desktop,mobile}/`
+- Modify: `frontend/components/match/match-header.tsx`
+
+**Interfaces:**
+
+- Consumes: v0 exported component structure and the approved design DTO shape only as fixture types.
+- Produces preview components with explicit props; no component may call `fetch` in T43.
+
+```ts
+type PlayersPageProps = {
+  initialTour?: 'ATP' | 'WTA'
+  initialQuery?: string
+  preview: true
+  previewData: PlayerDirectoryPreviewData
+}
+
+type PlayerProfilePageProps = {
+  playerId?: string
+  preview: true
+  previewData: PlayerProfilePreviewData
+}
+```
+
+- [ ] **Step 1: Verify and record the exact v0 input commit/export**
+
+Place only the user-approved export in the task diff. Record its source/export date in `CURRENT.md`; do not copy package manifests or overwrite established shadcn components blindly.
+
+- [ ] **Step 2: Claim T43 and normalize imports without redesigning**
+
+Reuse existing `ProductHeader`, `PlayerCountry`, shadcn primitives, colors and fonts where they are visually equivalent. Preserve v0 layout/spacing/content hierarchy. Change the header's `球员` link to `/players` and set `active="players"` on both player routes.
+
+- [ ] **Step 3: Write component behavior tests before cleanup**
+
+Assert ATP/WTA switching, 50-row pagination labels, country/China filters, search mode outside Top 200, row/profile links, season/tier/W-L controls, 20-result pagination and exact empty text `暂无比赛信息`.
+
+```tsx
+expect(screen.getByRole('heading', { name: 'Ben Shelton' })).toBeVisible()
+expect(screen.getByText('本·谢尔顿')).toBeVisible()
+expect(screen.getByText('暂无比赛信息')).toBeVisible()
+```
+
+- [ ] **Step 4: Prove tests fail against the raw export where behavior is incomplete**
+
+```bash
+cd frontend
+pnpm test -- components/players/players-page.test.tsx components/players/player-profile-page.test.tsx
+```
+
+- [ ] **Step 5: Add deterministic preview data and complete interaction-only gaps**
+
+Preview data must include ATP/WTA, China/non-China, rank 200/rank 201/no rank, movement directions, profile with/without image, live/next/empty status, five seasons and enough results for pagination. Keep data isolated in `player-preview-data.ts`; production props remain unimplemented until T51.
+
+- [ ] **Step 6: Capture and inspect four visual baselines**
+
+```bash
+cd frontend
+pnpm test:e2e:update --grep "player directory visual"
+pnpm test:e2e --grep "player directory visual"
+```
+
+Required: players desktop/mobile and profile desktop/mobile at `1440×1000` and `390×844`. Inspect every PNG for clipping, overflow, unreadable bilingual hierarchy, broken mobile filters and accidental dev overlays.
+
+- [ ] **Step 7: Run existing prototype/visual regressions**
+
+```bash
+cd frontend
+pnpm test
+pnpm typecheck
+pnpm build
+pnpm test:e2e --grep "prototype|visual"
+```
+
+Existing Home/Match baselines must not change unless the only pixel delta is the approved `/players` navigation href/active state and no screenshot captures it differently.
+
+- [ ] **Step 8: Commit and close T43**
+
+Commit preview components and reviewed baselines, name the source as v0 in controls, mark T44 ready and push.
+
+---
+
+### T44: Add Canonical Ranking Models and the API-Tennis Standings Adapter
 
 **Outcome:** provider 可以把 ATP/WTA standings 映射成零供应商字段的 canonical ranking entries；现有 Match/Player API 保持兼容。
 
@@ -129,15 +231,15 @@ class Player(FrozenModel):
     ranking: int | None = None
 ```
 
-- Consumed by T44/T45: `RankingEntry.player.id` is already an internal `ply_` ID created through `IdentityRepository`; `StandingDto.player_key` never escapes the adapter.
+- Consumed by T45/T46: `RankingEntry.player.id` is already an internal `ply_` ID created through `IdentityRepository`; `StandingDto.player_key` never escapes the adapter.
 
-- [ ] **Step 1: Claim T43 in the control plane**
+- [ ] **Step 1: Claim T44 in the control plane**
 
-Update T43 to `in_progress` in `ROADMAP.md` and replace the current task in `CURRENT.md` with executor, branch `main`, starting commit and timestamp. Commit and push only those control files.
+Update T44 to `in_progress` in `ROADMAP.md` and replace the current task in `CURRENT.md` with executor, branch `main`, starting commit and timestamp. Commit and push only those control files.
 
 ```bash
 git add ROADMAP.md CURRENT.md
-git commit -m "docs: claim T43 ranking adapter"
+git commit -m "docs: claim T44 ranking adapter"
 git push origin main
 ```
 
@@ -210,18 +312,18 @@ TENNIX_RUN_API_TENNIS_LIVE=1 uv run pytest -m api_tennis_live tests/live/test_ap
 
 The smoke must assert both `ATP` and `WTA` calls authenticate, return sorted canonical entries when data exists, and never print response bodies or the key. A supplier-declared empty tour may skip only that tour after authentication; 403/429 is a truthful failure, not a pass.
 
-- [ ] **Step 9: Commit implementation and close T43**
+- [ ] **Step 9: Commit implementation and close T44**
 
 ```bash
 git add backend/app/domain.py backend/app/players backend/app/providers backend/tests
 git commit -m "feat: add canonical player rankings adapter"
 ```
 
-Record the product commit and exact test counts in all three controls, mark T43 `done`, T44 `ready`, then commit/push controls separately.
+Record the product commit and exact test counts in all three controls, mark T44 `done`, T45 `ready`, then commit/push controls separately.
 
 ---
 
-### T44: Persist the Player Directory, Aliases, and Ranking Snapshots
+### T45: Persist the Player Directory, Aliases, and Ranking Snapshots
 
 **Outcome:** PostgreSQL 成为 player master data 和 aliases 的事实源，现有 player external IDs 与 Match snapshots 无损兼容。
 
@@ -301,9 +403,9 @@ class MemoryPlayerDirectoryRepository:
     ...
 ```
 
-- Consumes: T43 `RankingEntry`, `Tour`, existing `Database` and `PlayerExternalIdRow`.
+- Consumes: T44 `RankingEntry`, `Tour`, existing `Database` and `PlayerExternalIdRow`.
 
-- [ ] **Step 1: Claim T44 and write migration/repository failure tests**
+- [ ] **Step 1: Claim T45 and write migration/repository failure tests**
 
 Tests must assert schema constraints, duplicate alias idempotency, same alias across two players, latest ranking snapshot selection, country filtering, 50-row pagination, concurrent external-ID preservation and snapshot reconstruction with `localized_name`.
 
@@ -371,11 +473,11 @@ cd backend
 uv run pytest -m "not llm_live and not provider_live and not end_to_end_live and not api_tennis_live and not realtime_live and not infrastructure" -q
 ```
 
-Commit product code, then update controls with exact migration/test evidence, mark T44 done and T45 ready, commit/push both commits.
+Commit product code, then update controls with exact migration/test evidence, mark T45 done and T46 ready, commit/push both commits.
 
 ---
 
-### T45: Build Idempotent Directory Sync and English Alias Derivation
+### T46: Build Idempotent Directory Sync and English Alias Derivation
 
 **Outcome:** 一个显式本地命令可以同步 ATP/WTA rankings、更新 player master data，并为所有已知单打球员生成一致的英文 full/surname/reordered/abbreviated/provider aliases。
 
@@ -412,9 +514,9 @@ class DirectorySyncReport(FrozenModel):
     failed: int
 ```
 
-- Consumes: T43 provider and T44 repository.
+- Consumes: T44 provider and T45 repository.
 
-- [ ] **Step 1: Claim T45 and write table-driven normalization failures**
+- [ ] **Step 1: Claim T46 and write table-driven normalization failures**
 
 Use exact cases:
 
@@ -486,13 +588,13 @@ uv run python -m app.players.cli status
 
 Verify non-zero ATP/WTA counts, Top 200 availability, no secrets/external IDs in stdout, and rerun `sync` to prove stable counts.
 
-- [ ] **Step 9: Commit and close T45**
+- [ ] **Step 9: Commit and close T46**
 
-Commit implementation, record real aggregate counts and deterministic/infrastructure results in controls, mark T46 ready, push product and control commits.
+Commit implementation, record real aggregate counts and deterministic/infrastructure results in controls, mark T47 ready, push product and control commits.
 
 ---
 
-### T46: Add Offline LLM Chinese-Name Enrichment
+### T47: Add Offline LLM Chinese-Name Enrichment
 
 **Outcome:** 缺失中文名的球员可通过严格批量协议离线补齐；重复运行不重复消费，错误 batch 零写入，web runtime 不持有 translator。
 
@@ -533,9 +635,9 @@ class PlayerAliasEnricher:
     async def enrich_missing(self, *, batch_size: int = 25, max_batches: int | None = None) -> EnrichmentReport: ...
 ```
 
-- Consumes: existing root `.env` LLM settings and T44 atomic `save_localized_names()`.
+- Consumes: existing root `.env` LLM settings and T45 atomic `save_localized_names()`.
 
-- [ ] **Step 1: Claim T46 and write strict validation failures**
+- [ ] **Step 1: Claim T47 and write strict validation failures**
 
 Tests cover valid batch, unknown returned ID, duplicate returned ID, omitted input ID, extra ID, blank name, malformed JSON, translator error, atomic zero-write, rerun skip, Chinese alias derivation (`本·谢尔顿`/`本谢尔顿`/`谢尔顿`) and provenance fields.
 
@@ -599,13 +701,13 @@ Run `enrich-zh` until `status` reports `localized == players` for the publishabl
 
 Add an import/constructor spy around `create_app()` and assert no `AsyncOpenAI` or `PlayerNameTranslator` is constructed for fake, replay or api_tennis web modes.
 
-- [ ] **Step 9: Commit and close T46**
+- [ ] **Step 9: Commit and close T47**
 
-Commit code/tests, record model name but no request content or key, record coverage counts, mark T47 ready and push both product/control commits.
+Commit code/tests, record model name but no request content or key, record coverage counts, mark T48 ready and push both product/control commits.
 
 ---
 
-### T47: Add the Deterministic PlayerResolver and Cut Runtime Queries to Internal IDs
+### T48: Add the Deterministic PlayerResolver and Cut Runtime Queries to Internal IDs
 
 **Outcome:** 英文全名、姓氏、供应商缩写、中文名、姓名倒序及重音变体解析为统一内部 ID；API-Tennis 查询不再扫描比赛按名字匹配。
 
@@ -661,9 +763,9 @@ async def list_matches_by_player_id(self, status: str, player_id: str) -> list[M
 async def find_player_matches_by_id(self, player_id: str, time_scope: MatchTimeScope) -> list[Match]: ...
 ```
 
-- Consumes: T44 repository, T45 normalizer. Does not consume T46 translator.
+- Consumes: T45 repository, T46 normalizer. Does not consume T47 translator.
 
-- [ ] **Step 1: Claim T47 and write resolver acceptance tests**
+- [ ] **Step 1: Claim T48 and write resolver acceptance tests**
 
 Parameterize the three approved identity groups and all normalization variants. Add two `Wang` candidates for Home ambiguity and a match context containing one candidate for unique resolution.
 
@@ -718,13 +820,13 @@ uv run pytest -m "not llm_live and not provider_live and not end_to_end_live and
 
 With the local directory already synced/enriched, resolve `Ben Shelton`, `B. Shelton`, `谢尔顿` and assert one internal ID, then call next/live provider paths by that ID. Log only internal ID and result counts.
 
-- [ ] **Step 9: Commit and close T47**
+- [ ] **Step 9: Commit and close T48**
 
-Record the exact aliases and no-scan evidence in controls, mark T48 ready and push.
+Record the exact aliases and no-scan evidence in controls, mark T49 ready and push.
 
 ---
 
-### T48: Expose Rankings, Profile, and Five-Season Result APIs
+### T49: Expose Rankings, Profile, and Five-Season Result APIs
 
 **Outcome:** FastAPI 提供稳定的 rankings/search/profile/results DTO，支持 Top 200、全目录搜索、赛季详情和分页筛选，并保持历史按需查询。
 
@@ -819,7 +921,7 @@ GET /api/v1/players/{player_id}?season=2026
 GET /api/v1/players/{player_id}/results?season=2026&tier=ATP&outcome=won&page=1&page_size=20
 ```
 
-- [ ] **Step 1: Claim T48 and write failing route/service tests**
+- [ ] **Step 1: Claim T49 and write failing route/service tests**
 
 Test static route precedence, tour enum, fixed page sizes, page bounds, Top 200 cap, China filter, outside-rank search, unknown ID, optional profile fields, selected season, live-over-next priority, exact empty copy represented by `current_match=None`, five-year boundary, tier/outcome filters, result total/page and no surface parameter.
 
@@ -866,13 +968,13 @@ uv run pytest -m "not llm_live and not provider_live and not end_to_end_live and
 
 Exercise one Top 200 and one locally known outside-Top-200 player. Assert profile mapping and at least one bounded season request completes or returns honest unavailable; never claim a nonempty history if the supplier returns none.
 
-- [ ] **Step 9: Commit and close T48**
+- [ ] **Step 9: Commit and close T49**
 
-Record endpoints, cache bounds, real smoke result and test counts; mark T49 ready and push.
+Record endpoints, cache bounds, real smoke result and test counts; mark T50 ready and push.
 
 ---
 
-### T49: Route Home and Match Chat Through the Shared Resolver
+### T50: Route Home and Match Chat Through the Shared Resolver
 
 **Outcome:** 所有按名字的 Chat 工具共用 PlayerResolver；消歧/未找到会自然追问并以 `done` 完成，不再出现“查询失败（not_found）”。
 
@@ -916,7 +1018,7 @@ async def _resolve_player_query(self, query: str, context: ChatContext) -> Playe
     return StructuredToolResult(kind="player_resolution", resolution=result)
 ```
 
-- [ ] **Step 1: Claim T49 and write failing tool/SSE tests**
+- [ ] **Step 1: Claim T50 and write failing tool/SSE tests**
 
 Cover each name-bearing tool: `find_player_matches`, filtered `get_live_matches`, `get_player_results`, both sides of `get_head_to_head`. Prove Match context uniquely resolves a surname and Home ambiguity returns candidates.
 
@@ -973,115 +1075,13 @@ pnpm typecheck
 pnpm build
 ```
 
-Commit backend/frontend changes, record real SSE event order and test counts, mark T50 ready and push.
-
----
-
-### T50: Import and Freeze the v0 Player Pages as Visual Truth
-
-**Outcome:** 用户提供的 v0 `/players` 与 `/players/[playerId]` 设计被整理成仓库内 preview 页面和桌面/移动视觉基线；不接真实 API。
-
-**Input gate:** 使用 [v0 球员页面交付提示](../../v0/2026-09-12-player-pages-prompt.md) 生成并导出代码。若仓库中没有用户确认的 v0 输出或可访问的 v0 项目，本任务必须保持 `ready` 并在 `CURRENT.md` 记录这一项外部输入，不得由 ADE 自行发明视觉稿。
-
-**Files:**
-
-- Create: `frontend/app/players/page.tsx`
-- Create: `frontend/app/players/[playerId]/page.tsx`
-- Create: `frontend/components/players/players-page.tsx`
-- Create: `frontend/components/players/rankings-table.tsx`
-- Create: `frontend/components/players/player-search-results.tsx`
-- Create: `frontend/components/players/player-profile-page.tsx`
-- Create: `frontend/components/players/player-profile-header.tsx`
-- Create: `frontend/components/players/player-season-summary.tsx`
-- Create: `frontend/components/players/player-current-status.tsx`
-- Create: `frontend/components/players/player-results.tsx`
-- Create: `frontend/components/players/player-preview-data.ts`
-- Create: `frontend/components/players/players-page.test.tsx`
-- Create: `frontend/components/players/player-profile-page.test.tsx`
-- Create: `frontend/e2e/player-directory.visual.spec.ts`
-- Create: approved screenshots under `frontend/e2e/__screenshots__/{desktop,mobile}/`
-- Modify: `frontend/components/match/match-header.tsx`
-
-**Interfaces:**
-
-- Consumes: v0 exported component structure and T48 DTO shape only as fixture types.
-- Produces preview components with explicit props; no component may call `fetch` in T50.
-
-```ts
-type PlayersPageProps = {
-  initialTour?: 'ATP' | 'WTA'
-  initialQuery?: string
-  preview: true
-  previewData: PlayerDirectoryPreviewData
-}
-
-type PlayerProfilePageProps = {
-  playerId?: string
-  preview: true
-  previewData: PlayerProfilePreviewData
-}
-```
-
-- [ ] **Step 1: Verify and record the exact v0 input commit/export**
-
-Place only the user-approved export in the task diff. Record its source/export date in `CURRENT.md`; do not copy package manifests or overwrite established shadcn components blindly.
-
-- [ ] **Step 2: Claim T50 and normalize imports without redesigning**
-
-Reuse existing `ProductHeader`, `PlayerCountry`, shadcn primitives, colors and fonts where they are visually equivalent. Preserve v0 layout/spacing/content hierarchy. Change the header's `球员` link to `/players` and set `active="players"` on both player routes.
-
-- [ ] **Step 3: Write component behavior tests before cleanup**
-
-Assert ATP/WTA switching, 50-row pagination labels, country/China filters, search mode outside Top 200, row/profile links, season/tier/W-L controls, 20-result pagination and exact empty text `暂无比赛信息`.
-
-```tsx
-expect(screen.getByRole('heading', { name: 'Ben Shelton' })).toBeVisible()
-expect(screen.getByText('本·谢尔顿')).toBeVisible()
-expect(screen.getByText('暂无比赛信息')).toBeVisible()
-```
-
-- [ ] **Step 4: Prove tests fail against the raw export where behavior is incomplete**
-
-```bash
-cd frontend
-pnpm test -- components/players/players-page.test.tsx components/players/player-profile-page.test.tsx
-```
-
-- [ ] **Step 5: Add deterministic preview data and complete interaction-only gaps**
-
-Preview data must include ATP/WTA, China/non-China, rank 200/rank 201/no rank, movement directions, profile with/without image, live/next/empty status, five seasons and enough results for pagination. Keep data isolated in `player-preview-data.ts`; production props remain unimplemented until T51.
-
-- [ ] **Step 6: Capture and inspect four visual baselines**
-
-```bash
-cd frontend
-pnpm test:e2e:update --grep "player directory visual"
-pnpm test:e2e --grep "player directory visual"
-```
-
-Required: players desktop/mobile and profile desktop/mobile at `1440×1000` and `390×844`. Inspect every PNG for clipping, overflow, unreadable bilingual hierarchy, broken mobile filters and accidental dev overlays.
-
-- [ ] **Step 7: Run existing prototype/visual regressions**
-
-```bash
-cd frontend
-pnpm test
-pnpm typecheck
-pnpm build
-pnpm test:e2e --grep "prototype|visual"
-```
-
-Existing Home/Match baselines must not change unless the only pixel delta is the approved `/players` navigation href/active state and no screenshot captures it differently.
-
-- [ ] **Step 8: Commit and close T50**
-
-Commit preview components and reviewed baselines, name the source as v0 in controls, mark T51 ready and push.
+Commit backend/frontend changes, record real SSE event order and test counts, mark T51 ready and push.
 
 ---
 
 ### T51: Connect the v0 Player Pages to Real Structured APIs
 
-**Outcome:** v0 页面在 production routes 消费 FastAPI 真实数据，完整支持 loading/empty/partial/error/stale、筛选分页和内部 ID 导航，视觉保持 T50 基线。
+**Outcome:** v0 页面在 production routes 消费 FastAPI 真实数据，完整支持 loading/empty/partial/error/stale、筛选分页和内部 ID 导航，视觉保持 T43 基线。
 
 **Files:**
 
@@ -1094,7 +1094,7 @@ Commit preview components and reviewed baselines, name the source as v0 in contr
 - Modify: `frontend/app/api/players/search/route.ts` (forward the new resolution response unchanged)
 - Modify: `frontend/app/players/page.tsx`
 - Modify: `frontend/app/players/[playerId]/page.tsx`
-- Modify: all T50 player components to accept production data/state without changing visual structure
+- Modify: all T43 player components to accept production data/state without changing visual structure
 - Modify: `frontend/lib/api/types.ts`
 - Modify: `frontend/lib/api/client.ts`
 - Modify: `frontend/lib/api/client.test.ts`
@@ -1160,7 +1160,7 @@ pnpm test:e2e --grep "player directory"
 pnpm test:e2e --grep "player directory visual"
 ```
 
-Both viewports must cover ATP→WTA, China filter, Chinese search, outside-rank result, profile, season/filter/page, Finished Match navigation and empty current status. T50 visual baselines must pass without update.
+Both viewports must cover ATP→WTA, China filter, Chinese search, outside-rank result, profile, season/filter/page, Finished Match navigation and empty current status. T43 visual baselines must pass without update.
 
 - [ ] **Step 9: Run existing Home/Match regression and commit**
 
