@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-12 11:02 CST
+**最后更新：** 2026-09-12 11:40 CST
 
-**总体状态：** `in_progress`（T40 正在修复真实服务回答未完成并完成 Markdown 渲染复验）
+**总体状态：** `done`（P2.5 验收与真实服务对话质量修复完成）
 
 **当前里程碑：** P2 — Live Match Intelligence（`done`）
 
-**当前阶段：** P2.5 — Acceptance and hardening（`in_progress`）
+**当前阶段：** P2.5 — Acceptance and hardening（`done`）
 
 ## 状态说明
 
@@ -56,7 +56,7 @@
 | P2.2 — Unified data and discovery | `done` | API-Tennis REST、历史/H2H、赛事分类和 Home 叠加筛选 | T23–T25 完成（`015ff7f`、`dddb734`、`e904485`）；P2.3 可开始 |
 | P2.3 — Realtime pipeline | `done` | Reducer、WebSocket worker、租约、持久化、snapshot + SSE | T26–T28 完成（`98a1a22`、`d354aba`、`f03985b`）；T29/T30 已在 P2.4 完成 |
 | P2.4 — Match intelligence | `done` | 完整 PBP、22 项统计、近期控制指数、版本化上下文 Chat | T29（`ecd916b`）、T30（`8c9e161`）、T31（`128518f`）完成；P2.5 可开始 |
-| P2.5 — Acceptance and hardening | `in_progress` | Replay、恢复门、真实 smoke、双视口视觉、本地 runbook 与真实数据回归修复 | T32 `ac9c6e5`、T33 `b60217e`、T34 `84eb146`、T35 `054062b`、T36 `28b316d`、T37 `54059fe`、T38 `ddaf24b` 已完成；T39 正在实现作用域感知的多工具对话编排与真实查询失败回归修复 |
+| P2.5 — Acceptance and hardening | `done` | Replay、恢复门、真实 smoke、双视口视觉、本地 runbook 与真实数据回归修复 | T32 `ac9c6e5`、T33 `b60217e`、T34 `84eb146`、T35 `054062b`、T36 `28b316d`、T37 `54059fe`、T38 `ddaf24b`、T39 `61d8fee`、T40 `17ccdb7` 已完成；确定性/真实 Qwen/双视口浏览器和真实服务质量门均有证据 |
 
 详细产品、架构和数据语义见 [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md)，逐任务实施步骤见 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md)。
 
@@ -85,6 +85,7 @@
 | T37 | P2.5 | Adapt Available Match Metadata and Explain Unavailable Fields | `done` | `54059fe` | 依据 [API-Tennis REST 文档](https://api-tennis.com/documentation) 的 `get_draw`/`get_players` 官方响应补齐详情场地与安全国家代码映射；短 TTL 缓存并持久化可获得元数据，reducer 发出元数据版本事件；官方未返回或赛前才产生的轮次、室内外、赛制、开赛时间、比分、PBP、统计、动量等字段均显示解释性文案。TDD focused provider/service/reducer 91 passed；确定性 backend 349 passed/2 skipped/9 deselected；frontend 136 passed + typecheck/build；隔离 fake 服务 P1 Playwright 24 passed；真实 REST smoke 1 passed；真实浏览器鼠标复核与错误/警告检查通过。 |
 | T38 | P2.5 | Preserve World Country Code and Render Prototype Flags | `done` | `ddaf24b` | 按用户提供的原型截图保留 `World` 为 canonical `world`；catalog 对筛选后的比赛复用 player profile cache，补齐首页此前缺失的国家与排名；统一适配国家代码、国旗、中文名称和无障碍文本；首页比赛卡显示国旗，详情页显示国旗+国家代码，`world` 使用 Globe/WORLD；TDD 后 backend 确定性 `352 passed, 2 skipped, 9 deselected`，frontend `140 passed` + typecheck/build，隔离 fake P1 功能/视觉 `12/12`，真实 REST smoke `1 passed`，真实浏览器鼠标流程和 error/warn 检查通过 |
 | T39 | P2.5 | Design and Implement Scope-Aware Multi-Tool Chat Orchestration | `done` | `61d8fee` | 作用域感知工具目录、多工具并行/依赖串行、非法调用重规划、部分失败降级、完整综合上下文规划与冻结事实质量门；CommonMark + GFM 表格等语义渲染；backend 确定性 `373 passed, 2 skipped, 11 deselected`，真实 Qwen `9 passed`，frontend `147 passed` + typecheck/build，隔离 fake Playwright `12 passed/6 skipped`，真实 LLM 浏览器桌面/移动 `6 passed`；真实质量门曾捕获 `BO3` 泄漏并在修复后全通过 |
+| T40 | P2.5 | Repair Real Chat Completion and Polish User-Facing Markdown Answers | `done` | `17ccdb7` | 修复未知赛制回答的二次生成失败导致 `查询未完成`；已有结构化数据时生成异常/空结果仍以可读正文、warning 和 `done` 完成；正文移除原问题回显、内部 `format`/工具/质量校验话术和“重要说明”模板，缺失赛制改为独立友好提示；backend 确定性 `374 passed, 2 skipped, 11 deselected`，真实 Qwen `9 passed`，frontend `149 passed` + typecheck/build，隔离 fake Playwright `12 passed/6 skipped`，真实浏览器复杂分析等待完整结果并通过质量断言，浏览器 error/warn 为空 |
 
 ## P2 完成门摘要
 
@@ -96,11 +97,12 @@
 - Chat 只消费 compact canonical facts，回答在提问开始时固定 `state_version/as_of`，旧回答不随比赛静默改写；可选能力缺失不再把已有回答升级为失败；SSE 还会显示解析、规划、取数和生成阶段，长等待期间可见当前进度。
 - T39 已将 Chat 编排收紧为最小权限的 scope/phase 工具目录；无依赖调用并行、有依赖调用串行，非法调用可重规划，综合问题固定覆盖 overview/statistics/points/momentum；统计事实按球员姓名标注，未知赛制回答经过完整正文校验和安全重写/降级。
 - Chat 回答已统一支持 CommonMark + GFM，包括表格、任务列表、删除线、脚注、自动链接、标题、引用和代码块；原始 HTML 保持禁用。
+- T40 已完成真实服务回归：复杂比赛分析完整等待至 `done`，正文不再暴露原问题、内部字段、工具过程或“重要说明”模板；缺失赛制以独立友好提示呈现，已有结构化数据不会因生成异常变成查询失败。
 - History/H2H 按需来自 API-Tennis；raw payload 14 天，canonical observations 长期；无完整供应商历史镜像。
 - P2 schema/API/UI 中不存在 odds、prediction、market、edge 或 trading 能力。
 - 用户追加验收门（2026-09-09）已完成：使用真实浏览器和鼠标逐项核对 Home 筛选→Featured→Match Page 实时更新→PBP/统计/控制指数→版本化 Chat→终态；发现的问题已修复并复验至无 bug。
 - T38 国别展示验收已完成：按 [API-Tennis REST 文档](https://api-tennis.com/documentation) 处理明确的球员国家 affiliation；`World` 保留为 `world`，首页只呈现旗帜，详情页呈现旗帜+代码，缺失/未知值不请求不存在的资源。
-- Final P2 Completion Gate 的 15 项技术门已按 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#final-p2-completion-gate) 核对；T39 另以真实 Qwen `9 passed` 与真实浏览器桌面/移动 `6 passed` 完成对话质量和完整结果门禁。
+- Final P2 Completion Gate 的 15 项技术门已按 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md#final-p2-completion-gate) 核对；T39/T40 另以真实 Qwen `9 passed`、隔离 fake Playwright `12 passed/6 skipped` 和真实浏览器复杂分析完整结果门禁完成对话质量验收。
 
 ## P1 任务登记表
 
