@@ -3,19 +3,19 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-12 15:38 CST
+**最后更新：** 2026-09-12 16:18 CST
 
-**当前任务：** T43 — 生成、导入并冻结 v0 球员页面视觉真相
+**当前任务：** T44 — 增加 canonical 排名模型与 API-Tennis standings adapter（`ready`，待领取）
 
-**任务状态：** `in_progress`
+**任务状态：** 无 `in_progress`（T43 已完成并推送）
 
 **当前执行者 / ADE：** Claude Code / Claude Code
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**最近完成任务提交：** `60543ea`
+**最近完成任务提交：** `42c7a36`
 
-**最后验证的产品提交：** `5c3d469`
+**最后验证的产品提交：** `42c7a36`
 
 **本次任务起始提交：** `44cd9d5`（v0 原型已入库；本执行者从该提交继续 T43 工程收口）
 
@@ -87,16 +87,14 @@
 
 ### T43 — 生成、导入并冻结 v0 球员页面视觉真相
 
-- **状态：** `in_progress`
-- **执行者 / ADE：** Claude Code / Claude Code
+- **状态：** `done`
+- **执行者 / ADE：** Claude Code / Claude Code（自 v0 显式交接）
 - **分支：** `main`
-- **起始提交：** `44cd9d5`
+- **起始提交：** `44cd9d5`（领取记录 `cd45108`）
 - **领取时间：** 2026-09-12 15:38 CST
-- **交接说明：** 用户明确授权把 T43 从 v0 交接给 Claude Code。v0 已完成输入门：用户确认的原型代码已以 `44cd9d5`（作者 v0，2026-09-12）入库，包含 `/players`、`/players/[playerId]` 路由、9 个 preview 组件、570 行确定性样例和 2 张本地头像；`match-header.tsx` 的 `球员` 导航已改为 `/players`。该提交是已接受视觉方向的 v0 原型输入，不是已完成的 T43；本执行者不得重设计，只按 T43 计划通过 TDD 补齐工程收口。
-- **当前节点：** 已核实远程基线 `44cd9d5` 与已知未跟踪文件；已确认待修复问题清单：①搜索仍受 ATP/WTA tab 限制（默认 ATP 页搜不到郑钦文）；②无排名文案为“暂无排名”而非固定“暂无当前排名”；③当前比赛/历史赛果链接统一跳 `/match?status=...` 而不是 `/matches/{internalMatchId}`；④赛季摘要把硬地/红土/草地显示为胜率而非胜负记录；⑤2026 赛季 Finished 样例日期（最晚 2026-09-27）晚于快照日 2026-09-11；⑥缺少 `players-page.test.tsx`、`player-profile-page.test.tsx`、`player-directory.visual.spec.ts` 和四张双视口基线。
-- **输入门：** 已满足（v0 输出经用户确认并以 `44cd9d5` 入库）。
-- **范围：** 在 v0 产物之上按 T43 计划补齐：先写失败组件测试，再修复上述行为缺口；补 preview 数据与交互完整性；冻结桌面 `1440×1000` 与移动 `390×844` 共 4 张视觉基线并逐张审阅；运行既有 prototype/visual 回归并如实归因旧债。不接真实 API，不实现后端。
-- **验收门：** 两页 desktop/mobile 基线均经逐张视觉检查；ATP/WTA、50 人分页、国家/中国筛选、英文/中文/缩写搜索、同姓候选、Top 200 外与无排名球员、profile、五赛季、tier/W-L、20 场分页、live/next/“暂无比赛信息”与 loading/empty/partial/unavailable/error/stale 展示态齐全；内部 matchId 链接；“暂无当前排名”固定文案；赛季分场地胜负；Finished 样例日期不晚于快照日；既有 Home/Match 原型不漂移（旧债如实记录归因）。
+- **完成提交：** `42c7a36`
+- **完成事实：** v0 已接受视觉方向保持不变，仅按 T43 计划补齐工程收口：①有 q 时搜索完整本地单打目录、不受 ATP/WTA tab 限制（默认 ATP 页输入“郑钦文”命中 Qinwen Zheng）；②无当前排名固定文案“暂无当前排名”（搜索结果行、资料头排名块、快捷示例）；③live/next/历史赛果均链 `/matches/{internalMatchId}`；④赛季摘要改为硬地/红土/草地胜负记录（缺失为 unavailable，不以 0–0 冒充）；⑤2026 赛季 Finished 样例最晚 2026-09-10，不晚于快照 2026-09-11；⑥新增 `players-page.test.tsx`、`player-profile-page.test.tsx`（合计 28 项）与 `e2e/player-directory.visual.spec.ts`，冻结并逐张审阅 1440×1000/390×844 四张基线（players-directory、players-profile 各双视口），规格内含横向溢出守卫断言。
+- **验证门：** TDD 先红后绿（定向 10 项失败→28/28 通过）；`pnpm test` 179 passed、`pnpm typecheck` 通过、`pnpm build` exit 0；`pnpm test:e2e:update --grep "player directory visual"` 4 passed 后 plain 复跑 4 passed；回归 `pnpm test:e2e --grep "player directory visual|prototype|visual"` 16 passed/4 skipped/10 failed，10 项失败全部为 prototype.visual 且与父提交 `44cd9d5` 干净 worktree 复跑的失败集完全相同（基线漂移：期望 1440×2216 vs 实际 2182，约 34px 垂直偏移），属任务前旧债，未重录 Home/Match 基线；p1-home-result mobile 单次抖动单独与整轮复跑均通过（T29 起已知移动端抖动）。
 - **阻塞：** 无。
 
 ### T42A — 修正 P2.6 为原型优先实施顺序
@@ -404,6 +402,7 @@
 
 | 日期 | 提交 | 验证 | 结果 |
 |---|---|---|---|
+| 2026-09-12 | `42c7a36` | TDD：28 项 player 组件测试先红（定向 10 项失败）后绿；`pnpm test` 179 passed、typecheck、build exit 0；`player-directory.visual` 双视口 4/4（update 后 plain 复跑）；四张 PNG 逐张审阅无裁切/横向溢出/dev overlay/双语层级问题；回归 `--grep "player directory visual\|prototype\|visual"` 16 passed/4 skipped/10 failed，10 项 prototype.visual 失败在 `44cd9d5` 干净 worktree 复跑相同（旧债，未重录）；p1-home-result mobile 抖动复跑通过 | T43 完成；v0 球员页工程收口与四张双视口视觉基线冻结 |
 | 2026-09-12 | `5c3d469` | TDD：Home 内部实现文字泄漏与完整流式结果回归先失败后通过；frontend `pnpm test` 151 passed、typecheck/build；隔离 fake Home 流程 desktop+mobile 2 passed、P1 视觉 12 passed；真实服务重启后浏览器等待 Home 回答至 `done`，10 张结构化比赛卡与资料缺失提示可见，progress/internal footer/原问题回显均为 0；full e2e 28 passed/14 skipped/14 failed（既有 P2 gender query 断言与 prototype 基线问题）；health/home 200；`git diff --check` 通过 | T41 完成；首页与详情页用户展示策略同步 |
 | 2026-09-11 | `ddaf24b` | TDD focused provider/service/view-model/component 先红后绿；backend 确定性 `352 passed, 2 skipped, 9 deselected`；frontend `140 passed` + typecheck + build；隔离 fake 服务 P1 功能 `12 passed`、视觉 `12 passed`；真实 API-Tennis REST smoke `1 passed`；真实 catalog/detail 国家数据一致；真实浏览器鼠标 Home→Match→Home 确认德国国旗+`DEU`、World Globe+`WORLD`，error/warn 为空；`git diff --check` 通过 | T38 完成；首页比赛卡展示国旗，详情页展示国旗+国家代码，`World` 语义保留 |
 | 2026-09-11 | `54059fe` | TDD focused provider/service/reducer `91 passed`；backend 确定性 `349 passed, 2 skipped, 9 deselected`；frontend `136 passed` + typecheck + build；隔离 fake 服务 P1 Playwright 功能+视觉 `24 passed`；真实 API-Tennis REST smoke 1 passed；真实服务 health 200、目标 Match API 200；真实浏览器鼠标进入并刷新目标页，浏览器 error/warn 为空；`git diff --check` 通过 | T37 完成；详情页补齐官方可获得场地与安全国家代码，所有仍缺失的元数据/实时能力均改为字段级解释 |
@@ -455,11 +454,11 @@
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-12 | T43 完成：v0 球员页工程收口（全目录搜索、固定文案、内部 matchId 链接、分场地胜负、样例日期）与四张双视口视觉基线冻结 | `42c7a36` |
 | 2026-09-12 | T41 完成：首页与详情页共享回答标签，移除 Home 生产内部来源 footer，补齐完整流式/Home 双视口回归 | `5c3d469` |
 | 2026-09-12 | T39 完成：作用域感知编排、综合事实质量门与 CommonMark/GFM 渲染 | `61d8fee` |
 | 2026-09-11 | T38 完成：保留 `World` 国家语义，首页显示国旗、详情页显示国旗与国家代码 | `ddaf24b` |
 | 2026-09-11 | T37 完成：详情页适配官方赛事场地与安全国家代码，并解释所有不可用字段 | `54059fe` |
-| 2026-09-11 | T36 完成：Match Chat 显示 SSE 解析、规划、取数和生成阶段 | `28b316d` |
 
 ## 接手与更新规则
 

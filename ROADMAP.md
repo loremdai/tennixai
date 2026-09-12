@@ -57,7 +57,7 @@
 | P2.3 — Realtime pipeline | `done` | Reducer、WebSocket worker、租约、持久化、snapshot + SSE | T26–T28 完成（`98a1a22`、`d354aba`、`f03985b`）；T29/T30 已在 P2.4 完成 |
 | P2.4 — Match intelligence | `done` | 完整 PBP、22 项统计、近期控制指数、版本化上下文 Chat | T29（`ecd916b`）、T30（`8c9e161`）、T31（`128518f`）完成；P2.5 可开始 |
 | P2.5 — Acceptance and hardening | `done` | Replay、恢复门、真实 smoke、双视口视觉、本地 runbook 与真实数据回归修复 | T32 `ac9c6e5`–T41 `5c3d469` 已完成；Home 与 Match 详情页的问答用户展示策略已同步 |
-| P2.6 — Player Discovery and Multilingual Identity | `in_progress` | ATP/WTA 单打 Top 200 目录、球员详情与历史赛果、共享多语言球员主数据和确定性名称解析 | T42A `60543ea` 已把 v0 原型设为第一实施门；T43 等待 v0 输入 |
+| P2.6 — Player Discovery and Multilingual Identity | `in_progress` | ATP/WTA 单打 Top 200 目录、球员详情与历史赛果、共享多语言球员主数据和确定性名称解析 | T43 已完成（`42c7a36`，v0 视觉冻结）；T44 是下一任务 |
 
 P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md)，逐任务步骤见 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md)。P2.6 的唯一详细基线是 [球员目录设计规格](./docs/superpowers/specs/2026-09-12-tennixai-player-directory-multilingual-identity-design.md)、[P2.6 实施计划](./docs/superpowers/plans/2026-09-12-tennixai-player-directory-multilingual-identity-implementation.md) 和 [v0 球员页面 Prompt](./docs/v0/2026-09-12-player-pages-prompt.md)。
 
@@ -90,8 +90,8 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | T41 | P2.5 | Sync Home Chat User-Facing Answer Policy | `done` | `5c3d469` | 将 T40 的生产回答展示策略同步到 Home：去除内部实现来源 footer，统一用户可见状态话术，保留结构化比赛卡、友好资料 warning、进度和重试；TDD 先覆盖内部文字泄漏与完整流式结果，再通过前端 151 passed、typecheck/build、隔离 fake Home desktop/mobile 2 passed、P1 视觉 12 passed 和真实浏览器等待 `done` 验证；完整 e2e 28 passed/14 skipped/14 failed 为既有 P2 gender query 断言与 prototype 视觉基线问题；不扩大 Home 工具能力，不改预览原型 |
 | T42 | P2.6 | Freeze Player Directory, Multilingual Identity, and Historical Results Design | `done` | `c8c7c24` | 740 行规格 + 1317 行 T43–T52 实施计划 + 222 行 v0 Prompt；占位符/敏感模式扫描零命中、8 个本地链接存在、接口与范围自审、`git diff --check` 通过；用户已免除设计审阅停点，本任务未写产品代码 |
 | T42A | P2.6 | Correct the P2.6 Roadmap to Prototype-First Delivery | `done` | `60543ea` | 规格、实施计划和总控已一致改为 v0→backend/data/Chat→真实前端；T43–T52 编号、前置依赖和视觉基线引用已重排，未改产品代码 |
-| T43 | P2.6 | Generate, Import, and Freeze the v0 Player Pages as Visual Truth | `in_progress` | — | v0 原型已以 `44cd9d5` 入库（用户确认的视觉输入）；2026-09-12 15:38 CST 交接给 Claude Code 继续工程收口：TDD 修复搜索跨 tour/固定文案/内部 matchId 链接/分场地胜负/样例日期，并补组件测试、视觉规格与四张双视口基线 |
-| T44 | P2.6 | Add Canonical Ranking Models and the API-Tennis Standings Adapter | `planned` | — | 等待 T43；供应商排名字段冻结、canonical ranking、真实 standings smoke |
+| T43 | P2.6 | Generate, Import, and Freeze the v0 Player Pages as Visual Truth | `done` | `42c7a36` | v0 原型 `44cd9d5` 为已接受视觉输入；交接领取 `cd45108`。TDD 先红后绿（10 项定向失败→全绿）：有 q 搜索完整本地目录（ATP 页可搜到郑钦文）、固定文案“暂无当前排名”（搜索结果/资料头/快捷示例）、live/next/Finished 均链 `/matches/{internalMatchId}`、赛季摘要改为硬地/红土/草地胜负、Finished 样例最晚 2026-09-10 不晚于快照 2026-09-11；新增 `players-page.test.tsx`+`player-profile-page.test.tsx`（28 项）与 `player-directory.visual.spec.ts`，1440×1000/390×844 四张基线逐张审阅入库并复跑 4/4；`pnpm test` 179 passed、typecheck、build exit 0；回归 `--grep "player directory visual|prototype|visual"` 16 passed/4 skipped/10 failed，10 项失败全为 prototype.visual，在父提交 `44cd9d5` 干净 worktree 复跑失败集相同（基线漂移：期望 1440×2216 vs 实际 2182，约 34px 垂直偏移），属任务前旧债、未重录 Home/Match 基线；p1-home-result mobile 单次抖动复跑通过 |
+| T44 | P2.6 | Add Canonical Ranking Models and the API-Tennis Standings Adapter | `ready` | — | T43 已完成；供应商排名字段冻结、canonical ranking、真实 standings smoke |
 | T45 | P2.6 | Persist the Player Directory, Aliases, and Ranking Snapshots | `planned` | — | 等待 T44；兼容 migration、PostgreSQL repository、identity 无损门 |
 | T46 | P2.6 | Build Idempotent Directory Sync and English Alias Derivation | `planned` | — | 等待 T45；显式本地 sync、重复运行幂等、失败保留旧快照 |
 | T47 | P2.6 | Add Offline LLM Chinese-Name Enrichment | `planned` | — | 等待 T46；只补缺、严格 batch、零运行时翻译、100% 发布覆盖门 |
