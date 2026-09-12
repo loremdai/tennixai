@@ -79,7 +79,10 @@ async def _run_enrich(batch_size: int, max_batches: int | None) -> int:
             api_key=settings.llm_api_key.get_secret_value(),
             base_url=settings.llm_base_url,
             model=settings.llm_model,
-            timeout_seconds=settings.llm_timeout_seconds,
+            # Offline batches translate up to 50 names per request; they need a
+            # longer window than a single chat turn. Chat keeps the configured
+            # 45s bound.
+            timeout_seconds=max(settings.llm_timeout_seconds, 180.0),
         )
         enricher = PlayerAliasEnricher(
             repository, translator, model=settings.llm_model
