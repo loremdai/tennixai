@@ -227,10 +227,25 @@ export type MatchStreamFrame =
       id: string | null
       payload: { code: string; message: string; details: Record<string, unknown> }
     }
+export type PlayerResolutionCandidateDto = {
+  id: string
+  display_name: string
+  name: string
+  localized_name: string | null
+  country_code: string | null
+  ranking: number | null
+}
+export type PlayerResolutionDto = {
+  status: 'resolved' | 'ambiguous' | 'not_found'
+  query: string
+  player: PlayerResolutionCandidateDto | null
+  candidates: PlayerResolutionCandidateDto[]
+}
 export type StructuredData = {
-  kind: 'matches' | 'match' | 'intelligence' | 'unsupported'
+  kind: 'matches' | 'match' | 'intelligence' | 'player_resolution' | 'unsupported'
   matches: MatchDto[]
   packet?: IntelligencePacketDto | null
+  resolution?: PlayerResolutionDto | null
   metadata?: Record<string, unknown>
   answer_context?: AnswerContextDto | null
 }

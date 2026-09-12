@@ -142,6 +142,11 @@ function answerTitle(chat: ChatViewState, cards: HomeMatchViewModel[]): string {
     return `${cards[0].players[0]} 对阵 ${cards[0].players[1]}`
   }
   if (chat.data?.kind === 'unsupported') return '历史结果查询暂不支持'
+  if (chat.data?.kind === 'player_resolution') {
+    if (chat.data.resolution?.status === 'ambiguous') return '多位候选球员，请选择'
+    if (chat.data.resolution?.status === 'not_found') return '未找到该球员'
+    return '已解析球员'
+  }
   if (chat.data) return '没有符合条件的比赛'
   if (chat.error) return `查询失败（${chat.error.code}）`
   return '正在整理回答'
@@ -280,6 +285,26 @@ export function HomeAssistant({
                 >
                   {cards.map((match) => (
                     <MatchResultCard key={match.id} match={match} onFollowUp={followUp} />
+                  ))}
+                </div>
+              ) : null}
+
+              {chat.data?.kind === 'player_resolution'
+              && chat.data.resolution?.status === 'ambiguous' ? (
+                <div className="flex flex-col gap-2" aria-label="候选球员">
+                  {chat.data.resolution.candidates.map((candidate) => (
+                    <Link
+                      key={candidate.id}
+                      href={`/players/${candidate.id}`}
+                      className="flex items-center justify-between gap-3 rounded-xl border bg-card/60 px-4 py-3 text-sm transition-colors hover:bg-muted/40"
+                    >
+                      <span className="font-medium">{candidate.display_name}</span>
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {candidate.country_code ?? '—'}
+                        {' '}
+                        {candidate.ranking ? `#${candidate.ranking}` : '暂无当前排名'}
+                      </span>
+                    </Link>
                   ))}
                 </div>
               ) : null}
