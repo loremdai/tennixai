@@ -3,23 +3,19 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-12 17:30 CST
+**最后更新：** 2026-09-12 18:59 CST
 
-**当前任务：** T47 — 离线 LLM 中文名 enrichment
+**当前任务：** T48 — 确定性 PlayerResolver 与按内部 ID 的运行时查询（`ready`，待领取）
 
-**任务状态：** `in_progress`
+**任务状态：** 无 `in_progress`（T47 已完成并推送）
 
 **当前执行者 / ADE：** Claude Code / Claude Code
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**最近完成任务提交：** `e68e09e`
+**最近完成任务提交：** `2a1a488`
 
-**最后验证的产品提交：** `e68e09e`
-
-**本次任务起始提交：** `c570b87`
-
-**本次任务领取时间：** 2026-09-12 17:30 CST
+**最后验证的产品提交：** `f720f2b`
 
 **本次任务起始提交：** `44cd9d5`（v0 原型已入库；本执行者从该提交继续 T43 工程收口）
 
@@ -91,13 +87,14 @@
 
 ### T47 — 离线 LLM 中文名 enrichment
 
-- **状态：** `in_progress`
+- **状态：** `done`
 - **执行者 / ADE：** Claude Code / Claude Code
 - **分支：** `main`
-- **起始提交：** `c570b87`
+- **起始提交：** `c570b87`（领取记录 `c496392`）
 - **领取时间：** 2026-09-12 17:30 CST
-- **范围：** 按 [P2.6 实施计划 T47](./docs/superpowers/plans/2026-09-12-tennixai-player-directory-multilingual-identity-implementation.md#t47-add-offline-llm-chinese-name-enrichment)：`enrichment.py`（`PlayerNameTranslator` protocol + OpenAI-compatible adapter + 严格 batch 校验 + `PlayerAliasEnricher.enrich_missing`）、CLI `enrich-zh --batch-size --max-batches`（1..50 校验）、`player_alias_llm_live` marker 与 opt-in live 测试、web runtime 不实例化 translator 的 spy 测试；中文 alias 派生（完整名/去间隔/姓氏）。
-- **验收门：** 非法 batch（未知/重复/缺失/多余 ID、空名、坏 JSON、translator 异常）零写入并报错；重跑跳过已有名字且零模型调用；无名占位球员不进入 enrichment；真实 LLM 小批 smoke 通过；本地目录 enrichment 至 `localized == players`（有英文名成员）100%；web runtime spy 证明 fake/replay/api_tennis 模式不构造 AsyncOpenAI/translator。
+- **完成提交：** `2a1a488`（超时修复 `112a9f7`、integration 自清洁 `f720f2b`）
+- **完成事实：** `enrichment.py`：`PlayerNameInput/PlayerNameTranslation/EnrichmentReport`、`parse_translation_payload`（仅剥离 Markdown fence 后严格 JSON/Pydantic 校验）、`OpenAICompatibleTranslator`（system 指令 + 紧凑 JSON user payload、`enable_thinking=False`、只发公共身份字段）、`PlayerAliasEnricher.enrich_missing`（返回 ID 必须与输入完全一致、重复/缺失/多余/空名整批零写入并抛 `translation batch` 错误；`llm_unavailable` 计 failed 并停止；重跑只处理缺失者）；中文 alias 派生 preferred/full/surname（`source=llm`、`prompt_version=zh-Hans-player-name-v1`）；CLI `enrich-zh --batch-size/--max-batches`（1..50 外 exit 2）与覆盖率打印；`list_players_missing_localized_name` 两实现均排除无名占位；web runtime spy 证明 fake/api_tennis 模式不构造 AsyncOpenAI。
+- **验证门：** TDD 先红（缺模块 collection error）后绿 14 passed；`TENNIX_RUN_PLAYER_ALIAS_LLM_LIVE=1` 真实 LLM smoke 1 passed（2 人 fixture 批、中文输出、二次 enrich `request_count==1`）；CLI 边界 exit 2；确定性 411 passed/36 deselected；infrastructure 21 passed 且套件自清洁（连续双轮 status 零漂移）；真实目录 enrichment 全量完成：final run `translated=1967 failed=0 batches=40`，补充轮后有名成员覆盖 `4186/4186=100%`（540 条无名占位为 P2 既有比赛观察身份、无英文名，T52 以净库重算）；过程中发现 50 名批超 chat 45s 时限，enrichment 专用 180s 超时（`112a9f7`），Chat 时限不变。
 - **阻塞：** 无。
 
 ### T46 — 幂等目录同步与英文别名派生
@@ -453,6 +450,7 @@
 
 | 日期 | 提交 | 验证 | 结果 |
 |---|---|---|---|
+| 2026-09-12 | `2a1a488` | TDD 先红后绿 14 passed；真实 LLM smoke 1 passed（二次 enrich 零模型调用）；CLI 边界 exit 2；确定性 411 passed/36 deselected；infrastructure 21 passed 自清洁双轮零漂移；真实 enrichment 全量完成、有名成员覆盖 4186/4186=100% | T47 完成；离线中文名 enrichment 与 100% 发布覆盖门就绪 |
 | 2026-09-12 | `e68e09e` | TDD 先红后绿；focused 28 passed；infrastructure 21 passed；确定性 397 passed/35 deselected；CLI help exit 0；真实 sync 两轮幂等（inserted 19657→0）、status 计数稳定、并列 rank 去重满足唯一约束 | T46 完成；幂等目录同步与英文别名派生就绪 |
 | 2026-09-12 | `fb77d80` | TDD 先红后绿；memory 契约+schema 单测 30 passed；integration 12 passed（含并发收敛与快照重建）；alembic 0003 往返 exit 0 且复跑通过；确定性 backend（不含 infrastructure）379 passed | T45 完成；球员目录/别名/排名快照持久化就绪 |
 | 2026-09-12 | `4e882b9` | TDD 先红（缺 `app.players`）后绿；focused 75 passed；全确定性 backend 382 passed/14 deselected；真实 `TENNIX_RUN_API_TENNIS_LIVE=1` api_tennis_live 2 passed（standings 两 tour 认证与 canonical 映射、零泄漏） | T44 完成；canonical 排名模型与 standings adapter 就绪 |
@@ -508,11 +506,11 @@
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-12 | T47 完成：离线中文名 enrichment、严格 batch 零写入与 100% 发布覆盖门 | `2a1a488` |
 | 2026-09-12 | T46 完成：幂等目录同步、英文别名派生与本地 sync/status CLI | `e68e09e` |
 | 2026-09-12 | T45 完成：migration 0003、目录 repository（memory+Postgres）与 identity 无损门 | `fb77d80` |
 | 2026-09-12 | T44 完成：canonical 排名模型、API-Tennis standings adapter 与真实 standings smoke | `4e882b9` |
 | 2026-09-12 | T43 完成：v0 球员页工程收口（全目录搜索、固定文案、内部 matchId 链接、分场地胜负、样例日期）与四张双视口视觉基线冻结 | `42c7a36` |
-| 2026-09-12 | T41 完成：首页与详情页共享回答标签，移除 Home 生产内部来源 footer，补齐完整流式/Home 双视口回归 | `5c3d469` |
 
 ## 接手与更新规则
 
