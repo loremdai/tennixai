@@ -3,19 +3,19 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-13 00:46 CST
+**最后更新：** 2026-09-13 05:35 CST
 
-**当前任务：** T51 — v0 球员页接入真实结构化 API
+**当前任务：** T52 — P2.6 真实服务完成门与里程碑关闭
 
-**任务状态：** `in_progress`
+**任务状态：** `planned`（待领取）
 
 **当前执行者 / ADE：** Claude Code / Claude Code
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**最近完成任务提交：** `c593f36`
+**最近完成任务提交：** `501f229`
 
-**最后验证的产品提交：** `c593f36`
+**最后验证的产品提交：** `501f229`
 
 **本次任务起始提交：** `51b62d2`
 
@@ -84,6 +84,7 @@
 - T42 已于 2026-09-12 完成并推送（`c8c7c24`）：[球员目录设计规格](./docs/superpowers/specs/2026-09-12-tennixai-player-directory-multilingual-identity-design.md) 明确 Top 200 排名、全目录双语搜索、profile、五赛季历史、离线中文名和共享 resolver。
 - T42A 已于 2026-09-12 完成并推送（`60543ea`）：[P2.6 实施计划](./docs/superpowers/plans/2026-09-12-tennixai-player-directory-multilingual-identity-implementation.md) 已重排为 T43 v0 原型 → T44–T50 后端/数据/Chat → T51 真实前端集成 → T52 总门。
 - v0 交付入口已准备：[球员页面 v0 Prompt](./docs/v0/2026-09-12-player-pages-prompt.md)；T43 必须先取得用户确认的 v0 输出并冻结双视口视觉基线，后端 T44 才可开始；ADE 不得自行重设计。
+- T51 已于 2026-09-13 完成并推送（`501f229`）：`/players` 与 `/players/[playerId]` 生产模式消费真实 rankings/search/profile/results 并覆盖全状态；`?preview=1` 保留确定性 v0 视觉真源，四张 T43 基线零更新通过；T52 待领取执行真实服务总门。
 - P2.6 当前代码事实仍是：API-Tennis `search_players` 扫 live + 3 天 fixtures 并字符串匹配，`Ben Shelton` 对 `B. Shelton` 会 `not_found`；修复尚未实施，T48/T50 负责关闭。
 - 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`、`REALTIME_LATENCY_INVESTIGATION.md`（任务外调查文档）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`、`frontend/next-env.d.ts`；保留原样，不纳入 T42A。
 
@@ -91,13 +92,15 @@
 
 ### T51 — v0 球员页接入真实结构化 API
 
-- **状态：** `in_progress`
+- **状态：** `completed`（提交 `501f229`，2026-09-13 05:35 CST）
 - **执行者 / ADE：** Claude Code / Claude Code
 - **分支：** `main`
 - **起始提交：** `51b62d2`
 - **领取时间：** 2026-09-13 00:46 CST
 - **范围：** 按 [P2.6 实施计划 T51](./docs/superpowers/plans/2026-09-12-tennixai-player-directory-multilingual-identity-implementation.md#t51-connect-the-v0-player-pages-to-real-structured-apis)：Next 代理路由（rankings/profile/results，search 转发 resolution）、typed client 四方法、`player-view-models.ts` DTO→v0 视图形状映射、`/players` 与 `/players/[playerId]` 生产数据/URL 状态/全状态处理（loading/empty/partial/error/stale）、preview 开关保留 v0 视觉真相供视觉基线；新增 `e2e/player-directory.spec.ts` 功能门。
 - **验收门：** pnpm test/typecheck/build；`--grep "player directory"` 功能门双视口（ATP→WTA、中国筛选、中文搜索、Top 200 外、profile、赛季/筛选/分页、Finished Match 导航、空当前状态）；`--grep "player directory visual"` 四张 T43 基线不更新通过；`--grep "P1|P2|prototype"` 回归。
+- **完成证据：** TDD 先红（`player-view-models` 模块缺失+REST resolution 类型缺失）后绿；`pnpm vitest run` 全量 17 文件 206 passed、typecheck 与 `pnpm build` exit 0；`--grep "player directory" --workers=1` 14 passed（desktop+mobile 功能 10 + 视觉 4，四张 T43 PNG 基线零更新通过）；`--grep "P1|P2|prototype" --workers=1` 28 passed/6 skipped/14 failed，14 项失败=10 prototype.visual+4 p2-home-filters `gender=` 断言，均为 T41/T43 已归因旧债（本次未重录任何基线）。fake 模式真实浏览器链路：rankings 5+2 行、search 跨 tour 与 rank 201、中文查询诚实 not_found、Sinner LIVE 卡与 Finished 导航、Zheng 暂无比赛信息与 2026/2025/2022/Challenger/胜 筛选分页全部断言通过。
+- **环境事实：** 本机负载曾达 140+（用户 Chrome/WindowServer 风暴），full vitest 首跑 10 个文件 worker 启动超时、match-page 12 失败；干净 HEAD `52c4f59` worktree 复跑 match-page 7/19 失败（带 T51 改动 5/19）证明为负载时序而非任务缺陷；负载回落后全量 206/206。playwright.config 仅增加 timeout/expect 余量（120s→180s、expect 30s），断言与快照零放宽。
 - **阻塞：** 无。
 
 ### T50 — Home/Match Chat 共用 resolver
@@ -501,6 +504,7 @@
 
 | 日期 | 提交 | 验证 | 结果 |
 |---|---|---|---|
+| 2026-09-13 | `501f229` | TDD 先红后绿；frontend vitest 全量 17 文件 206 passed、typecheck/build exit 0；`--grep "player directory"` 14 passed 双视口（功能 10 + 视觉 4，T43 四基线零更新）；`--grep "P1\|P2\|prototype"` 28 passed/6 skipped/14 failed（旧债）；干净 HEAD 复跑归因负载失败；泄漏扫描零命中 | T51 完成；v0 球员页生产数据接线与 preview 视觉开关 |
 | 2026-09-13 | `7f78c33`+`c593f36` | chat tools 28 + orchestrator 38 + chat api 7 passed；真实 LLM 门 14 passed（歧义/未找到 resolution+done）；后端确定性 460 passed/41 deselected（stream 单例高负载抖动单跑 9/9）；frontend typecheck/build exit 0、vitest 174/179（match-page 5 失败=干净 HEAD 同样复现的负载时序） | T50 完成；Chat 全链路共用 resolver |
 | 2026-09-12 | `ae0fa44` | TDD 先红（13 失败）后绿；player API/profile service 23 passed；p2/api 契约更新全绿；确定性 454 passed/36 deselected；infrastructure 21 passed；真实 smoke Top 200 与 Top 200 外 profile/赛果诚实映射 | T49 完成；rankings/profile/五赛季赛果 API 就绪 |
 | 2026-09-12 | `1f480df` | TDD 先红后绿；resolver 26 项 + focused 111 passed；确定性 441 passed/36 deselected；infrastructure 21 passed；真实目录五形式同内部 ID、按 ID 取赛程成功、零供应商扫描 | T48 完成；共享 resolver 与内部 ID 运行时查询就绪 |
@@ -560,11 +564,11 @@
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-13 | T51 完成：v0 球员页接入真实 rankings/search/profile/results 与全状态处理，preview 开关冻结视觉 | `501f229` |
 | 2026-09-13 | T50 完成：Chat 全链路共用 resolver、resolution 信封与 Home 候选列表 | `7f78c33`+`c593f36` |
 | 2026-09-12 | T49 完成：rankings/profile/五赛季赛果 REST API 与真实 profile/history smoke | `ae0fa44` |
 | 2026-09-12 | T48 完成：确定性 PlayerResolver、内部 ID 运行时查询与目录委托搜索 | `1f480df` |
 | 2026-09-12 | T47 完成：离线中文名 enrichment、严格 batch 零写入与 100% 发布覆盖门 | `2a1a488` |
-| 2026-09-12 | T46 完成：幂等目录同步、英文别名派生与本地 sync/status CLI | `e68e09e` |
 
 ## 接手与更新规则
 
