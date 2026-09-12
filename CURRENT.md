@@ -3,11 +3,11 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-12 17:06 CST
+**最后更新：** 2026-09-12 17:09 CST
 
-**当前任务：** T46 — 幂等目录同步与英文别名派生（`ready`，待领取）
+**当前任务：** T46 — 幂等目录同步与英文别名派生
 
-**任务状态：** 无 `in_progress`（T45 已完成并推送）
+**任务状态：** `in_progress`
 
 **当前执行者 / ADE：** Claude Code / Claude Code
 
@@ -16,6 +16,10 @@
 **最近完成任务提交：** `fb77d80`
 
 **最后验证的产品提交：** `fb77d80`
+
+**本次任务起始提交：** `794b751`
+
+**本次任务领取时间：** 2026-09-12 17:09 CST
 
 **本次任务起始提交：** `44cd9d5`（v0 原型已入库；本执行者从该提交继续 T43 工程收口）
 
@@ -84,6 +88,17 @@
 - 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`、`REALTIME_LATENCY_INVESTIGATION.md`（任务外调查文档）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`、`frontend/next-env.d.ts`；保留原样，不纳入 T42A。
 
 ## 当前任务
+
+### T46 — 幂等目录同步与英文别名派生
+
+- **状态：** `in_progress`
+- **执行者 / ADE：** Claude Code / Claude Code
+- **分支：** `main`
+- **起始提交：** `794b751`
+- **领取时间：** 2026-09-12 17:09 CST
+- **范围：** 按 [P2.6 实施计划 T46](./docs/superpowers/plans/2026-09-12-tennixai-player-directory-multilingual-identity-implementation.md#t46-build-idempotent-directory-sync-and-english-alias-derivation)：`normalization.py`（唯一归一化 + 确定性英文 alias 派生）、`sync.py`（`PlayerDirectorySync.sync_rankings/sync_known_player_aliases` + `DirectorySyncReport`）、`cli.py`（`sync`/`status`）；tour 失败保留旧快照且不 prune；组合名排除。
+- **验收门：** 归一化表驱动用例（含重音/中文/标点/空白）；alias 派生覆盖全名/姓氏/倒序/缩写/供应商名且组合名排除；sync 幂等（二次运行零新增）；WTA 注入失败后旧快照仍可用、failed 计数、不 prune；CLI 聚合计数无凭据/外部 ID；真实本地 sync 一次 + status + 复跑稳定；infrastructure 与全套确定性不回归。
+- **阻塞：** 无。
 
 ### T45 — 持久化球员目录、别名与排名快照
 
