@@ -3,11 +3,11 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-12 20:12 CST
+**最后更新：** 2026-09-12 20:16 CST
 
-**当前任务：** T50 — Home/Match Chat 共用 resolver（`ready`，待领取）
+**当前任务：** T50 — Home/Match Chat 共用 resolver
 
-**任务状态：** 无 `in_progress`（T49 已完成并推送）
+**任务状态：** `in_progress`
 
 **当前执行者 / ADE：** Claude Code / Claude Code
 
@@ -16,6 +16,10 @@
 **最近完成任务提交：** `ae0fa44`
 
 **最后验证的产品提交：** `ae0fa44`
+
+**本次任务起始提交：** `6114a5c`
+
+**本次任务领取时间：** 2026-09-12 20:16 CST
 
 **本次任务起始提交：** `44cd9d5`（v0 原型已入库；本执行者从该提交继续 T43 工程收口）
 
@@ -84,6 +88,17 @@
 - 未跟踪文件：`.codex/skills/ui-ux-pro-max/SKILL.md`、`REALTIME_LATENCY_INVESTIGATION.md`（任务外调查文档）、`frontend/AGENTS.md` 与 `frontend/CLAUDE.md`、`frontend/next-env.d.ts`；保留原样，不纳入 T42A。
 
 ## 当前任务
+
+### T50 — Home/Match Chat 共用 resolver
+
+- **状态：** `in_progress`
+- **执行者 / ADE：** Claude Code / Claude Code
+- **分支：** `main`
+- **起始提交：** `6114a5c`
+- **领取时间：** 2026-09-12 20:16 CST
+- **范围：** 按 [P2.6 实施计划 T50](./docs/superpowers/plans/2026-09-12-tennixai-player-directory-multilingual-identity-implementation.md#t50-route-home-and-match-chat-through-the-shared-resolver)：`StructuredToolResult` 增加 `player_resolution` kind 与 `resolution` 字段；`BusinessTools._resolve_player_query`（Match context 传入 snapshot 球员 ID）；所有按名分支改走 resolver + by-id service 方法；executor 视 resolution 为 SUCCESS、模型只见公共候选字段；system guidance（ambiguous 请用户选择、not_found 请补充信息）；前端 `StructuredData.resolution` 与 Home 候选列表；双语首提 `English（中文）`。
+- **验收门：** 每个按名工具（find_player_matches、get_live_matches 过滤、get_player_results、get_head_to_head 双方）经 resolver；Match context 唯一消歧；Home ambiguous 候选；not_found/ambiguous 以 SSE `done` 结束且无终止 error；真实 LLM 门：Ben Shelton/Shelton/谢尔顿/郑钦文 + 歧义 + 未知名字均 done；frontend 单测/typecheck/build 不回归。
+- **阻塞：** 无。
 
 ### T49 — Rankings/Profile/五赛季赛果 API
 
