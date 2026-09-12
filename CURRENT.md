@@ -3,23 +3,19 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-12 19:02 CST
+**最后更新：** 2026-09-12 19:26 CST
 
-**当前任务：** T48 — 确定性 PlayerResolver 与按内部 ID 的运行时查询
+**当前任务：** T49 — Rankings/Profile/五赛季赛果 API（`ready`，待领取）
 
-**任务状态：** `in_progress`
+**任务状态：** 无 `in_progress`（T48 已完成并推送）
 
 **当前执行者 / ADE：** Claude Code / Claude Code
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**最近完成任务提交：** `2a1a488`
+**最近完成任务提交：** `1f480df`
 
-**最后验证的产品提交：** `f720f2b`
-
-**本次任务起始提交：** `49c2ce1`
-
-**本次任务领取时间：** 2026-09-12 19:02 CST
+**最后验证的产品提交：** `1f480df`
 
 **本次任务起始提交：** `44cd9d5`（v0 原型已入库；本执行者从该提交继续 T43 工程收口）
 
@@ -91,13 +87,14 @@
 
 ### T48 — 确定性 PlayerResolver 与按内部 ID 的运行时查询
 
-- **状态：** `in_progress`
+- **状态：** `done`
 - **执行者 / ADE：** Claude Code / Claude Code
 - **分支：** `main`
-- **起始提交：** `49c2ce1`
+- **起始提交：** `49c2ce1`（领取记录 `cc375ea`）
 - **领取时间：** 2026-09-12 19:02 CST
-- **范围：** 按 [P2.6 实施计划 T48](./docs/superpowers/plans/2026-09-12-tennixai-player-directory-multilingual-identity-implementation.md#t48-add-the-deterministic-playerresolver-and-cut-runtime-queries-to-internal-ids)：`resolver.py`（resolved/ambiguous/not_found 领域结果、kind 优先级排序、Match context 唯一消歧）；`TennisService.resolve_player/list_matches_by_player_id/find_player_matches_by_id`；`ApiTennisProvider.search_players` 委托本地目录、无目录时 typed unsupported，删除三日扫描；`create_app` 装配（api_tennis→Postgres 目录、fake→Memory 目录 + lifespan 一次性内存 sync、livetennis/replay→旧 fallback）。
-- **验收门：** Shelton/Zheng/Djokovic 三组别名矩阵同 ID；大小写/标点/重音/空白变体；同姓 ambiguous 候选；Match context 唯一解析；空 query invalid_request、未知 not_found 且零 provider 调用；runtime 解析零 LLM 调用；API-Tennis 运行时不再扫 live/fixtures 做身份发现；P1 验收矩阵与全套确定性不回归。
+- **完成提交：** `1f480df`
+- **完成事实：** `resolver.py`：内部 ID 直查、归一化别名精确匹配、kind 优先级去重排序、Match context 唯一消歧、§8.3 单一明显候选规则（非身份级别名且恰一名 Top 200 候选才解析，同窗冲突保持 ambiguous）、`resolved/ambiguous/not_found` 领域结果；`TennisService.resolve_player/list_matches_by_player_id/find_player_matches_by_id`，`_resolve_player` 转为领域结果→typed 异常（404/409），无 resolver 时保留旧 provider-search fallback（精确名优先语义保留）；`ApiTennisProvider.search_players` 委托本地目录、零供应商扫描，无目录 typed `unsupported`，删除三日扫描与 `SEARCH_WINDOW_DAYS`；`create_app`：api_tennis→`PostgresPlayerDirectoryRepository`、fake→`MemoryPlayerDirectoryRepository` + resolver 一次性 seeder（服务器与 ASGI 单测同路径）、livetennis/replay→fallback。
+- **验证门：** TDD 先红后绿；resolver 26 项（三组别名矩阵、大小写/标点/重音/空白、同姓 ambiguous、context 唯一、空 query invalid_request、未知 not_found、明显候选与同窗冲突）+ service/provider 契约 focused 111 passed；确定性 441 passed/36 deselected；infrastructure 21 passed；真实门：已同步真实目录上 `Ben Shelton/B. Shelton/Shelton/谢尔顿` 均解析同一内部 ID（`ply_63b7…`，候选数 1/1/1/3→明显候选解析），按内部 ID `get_live_matches/get_fixtures` 返回 0/1 场且只打印 ID 与计数；P1 验收矩阵不回归。
 - **阻塞：** 无。
 
 ### T47 — 离线 LLM 中文名 enrichment
@@ -465,6 +462,7 @@
 
 | 日期 | 提交 | 验证 | 结果 |
 |---|---|---|---|
+| 2026-09-12 | `1f480df` | TDD 先红后绿；resolver 26 项 + focused 111 passed；确定性 441 passed/36 deselected；infrastructure 21 passed；真实目录五形式同内部 ID、按 ID 取赛程成功、零供应商扫描 | T48 完成；共享 resolver 与内部 ID 运行时查询就绪 |
 | 2026-09-12 | `2a1a488` | TDD 先红后绿 14 passed；真实 LLM smoke 1 passed（二次 enrich 零模型调用）；CLI 边界 exit 2；确定性 411 passed/36 deselected；infrastructure 21 passed 自清洁双轮零漂移；真实 enrichment 全量完成、有名成员覆盖 4186/4186=100% | T47 完成；离线中文名 enrichment 与 100% 发布覆盖门就绪 |
 | 2026-09-12 | `e68e09e` | TDD 先红后绿；focused 28 passed；infrastructure 21 passed；确定性 397 passed/35 deselected；CLI help exit 0；真实 sync 两轮幂等（inserted 19657→0）、status 计数稳定、并列 rank 去重满足唯一约束 | T46 完成；幂等目录同步与英文别名派生就绪 |
 | 2026-09-12 | `fb77d80` | TDD 先红后绿；memory 契约+schema 单测 30 passed；integration 12 passed（含并发收敛与快照重建）；alembic 0003 往返 exit 0 且复跑通过；确定性 backend（不含 infrastructure）379 passed | T45 完成；球员目录/别名/排名快照持久化就绪 |
@@ -521,11 +519,11 @@
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-12 | T48 完成：确定性 PlayerResolver、内部 ID 运行时查询与目录委托搜索 | `1f480df` |
 | 2026-09-12 | T47 完成：离线中文名 enrichment、严格 batch 零写入与 100% 发布覆盖门 | `2a1a488` |
 | 2026-09-12 | T46 完成：幂等目录同步、英文别名派生与本地 sync/status CLI | `e68e09e` |
 | 2026-09-12 | T45 完成：migration 0003、目录 repository（memory+Postgres）与 identity 无损门 | `fb77d80` |
 | 2026-09-12 | T44 完成：canonical 排名模型、API-Tennis standings adapter 与真实 standings smoke | `4e882b9` |
-| 2026-09-12 | T43 完成：v0 球员页工程收口（全目录搜索、固定文案、内部 matchId 链接、分场地胜负、样例日期）与四张双视口视觉基线冻结 | `42c7a36` |
 
 ## 接手与更新规则
 
