@@ -6,11 +6,12 @@ the configured retention window. Vendor payloads only ever land in
 canonical domain shapes.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -35,14 +36,78 @@ class PlayerRow(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     name: Mapped[str | None] = mapped_column(Text)
+    localized_name: Mapped[str | None] = mapped_column(Text)
     country_code: Mapped[str | None] = mapped_column(String(8))
     ranking: Mapped[int | None] = mapped_column(Integer)
+    gender: Mapped[str] = mapped_column(String(16), nullable=False, default="unknown")
+    birth_date: Mapped[date | None] = mapped_column(Date)
+    image_url: Mapped[str | None] = mapped_column(Text)
+    first_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class PlayerAliasRow(Base):
+    """Display/lookup aliases per player. The same normalized alias may point
+    at several players; ambiguity is data, never a uniqueness conflict."""
+
+    __tablename__ = "player_aliases"
+    __table_args__ = (
+        UniqueConstraint("player_id", "locale", "normalized_alias", "kind"),
+        Index("ix_player_aliases_normalized_alias", "normalized_alias"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    player_id: Mapped[str] = mapped_column(
+        ForeignKey("players.id"), nullable=False, index=True
+    )
+    locale: Mapped[str] = mapped_column(String(16), nullable=False)
+    alias: Mapped[str] = mapped_column(Text, nullable=False)
+    normalized_alias: Mapped[str] = mapped_column(Text, nullable=False)
+    kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    source: Mapped[str] = mapped_column(String(24), nullable=False)
+    source_ref: Mapped[str | None] = mapped_column(String(191))
+    model: Mapped[str | None] = mapped_column(String(64))
+    prompt_version: Mapped[str | None] = mapped_column(String(64))
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class PlayerRankingRow(Base):
+    """Bounded ranking snapshots per tour and ranking date."""
+
+    __tablename__ = "player_rankings"
+    __table_args__ = (
+        UniqueConstraint("tour", "ranking_date", "rank"),
+        UniqueConstraint("tour", "ranking_date", "player_id"),
+        Index("ix_player_rankings_lookup", "tour", "ranking_date", "rank"),
+        Index("ix_player_rankings_player", "player_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    player_id: Mapped[str] = mapped_column(
+        ForeignKey("players.id"), nullable=False, index=True
+    )
+    tour: Mapped[str] = mapped_column(String(8), nullable=False)
+    ranking_date: Mapped[date] = mapped_column(Date, nullable=False)
+    rank: Mapped[int] = mapped_column(Integer, nullable=False)
+    points: Mapped[int] = mapped_column(Integer, nullable=False)
+    movement: Mapped[str] = mapped_column(String(16), nullable=False)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class TournamentRow(Base):

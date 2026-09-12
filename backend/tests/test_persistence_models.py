@@ -15,6 +15,7 @@ from app.persistence.models import (
     MatchExternalIdRow,
     MatchStateSnapshotRow,
     PlayerExternalIdRow,
+    PlayerRow,
     PointEventRevisionRow,
     PointEventRow,
     RawProviderEventRow,
@@ -117,3 +118,36 @@ def test_raw_retention_cutoff_is_exclusive_and_bounded() -> None:
 
     with pytest.raises(ValueError):
         raw_retention_cutoff(FIXED_NOW, retention_days=0)
+
+
+def test_player_aliases_are_unique_per_player_locale_normalized_kind() -> None:
+    from app.persistence.models import PlayerAliasRow
+
+    uniques = _unique_column_sets(PlayerAliasRow.__table__)
+    assert ("kind", "locale", "normalized_alias", "player_id") in uniques
+    indexes = _index_column_sets(PlayerAliasRow.__table__)
+    assert ("normalized_alias",) in indexes
+
+
+def test_player_rankings_are_unique_per_tour_date_rank_and_player() -> None:
+    from app.persistence.models import PlayerRankingRow
+
+    uniques = _unique_column_sets(PlayerRankingRow.__table__)
+    assert ("rank", "ranking_date", "tour") in uniques
+    assert ("player_id", "ranking_date", "tour") in uniques
+    indexes = _index_column_sets(PlayerRankingRow.__table__)
+    assert ("rank", "ranking_date", "tour") in indexes
+    assert ("player_id",) in indexes
+
+
+def test_players_carry_directory_columns() -> None:
+    columns = PlayerRow.__table__.columns
+    for name in (
+        "localized_name",
+        "gender",
+        "birth_date",
+        "image_url",
+        "first_seen_at",
+        "last_seen_at",
+    ):
+        assert name in columns

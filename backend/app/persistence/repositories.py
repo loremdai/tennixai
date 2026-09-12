@@ -228,6 +228,7 @@ class MatchSnapshotRepository:
             return Player(
                 id=player_id or "ply_unknown",
                 name=(row.name if row and row.name else "Unknown player"),
+                localized_name=row.localized_name if row else None,
                 country_code=row.country_code if row else None,
                 ranking=row.ranking if row else None,
             )
