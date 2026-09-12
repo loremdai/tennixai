@@ -3,23 +3,19 @@
 > 本文件是唯一执行面板，回答“现在只做什么、由谁做、从哪里继续、怎样算完成”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，全局路线见 [ROADMAP.md](./ROADMAP.md)。
 
-**最后更新：** 2026-09-12 19:35 CST
+**最后更新：** 2026-09-12 20:12 CST
 
-**当前任务：** T49 — Rankings/Profile/五赛季赛果 API
+**当前任务：** T50 — Home/Match Chat 共用 resolver（`ready`，待领取）
 
-**任务状态：** `in_progress`
+**任务状态：** 无 `in_progress`（T49 已完成并推送）
 
 **当前执行者 / ADE：** Claude Code / Claude Code
 
 **工作分支：** `main`（P1 默认唯一执行与同步分支）
 
-**最近完成任务提交：** `1f480df`
+**最近完成任务提交：** `ae0fa44`
 
-**最后验证的产品提交：** `1f480df`
-
-**本次任务起始提交：** `f3e0161`
-
-**本次任务领取时间：** 2026-09-12 19:35 CST
+**最后验证的产品提交：** `ae0fa44`
 
 **本次任务起始提交：** `44cd9d5`（v0 原型已入库；本执行者从该提交继续 T43 工程收口）
 
@@ -91,13 +87,14 @@
 
 ### T49 — Rankings/Profile/五赛季赛果 API
 
-- **状态：** `in_progress`
+- **状态：** `done`
 - **执行者 / ADE：** Claude Code / Claude Code
 - **分支：** `main`
-- **起始提交：** `f3e0161`
+- **起始提交：** `f3e0161`（领取记录 `d838ab9`）
 - **领取时间：** 2026-09-12 19:35 CST
-- **范围：** 按 [P2.6 实施计划 T49](./docs/superpowers/plans/2026-09-12-tennixai-player-directory-multilingual-identity-implementation.md#t49-expose-rankings-profile-and-five-season-result-apis)：canonical profile/season/result 模型与 `PlayerProfileProvider`；API-Tennis profile（logo + 分场地胜负）与按年有界赛果；fake 对应能力；service 组合与缓存（profile 1h/负 60s、赛果 10min/空 60s、live/next 复用）；四个 REST 路由（rankings/search/profile/results，page_size 固定 50/20，路由先注册 rankings/search）；search 返回 `PlayerResolution` 信封。
-- **验收门：** 静态路由优先、tour enum、page 边界、Top 200 上限、中国筛选、Top 200 外搜索、未知 ID 404、可选 profile 字段、选中赛季、live 优先 next、`current_match=None` 空文案语义、五年边界、tier/outcome 筛选、结果分页与无 surface 参数；真实 profile/history smoke（Top 200 与 Top 200 外各一）。
+- **完成提交：** `ae0fa44`
+- **完成事实：** canonical 模型（`RankingPage/PlayerProfileView/PlayerResultPage/ResultOutcome/SurfaceRecord/PlayerSeasonRecord`）与 `PlayerProfileProvider` protocol；API-Tennis profile（`player_logo`、singles-only 赛季记录、空白场地保持 None、DD.MM.YYYY 生日解析）与按年有界赛果（`get_fixtures` + player_key + 日期窗、FINISHED、最新优先）；fake provider 8 球员目录与确定性 profile/赛果（23+5 场/人）；service 组合与缓存（profile 1h/负缓存 60s、单季赛果 10min/空 60s、current_match live→next→None）；REST 四路由：`/players/rankings`（tour enum、page≥1、page_size 固定 50、country 过滤）、`/players/search`（resolution 信封、limit≤50）、`/players/{id}`（season 五年窗口外 422、未知 404）、`/players/{id}/results`（season 必填、tier 多值、outcome、page、page_size 固定 20）；静态路由先于 `{player_id}` 注册。
+- **验证门：** TDD 先红（13 失败）后绿；test_player_api + test_player_profile_service 23 passed；test_p2_api/test_api 契约更新后全绿；确定性 454 passed/36 deselected；infrastructure 21 passed；真实 smoke：Top 200（Ben Shelton 11 赛季全部含场地记录、2026 赛果 65 场）与 Top 200 外（Mitchell Sheldon #1339，8 赛季、2026 赛果 5 场）profile/赛果诚实映射；无表面筛选参数。
 - **阻塞：** 无。
 
 ### T48 — 确定性 PlayerResolver 与按内部 ID 的运行时查询
@@ -477,6 +474,7 @@
 
 | 日期 | 提交 | 验证 | 结果 |
 |---|---|---|---|
+| 2026-09-12 | `ae0fa44` | TDD 先红（13 失败）后绿；player API/profile service 23 passed；p2/api 契约更新全绿；确定性 454 passed/36 deselected；infrastructure 21 passed；真实 smoke Top 200 与 Top 200 外 profile/赛果诚实映射 | T49 完成；rankings/profile/五赛季赛果 API 就绪 |
 | 2026-09-12 | `1f480df` | TDD 先红后绿；resolver 26 项 + focused 111 passed；确定性 441 passed/36 deselected；infrastructure 21 passed；真实目录五形式同内部 ID、按 ID 取赛程成功、零供应商扫描 | T48 完成；共享 resolver 与内部 ID 运行时查询就绪 |
 | 2026-09-12 | `2a1a488` | TDD 先红后绿 14 passed；真实 LLM smoke 1 passed（二次 enrich 零模型调用）；CLI 边界 exit 2；确定性 411 passed/36 deselected；infrastructure 21 passed 自清洁双轮零漂移；真实 enrichment 全量完成、有名成员覆盖 4186/4186=100% | T47 完成；离线中文名 enrichment 与 100% 发布覆盖门就绪 |
 | 2026-09-12 | `e68e09e` | TDD 先红后绿；focused 28 passed；infrastructure 21 passed；确定性 397 passed/35 deselected；CLI help exit 0；真实 sync 两轮幂等（inserted 19657→0）、status 计数稳定、并列 rank 去重满足唯一约束 | T46 完成；幂等目录同步与英文别名派生就绪 |
@@ -534,11 +532,11 @@
 
 | 日期 | 变更 | 提交 |
 |---|---|---|
+| 2026-09-12 | T49 完成：rankings/profile/五赛季赛果 REST API 与真实 profile/history smoke | `ae0fa44` |
 | 2026-09-12 | T48 完成：确定性 PlayerResolver、内部 ID 运行时查询与目录委托搜索 | `1f480df` |
 | 2026-09-12 | T47 完成：离线中文名 enrichment、严格 batch 零写入与 100% 发布覆盖门 | `2a1a488` |
 | 2026-09-12 | T46 完成：幂等目录同步、英文别名派生与本地 sync/status CLI | `e68e09e` |
 | 2026-09-12 | T45 完成：migration 0003、目录 repository（memory+Postgres）与 identity 无损门 | `fb77d80` |
-| 2026-09-12 | T44 完成：canonical 排名模型、API-Tennis standings adapter 与真实 standings smoke | `4e882b9` |
 
 ## 接手与更新规则
 
