@@ -274,7 +274,7 @@ export function PlayerResults({
               {visibleResults.map((result) => (
                 <li key={result.id}>
                   <Link
-                    href="/match?status=finished"
+                    href={`/matches/${encodeURIComponent(result.matchId)}`}
                     aria-label={`查看 ${result.date} 对阵 ${result.opponent.name} 的比赛详情`}
                     className="group flex flex-col gap-3 border-b px-4 py-4 transition-colors last:border-b-0 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring md:grid md:grid-cols-[6rem_minmax(0,1.35fr)_minmax(0,1fr)_6rem_9rem_1.5rem] md:items-center md:gap-4 md:py-3"
                   >

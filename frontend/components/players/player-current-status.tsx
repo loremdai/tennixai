@@ -81,7 +81,7 @@ export function PlayerCurrentStatus({
       </CardContent>
       <CardFooter>
         <Link
-          href={`/match?status=${status.kind === 'live' ? 'live' : 'upcoming'}`}
+          href={`/matches/${encodeURIComponent(status.matchId)}`}
           aria-label={`查看 ${profileName} 的${isLive ? '实时比赛' : '下一场比赛'}`}
           className={cn(buttonVariants({ variant: isLive ? 'default' : 'outline', size: 'lg' }), 'w-full')}
         >

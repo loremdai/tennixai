@@ -72,7 +72,7 @@ export function PlayerProfileHeader({ profile }: { profile: PlayerProfilePreview
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="rounded-xl bg-muted/55 p-4">
             <p className="text-xs text-muted-foreground">当前世界排名</p>
-            <p className="mt-2 font-mono text-2xl font-semibold tabular-nums">{profile.rank ? `#${profile.rank}` : '暂无'}</p>
+            <p className="mt-2 font-mono text-2xl font-semibold tabular-nums">{profile.rank ? `#${profile.rank}` : '暂无当前排名'}</p>
           </div>
           <div className="rounded-xl bg-muted/55 p-4">
             <p className="text-xs text-muted-foreground">排名积分</p>

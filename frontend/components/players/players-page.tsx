@@ -37,7 +37,7 @@ const quickSearches: Array<{ label: string; query: string; tour: TourKey }> = [
   { label: 'B. Shelton', query: 'B. Shelton', tour: 'ATP' },
   { label: '郑钦文', query: '郑钦文', tour: 'WTA' },
   { label: '排名 201', query: 'Coleman Wong', tour: 'ATP' },
-  { label: '暂无排名', query: 'Bryan Shelton', tour: 'ATP' },
+  { label: '暂无当前排名', query: 'Bryan Shelton', tour: 'ATP' },
 ]
 
 function replaceDirectoryUrl(filters: PlayersFilters) {
@@ -74,10 +74,9 @@ export function PlayersPage({
   const searchResults = useMemo(
     () => searchPlayerDirectory(directory, {
       query: filters.query,
-      tour: filters.tour,
       countryCode: filters.countryCode,
     }),
-    [directory, filters.countryCode, filters.query, filters.tour],
+    [directory, filters.countryCode, filters.query],
   )
 
   function applyFilters(next: PlayersFilters) {
@@ -260,7 +259,6 @@ export function PlayersPage({
         {filters.query ? (
           <PlayerSearchResults
             query={filters.query}
-            tour={filters.tour}
             countryName={selectedCountry?.name ?? null}
             players={searchResults}
             onClear={clearSearch}

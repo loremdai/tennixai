@@ -45,6 +45,11 @@ export type PlayerProfilePreview = PlayerDirectoryEntry & {
   rankUpdatedAt: string
 }
 
+export type SurfaceRecordPreview = {
+  won: number
+  lost: number
+}
+
 export type PlayerSeasonSummaryPreview = {
   season: number
   matches: number | null
@@ -52,9 +57,9 @@ export type PlayerSeasonSummaryPreview = {
   losses: number | null
   winRate: number | null
   titles: number | null
-  hardWinRate: number | null
-  clayWinRate: number | null
-  grassWinRate: number | null
+  hard: SurfaceRecordPreview | null
+  clay: SurfaceRecordPreview | null
+  grass: SurfaceRecordPreview | null
 }
 
 export type PlayerResultPreview = {
@@ -371,14 +376,15 @@ function normalizeSearchValue(value: string) {
 
 export function searchPlayerDirectory(
   players: PlayerDirectoryEntry[],
-  filters: { query: string; tour: TourKey; countryCode: string },
+  filters: { query: string; countryCode: string },
 ) {
   const query = normalizeSearchValue(filters.query)
   if (!query) return []
   const compactQuery = query.replace(/\s/g, '')
 
+  // With a query the page searches the full local singles directory; the
+  // ATP/WTA rankings tab only controls the no-query ranking mode.
   return players.filter((player) => {
-    if (player.tour !== filters.tour) return false
     if (filters.countryCode !== 'ALL' && player.countryCode !== filters.countryCode) return false
     const values = [player.name, player.nameZh ?? '', player.shortName, ...player.aliases]
     return values.some((value) => {
@@ -413,15 +419,22 @@ function seasonSummariesFor(profile: PlayerProfilePreview): PlayerSeasonSummaryP
         losses: null,
         winRate: null,
         titles: null,
-        hardWinRate: null,
-        clayWinRate: null,
-        grassWinRate: null,
+        hard: null,
+        clay: null,
+        grass: null,
       }
     }
     const tourAdjustment = profile.tour === 'WTA' ? 2 : 0
     const matches = 47 - index * 3 + tourAdjustment
     const wins = 35 - index * 3 + tourAdjustment
     const losses = matches - wins
+    // Deterministic surface split; per-surface records always sum to the totals.
+    const hardMatches = Math.round(matches * 0.6)
+    const clayMatches = Math.round(matches * 0.25)
+    const grassMatches = matches - hardMatches - clayMatches
+    const hardWon = Math.round(wins * 0.62)
+    const clayWon = Math.round(wins * 0.24)
+    const grassWon = wins - hardWon - clayWon
     return {
       season,
       matches,
@@ -429,9 +442,9 @@ function seasonSummariesFor(profile: PlayerProfilePreview): PlayerSeasonSummaryP
       losses,
       winRate: Number(((wins / matches) * 100).toFixed(1)),
       titles: Math.max(0, 3 - index),
-      hardWinRate: 78 - index * 2 + tourAdjustment,
-      clayWinRate: 66 - index + tourAdjustment,
-      grassWinRate: 72 - index * 2,
+      hard: { won: hardWon, lost: hardMatches - hardWon },
+      clay: { won: clayWon, lost: clayMatches - clayWon },
+      grass: { won: grassWon, lost: grassMatches - grassWon },
     }
   })
 }
@@ -477,8 +490,10 @@ function resultsFor(profile: PlayerProfilePreview): PlayerResultPreview[] {
       let tier: CompetitionTier = profile.tour
       if (index % 11 === 10) tier = 'ITF'
       else if (index % 7 === 6) tier = 'Challenger'
+      // Finished sample results must never post-date the preview snapshot
+      // date (2026-09-11), so the newest result is 2026-09-10.
       const month = Math.max(1, 9 - Math.floor(index / 3))
-      const day = 27 - (index % 3) * 5
+      const day = 10 - (index % 3) * 3
       return {
         id: `result_${profile.id}_${season}_${String(index + 1).padStart(2, '0')}`,
         matchId: `mtch_${profile.tour.toLowerCase()}_${season}_${String(index + 1).padStart(3, '0')}`,

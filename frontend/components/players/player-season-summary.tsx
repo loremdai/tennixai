@@ -1,4 +1,4 @@
-import type { PlayerSeasonSummaryPreview } from '@/components/players/player-preview-data'
+import type { PlayerSeasonSummaryPreview, SurfaceRecordPreview } from '@/components/players/player-preview-data'
 import { Badge } from '@/components/ui/badge'
 import {
   Card,
@@ -10,6 +10,10 @@ import {
 
 function valueOrUnavailable(value: number | null, suffix = '') {
   return value === null ? '暂无' : `${value}${suffix}`
+}
+
+function recordOrUnavailable(record: SurfaceRecordPreview | null) {
+  return record === null ? '暂无' : `${record.won}–${record.lost}`
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
@@ -40,9 +44,9 @@ export function PlayerSeasonSummary({ summary }: { summary: PlayerSeasonSummaryP
         />
         <Metric label="胜率" value={valueOrUnavailable(summary.winRate, '%')} />
         <Metric label="冠军数" value={valueOrUnavailable(summary.titles)} />
-        <Metric label="硬地胜率" value={valueOrUnavailable(summary.hardWinRate, '%')} />
-        <Metric label="红土胜率" value={valueOrUnavailable(summary.clayWinRate, '%')} />
-        <Metric label="草地胜率" value={valueOrUnavailable(summary.grassWinRate, '%')} />
+        <Metric label="硬地胜负" value={recordOrUnavailable(summary.hard)} />
+        <Metric label="红土胜负" value={recordOrUnavailable(summary.clay)} />
+        <Metric label="草地胜负" value={recordOrUnavailable(summary.grass)} />
         <div className="flex items-center rounded-xl bg-secondary/55 p-3 text-xs leading-relaxed text-muted-foreground">
           {hasData ? '仅统计单打正式比赛' : '该赛季统计暂不可用'}
         </div>

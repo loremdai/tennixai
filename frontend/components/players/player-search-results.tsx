@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { ChevronRight, SearchX } from 'lucide-react'
 
 import { PlayerCountry } from '@/components/player-country'
-import type { PlayerDirectoryEntry, TourKey } from '@/components/players/player-preview-data'
+import type { PlayerDirectoryEntry } from '@/components/players/player-preview-data'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -20,13 +20,11 @@ function initials(name: string) {
 
 export function PlayerSearchResults({
   query,
-  tour,
   countryName,
   players,
   onClear,
 }: {
   query: string
-  tour: TourKey
   countryName: string | null
   players: PlayerDirectoryEntry[]
   onClear: () => void
@@ -39,7 +37,7 @@ export function PlayerSearchResults({
             <h2 id="player-search-results-title">全目录搜索结果</h2>
           </CardTitle>
           <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-            “{query}” · {tour}{countryName ? ` · ${countryName}` : ''}
+            “{query}”{countryName ? ` · ${countryName}` : ''}
           </p>
         </div>
         <CardAction>
@@ -77,7 +75,7 @@ export function PlayerSearchResults({
                   <div className="flex shrink-0 items-center gap-3">
                     <div className="text-right">
                       <p className="font-mono text-sm font-semibold tabular-nums">
-                        {player.rank ? `#${player.rank}` : '暂无排名'}
+                        {player.rank ? `#${player.rank}` : '暂无当前排名'}
                       </p>
                       <p className="mt-0.5 hidden text-xs text-muted-foreground sm:block">
                         {player.points ? `${player.points.toLocaleString('en-US')} 分` : '积分暂无'}
