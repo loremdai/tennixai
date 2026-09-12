@@ -180,11 +180,25 @@ class FakeChatModel:
     @staticmethod
     def _default_text(messages: list[dict[str, Any]]) -> str:
         for message in reversed(messages):
+            result: dict[str, Any] | None = None
             if message.get("role") == "tool":
                 try:
                     result = json.loads(str(message.get("content") or "{}"))
                 except json.JSONDecodeError:
                     result = {}
+            elif (
+                message.get("role") == "user"
+                and "以下是提问时冻结并已核验的事实" in str(message.get("content") or "")
+            ):
+                try:
+                    result_list = json.loads(str(message.get("content") or "").rsplit("\n", 1)[-1])
+                    result = next(
+                        (item for item in reversed(result_list) if isinstance(item, dict)),
+                        {},
+                    )
+                except (json.JSONDecodeError, TypeError):
+                    result = {}
+            if result is not None:
                 kind = result.get("kind")
                 matches = result.get("matches") or []
                 if kind == "match" and matches:

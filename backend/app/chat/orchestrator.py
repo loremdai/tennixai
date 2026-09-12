@@ -32,6 +32,7 @@ from app.errors import AppError
 
 HISTORICAL_REPLY = "P2 暂不支持大范围历史查询。"
 LLM_FALLBACK_REPLY = "比赛数据已找到，但 AI 说明暂时不可用。"
+LLM_EMPTY_REPLY = "暂时没有生成可展示的回答，请稍后重试。"
 MAX_TOOL_ROUNDS = 3
 MAX_REPLANS = 1
 MAX_MODEL_MATCHES = 12
@@ -181,6 +182,33 @@ def _model_tool_outcome(outcome: ToolOutcome) -> dict[str, Any]:
     }
 
 
+def _synthesis_messages(
+    messages: list[dict[str, Any]], verified_facts: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    clean_messages = [
+        {
+            "role": message["role"],
+            "content": message["content"],
+        }
+        for message in messages
+        if message.get("role") in {"system", "user", "assistant"}
+        and "tool_calls" not in message
+        and isinstance(message.get("content"), str)
+        and message["content"]
+    ]
+    clean_messages.append(
+        {
+            "role": "user",
+            "content": (
+                "现在请直接回答原问题，不要调用工具。以下是提问时冻结并已核验的事实；"
+                "只能根据这些事实回答，缺失字段请明确说明：\n"
+                f"{json.dumps(verified_facts, ensure_ascii=False)}"
+            ),
+        }
+    )
+    return clean_messages
+
+
 def _optional_warning(outcome: ToolOutcome) -> ChatEvent:
     return ChatEvent(
         type=ChatEventType.WARNING,
@@ -201,6 +229,17 @@ def _replan_warning() -> ChatEvent:
         payload={
             "code": "tool_replan_exhausted",
             "message": "部分辅助资料未能读取，已继续使用可用的比赛事实。",
+            "details": {},
+        },
+    )
+
+
+def _empty_generation_warning() -> ChatEvent:
+    return ChatEvent(
+        type=ChatEventType.WARNING,
+        payload={
+            "code": "llm_empty_response",
+            "message": "AI 未返回可展示的文字，已保留结构化结果。",
             "details": {},
         },
     )
@@ -282,6 +321,7 @@ class ChatOrchestrator:
         known_match_ids = {request.match_id} if request.match_id else set()
         has_discovered_matches = bool(known_match_ids)
         replan_count = 0
+        verified_facts: list[dict[str, Any]] = []
 
         try:
             while True:
@@ -368,6 +408,7 @@ class ChatOrchestrator:
                             match.id for match in outcome.result.matches
                         )
                         if outcome.duplicate_of is None:
+                            verified_facts.append(_model_tool_result(outcome.result))
                             yield ChatEvent(
                                 type=ChatEventType.DATA,
                                 payload=outcome.result.model_dump(mode="json"),
@@ -444,8 +485,18 @@ class ChatOrchestrator:
                 type=ChatEventType.STATUS,
                 payload={"stage": "generating", "phase": "synthesis"},
             )
-            async for chunk in self._model.stream_text(messages):
+            generated_text = False
+            async for chunk in self._model.stream_text(
+                _synthesis_messages(messages, verified_facts)
+            ):
+                generated_text = generated_text or bool(chunk)
                 yield ChatEvent(type=ChatEventType.TEXT_DELTA, payload={"delta": chunk})
+            if not generated_text:
+                yield ChatEvent(
+                    type=ChatEventType.TEXT_DELTA,
+                    payload={"delta": LLM_FALLBACK_REPLY if data_emitted else LLM_EMPTY_REPLY},
+                )
+                yield _empty_generation_warning()
         except Exception:
             if data_emitted:
                 yield ChatEvent(

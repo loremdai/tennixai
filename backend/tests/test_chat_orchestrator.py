@@ -800,6 +800,71 @@ async def test_match_scope_rejects_unrequested_history_tool_calls() -> None:
 
 
 @pytest.mark.asyncio
+async def test_synthesis_uses_clean_verified_facts_after_replan_exhaustion() -> None:
+    model = FakeChatModel(
+        turns=[
+            tool_turn("get_match_intelligence", {"topic": "overview"}, "call_1"),
+            tool_turn("get_match_intelligence", {"topic": "overview"}, "call_2"),
+            tool_turn("get_match_intelligence", {"topic": "overview"}, "call_3"),
+        ],
+        text_chunks=["已基于可用的比赛事实完成回答。"],
+    )
+    orchestrator, recording = build_orchestrator(model)
+    await recording.inner.build()
+    match_id = recording.inner.live_match.id
+
+    events = [
+        event
+        async for event in orchestrator.stream(
+            ChatRequest(
+                scope="match",
+                match_id=match_id,
+                messages=[
+                    ChatMessage(
+                        role="user",
+                        content="分析当前比赛和球员优缺点。",
+                    )
+                ],
+            )
+        )
+    ]
+
+    assert events[-1].type is ChatEventType.DONE
+    synthesis_messages = model.stream_calls[-1]
+    assert not any(message.get("role") == "tool" for message in synthesis_messages)
+    assert not any("tool_calls" in message for message in synthesis_messages)
+    assert any(
+        message.get("role") == "user"
+        and "已核验" in str(message.get("content"))
+        for message in synthesis_messages
+    )
+
+
+@pytest.mark.asyncio
+async def test_empty_synthesis_does_not_silently_complete_after_data() -> None:
+    model = FakeChatModel(
+        turns=[tool_turn("get_live_matches", {}), ModelTurn()],
+        text_chunks=[],
+    )
+    orchestrator, _ = build_orchestrator(model)
+
+    events = [
+        event
+        async for event in orchestrator.stream(global_request("现在有什么比赛？"))
+    ]
+
+    text = [event for event in events if event.type is ChatEventType.TEXT_DELTA]
+    assert text and text[-1].payload["delta"] == "比赛数据已找到，但 AI 说明暂时不可用。"
+    assert any(
+        event.type is ChatEventType.WARNING
+        and event.payload["code"] == "llm_empty_response"
+        for event in events
+    )
+    assert not any(event.type is ChatEventType.ERROR for event in events)
+    assert events[-1].type is ChatEventType.DONE
+
+
+@pytest.mark.asyncio
 async def test_match_scope_optional_player_lookup_does_not_abort_existing_answer() -> None:
     model = FakeChatModel(
         turns=[
