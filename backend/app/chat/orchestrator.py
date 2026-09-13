@@ -13,6 +13,11 @@ from typing import Any
 from app.chat.client import ChatModel
 from app.chat.capabilities import ChatPhase, ToolRequiredness, allowed_tool_names
 from app.chat.executor import ToolBatchExecutor
+from app.chat.history import (
+    HistoryCapability,
+    classify_history_capabilities,
+    is_broad_history_only,
+)
 from app.chat.models import (
     ChatContext,
     ChatEvent,
@@ -25,16 +30,16 @@ from app.chat.models import (
     ToolOutcome,
     ToolOutcomeStatus,
 )
-from app.chat.tools import (
-    BusinessTools,
-    is_historical_query,
-    is_unsupported_historical_query,
-)
+from app.chat.tools import BusinessTools
 from app.domain import Match
 from app.errors import AppError
 from app.intelligence import IntelligencePacket, IntelligenceTopic
 
 HISTORICAL_REPLY = "P2 暂不支持大范围历史查询。"
+BROAD_HISTORY_NOTE = (
+    "用户问题中还包含超出产品支持范围的全部历史/生涯战绩请求；"
+    "回答时必须明确说明该部分暂不支持，只基于已核验事实回答受支持的部分。"
+)
 LLM_FALLBACK_REPLY = "比赛数据已找到，但 AI 说明暂时不可用。"
 LLM_EMPTY_REPLY = "暂时没有生成可展示的回答，请稍后重试。"
 UNKNOWN_FORMAT_REPLY = "比赛数据已找到，但本次没有生成可展示的分析。"
@@ -91,23 +96,6 @@ MATCH_SYSTEM_SUFFIX = (
     "不要用回答期间的新版本覆盖或否定这份基线。"
 )
 
-MATCH_HISTORY_PHRASES = (
-    "近期",
-    "recent",
-    "交手",
-    "对战",
-    "h2h",
-    "head-to-head",
-    "head to head",
-    "球员特点",
-    "球员背景",
-    "近期状态",
-    "近期表现",
-    "优缺点",
-    "strengths",
-    "weaknesses",
-)
-
 MATCH_COMPREHENSIVE_PHRASES = (
     "技术统计",
     "每盘",
@@ -126,13 +114,6 @@ MATCH_COMPREHENSIVE_PHRASES = (
     "谁能获胜",
     "谁会赢",
 )
-
-
-def _requests_match_history(text: str) -> bool:
-    normalized = text.casefold()
-    return is_historical_query(text) or any(
-        phrase in normalized for phrase in MATCH_HISTORY_PHRASES
-    )
 
 
 def _requested_match_topics(text: str) -> tuple[IntelligenceTopic, ...]:
@@ -214,7 +195,7 @@ def _planned_match_context_calls(
 def _catalog_for_request(
     tools: list[dict[str, Any]],
     request: ChatRequest,
-    last_user: str,
+    history_capabilities: frozenset[HistoryCapability],
     *,
     phase: ChatPhase | None = None,
     has_discovered_matches: bool = False,
@@ -226,7 +207,7 @@ def _catalog_for_request(
         allowed_tool_names(
             request.scope,
             phase,
-            history_requested=_requests_match_history(last_user),
+            history_capabilities=history_capabilities,
             has_discovered_matches=has_discovered_matches,
         )
     )
@@ -378,7 +359,10 @@ def _model_tool_outcome(outcome: ToolOutcome) -> dict[str, Any]:
 
 
 def _synthesis_messages(
-    messages: list[dict[str, Any]], verified_facts: list[dict[str, Any]]
+    messages: list[dict[str, Any]],
+    verified_facts: list[dict[str, Any]],
+    *,
+    note_broad_history: bool = False,
 ) -> list[dict[str, Any]]:
     clean_messages = [
         {
@@ -391,6 +375,7 @@ def _synthesis_messages(
         and isinstance(message.get("content"), str)
         and message["content"]
     ]
+    broad_note = f"{BROAD_HISTORY_NOTE}\n" if note_broad_history else ""
     clean_messages.append(
         {
             "role": "user",
@@ -405,6 +390,7 @@ def _synthesis_messages(
                 "明确这是已发生的比赛结果，不要把它称为预测。"
                 "不能交换两列。若任何事实中的 format 为 null，整篇回答严禁出现 BO3、BO5、三盘两胜、"
                 "五盘三胜、第五盘或最终盘数比分（例如 3-1）；只能预测胜者倾向，不得补猜赛制：\n"
+                f"{broad_note}"
                 f"{json.dumps(verified_facts, ensure_ascii=False)}"
             ),
         }
@@ -506,7 +492,15 @@ class ChatOrchestrator:
             ),
             "",
         )
-        if is_unsupported_historical_query(last_user):
+        history_capabilities = classify_history_capabilities(
+            last_user, scope=request.scope
+        )
+        history_requested = bool(history_capabilities)
+        note_broad_history = (
+            HistoryCapability.BROAD_HISTORY in history_capabilities
+            and not is_broad_history_only(history_capabilities)
+        )
+        if is_broad_history_only(history_capabilities):
             unsupported = StructuredToolResult(kind="unsupported")
             yield ChatEvent(
                 type=ChatEventType.DATA, payload=unsupported.model_dump(mode="json")
@@ -566,7 +560,7 @@ class ChatOrchestrator:
                 catalog = _catalog_for_request(
                     self._tools.catalog(scope=request.scope),
                     request,
-                    last_user,
+                    history_capabilities,
                     phase=phase,
                     has_discovered_matches=has_discovered_matches,
                 )
@@ -713,7 +707,7 @@ class ChatOrchestrator:
                         )
                 if received_data and (
                     request.scope is ChatScope.GLOBAL
-                    or (_requests_match_history(last_user) and request.scope is ChatScope.MATCH)
+                    or (history_requested and request.scope is ChatScope.MATCH)
                 ):
                     phase = ChatPhase.ENRICHMENT
                 yield ChatEvent(
@@ -751,7 +745,9 @@ class ChatOrchestrator:
                 type=ChatEventType.STATUS,
                 payload={"stage": "generating", "phase": "synthesis"},
             )
-            synthesis_messages = _synthesis_messages(messages, verified_facts)
+            synthesis_messages = _synthesis_messages(
+                messages, verified_facts, note_broad_history=note_broad_history
+            )
             if _has_unknown_format(context.snapshot, verified_facts):
                 raw_generated = ""
                 async for chunk in self._model.stream_text(synthesis_messages):

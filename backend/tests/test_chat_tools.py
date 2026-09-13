@@ -10,12 +10,9 @@ from app.chat.models import (
     ChatScope,
     StructuredToolResult,
 )
+from app.chat.history import HistoryCapability, classify_history_capabilities
 from app.chat.orchestrator import _catalog_for_request
-from app.chat.tools import (
-    BusinessTools,
-    is_historical_query,
-    is_unsupported_historical_query,
-)
+from app.chat.tools import BusinessTools
 from app.domain import Match, Player
 from app.errors import AppError
 from app.identity import MemoryIdentityRepository
@@ -92,7 +89,7 @@ def test_global_catalog_hides_match_only_tool(tools: BusinessTools) -> None:
     catalog = _catalog_for_request(
         tools.catalog(),
         ChatRequest(scope=ChatScope.GLOBAL, messages=[ChatMessage(role="user", content="现在有什么比赛？")]),
-        "现在有什么比赛？",
+        classify_history_capabilities("现在有什么比赛？", scope=ChatScope.GLOBAL),
     )
     names = {item["function"]["name"] for item in catalog}
 
@@ -285,8 +282,13 @@ async def test_unknown_name_without_resolver_is_recoverable_resolution(
 
 
 def test_historical_query_is_rejected_without_calling_model() -> None:
-    assert is_historical_query("昨天 Sinner 赢了吗？") is True
-    assert is_historical_query("Sinner tonight?") is False
+    capabilities = classify_history_capabilities(
+        "昨天 Sinner 赢了吗？", scope=ChatScope.GLOBAL
+    )
+    assert HistoryCapability.LIMITED_RESULTS in capabilities
+    assert classify_history_capabilities(
+        "Sinner tonight?", scope=ChatScope.GLOBAL
+    ) == frozenset()
 
 
 def test_historical_guard_covers_all_p1_phrases_case_insensitively() -> None:
@@ -301,16 +303,32 @@ def test_historical_guard_covers_all_p1_phrases_case_insensitively() -> None:
         "PREVIOUS MATCH",
         "History",
     ]:
-        assert is_historical_query(f"...{phrase}...") is True
+        assert classify_history_capabilities(
+            f"...{phrase}...", scope=ChatScope.GLOBAL
+        ), phrase
 
-    assert is_historical_query("今晚 Sinner 几点打？") is False
-    assert is_historical_query("What is the score now?") is False
+    assert classify_history_capabilities(
+        "今晚 Sinner 几点打？", scope=ChatScope.GLOBAL
+    ) == frozenset()
+    assert classify_history_capabilities(
+        "What is the score now?", scope=ChatScope.GLOBAL
+    ) == frozenset()
 
 
 def test_broad_history_guard_keeps_bounded_h2h_supported() -> None:
-    assert is_unsupported_historical_query("Sinner 的历史战绩") is True
-    assert is_unsupported_historical_query("Sinner 和 Alcaraz 的历史交手") is False
-    assert is_unsupported_historical_query("Sinner 的 career history") is True
+    from app.chat.history import is_broad_history_only
+
+    assert is_broad_history_only(
+        classify_history_capabilities("Sinner 的历史战绩", scope=ChatScope.GLOBAL)
+    )
+    assert not is_broad_history_only(
+        classify_history_capabilities(
+            "Sinner 和 Alcaraz 的历史交手", scope=ChatScope.GLOBAL
+        )
+    )
+    assert is_broad_history_only(
+        classify_history_capabilities("Sinner 的 career history", scope=ChatScope.GLOBAL)
+    )
 
 
 def test_structured_unsupported_result_shape() -> None:

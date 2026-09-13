@@ -1326,3 +1326,88 @@ async def test_ambiguous_resolution_ends_done_with_candidates() -> None:
     assert len(data_events[0].payload["resolution"]["candidates"]) == 2
     assert all(e.type is not ChatEventType.ERROR for e in events)
     assert events[-1].type is ChatEventType.DONE
+
+
+# ------------------------------------------------------- T54 capability routing
+
+
+@pytest.mark.asyncio
+async def test_home_bare_result_wording_exposes_history_tool() -> None:
+    model = CatalogRecordingModel(
+        turns=[tool_turn("get_live_matches", {}), ModelTurn()],
+        text_chunks=["已找到比赛。"],
+    )
+    orchestrator, _ = build_orchestrator(model)
+
+    events = [
+        event async for event in orchestrator.stream(global_request("郑钦文赛果如何？"))
+    ]
+
+    assert events[-1].type is ChatEventType.DONE
+    assert "get_player_results" in model.catalog_calls[0]
+
+
+@pytest.mark.asyncio
+async def test_home_current_match_question_hides_history_tools() -> None:
+    model = CatalogRecordingModel(
+        turns=[tool_turn("get_live_matches", {}), ModelTurn()],
+        text_chunks=["已找到比赛。"],
+    )
+    orchestrator, _ = build_orchestrator(model)
+
+    events = [
+        event async for event in orchestrator.stream(global_request("现在有什么比赛？"))
+    ]
+
+    assert events[-1].type is ChatEventType.DONE
+    assert "get_player_results" not in model.catalog_calls[0]
+    assert "get_head_to_head" not in model.catalog_calls[0]
+
+
+@pytest.mark.asyncio
+async def test_broad_history_variant_bypasses_model_and_provider() -> None:
+    model = FakeChatModel()
+    orchestrator, recording = build_orchestrator(model)
+
+    events = [
+        event async for event in orchestrator.stream(global_request("Sinner 的生涯战绩"))
+    ]
+
+    assert [event.type for event in events] == ["data", "text_delta", "done"]
+    assert events[0].payload["kind"] == "unsupported"
+    assert model.choose_calls == []
+    assert sum(recording.calls.values()) == 0
+
+
+@pytest.mark.asyncio
+async def test_mixed_broad_history_keeps_supported_tools_and_notes_unsupported() -> None:
+    model = CatalogRecordingModel(
+        turns=[
+            tool_turn(
+                "get_player_results",
+                {"player_name": "Sinner", "scope": "recent", "limit": 5},
+            ),
+            ModelTurn(),
+        ],
+        text_chunks=["已找到最近赛果；完整历史暂不支持。"],
+    )
+    orchestrator, recording = build_orchestrator(model)
+
+    events = [
+        event
+        async for event in orchestrator.stream(
+            global_request("Sinner 最近赛果和完整历史战绩")
+        )
+    ]
+
+    assert events[-1].type is ChatEventType.DONE
+    assert not any(event.type is ChatEventType.ERROR for event in events)
+    assert "get_player_results" in model.catalog_calls[0]
+    assert recording.calls["get_recent_results"] == 1
+    synthesis = model.stream_calls[-1]
+    note = next(
+        message
+        for message in synthesis
+        if message.get("role") == "user" and "已核验" in str(message.get("content"))
+    )
+    assert "超出产品支持范围" in note["content"]

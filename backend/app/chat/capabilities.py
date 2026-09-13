@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from enum import StrEnum
 
+from app.chat.history import HistoryCapability
 from app.chat.models import ChatScope, ToolRequiredness
 
 
@@ -62,6 +63,14 @@ _CAPABILITIES = {
         parallel_safe=True,
         requiredness=ToolRequiredness.OPTIONAL,
     ),
+    "get_player_season_record": ToolCapability(
+        name="get_player_season_record",
+        allowed_scopes=frozenset({ChatScope.GLOBAL, ChatScope.MATCH}),
+        phases=frozenset({ChatPhase.DISCOVERY, ChatPhase.ENRICHMENT}),
+        requires=frozenset({"player_identity"}),
+        parallel_safe=True,
+        requiredness=ToolRequiredness.OPTIONAL,
+    ),
     "get_head_to_head": ToolCapability(
         name="get_head_to_head",
         allowed_scopes=frozenset({ChatScope.GLOBAL, ChatScope.MATCH}),
@@ -74,6 +83,14 @@ _CAPABILITIES = {
 
 TOOL_ORDER = tuple(_CAPABILITIES)
 
+# Optional history tools are visible only when the deterministic capability
+# classifier found the matching intent in the latest user message.
+OPTIONAL_TOOL_CAPABILITY = {
+    "get_player_results": HistoryCapability.LIMITED_RESULTS,
+    "get_player_season_record": HistoryCapability.SEASON_RECORD,
+    "get_head_to_head": HistoryCapability.HEAD_TO_HEAD,
+}
+
 
 def capability_for(name: str) -> ToolCapability | None:
     return _CAPABILITIES.get(name)
@@ -83,7 +100,7 @@ def allowed_tool_names(
     scope: ChatScope,
     phase: ChatPhase,
     *,
-    history_requested: bool,
+    history_capabilities: frozenset[HistoryCapability],
     has_discovered_matches: bool,
 ) -> tuple[str, ...]:
     names: list[str] = []
@@ -96,8 +113,10 @@ def allowed_tool_names(
         )
         if scope not in capability.allowed_scopes or not phase_allowed:
             continue
-        if capability.requiredness is ToolRequiredness.OPTIONAL and not history_requested:
-            continue
+        if capability.requiredness is ToolRequiredness.OPTIONAL:
+            required = OPTIONAL_TOOL_CAPABILITY.get(name)
+            if required is None or required not in history_capabilities:
+                continue
         if name == "get_match" and scope is ChatScope.MATCH:
             continue
         if name == "get_match" and scope is ChatScope.GLOBAL and not has_discovered_matches:

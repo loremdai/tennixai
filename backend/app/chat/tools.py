@@ -59,48 +59,6 @@ ARGS_MODELS = {
     "get_head_to_head": GetHeadToHeadArgs,
 }
 
-HISTORICAL_PHRASES = (
-    "昨天",
-    "昨日",
-    "上一场",
-    "最近一场",
-    "历史",
-    "yesterday",
-    "last match",
-    "previous match",
-    "history",
-)
-
-
-def is_historical_query(text: str) -> bool:
-    normalized = text.casefold()
-    return any(phrase in normalized for phrase in HISTORICAL_PHRASES)
-
-
-UNSUPPORTED_HISTORY_PHRASES = (
-    "全部历史",
-    "完整历史",
-    "所有历史",
-    "历史战绩",
-    "all-time",
-    "all time",
-    "entire history",
-    "career history",
-)
-
-
-def is_unsupported_historical_query(text: str) -> bool:
-    normalized = text.casefold()
-    if any(phrase in normalized for phrase in UNSUPPORTED_HISTORY_PHRASES):
-        return True
-    if any(
-        phrase in normalized
-        for phrase in ("交手", "对战", "h2h", "head-to-head", "head to head")
-    ):
-        return False
-    return "历史" in normalized or "history" in normalized
-
-
 def _inline_schema(schema: dict[str, Any]) -> dict[str, Any]:
     """Resolve local $defs so tool parameters expose inline enums."""
     definitions = schema.get("$defs", {})
