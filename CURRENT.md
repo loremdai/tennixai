@@ -2,11 +2,11 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-13 18:12 CST
+**最后更新：** 2026-09-13 20:42 CST
 
 **当前任务：** T54 — Close Home Historical Player Queries
 
-**任务状态：** `in_progress`
+**任务状态：** `done`
 
 **执行者 / ADE：** Claude Code / Claude Code ADE（用户显式交接，接替 Codex）
 
@@ -14,28 +14,28 @@
 
 **任务起始提交：** `5d8e3f2`
 
-**领取提交：** `259235c`（Codex）；本次 ADE 接手领取提交见本提交（接手起始提交 `559fdf7`，2026-09-13 18:12 CST）
+**领取提交：** `259235c`（Codex）；ADE 接手领取 `8e0b706`（接手起始提交 `559fdf7`，2026-09-13 18:12 CST）
 
 **设计提交：** `831459b`
 
-**当前动作：** 用户已把 T54 显式交接给当前 Claude Code ADE。接手后按 [T54 实施计划](./docs/superpowers/plans/2026-09-13-tennixai-home-historical-player-query-closure.md) 从 Task 1 起严格 TDD 执行 Task 1–7，每个任务独立提交并推送 `origin/main`。
+**产品提交：** `7a66e6a`（Task 1 能力路由）、`eef5724`（Task 2 五赛季语义）、`8818304`（Task 3 typed player_history）、`edb2b89`（Task 4 dataItems 聚合）、`4b23f1b`（Task 5 Home 分组渲染+双基线）、`8d1233f`（Task 6 真实内容门+候选链接修复）
 
-**当前状态：** 真实首页查询已证明 P2.6 的多语言 PlayerResolver 可用，但历史意图、最近一场/近期/赛季语义、多球员结构化结果和内容级真实验收未闭环。P3 保持 `planned`，T54 完成前不进入 P3 设计。
+**当前动作：** T54 已按 [实施计划](./docs/superpowers/plans/2026-09-13-tennixai-home-historical-player-query-closure.md) Task 1–7 全部完成并关闭；P2.6 与 P2 重新关闭，P3 恢复 `planned / ready for design`，未开始任何 P3 设计。
 
-## 已验证问题事实
+**当前状态：** Home 历史球员问答闭环：确定性能力路由（`app/chat/history.py`）、last/recent 五赛季按需语义与 profile-only 赛季战绩、typed `player_history` Chat/SSE、前端 `dataItems` 多结果聚合、Home 分组历史展示与两张专用视觉基线、真实 API-Tennis + 真实 Qwen + 真实浏览器内容级验收全部通过。
 
-- “上一次”和“赛果”未命中历史意图守卫，导致 `get_player_results` 不进入模型工具目录。
-- API-Tennis 当前真实数据中，郑钦文最近 30 天有 8 场已结束比赛；页面却回答无近期结果，证明问题位于 Chat 路由而非供应商数据或名称解析。
-- Sinner 2026 赛季有历史赛果，但最近一场超出 Chat 固定 30 天窗口；“上一场”不能等同于“最近 30 天”。
-- 后端可连续发送多条 SSE `data`，前端 `useChatStream` 当前只保留最后一条，多球员结果会相互覆盖。
-- 现有真实 LLM/浏览器门只检查非空文字、无 error 和 `done`，没有断言回答包含正确结构化历史事实。
+## T54 完成证据（2026-09-13）
 
-## T54 已批准边界
-
-- 采用方案 A：补齐意图、历史查询语义、typed structured result、多球员 SSE 聚合、Home 展示和内容级真实验收。
-- 复用 PlayerResolver、API-Tennis 按需赛果、现有五赛季窗口与缓存。
-- 不新增数据库迁移、历史镜像、RAG、运行时翻译、双打或任何 P3 能力。
-- T53 保留为当时已完成的历史事实；T54 完成后重新关闭 P2.6 并恢复 P3 readiness。
+- 确定性后端：`543 passed / 51 deselected`；infrastructure `22 passed / 572 deselected`。
+- 前端：`pnpm test` 228 passed；`pnpm typecheck` 干净；`pnpm build` 编译成功。
+- 全量 Playwright（fake）：`62 passed / 34 skipped / 0 failed`（exit 0）；新增 `home-history-answer.png` 桌面/移动两张基线逐张审阅通过，既有基线零变化（git 仅新增）。
+- 确定性 home-history e2e：功能 4 + 视觉 2（双视口），连续复跑稳定。
+- 真实 API-Tennis：`api_tennis_live` 2 passed。
+- 真实 LLM（确定性 provider）：`llm_live` 19 passed，含 5 项 T54 内容断言（last/recent/season scope、多球员双 data event、与同次 service probe 逐 ID 相等）。
+- 真实 API+LLM 同运行后端：`player_directory_e2e_live` 4 passed（probe-vs-Chat 不变量：内部身份、scope、finished 倒序、赛季记录；一次 supplier 同步抖动的诚实 skip 复跑全过）。
+- 真实浏览器（api_tennis + 真实 LLM）：`player-directory-live.spec.ts` 20 passed，5 个历史场景内容级断言（section 数/双语标题/scope 徽章/内部链接/空态文案/SSE done/无 error 帧/无控制台错误/无 payload 泄漏）。
+- 边界：`git diff --check` 干净；diff 无供应商字段/凭据；产品代码无 P3 术语；工作区仅 5 项受保护未跟踪项。
+- 顺带修复 T50 遗留契约错位：Chat `player_resolution` SSE 为嵌套域形状，Home 候选链接曾以 undefined id 渲染（React key 警告 + `/players/undefined`）；现按内部 ID 渲染并有单测与 live 复验。
 
 ## 未跟踪文件保护
 
@@ -45,12 +45,12 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
-| 2026-09-13 | 本提交 | 用户显式交接：T54 执行者由 Codex 改为 Claude Code ADE，接手起始提交 `559fdf7`，开始按计划执行 Task 1–7 |
-| 2026-09-13 | `831459b` | 冻结并推送用户确认的 T54 方案 A 设计规格 |
-| 2026-09-13 | `259235c` | 领取 T54，锁定 `main` 与起始提交 `5d8e3f2` |
-| 2026-09-13 | `5d8e3f2` | 记录 T53 最终验证；随后真实首页查询暴露 T54 验收缺口 |
-| 2026-09-13 | `348110c` | T53 修复 Home 断言、配置重复和旧视觉基线 |
+| 2026-09-13 | 本提交 | T54 关闭：P2.6/P2 重新 done，P3 恢复 ready for design（未开始） |
+| 2026-09-13 | `8d1233f` | Task 6 真实内容门 + 修复 T50 候选链接契约错位 |
+| 2026-09-13 | `4b23f1b` | Task 5 Home 历史分组渲染与两张专用视觉基线 |
+| 2026-09-13 | `edb2b89` / `8818304` | Task 4 dataItems 聚合 / Task 3 typed player_history |
+| 2026-09-13 | `eef5724` / `7a66e6a` / `8e0b706` | Task 2 五赛季语义 / Task 1 能力路由 / ADE 接手领取 |
 
 ## 下一步
 
-接手 ADE（Claude Code）从 Task 1 起逐项执行 [T54 实施计划](./docs/superpowers/plans/2026-09-13-tennixai-home-historical-player-query-closure.md)：确定性能力路由 → 五赛季 last/recent 与 profile-only 赛季战绩 → typed `player_history` Chat/SSE → 前端 `dataItems` 聚合 → Home 历史分组展示与两张专用视觉基线 → 真实 API/LLM/浏览器内容级验收 → 全量关闭门与总控更新。T54 全部门通过前不得开始 P3。
+无进行中任务。P3（Market & Decision Support）已恢复 `planned / ready for design`，但必须经用户显式授权后才能领取设计任务；领取前按根目录入口重新核对 Git 与总控状态。

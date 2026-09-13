@@ -3,9 +3,9 @@
 > 本文件回答“这个项目是什么、为什么做、哪些原则不能被破坏”。
 > 全局进度见 [ROADMAP.md](./ROADMAP.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-13 18:04 CST
+**最后更新：** 2026-09-13 20:42 CST
 
-**产品阶段：** P1 — 比赛信息查询助手（`done`，2026-09-08）；P2.0–P2.5（`done`），P2.6 正在补齐 Home 历史球员问答的已验证验收缺口；P3 — Market & Decision Support（`planned`，待 P2.6 修正门重新关闭后再进入设计）
+**产品阶段：** P1 — 比赛信息查询助手（`done`，2026-09-08）；P2.0–P2.6 全部 `done`（P2.6 于 2026-09-13 经 T54 修正门重新关闭）；P3 — Market & Decision Support（`planned`，已恢复 ready for design，开始设计需用户显式授权）
 
 **详细基线：** [产品与架构上下文](./docs/product-context.md) · [产品路线设计](./docs/superpowers/specs/2026-09-08-tennixai-product-roadmap-design.md) · [P1 实施计划](./docs/superpowers/plans/2026-09-08-tennixai-p1-implementation.md) · [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) · [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md) · [P2.6 球员目录设计](./docs/superpowers/specs/2026-09-12-tennixai-player-directory-multilingual-identity-design.md) · [P2.6 实施计划](./docs/superpowers/plans/2026-09-12-tennixai-player-directory-multilingual-identity-implementation.md) · [T54 Home 历史球员问答修正设计](./docs/superpowers/specs/2026-09-13-tennixai-home-historical-player-query-closure-design.md) · [T54 实施计划](./docs/superpowers/plans/2026-09-13-tennixai-home-historical-player-query-closure.md) · [v0 球员页面 Prompt](./docs/v0/2026-09-12-player-pages-prompt.md)
 
@@ -18,7 +18,7 @@
 - P2 设计已冻结：API-Tennis WebSocket 是实时主路径，PostgreSQL 保存长期 canonical 事实，Redis 负责租约、热状态和 pub/sub，FastAPI 通过版本化 SSE 服务浏览器。
 - Home 默认展示 ATP + WTA、全部性别、单打，并允许赛事级别、性别、单双打叠加筛选；赛事按 ATP/WTA → Challenger → ITF → other 排序。
 - Match Page 将提供完整 PBP、尽可能多的可信技术统计、近期控制指数和带 `state_version/as_of` 的上下文问答。
-- P2.6 的目录、球员详情、多语言身份和五赛季赛果页面已交付；随后真实用户查询发现 Home Chat 的“上一次/赛果/赛季战绩”意图、30 天结果窗口、多球员 SSE 聚合和内容级验收存在缺口，T54 正在补齐后重新关闭 P2.6。
+- P2.6 的目录、球员详情、多语言身份和五赛季赛果页面已交付；T54 已关闭 Home Chat 的历史问答闭环：确定性能力路由识别昨天/上一场/近期/赛季/交手意图，`last`/`recent` 使用五赛季按需结果数语义（不再等同 30 天窗口），赛季战绩只读缓存 profile，`player_history` typed 结果经 SSE 逐条保序送达，Home 按球员分组渲染历史与赛季汇总（含专用双视口视觉基线），真实 API-Tennis/真实 LLM/真实浏览器均以内容级断言验收。
 - 球员身份统一为“英文主名 + 中文辅名 + aliases → 内部 `player_id`”；中文名离线批量补齐（净库覆盖 100%，重跑零模型调用），Home/Match Chat 运行时只使用确定性 PlayerResolver，不调用翻译 LLM。
 - P2.6 首要回归已关闭：`Ben Shelton`/`B. Shelton`/`Shelton`/`本·谢尔顿`/`谢尔顿` 等别名矩阵解析到同一内部 ID；`ambiguous` / `not_found` 为正常可恢复结果（自然澄清 + SSE `done`）。
 - P2 仍严格排除 odds、预测、Polymarket、交易、认证和云部署；完成目标是本地完整运行与少量好友私人测试。
