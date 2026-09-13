@@ -2,7 +2,7 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-13 20:42 CST
+**最后更新：** 2026-09-13 21:05 CST
 
 **当前任务：** T54 — Close Home Historical Player Queries
 
@@ -19,6 +19,8 @@
 **设计提交：** `831459b`
 
 **产品提交：** `7a66e6a`（Task 1 能力路由）、`eef5724`（Task 2 五赛季语义）、`8818304`（Task 3 typed player_history）、`edb2b89`（Task 4 dataItems 聚合）、`4b23f1b`（Task 5 Home 分组渲染+双基线）、`8d1233f`（Task 6 真实内容门+候选链接修复）
+
+**关闭提交：** `86ea404`
 
 **当前动作：** T54 已按 [实施计划](./docs/superpowers/plans/2026-09-13-tennixai-home-historical-player-query-closure.md) Task 1–7 全部完成并关闭；P2.6 与 P2 重新关闭，P3 恢复 `planned / ready for design`，未开始任何 P3 设计。
 
@@ -45,7 +47,7 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
-| 2026-09-13 | 本提交 | T54 关闭：P2.6/P2 重新 done，P3 恢复 ready for design（未开始） |
+| 2026-09-13 | `86ea404` | T54 关闭：P2.6/P2 重新 done，P3 恢复 ready for design（未开始） |
 | 2026-09-13 | `8d1233f` | Task 6 真实内容门 + 修复 T50 候选链接契约错位 |
 | 2026-09-13 | `4b23f1b` | Task 5 Home 历史分组渲染与两张专用视觉基线 |
 | 2026-09-13 | `edb2b89` / `8818304` | Task 4 dataItems 聚合 / Task 3 typed player_history |
