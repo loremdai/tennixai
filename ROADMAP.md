@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-13 13:34 CST
+**最后更新：** 2026-09-13 17:53 CST
 
-**总体状态：** `ready`
+**总体状态：** `in_progress`
 
-**当前里程碑：** P3 — Market & Decision Support（`planned`；`ready for design`，启动需用户明确授权）
+**当前里程碑：** P2.6 — Home Historical Player Query Closure（T54，`in_progress`）
 
-**当前阶段：** P2 正式关闭；当前没有进行中的任务；P3 保持 `planned`，已具备设计启动前置条件但仍需用户明确授权
+**当前阶段：** 真实首页查询发现历史球员问答未达到已批准规格；T54 正在先冻结修正设计，再实施内容级验收；P3 保持 `planned` 且暂不具备进入设计的条件
 
 ## 状态说明
 
@@ -29,7 +29,7 @@
 | 里程碑 | 状态 | 目标 | 进入/完成条件 |
 |---|---|---|---|
 | P1 — Match Information Assistant | `done` | 跑通真实结构化比赛查询、卡片、Match Page 与上下文 Chat | T17/T18/T19 均已完成（`69c8238`、`5572960`、`fdb0131`）；P1 已关闭 |
-| P2 — Live Match Intelligence | `done` | 技术统计、PBP、近期控制指数、持久化、多进程实时协调，以及球员目录、多语言身份与历史赛果入口 | P2.0–P2.6 全部任务完成；P2.6 的最终 Playwright、配置和视觉收口由 T53 于 2026-09-13 完成 |
+| P2 — Live Match Intelligence | `in_progress` | 技术统计、PBP、近期控制指数、持久化、多进程实时协调，以及球员目录、多语言身份与历史赛果入口 | T20–T53 已交付；T54 正在修复真实 Home 历史球员问答的验收缺口，完成后重新关闭 P2 |
 | P3 — Market & Decision Support | `planned` | 市场状态、预测、edge、confidence 和 paper trading | P2 数据可信；映射、模型评估和风控设计另行批准 |
 | Optional — Automated Execution | `deferred` | 在满足法律、风控、安全和可审计条件后考虑自动下单 | 不属于 P3 默认范围，必须单独批准 |
 
@@ -57,7 +57,7 @@
 | P2.3 — Realtime pipeline | `done` | Reducer、WebSocket worker、租约、持久化、snapshot + SSE | T26–T28 完成（`98a1a22`、`d354aba`、`f03985b`）；T29/T30 已在 P2.4 完成 |
 | P2.4 — Match intelligence | `done` | 完整 PBP、22 项统计、近期控制指数、版本化上下文 Chat | T29（`ecd916b`）、T30（`8c9e161`）、T31（`128518f`）完成；P2.5 可开始 |
 | P2.5 — Acceptance and hardening | `done` | Replay、恢复门、真实 smoke、双视口视觉、本地 runbook 与真实数据回归修复 | T32 `ac9c6e5`–T41 `5c3d469` 已完成；Home 与 Match 详情页的问答用户展示策略已同步 |
-| P2.6 — Player Discovery and Multilingual Identity | `done` | ATP/WTA 单打 Top 200 目录、球员详情与历史赛果、共享多语言球员主数据和确定性名称解析 | T43–T53 全部完成；T53 于 2026-09-13 关闭最终验收门并正式关闭 P2.6 |
+| P2.6 — Player Discovery and Multilingual Identity | `in_progress` | ATP/WTA 单打 Top 200 目录、球员详情与历史赛果、共享多语言球员主数据和确定性名称解析 | T43–T53 已交付；T54 补齐 Home 历史意图、最近一场/近期/赛季语义、多球员结构化结果和内容级真实验收 |
 
 P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md)，逐任务步骤见 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md)。P2.6 的唯一详细基线是 [球员目录设计规格](./docs/superpowers/specs/2026-09-12-tennixai-player-directory-multilingual-identity-design.md)、[P2.6 实施计划](./docs/superpowers/plans/2026-09-12-tennixai-player-directory-multilingual-identity-implementation.md) 和 [v0 球员页面 Prompt](./docs/v0/2026-09-12-player-pages-prompt.md)。
 
@@ -102,6 +102,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | T52 | P2.6 | Run the P2.6 Real-Service Completion Gate and Close the Milestone | `done` | `6be739c`、`f9cc03f`、`d0120ac`、`7bbb541` | 净库 sync/enrich/status、真实 API-Tennis/LLM/目录和浏览器证据已入库：sync 3876/failed=0，中文覆盖 100%，重跑零模型调用且同步幂等；backend deterministic 463 passed/45 deselected、infra 22、api_tennis_live 2、llm_live 14、player_directory_e2e_live 3；frontend 206/206、typecheck/build、目录 e2e 14/14、真实目录 e2e 18/18。T52 记录的 14 个确定性 Playwright 失败属于最终收口遗留，已由 T53 逐项关闭 |
 
 | T53 | P2 final gate | P2 Final Completion Gate Repair | `done` | `348110c` | 领取提交 `891b4d5`（起始 `7bbb541`）；Home 默认显式四性别 URL 契约断言修复，`config.py` 删除重复 `api_tennis_ws_url`；10 张 prototype expected/actual/diff 逐张人工审查，确认 T38/T41/T52 批准演进后仅更新对应基线；PostgreSQL/Redis healthy，backend 463/45 与 infrastructure 22/486，frontend 206/206+typecheck/build，完整 Playwright 56 passed/32 skipped/0 failed，`git diff --check` 与供应商字段/凭据扫描通过 |
+| T54 | P2.6 corrective gate | Close Home Historical Player Queries | `in_progress` | — | 用户批准方案 A；先冻结历史意图与查询语义、typed structured results、多条 SSE 聚合、Home 历史结果展示和内容级真实验收，再实施并重新关闭 P2.6 |
 
 ## P2 完成门摘要
 

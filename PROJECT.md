@@ -3,9 +3,9 @@
 > 本文件回答“这个项目是什么、为什么做、哪些原则不能被破坏”。
 > 全局进度见 [ROADMAP.md](./ROADMAP.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-13 13:34 CST
+**最后更新：** 2026-09-13 17:53 CST
 
-**产品阶段：** P1 — 比赛信息查询助手（`done`，2026-09-08）；P2.0–P2.6 — Live Match Intelligence 与 Player Discovery and Multilingual Identity（`done`，最终收口于 2026-09-13）；P3 — Market & Decision Support（`planned`，已 `ready for design`，设计启动需用户另行授权）
+**产品阶段：** P1 — 比赛信息查询助手（`done`，2026-09-08）；P2.0–P2.5（`done`），P2.6 正在补齐 Home 历史球员问答的已验证验收缺口；P3 — Market & Decision Support（`planned`，待 P2.6 修正门重新关闭后再进入设计）
 
 **详细基线：** [产品与架构上下文](./docs/product-context.md) · [产品路线设计](./docs/superpowers/specs/2026-09-08-tennixai-product-roadmap-design.md) · [P1 实施计划](./docs/superpowers/plans/2026-09-08-tennixai-p1-implementation.md) · [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) · [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md) · [P2.6 球员目录设计](./docs/superpowers/specs/2026-09-12-tennixai-player-directory-multilingual-identity-design.md) · [P2.6 实施计划](./docs/superpowers/plans/2026-09-12-tennixai-player-directory-multilingual-identity-implementation.md) · [v0 球员页面 Prompt](./docs/v0/2026-09-12-player-pages-prompt.md)
 
@@ -18,7 +18,7 @@
 - P2 设计已冻结：API-Tennis WebSocket 是实时主路径，PostgreSQL 保存长期 canonical 事实，Redis 负责租约、热状态和 pub/sub，FastAPI 通过版本化 SSE 服务浏览器。
 - Home 默认展示 ATP + WTA、全部性别、单打，并允许赛事级别、性别、单双打叠加筛选；赛事按 ATP/WTA → Challenger → ITF → other 排序。
 - Match Page 将提供完整 PBP、尽可能多的可信技术统计、近期控制指数和带 `state_version/as_of` 的上下文问答。
-- P2.6 已正式关闭（2026-09-13，T43–T53）：`/players` ATP/WTA 单打 Top 200（50/页、国家与中国筛选）、`/players/[playerId]` 详情与当前+前四赛季按需赛果（20/页、级别与胜负筛选）；默认排名页与全目录搜索两种模式；排名页以 Top 200 快照为界，200 外/无排名成员仅经搜索可见；最终 Playwright、配置和视觉验收门均通过。
+- P2.6 的目录、球员详情、多语言身份和五赛季赛果页面已交付；随后真实用户查询发现 Home Chat 的“上一次/赛果/赛季战绩”意图、30 天结果窗口、多球员 SSE 聚合和内容级验收存在缺口，T54 正在补齐后重新关闭 P2.6。
 - 球员身份统一为“英文主名 + 中文辅名 + aliases → 内部 `player_id`”；中文名离线批量补齐（净库覆盖 100%，重跑零模型调用），Home/Match Chat 运行时只使用确定性 PlayerResolver，不调用翻译 LLM。
 - P2.6 首要回归已关闭：`Ben Shelton`/`B. Shelton`/`Shelton`/`本·谢尔顿`/`谢尔顿` 等别名矩阵解析到同一内部 ID；`ambiguous` / `not_found` 为正常可恢复结果（自然澄清 + SSE `done`）。
 - P2 仍严格排除 odds、预测、Polymarket、交易、认证和云部署；完成目标是本地完整运行与少量好友私人测试。
