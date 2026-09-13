@@ -329,7 +329,7 @@
 
   Actual task commit: `348110c`. The control-document synchronization is committed separately after this evidence is recorded.
 
-- [ ] **Step 2: Push the final commit**
+- [x] **Step 2: Push the final commits**
 
   Run:
 
@@ -337,7 +337,9 @@
   git push origin main
   ```
 
-- [ ] **Step 3: Verify exact local/remote agreement**
+  Actual control synchronization commit pushed: `f221420`.
+
+- [x] **Step 3: Verify exact local/remote agreement**
 
   Run:
 
@@ -351,6 +353,10 @@
 
   Expected: identical commit IDs, `0 0`, and only the unchanged pre-existing untracked files.
 
-- [ ] **Step 4: Complete T53**
+  Verified after push: local and `origin/main` both resolved to `f221420c2959fab98fbd3e33278b1774b0a304b`; divergence `0 0`; only the five pre-existing untracked groups remain.
+
+- [x] **Step 4: Complete T53**
 
   Update `CURRENT.md` with the final commit and actual outputs only, make the final control-only commit if needed, push it, and repeat Step 3. The final handoff must say exactly: P2 formally closed; no `in_progress`; P3 `planned`/ready for design; user authorization still required; P3 not started.
+
+  Final handoff records T53 as `done`, P2 as formally closed, no current task, and P3 as `planned`/ready for design pending user authorization.
