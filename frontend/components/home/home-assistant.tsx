@@ -218,15 +218,19 @@ export function HomeAssistant({
                 <div className="flex flex-col gap-2" aria-label="候选球员">
                   {chat.data.resolution.candidates.map((candidate) => (
                     <Link
-                      key={candidate.id}
-                      href={`/players/${candidate.id}`}
+                      key={candidate.player.id}
+                      href={`/players/${candidate.player.id}`}
                       className="flex items-center justify-between gap-3 rounded-xl border bg-card/60 px-4 py-3 text-sm transition-colors hover:bg-muted/40"
                     >
-                      <span className="font-medium">{candidate.display_name}</span>
+                      <span className="font-medium">
+                        {candidate.player.localized_name
+                          ? `${candidate.player.name}（${candidate.player.localized_name}）`
+                          : candidate.player.name}
+                      </span>
                       <span className="font-mono text-xs text-muted-foreground">
-                        {candidate.country_code ?? '—'}
+                        {candidate.player.country_code ?? '—'}
                         {' '}
-                        {candidate.ranking ? `#${candidate.ranking}` : '暂无当前排名'}
+                        {candidate.current_rank ? `#${candidate.current_rank}` : '暂无当前排名'}
                       </span>
                     </Link>
                   ))}

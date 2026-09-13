@@ -570,6 +570,49 @@ describe('HomePage chat', () => {
     expect(streamChatMock).toHaveBeenCalledTimes(1)
   })
 
+  it('renders ambiguous candidates with internal player links', async () => {
+    mockStream({
+      data: {
+        kind: 'player_resolution',
+        matches: [],
+        resolution: {
+          status: 'ambiguous',
+          query: 'Wang',
+          player: null,
+          candidates: [
+            {
+              player: { id: 'ply_wang_a', name: 'Xinyu Wang', localized_name: '王欣瑜', country_code: 'chn', ranking: 25 },
+              matched_alias: 'Wang',
+              alias_kind: 'surname',
+              current_rank: 25,
+            },
+            {
+              player: { id: 'ply_wang_b', name: 'Xiyu Wang', localized_name: '王曦雨', country_code: 'chn', ranking: 50 },
+              matched_alias: 'Wang',
+              alias_kind: 'surname',
+              current_rank: 50,
+            },
+          ],
+        },
+      },
+      text: '有多位 Wang，请选择其中一位。',
+    })
+    render(<HomePage />)
+    await screen.findByText('Jannik Sinner')
+
+    await askQuestion('Wang 最近战绩如何？')
+
+    expect(await screen.findByText('多位候选球员，请选择')).toBeVisible()
+    expect(screen.getByRole('link', { name: /Xinyu Wang（王欣瑜）/ })).toHaveAttribute(
+      'href',
+      '/players/ply_wang_a',
+    )
+    expect(screen.getByRole('link', { name: /Xiyu Wang（王曦雨）/ })).toHaveAttribute(
+      'href',
+      '/players/ply_wang_b',
+    )
+  })
+
   it('renders broad historical unsupported without a card', async () => {
     mockStream({
       data: { kind: 'unsupported', matches: [] },

@@ -301,7 +301,9 @@ async def test_qwen_comprehensive_match_answer_waits_for_all_requested_context()
 # ---------------------------------------------------------------- T50 resolver
 
 
-def _build_with_directory() -> tuple[ChatOrchestrator, RecordingBusinessTools, MemoryPlayerDirectoryRepository]:
+def _build_with_directory() -> tuple[
+    ChatOrchestrator, RecordingBusinessTools, MemoryPlayerDirectoryRepository, TennisService, LiveGateFakeProvider
+]:
     from app.players.models import RankingEntry, RankingMovement, Tour
     from app.players.normalization import derive_english_aliases
     from app.players.repository import MemoryPlayerDirectoryRepository
@@ -317,21 +319,18 @@ def _build_with_directory() -> tuple[ChatOrchestrator, RecordingBusinessTools, M
     )
     tools = RecordingBusinessTools(service)
     model = OpenAICompatibleChatModel(api_key=api_key, base_url=base_url, model=model_name)
-    return ChatOrchestrator(tools, model), tools, directory
+    return ChatOrchestrator(tools, model), tools, directory, service, provider
 
 
-async def _seed_resolver_directory(directory) -> None:
+async def _seed_resolver_directory(directory, provider=None) -> None:
     import asyncio
 
     from app.players.models import RankingEntry, RankingMovement, Tour
-    from app.players.normalization import derive_english_aliases
+    from app.players.normalization import derive_english_aliases, normalize_player_name
 
     entries = [
         RankingEntry(player=Player(id="ply_ben", name="Ben Shelton", ranking=5),
                      tour=Tour.ATP, rank=5, points=5200, movement=RankingMovement.SAME,
-                     ranking_date=NOW.date(), fetched_at=NOW),
-        RankingEntry(player=Player(id="ply_zheng", name="Qinwen Zheng", ranking=5),
-                     tour=Tour.WTA, rank=5, points=5315, movement=RankingMovement.UP,
                      ranking_date=NOW.date(), fetched_at=NOW),
         RankingEntry(player=Player(id="ply_wang_a", name="Xinyu Wang", ranking=25),
                      tour=Tour.WTA, rank=25, points=1800, movement=RankingMovement.UP,
@@ -340,9 +339,37 @@ async def _seed_resolver_directory(directory) -> None:
                      tour=Tour.WTA, rank=50, points=1080, movement=RankingMovement.UP,
                      ranking_date=NOW.date(), fetched_at=NOW),
     ]
+    if provider is not None:
+        await provider.build()
+        sinner = next(player for player in provider._players if player.name == "Jannik Sinner")
+        zheng = next(player for player in provider._players if player.name == "Qinwen Zheng")
+        entries.insert(
+            0,
+            RankingEntry(player=sinner, tour=Tour.ATP, rank=1, points=9000,
+                         movement=RankingMovement.SAME, ranking_date=NOW.date(), fetched_at=NOW),
+        )
+        entries.insert(
+            1,
+            RankingEntry(player=zheng, tour=Tour.WTA, rank=5, points=5315,
+                         movement=RankingMovement.UP, ranking_date=NOW.date(), fetched_at=NOW),
+        )
     await directory.save_ranking_snapshot(tuple(entries))
     for directory_player in await directory.list_players_for_alias_sync(limit=50):
         await directory.upsert_aliases(derive_english_aliases(directory_player))
+    zh_aliases = []
+    if provider is not None:
+        sinner = next(player for player in provider._players if player.name == "Jannik Sinner")
+        zheng = next(player for player in provider._players if player.name == "Qinwen Zheng")
+        zh_aliases = [
+            PlayerAlias(player_id=sinner.id, locale="zh-Hans", alias="辛纳",
+                        normalized_alias=normalize_player_name("辛纳"),
+                        kind=PlayerAliasKind.PREFERRED, source=PlayerAliasSource.LLM,
+                        model="live-gate", prompt_version="zh-Hans-player-name-v1"),
+            PlayerAlias(player_id=zheng.id, locale="zh-Hans", alias="郑钦文",
+                        normalized_alias=normalize_player_name("郑钦文"),
+                        kind=PlayerAliasKind.PREFERRED, source=PlayerAliasSource.LLM,
+                        model="live-gate", prompt_version="zh-Hans-player-name-v1"),
+        ]
     await directory.upsert_aliases(
         (
             PlayerAlias(player_id="ply_ben", locale="zh-Hans", alias="本·谢尔顿",
@@ -351,10 +378,6 @@ async def _seed_resolver_directory(directory) -> None:
                         prompt_version="zh-Hans-player-name-v1"),
             PlayerAlias(player_id="ply_ben", locale="zh-Hans", alias="谢尔顿",
                         normalized_alias="谢尔顿", kind=PlayerAliasKind.SURNAME,
-                        source=PlayerAliasSource.LLM, model="live-gate",
-                        prompt_version="zh-Hans-player-name-v1"),
-            PlayerAlias(player_id="ply_zheng", locale="zh-Hans", alias="郑钦文",
-                        normalized_alias="郑钦文", kind=PlayerAliasKind.PREFERRED,
                         source=PlayerAliasSource.LLM, model="live-gate",
                         prompt_version="zh-Hans-player-name-v1"),
             PlayerAlias(player_id="ply_wang_a", locale="zh-Hans", alias="王欣瑜",
@@ -373,6 +396,7 @@ async def _seed_resolver_directory(directory) -> None:
                         normalized_alias="王", kind=PlayerAliasKind.SURNAME,
                         source=PlayerAliasSource.LLM, model="live-gate",
                         prompt_version="zh-Hans-player-name-v1"),
+            *zh_aliases,
         )
     )
 
@@ -383,17 +407,17 @@ async def _seed_resolver_directory(directory) -> None:
         ("Ben Shelton 下一场什么时候？", True),
         ("Shelton 今天有比赛吗？", True),
         ("谢尔顿现在比分多少？", True),
-        # Season records are not a Chat tool yet; an honest "capability
-        # unavailable" answer without any tool call is acceptable here.
-        ("郑钦文这个赛季战绩如何？", False),
+        # T54: season records are a Chat tool; the resolved player must get a
+        # typed player_history payload with the supplier-backed record.
+        ("郑钦文这个赛季战绩如何？", True),
     ],
 )
 @pytest.mark.asyncio
 async def test_qwen_resolves_approved_names_and_ends_done(
     question: str, requires_data: bool
 ) -> None:
-    orchestrator, _tools, directory = _build_with_directory()
-    await _seed_resolver_directory(directory)
+    orchestrator, _tools, directory, _service, provider = _build_with_directory()
+    await _seed_resolver_directory(directory, provider)
 
     events = [
         event
@@ -414,8 +438,8 @@ async def test_qwen_resolves_approved_names_and_ends_done(
 
 @pytest.mark.asyncio
 async def test_qwen_ambiguous_and_unknown_names_end_done_with_clarification() -> None:
-    orchestrator, _tools, directory = _build_with_directory()
-    await _seed_resolver_directory(directory)
+    orchestrator, _tools, directory, _service, provider = _build_with_directory()
+    await _seed_resolver_directory(directory, provider)
 
     for question, expected_status in (
         ("Wang 下一场什么时候？", "ambiguous"),
@@ -440,3 +464,123 @@ async def test_qwen_ambiguous_and_unknown_names_end_done_with_clarification() ->
         ]
         assert resolution_events, f"expected resolution data for {question}"
         assert resolution_events[0].payload["resolution"]["status"] == expected_status
+
+
+# ------------------------------------------------------- T54 content-level gates
+
+
+async def _stream_question(orchestrator: ChatOrchestrator, question: str):
+    return [
+        event
+        async for event in orchestrator.stream(
+            ChatRequest(
+                scope="global",
+                messages=[ChatMessage(role="user", content=question)],
+            )
+        )
+    ]
+
+
+def _history_payloads(events) -> list[dict]:
+    return [
+        event.payload
+        for event in events
+        if event.type is ChatEventType.DATA
+        and event.payload.get("kind") == "player_history"
+    ]
+
+
+def _assert_finished_and_ordered(matches: list[dict]) -> None:
+    assert all(match["status"] == "finished" for match in matches)
+    scheduled = [match["scheduled_at"] for match in matches]
+    assert scheduled == sorted(scheduled, reverse=True)
+
+
+@pytest.mark.parametrize(
+    ("question", "expected_scope"),
+    [
+        ("辛纳上一次比赛是什么时候？", "last"),
+        ("Sinner last match", "last"),
+        ("辛纳最近赛果如何？", "recent"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_qwen_history_questions_return_typed_player_history(
+    question: str, expected_scope: str
+) -> None:
+    orchestrator, tools, directory, service, provider = _build_with_directory()
+    await _seed_resolver_directory(directory, provider)
+
+    events = await _stream_question(orchestrator, question)
+
+    assert tools.executed and tools.executed[0] == "get_player_results"
+    payloads = _history_payloads(events)
+    assert payloads, "expected a typed player_history payload"
+    history = payloads[0]["player_history"]
+    assert history["scope"] == expected_scope
+    assert history["player"]["name"] == "Jannik Sinner"
+    assert history["player"]["id"].startswith("ply_")
+    matches = payloads[0]["matches"]
+    if expected_scope == "last":
+        assert len(matches) == 1
+    _assert_finished_and_ordered(matches)
+    probe = await service.get_latest_player_results(
+        history["player"]["id"], limit=max(1, len(matches))
+    )
+    assert [match["id"] for match in matches] == [match.id for match in probe]
+    assert not any(event.type is ChatEventType.ERROR for event in events)
+    assert events[-1].type is ChatEventType.DONE
+
+
+@pytest.mark.asyncio
+async def test_qwen_season_question_returns_supplier_season_record() -> None:
+    orchestrator, tools, directory, service, provider = _build_with_directory()
+    await _seed_resolver_directory(directory, provider)
+
+    events = await _stream_question(orchestrator, "郑钦文这个赛季战绩如何？")
+
+    assert tools.executed and tools.executed[0] == "get_player_season_record"
+    payloads = _history_payloads(events)
+    assert payloads, "expected a typed player_history payload for the season question"
+    history = payloads[0]["player_history"]
+    assert history["scope"] == "season"
+    assert history["player"]["name"] == "Qinwen Zheng"
+    probe_season, probe_record = await service.get_player_season_record(
+        history["player"]["id"]
+    )
+    assert history["season"] == probe_season
+    assert probe_record is not None
+    assert history["season_record"] is not None
+    assert history["season_record"]["matches_won"] == probe_record.matches_won
+    assert history["season_record"]["matches_lost"] == probe_record.matches_lost
+    assert not any(event.type is ChatEventType.ERROR for event in events)
+    assert events[-1].type is ChatEventType.DONE
+
+
+@pytest.mark.asyncio
+async def test_qwen_multi_player_question_emits_two_typed_history_results() -> None:
+    orchestrator, tools, directory, service, provider = _build_with_directory()
+    await _seed_resolver_directory(directory, provider)
+
+    events = await _stream_question(
+        orchestrator, "辛纳上一次比赛是什么时候？郑钦文赛果如何？"
+    )
+
+    assert tools.executed.count("get_player_results") == 2
+    payloads = _history_payloads(events)
+    assert len(payloads) == 2, "both players must keep their own structured result"
+    identities = {payload["player_history"]["player"]["id"] for payload in payloads}
+    assert len(identities) == 2
+    scopes = {payload["player_history"]["scope"] for payload in payloads}
+    assert scopes == {"last", "recent"}
+    for payload in payloads:
+        matches = payload["matches"]
+        _assert_finished_and_ordered(matches)
+        if payload["player_history"]["scope"] == "last":
+            assert len(matches) == 1
+        probe = await service.get_latest_player_results(
+            payload["player_history"]["player"]["id"], limit=max(1, len(matches))
+        )
+        assert [match["id"] for match in matches] == [match.id for match in probe]
+    assert not any(event.type is ChatEventType.ERROR for event in events)
+    assert events[-1].type is ChatEventType.DONE

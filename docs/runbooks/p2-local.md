@@ -142,10 +142,31 @@ cd frontend && TENNIX_E2E_API_TENNIS=1 TENNIX_E2E_REAL_LLM=1 pnpm exec playwrigh
 
 `TENNIX_E2E_API_TENNIS=1` 会让 Playwright 以 `TENNIX_PROVIDER_MODE=api_tennis` 启动独立后端（不复用已有 fake 服务）；浏览器旅程与 payload 检查只允许内部 ID，禁止供应商 key/外部 ID 出现在网络响应中。
 
+### T54 Home 历史问答内容级真实门
+
+前置条件同 §5（compose PostgreSQL、`alembic upgrade head`、已完成目录 sync 与 enrich-zh），并且根 `.env` 同时具备 `TENNIX_API_TENNIS_API_KEY`、`TENNIX_LLM_API_KEY`、`TENNIX_LLM_BASE_URL`（只以变量名引用，绝不打印值）。
+
+```bash
+docker compose up -d --wait postgres redis
+cd backend && uv run alembic upgrade head
+cd backend && TENNIX_RUN_LLM_LIVE=1 uv run pytest -m llm_live tests/live/test_llm_live.py -q
+cd backend && TENNIX_RUN_PLAYER_DIRECTORY_E2E_LIVE=1 uv run pytest -m player_directory_e2e_live tests/live/test_player_directory_end_to_end_live.py -q
+cd frontend && TENNIX_E2E_API_TENNIS=1 TENNIX_E2E_REAL_LLM=1 pnpm exec playwright test e2e/player-directory-live.spec.ts
+```
+
+内容级断言语义（T54）：
+
+- `llm_live`：真实 Qwen + 确定性 fake 数据。`辛纳上一次比赛…/Sinner last match/辛纳最近赛果…` 必须产出 `kind=player_history`，`scope` 分别为 `last/last/recent`，matches 全部 `finished` 且按时间倒序，并与同一次运行内 `TennisService.get_latest_player_results()` 的 probe 结果逐 ID 相等；`郑钦文这个赛季战绩如何？` 必须走 `get_player_season_record` 且 `season_record` 与 probe 的胜负数相等；多球员问题 `辛纳上一次比赛是什么时候？郑钦文赛果如何？` 必须执行两次 `get_player_results` 并保留两条独立 `player_history`。
+- `player_directory_e2e_live`：真实 API-Tennis + 真实 Qwen。先用 `PlayerResolver` 与 service probe 取得 canonical 事实（recent/last/season），再发送对应 Chat 问题，比较内部 player ID、scope、match ID 列表、finished 状态与倒序；供应商数据变化时断言只比较同次运行的 probe，不冻结对手名或日期。
+- 浏览器旅程：解析 `chat/stream` 响应体中的 `player_history` 帧，与 DOM 的 `player-history-section` 数量、双语标题、scope 徽章、`/matches/<internal-id>` 链接、空态文案逐项对齐；断言 SSE 含 `event: done`、无 `event: error`、响应体不含供应商 key/外部 ID 模式、无控制台错误；历史回答永不出现“没有符合条件的比赛”。
+
+失败解读：凭据缺失按标记 skip（不以 skip 充数）；供应商 entitlement/HTTP 拒绝记录状态码与错误码；目录未同步时 resolver 返回 not_found，先补 sync/enrich 再跑，而不是放宽断言。
+
 ## 6. 故障排查
 
 | 症状 | 处理 |
 |---|---|
+| 全量 `pnpm test:e2e` 大面积超时/视觉失配（players、prototype、p1 视觉等） | Playwright 本地 `reuseExistingServer` 复用了 8000 端口残留后端（可能是 `api_tennis` 真实模式）。先 `lsof -nP -iTCP:8000 -iTCP:3100 -sTCP:LISTEN` 检查并清理残留进程，再重跑，让本次以 fake 模式自启服务。 |
 | Replay 首页为空 | 确认 `TENNIX_PROVIDER_MODE=replay`、fixture 路径相对 backend 根目录有效，并从 Home 重新进入比赛。 |
 | Match 页请求 500，Redis 报 `DB index is out of range` | 使用 0–15 的 Redis 库；默认回放命令使用 DB 10。 |
 | Match 页只有首帧没有增量 | 检查 Redis 连接是否使用 `decode_responses=True`；确认后端启动日志无 worker 异常。 |

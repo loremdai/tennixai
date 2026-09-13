@@ -234,17 +234,15 @@ export type MatchStreamFrame =
       payload: { code: string; message: string; details: Record<string, unknown> }
     }
 export type PlayerResolutionCandidateDto = {
-  id: string
-  display_name: string
-  name: string
-  localized_name: string | null
-  country_code: string | null
-  ranking: number | null
+  player: PlayerSummaryDto
+  matched_alias: string
+  alias_kind: string
+  current_rank: number | null
 }
 export type PlayerResolutionDto = {
   status: 'resolved' | 'ambiguous' | 'not_found'
   query: string
-  player: PlayerResolutionCandidateDto | null
+  player: PlayerSummaryDto | null
   candidates: PlayerResolutionCandidateDto[]
 }
 export type PlayerHistoryContextDto = {
