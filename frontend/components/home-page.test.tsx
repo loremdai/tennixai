@@ -9,6 +9,7 @@ import type {
   MatchCatalogDto,
   MatchDto,
   MatchFiltersDto,
+  PlayerHistoryContextDto,
   StructuredData,
 } from '@/lib/api/types'
 import { DEFAULT_MATCH_FILTERS } from '@/lib/match-filters'
@@ -108,6 +109,64 @@ const emptyFacetCounts: FacetCountsDto = {
   disciplines: { singles: 0, doubles: 0, team: 0, unknown: 0 },
 }
 
+// ------------------------------------------------------------- T54 history DTOs
+
+const finishedHistoryDto: MatchDto = {
+  id: 'mat_hist_1',
+  status: 'finished',
+  players: [
+    { id: 'ply_s', name: 'Jannik Sinner', country_code: 'ita', ranking: 1, localized_name: '辛纳' },
+    { id: 'ply_o', name: 'Opponent One', country_code: 'fra', ranking: 40 },
+  ],
+  tournament: { id: 'trn_h', name: 'US Open', tour: 'atp' },
+  scheduled_at: '2026-08-20T10:00:00Z',
+  round: 'Quarterfinal',
+  surface: 'hard',
+  indoor: false,
+  format: 'BO5',
+  live_state: null,
+  winner_player_id: 'ply_s',
+  freshness: {
+    provider: 'fake',
+    source_updated_at: null,
+    observed_at: '2026-08-20T12:00:00Z',
+    is_stale: false,
+    age_seconds: 0,
+  },
+}
+
+function playerHistoryData(
+  history: Partial<PlayerHistoryContextDto> & Pick<PlayerHistoryContextDto, 'player' | 'scope'>,
+  matches: MatchDto[] = [],
+): StructuredData {
+  return {
+    kind: 'player_history',
+    matches,
+    player_history: {
+      season: null,
+      availability: 'available',
+      season_record: null,
+      empty_reason: null,
+      ...history,
+    },
+  }
+}
+
+const sinnerPlayer = {
+  id: 'ply_s',
+  name: 'Jannik Sinner',
+  country_code: 'ita',
+  ranking: 1,
+  localized_name: '辛纳',
+}
+const zhengPlayer = {
+  id: 'ply_z',
+  name: 'Qinwen Zheng',
+  country_code: 'chn',
+  ranking: 5,
+  localized_name: '郑钦文',
+}
+
 function makeCatalog(
   status: 'live' | 'upcoming',
   matches: MatchDto[],
@@ -136,6 +195,7 @@ function makeCatalog(
 
 function mockStream(options: {
   data?: StructuredData
+  dataItems?: StructuredData[]
   text?: string
   errorCode?: string
   errorDetails?: Record<string, unknown>
@@ -144,7 +204,10 @@ function mockStream(options: {
   streamChatMock.mockImplementation(() => {
     async function* generate(): AsyncGenerator<ChatEvent> {
       yield { type: 'status', payload: { stage: 'resolving' } }
-      if (options.data) yield { type: 'data', payload: options.data }
+      const payloads = options.dataItems ?? (options.data ? [options.data] : [])
+      for (const payload of payloads) {
+        yield { type: 'data', payload }
+      }
       if (options.text) yield { type: 'text_delta', payload: { delta: options.text } }
       if (options.warningMessage) {
         yield {
@@ -625,5 +688,163 @@ describe('HomePage chat', () => {
 
     const featured = await screen.findByRole('link', { name: /打开比赛/ })
     expect(featured).toHaveAttribute('href', '/matches/mat_live1')
+  })
+})
+
+describe('HomePage player history', () => {
+  it('renders one history result with the bilingual player·scope title', async () => {
+    mockStream({
+      dataItems: [
+        playerHistoryData({ player: sinnerPlayer, scope: 'last' }, [finishedHistoryDto]),
+      ],
+      text: '辛纳上一场比赛在 8 月 20 日。',
+    })
+    render(<HomePage />)
+    await screen.findByText('Jannik Sinner')
+
+    await askQuestion('辛纳上一次比赛是什么时候？')
+
+    expect(
+      await screen.findByRole('heading', { name: 'Jannik Sinner（辛纳） · 上一场比赛' }),
+    ).toBeVisible()
+    const sections = screen.getAllByTestId('player-history-section')
+    expect(sections).toHaveLength(1)
+    expect(
+      screen.getByRole('link', { name: /打开比赛：Sinner 对阵 One/ }),
+    ).toHaveAttribute('href', '/matches/mat_hist_1')
+    expect(screen.queryByText('没有符合条件的比赛')).toBeNull()
+  })
+
+  it('renders yesterday and season scope labels', async () => {
+    mockStream({
+      dataItems: [
+        playerHistoryData({ player: sinnerPlayer, scope: 'yesterday' }),
+      ],
+      text: '昨天没有比赛。',
+    })
+    render(<HomePage />)
+    await screen.findByText('Jannik Sinner')
+    await askQuestion('Sinner 昨天赢了吗？')
+
+    expect(
+      await screen.findByRole('heading', { name: 'Jannik Sinner（辛纳） · 昨日赛果' }),
+    ).toBeVisible()
+    expect(screen.getByText('该范围暂无赛果信息')).toBeVisible()
+    expect(screen.queryByText('没有符合条件的比赛')).toBeNull()
+  })
+
+  it('renders multiple history sections simultaneously with the shared title', async () => {
+    mockStream({
+      dataItems: [
+        playerHistoryData({ player: sinnerPlayer, scope: 'recent' }, [finishedHistoryDto]),
+        playerHistoryData({
+          player: zhengPlayer,
+          scope: 'recent',
+          empty_reason: 'no_results_in_scope',
+        }),
+      ],
+      text: '已整理两位球员的赛果。',
+    })
+    render(<HomePage />)
+    await screen.findByText('Jannik Sinner')
+
+    await askQuestion('辛纳最近赛果如何？郑钦文赛果如何？')
+
+    expect(await screen.findByRole('heading', { name: '球员赛果与战绩' })).toBeVisible()
+    const sections = screen.getAllByTestId('player-history-section')
+    expect(sections).toHaveLength(2)
+    // The empty player must not hide the other player's matches.
+    expect(sections[0]).toHaveAttribute('aria-label', 'Jannik Sinner（辛纳） 近期赛果')
+    expect(sections[1]).toHaveAttribute('aria-label', 'Qinwen Zheng（郑钦文） 近期赛果')
+    expect(
+      within(sections[0]).getByRole('link', { name: /打开比赛：Sinner 对阵 One/ }),
+    ).toHaveAttribute('href', '/matches/mat_hist_1')
+    expect(within(sections[1]).getByText('该范围暂无赛果信息')).toBeVisible()
+    expect(screen.queryByText('没有符合条件的比赛')).toBeNull()
+  })
+
+  it('renders season wins, losses, win rate, titles and only available surfaces', async () => {
+    mockStream({
+      dataItems: [
+        playerHistoryData({
+          player: zhengPlayer,
+          scope: 'season',
+          season: 2026,
+          season_record: {
+            season: 2026,
+            matches_won: 30,
+            matches_lost: 5,
+            titles: 4,
+            hard: { won: 20, lost: 3 },
+            clay: null,
+            grass: { won: 10, lost: 2 },
+          },
+        }),
+      ],
+      text: '郑钦文本赛季 30 胜 5 负。',
+    })
+    render(<HomePage />)
+    await screen.findByText('Jannik Sinner')
+
+    await askQuestion('郑钦文这个赛季战绩如何？')
+
+    expect(
+      await screen.findByRole('heading', { name: 'Qinwen Zheng（郑钦文） · 2026 赛季战绩' }),
+    ).toBeVisible()
+    const summary = screen.getByTestId('season-record-summary')
+    expect(within(summary).getByText('30')).toBeVisible()
+    expect(within(summary).getByText('5')).toBeVisible()
+    expect(within(summary).getByText('86%')).toBeVisible()
+    expect(within(summary).getByText('4')).toBeVisible()
+    const surfaces = screen.getAllByTestId('season-surface-record')
+    expect(surfaces).toHaveLength(2)
+    expect(surfaces[0].textContent).toContain('硬地')
+    expect(surfaces[0].textContent).toContain('20-3')
+    expect(surfaces[1].textContent).toContain('草地')
+    expect(summary.textContent).not.toContain('红土')
+  })
+
+  it('renders the unavailable season copy for a missing record', async () => {
+    mockStream({
+      dataItems: [
+        playerHistoryData({
+          player: zhengPlayer,
+          scope: 'season',
+          season: 2024,
+          availability: 'unavailable',
+          empty_reason: 'season_record_unavailable',
+        }),
+      ],
+      text: '该赛季战绩暂不可用。',
+    })
+    render(<HomePage />)
+    await screen.findByText('Jannik Sinner')
+
+    await askQuestion('郑钦文 2024 赛季战绩如何？')
+
+    expect(
+      await screen.findByRole('heading', { name: 'Qinwen Zheng（郑钦文） · 2024 赛季战绩' }),
+    ).toBeVisible()
+    expect(screen.getByText('该赛季战绩暂不可用')).toBeVisible()
+    expect(screen.queryByText('没有符合条件的比赛')).toBeNull()
+  })
+
+  it('fills the follow-up prompt from a history match card', async () => {
+    mockStream({
+      dataItems: [
+        playerHistoryData({ player: sinnerPlayer, scope: 'last' }, [finishedHistoryDto]),
+      ],
+      text: '辛纳上一场比赛在 8 月 20 日。',
+    })
+    render(<HomePage />)
+    await screen.findByText('Jannik Sinner')
+
+    await askQuestion('辛纳上一次比赛是什么时候？')
+
+    const followUp = await screen.findByRole('button', { name: '继续追问' })
+    await userEvent.click(followUp)
+
+    const input = screen.getByLabelText('继续向 Tennix 提问') as HTMLInputElement
+    expect(input.value).toContain('Sinner 对阵 One')
   })
 })
