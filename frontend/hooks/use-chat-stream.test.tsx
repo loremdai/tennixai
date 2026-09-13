@@ -404,12 +404,137 @@ describe('useChatStream', () => {
       question: '',
       text: '',
       data: null,
+      dataItems: [],
       answerContext: null,
       stage: null,
       error: null,
       warnings: [],
       progress: null,
     })
+  })
+
+  // ------------------------------------------------------------ T54 dataItems
+
+  function historyDataEvent(playerName: string, playerId: string): ChatEvent {
+    return {
+      type: 'data',
+      payload: {
+        kind: 'player_history',
+        matches: [],
+        player_history: {
+          player: {
+            id: playerId,
+            name: playerName,
+            country_code: null,
+            ranking: null,
+            localized_name: null,
+          },
+          scope: 'recent',
+          season: null,
+          availability: 'available',
+          season_record: null,
+          empty_reason: 'no_results_in_scope',
+        },
+      },
+    }
+  }
+
+  it('accumulates every distinct data event in dataItems order', async () => {
+    const first = historyDataEvent('Jannik Sinner', 'ply_s')
+    const second = historyDataEvent('Qinwen Zheng', 'ply_z')
+    streamChatMock.mockImplementation(
+      scriptedStream([first, second, { type: 'done', payload: { ok: true } }]),
+    )
+
+    const { result } = renderHook(() => useChatStream('global'))
+
+    await act(async () => {
+      await result.current.send('辛纳上一次比赛是什么时候？郑钦文赛果如何？')
+    })
+
+    expect(result.current.state.dataItems).toEqual([first.payload, second.payload])
+    // latest-payload compatibility contract
+    expect(result.current.state.data).toEqual(second.payload)
+    expect(result.current.state.answerContext).toBeNull()
+  })
+
+  it('keeps the first answer context while accumulating data items', async () => {
+    const second = historyDataEvent('Qinwen Zheng', 'ply_z')
+    streamChatMock.mockImplementation(
+      scriptedStream([intelligenceDataEvent, second, { type: 'done', payload: { ok: true } }]),
+    )
+
+    const { result } = renderHook(() => useChatStream('match', 'mat_42'))
+
+    await act(async () => {
+      await result.current.send('问题')
+    })
+
+    expect(result.current.state.dataItems).toHaveLength(2)
+    expect(result.current.state.answerContext).toEqual(
+      intelligenceDataEvent.payload.answer_context,
+    )
+  })
+
+  it('clears dataItems on a new send', async () => {
+    const first = historyDataEvent('Jannik Sinner', 'ply_s')
+    streamChatMock.mockImplementation(
+      scriptedStream([first, { type: 'done', payload: { ok: true } }]),
+    )
+
+    const { result } = renderHook(() => useChatStream('global'))
+
+    await act(async () => {
+      await result.current.send('问题一')
+    })
+    expect(result.current.state.dataItems).toEqual([first.payload])
+
+    streamChatMock.mockImplementation(scriptedStream([{ type: 'done', payload: { ok: true } }]))
+    await act(async () => {
+      await result.current.send('问题二')
+    })
+
+    expect(result.current.state.dataItems).toEqual([])
+    expect(result.current.state.data).toBeNull()
+  })
+
+  it('preserves received data items when cancelled mid-stream', async () => {
+    const first = historyDataEvent('Jannik Sinner', 'ply_s')
+    let releaseStream!: () => void
+    const streamReleased = new Promise<void>((resolve) => {
+      releaseStream = resolve
+    })
+    let markFirstSeen!: () => void
+    const firstSeen = new Promise<void>((resolve) => {
+      markFirstSeen = resolve
+    })
+    streamChatMock.mockImplementation(() => {
+      async function* generate(): AsyncGenerator<ChatEvent> {
+        yield first
+        markFirstSeen()
+        await streamReleased
+        yield { type: 'done', payload: { ok: true } }
+      }
+      return generate()
+    })
+
+    const { result } = renderHook(() => useChatStream('global'))
+    const pending = result.current.send('问题')
+
+    await firstSeen
+    await waitFor(() => expect(result.current.state.dataItems).toHaveLength(1))
+
+    act(() => result.current.cancel())
+    expect(result.current.state.dataItems).toEqual([first.payload])
+    expect(result.current.state.error).toBeNull()
+
+    act(() => releaseStream())
+    await act(async () => {
+      await pending
+    })
+
+    // Facts received before cancellation are preserved, matching partial-answer behavior.
+    expect(result.current.state.dataItems).toEqual([first.payload])
   })
 
   it('bounds the message history to 12 entries', async () => {

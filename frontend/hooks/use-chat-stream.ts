@@ -17,6 +17,7 @@ export type ChatViewState = {
   question: string
   text: string
   data: StructuredData | null
+  dataItems: StructuredData[]
   answerContext: AnswerContextDto | null
   error: { code: string; message: string; details: Record<string, unknown> } | null
   warnings: ChatWarning[]
@@ -33,6 +34,7 @@ const IDLE_STATE: ChatViewState = {
   question: '',
   text: '',
   data: null,
+  dataItems: [],
   answerContext: null,
   error: null,
   warnings: [],
@@ -123,6 +125,7 @@ export function useChatStream(scope: 'global' | 'match', matchId?: string): {
         question: prompt,
         text: '',
         data: null,
+        dataItems: [],
         answerContext: null,
         error: null,
         warnings: [],
@@ -154,6 +157,7 @@ export function useChatStream(scope: 'global' | 'match', matchId?: string): {
                 stage: 'fetching_data',
                 progress: null,
                 data: event.payload,
+                dataItems: [...current.dataItems, event.payload],
                 answerContext: current.answerContext ?? event.payload.answer_context ?? null,
               }))
               break

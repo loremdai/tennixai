@@ -247,11 +247,26 @@ export type PlayerResolutionDto = {
   player: PlayerResolutionCandidateDto | null
   candidates: PlayerResolutionCandidateDto[]
 }
+export type PlayerHistoryContextDto = {
+  player: PlayerDto
+  scope: 'yesterday' | 'last' | 'recent' | 'season'
+  season: number | null
+  availability: CapabilityStatus
+  season_record: PlayerSeasonRecordDto | null
+  empty_reason: 'no_results_in_scope' | 'season_record_unavailable' | null
+}
 export type StructuredData = {
-  kind: 'matches' | 'match' | 'intelligence' | 'player_resolution' | 'unsupported'
+  kind:
+    | 'matches'
+    | 'match'
+    | 'intelligence'
+    | 'player_resolution'
+    | 'player_history'
+    | 'unsupported'
   matches: MatchDto[]
   packet?: IntelligencePacketDto | null
   resolution?: PlayerResolutionDto | null
+  player_history?: PlayerHistoryContextDto | null
   metadata?: Record<string, unknown>
   answer_context?: AnswerContextDto | null
 }
