@@ -66,7 +66,10 @@ test.describe('P2 Home filters', () => {
       expect(url).toContain('circuit=atp')
       expect(url).toContain('circuit=wta')
       expect(url).toContain('discipline=singles')
-      expect(url).not.toContain('gender=')
+      expect(url).toContain('gender=men')
+      expect(url).toContain('gender=women')
+      expect(url).toContain('gender=mixed')
+      expect(url).toContain('gender=unknown')
     }
   })
 
@@ -165,7 +168,15 @@ test.describe('P2 Home filters', () => {
     await expect
       .poll(() => {
         const last = catalogRequests[catalogRequests.length - 1] ?? ''
-        return last.includes('circuit=atp') && last.includes('circuit=wta') && last.includes('discipline=singles') && !last.includes('gender=')
+        return (
+          last.includes('circuit=atp') &&
+          last.includes('circuit=wta') &&
+          last.includes('discipline=singles') &&
+          last.includes('gender=men') &&
+          last.includes('gender=women') &&
+          last.includes('gender=mixed') &&
+          last.includes('gender=unknown')
+        )
       })
       .toBe(true)
   })
