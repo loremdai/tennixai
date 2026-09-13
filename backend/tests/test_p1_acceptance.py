@@ -196,8 +196,8 @@ async def test_yesterday_question_uses_bounded_history_tool(
 ) -> None:
     result = await acceptance_harness.ask("昨天 Sinner 赢了吗？", scope="global", match_id=None)
 
-    assert result.data_events[0]["kind"] == "matches"
-    assert result.data_events[0]["metadata"]["scope"] == "yesterday"
+    assert result.data_events[0]["kind"] == "player_history"
+    assert result.data_events[0]["player_history"]["scope"] == "yesterday"
     assert result.executed_tool_names == ["get_player_results"]
     assert acceptance_harness.provider_calls.calls > 0
     assert acceptance_harness.model.choose_calls

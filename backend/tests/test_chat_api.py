@@ -103,9 +103,10 @@ async def test_chat_stream_routes_supported_historical_queries(client: AsyncClie
     ]
     data = next(payload for event_type, payload in events if event_type == "data")
     text = next(payload for event_type, payload in events if event_type == "text_delta")
-    assert data["kind"] == "matches"
-    assert data["metadata"]["scope"] == "yesterday"
-    assert text["delta"] == "当前没有查到符合条件的比赛。"
+    assert data["kind"] == "player_history"
+    assert data["player_history"]["scope"] == "yesterday"
+    assert data["player_history"]["empty_reason"] == "no_results_in_scope"
+    assert text["delta"] == "该范围暂无赛果信息。"
 
 
 @pytest.mark.asyncio

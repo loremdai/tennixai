@@ -139,11 +139,43 @@ class FakeChatModel:
                         )
                     ]
                 )
-        if any(token in last_user for token in ("昨天", "昨日", "上一场", "最近一场")) or any(
-            token in lowered for token in ("yesterday", "previous match", "last match", "recent")
+        if any(token in last_user for token in ("赛季", "今年")) or any(
+            token in lowered for token in ("season record", "this season")
         ):
             if player_tokens:
-                scope = "yesterday" if ("昨天" in last_user or "昨日" in last_user or "yesterday" in lowered) else "recent"
+                return ModelTurn(
+                    tool_calls=[
+                        ToolCall(
+                            id="call_fake_season",
+                            name="get_player_season_record",
+                            arguments={"player_name": player_tokens[0]},
+                        )
+                    ]
+                )
+        if any(
+            token in last_user
+            for token in ("昨天", "昨日", "上一场", "上一次", "最近一场", "赛果", "近期", "最近")
+        ) or any(
+            token in lowered
+            for token in ("yesterday", "previous match", "last match", "recent")
+        ):
+            if player_tokens:
+                if (
+                    "昨天" in last_user
+                    or "昨日" in last_user
+                    or "yesterday" in lowered
+                ):
+                    scope = "yesterday"
+                elif (
+                    "上一场" in last_user
+                    or "上一次" in last_user
+                    or "最近一场" in last_user
+                    or "last match" in lowered
+                    or "previous match" in lowered
+                ):
+                    scope = "last"
+                else:
+                    scope = "recent"
                 return ModelTurn(
                     tool_calls=[
                         ToolCall(
@@ -210,6 +242,20 @@ class FakeChatModel:
                     return "已获取本场比赛的主题数据。"
                 if kind == "unsupported":
                     return "P2 暂不支持大范围历史查询。"
+                if kind == "player_history":
+                    history = result.get("player_history") or {}
+                    if history.get("season_record"):
+                        return f"已获取 {history.get('season')} 赛季战绩数据。"
+                    if matches:
+                        return (
+                            f"已为你找到 {len(matches)} 场历史比赛的结构化数据。"
+                        )
+                    if (
+                        history.get("empty_reason")
+                        == "season_record_unavailable"
+                    ):
+                        return "该赛季战绩暂不可用。"
+                    return "该范围暂无赛果信息。"
                 if matches:
                     return f"已为你找到 {len(matches)} 场比赛的结构化数据。"
                 return "当前没有查到符合条件的比赛。"

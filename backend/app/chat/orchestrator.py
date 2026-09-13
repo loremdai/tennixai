@@ -76,6 +76,14 @@ GLOBAL_SYSTEM_PROMPT = (
     "工具未提供的字段必须如实说明暂不可用。"
     "本场综合分析只能使用比赛快照和工具返回的事实；球员特点或历史资料未提供时说明暂未提供，不要让可选资料缺失中止已有分析。"
     "昨天、最近有限场结果和两位球员的有限交手记录使用对应 P2 工具；大范围历史查询不支持。"
+    "历史赛果语义：scope=yesterday 是澳门日历的昨天；scope=last 对应“上一场/上一次比赛”，"
+    "只返回最近一场已结束比赛，即使它早于 30 天；"
+    "scope=recent 返回最近若干场（默认 5，可 1-10），用户只说“赛果”按 recent 处理。"
+    "赛季战绩使用 get_player_season_record，season 缺省为本赛季，只支持本赛季至前四赛季。"
+    "一次提问涉及多名球员时，必须为每位球员单独调用对应工具，不得合并或遗漏；"
+    "kind=player_history 的结果按 empty_reason 如实说明：no_results_in_scope 表示该范围暂无赛果信息，"
+    "season_record_unavailable 表示该赛季战绩暂不可用；结构化事实中存在比赛或赛季战绩时，"
+    "不得声称没有数据。"
     "Match scope 的主题问题使用 get_match_intelligence，topic 只能是 overview、score、statistics、points 或 momentum。"
     "统计结果中的 player_values 已明确标注球员姓名，必须按姓名读取，不能交换两列。"
     "如果字段为 null、空数组或质量状态为 unavailable，必须明确标注暂不可用；不得从赛事名称、轮次、网球常识或当前比分推断未返回的赛制、场地属性、统计、逐分数据或球员事实。"
@@ -330,6 +338,24 @@ def _model_tool_result(result: StructuredToolResult) -> dict[str, Any]:
                 _model_player_display(candidate.player, rank=candidate.current_rank)
                 for candidate in resolution.candidates
             ],
+        }
+    if result.player_history is not None:
+        history = result.player_history
+        payload["player_history"] = {
+            "player": _model_player_display(history.player),
+            "scope": history.scope,
+            "season": history.season,
+            "availability": history.availability.value,
+            "season_record": (
+                history.season_record.model_dump(mode="json")
+                if history.season_record is not None
+                else None
+            ),
+            "empty_reason": (
+                history.empty_reason.value
+                if history.empty_reason is not None
+                else None
+            ),
         }
     if result.metadata:
         payload["metadata"] = result.metadata

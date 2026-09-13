@@ -20,9 +20,12 @@ from app.chat.models import (
     GetMatchArgs,
     GetMatchIntelligenceArgs,
     GetPlayerResultsArgs,
+    GetPlayerSeasonRecordArgs,
+    PlayerHistoryContext,
+    PlayerHistoryEmptyReason,
     StructuredToolResult,
 )
-from app.domain import MatchSnapshot, Player
+from app.domain import CapabilityStatus, MatchSnapshot, Player
 from app.errors import AppError
 from app.intelligence import build_intelligence_packet
 from app.players.models import PlayerResolutionStatus
@@ -33,7 +36,17 @@ DESCRIPTIONS = {
     "get_live_matches": "List matches that are live now, optionally filtered by player name.",
     "get_match": "Get trusted details for one Tennix internal match ID.",
     "get_match_intelligence": "Get compact, topic-scoped canonical facts for the current match.",
-    "get_player_results": "Get a player's bounded yesterday or recent match results.",
+    "get_player_results": (
+        "Get a player's finished match results. scope=yesterday: matches on the previous local "
+        "calendar day. scope=last: exactly the most recent finished match, even when older than "
+        "30 days (limit is normalized to 1). scope=recent: the latest finished matches, default 5, "
+        "accepts 1-10; a bare '赛果' request means recent. Use one call per player."
+    ),
+    "get_player_season_record": (
+        "Get a player's season record (wins, losses, titles, available surface records). "
+        "season defaults to the current season; only the current season through the four prior "
+        "seasons are supported. Use one call per player."
+    ),
     "get_head_to_head": "Get bounded head-to-head meetings for two players.",
 }
 
@@ -43,6 +56,7 @@ TOOL_NAMES = (
     "get_match",
     "get_match_intelligence",
     "get_player_results",
+    "get_player_season_record",
     "get_head_to_head",
 )
 
@@ -56,6 +70,7 @@ ARGS_MODELS = {
     "get_match": GetMatchArgs,
     "get_match_intelligence": GetMatchIntelligenceArgs,
     "get_player_results": GetPlayerResultsArgs,
+    "get_player_season_record": GetPlayerSeasonRecordArgs,
     "get_head_to_head": GetHeadToHeadArgs,
 }
 
@@ -224,12 +239,48 @@ class BusinessTools:
                     resolved.id, args.scope.value, args.limit
                 )
                 return with_context(StructuredToolResult(
-                    kind="matches",
+                    kind="player_history",
                     matches=list(results.matches),
-                    metadata={
-                        "scope": results.scope.value,
-                        "availability": results.availability.value,
-                    },
+                    player_history=PlayerHistoryContext(
+                        player=resolved,
+                        scope=results.scope.value,
+                        season=None,
+                        availability=results.availability,
+                        season_record=None,
+                        empty_reason=(
+                            PlayerHistoryEmptyReason.NO_RESULTS_IN_SCOPE
+                            if not results.matches
+                            and results.availability is not CapabilityStatus.UNAVAILABLE
+                            else None
+                        ),
+                    ),
+                ))
+            if name == "get_player_season_record":
+                args = GetPlayerSeasonRecordArgs.model_validate(arguments)
+                resolved = await self._resolve_player_query(args.player_name, context)
+                if isinstance(resolved, StructuredToolResult):
+                    return with_context(resolved)
+                season, record = await self._service.get_player_season_record(
+                    resolved.id, season=args.season
+                )
+                return with_context(StructuredToolResult(
+                    kind="player_history",
+                    player_history=PlayerHistoryContext(
+                        player=resolved,
+                        scope="season",
+                        season=season,
+                        availability=(
+                            CapabilityStatus.AVAILABLE
+                            if record is not None
+                            else CapabilityStatus.UNAVAILABLE
+                        ),
+                        season_record=record,
+                        empty_reason=(
+                            None
+                            if record is not None
+                            else PlayerHistoryEmptyReason.SEASON_RECORD_UNAVAILABLE
+                        ),
+                    ),
                 ))
             if name == "get_head_to_head":
                 args = GetHeadToHeadArgs.model_validate(arguments)

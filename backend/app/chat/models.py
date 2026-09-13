@@ -5,9 +5,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.domain import Match, MatchSnapshot
+from app.domain import CapabilityStatus, Match, MatchSnapshot, Player
 from app.intelligence import IntelligencePacket, IntelligenceTopic
-from app.players.models import PlayerResolution
+from app.players.models import PlayerResolution, PlayerSeasonRecord
 from app.service import MatchTimeScope, PlayerResultsScope
 
 
@@ -51,11 +51,35 @@ class AnswerContext(BaseModel):
         return value
 
 
+class PlayerHistoryEmptyReason(StrEnum):
+    NO_RESULTS_IN_SCOPE = "no_results_in_scope"
+    SEASON_RECORD_UNAVAILABLE = "season_record_unavailable"
+
+
+class PlayerHistoryContext(BaseModel):
+    """Typed identity + scope for player-history facts; never untyped metadata."""
+
+    player: Player
+    scope: Literal["yesterday", "last", "recent", "season"]
+    season: int | None = None
+    availability: CapabilityStatus
+    season_record: PlayerSeasonRecord | None = None
+    empty_reason: PlayerHistoryEmptyReason | None = None
+
+
 class StructuredToolResult(BaseModel):
-    kind: Literal["matches", "match", "intelligence", "player_resolution", "unsupported"]
+    kind: Literal[
+        "matches",
+        "match",
+        "intelligence",
+        "player_resolution",
+        "player_history",
+        "unsupported",
+    ]
     matches: list[Match] = Field(default_factory=list)
     packet: IntelligencePacket | None = None
     resolution: PlayerResolution | None = None
+    player_history: PlayerHistoryContext | None = None
     metadata: dict[str, object] = Field(default_factory=dict)
     answer_context: AnswerContext | None = None
 
@@ -81,6 +105,11 @@ class GetPlayerResultsArgs(BaseModel):
     player_name: str = Field(min_length=1)
     scope: PlayerResultsScope
     limit: int = Field(default=5, ge=1, le=10)
+
+
+class GetPlayerSeasonRecordArgs(BaseModel):
+    player_name: str = Field(min_length=1)
+    season: int | None = None
 
 
 class GetHeadToHeadArgs(BaseModel):
@@ -150,10 +179,13 @@ __all__ = [
     "GetMatchArgs",
     "GetMatchIntelligenceArgs",
     "GetPlayerResultsArgs",
+    "GetPlayerSeasonRecordArgs",
     "GetHeadToHeadArgs",
     "IntelligenceTopic",
     "MatchTimeScope",
     "ModelTurn",
+    "PlayerHistoryContext",
+    "PlayerHistoryEmptyReason",
     "StructuredToolResult",
     "ToolCall",
     "ToolOutcome",

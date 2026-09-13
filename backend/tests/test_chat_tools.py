@@ -8,12 +8,13 @@ from app.chat.models import (
     ChatMessage,
     ChatRequest,
     ChatScope,
+    PlayerHistoryEmptyReason,
     StructuredToolResult,
 )
 from app.chat.history import HistoryCapability, classify_history_capabilities
 from app.chat.orchestrator import _catalog_for_request
 from app.chat.tools import BusinessTools
-from app.domain import Match, Player
+from app.domain import CapabilityStatus, Match, MatchStatus, Player
 from app.errors import AppError
 from app.identity import MemoryIdentityRepository
 from app.intelligence import IntelligenceTopic
@@ -57,6 +58,7 @@ def test_tool_catalog_exposes_the_p2_surface(tools: BusinessTools) -> None:
         "get_match",
         "get_match_intelligence",
         "get_player_results",
+        "get_player_season_record",
         "get_head_to_head",
     ]
     scope = catalog[0]["function"]["parameters"]["properties"]["time_scope"]
@@ -173,10 +175,11 @@ async def test_player_results_yesterday_keeps_empty_availability(
         GLOBAL,
     )
 
-    assert result.kind == "matches"
+    assert result.kind == "player_history"
     assert result.matches == []
-    assert result.metadata["scope"] == "yesterday"
-    assert result.metadata["availability"] == "available"
+    assert result.player_history is not None
+    assert result.player_history.scope == "yesterday"
+    assert result.player_history.availability is CapabilityStatus.AVAILABLE
 
 
 @pytest.mark.asyncio
@@ -189,9 +192,10 @@ async def test_player_results_recent_uses_five_season_window(
         GLOBAL,
     )
 
-    assert result.kind == "matches"
-    assert result.metadata["scope"] == "recent"
-    assert result.metadata["availability"] == "available"
+    assert result.kind == "player_history"
+    assert result.player_history is not None
+    assert result.player_history.scope == "recent"
+    assert result.player_history.availability is CapabilityStatus.AVAILABLE
     sinner = next(
         player for player in fake_provider._players if player.name == "Jannik Sinner"
     )
@@ -534,6 +538,251 @@ async def test_head_to_head_stops_on_first_unresolved_side(resolver_service) -> 
     result = await tools.execute(
         "get_head_to_head",
         {"first_player_name": "Sinner", "second_player_name": "Federer", "limit": 2},
+        GLOBAL,
+    )
+    assert result.kind == "player_resolution"
+    assert result.resolution is not None
+    assert result.resolution.status.value == "not_found"
+
+
+# ------------------------------------------------- T54 typed player_history
+
+
+@pytest.mark.asyncio
+async def test_history_tools_have_exact_schemas(tools: BusinessTools) -> None:
+    catalog = {item["function"]["name"]: item for item in tools.catalog()}
+
+    results_params = catalog["get_player_results"]["function"]["parameters"]
+    assert results_params["required"] == ["player_name", "scope"]
+    assert results_params["properties"]["player_name"] == {
+        "minLength": 1,
+        "title": "Player Name",
+        "type": "string",
+    }
+    assert results_params["properties"]["scope"] == {
+        "enum": ["yesterday", "last", "recent"],
+        "title": "PlayerResultsScope",
+        "type": "string",
+    }
+    assert results_params["properties"]["limit"] == {
+        "default": 5,
+        "maximum": 10,
+        "minimum": 1,
+        "title": "Limit",
+        "type": "integer",
+    }
+
+    season_params = catalog["get_player_season_record"]["function"]["parameters"]
+    assert season_params["required"] == ["player_name"]
+    assert season_params["properties"]["player_name"] == {
+        "minLength": 1,
+        "title": "Player Name",
+        "type": "string",
+    }
+    assert season_params["properties"]["season"] == {
+        "anyOf": [{"type": "integer"}, {"type": "null"}],
+        "default": None,
+        "title": "Season",
+    }
+
+
+def test_history_tool_descriptions_state_semantics(tools: BusinessTools) -> None:
+    catalog = {item["function"]["name"]: item for item in tools.catalog()}
+    results_description = catalog["get_player_results"]["function"]["description"]
+    assert "last" in results_description
+    assert "recent" in results_description
+    assert "one call per player" in results_description
+
+    season_description = catalog["get_player_season_record"]["function"]["description"]
+    assert "season" in season_description
+
+
+def test_system_prompt_states_history_semantics() -> None:
+    from app.chat.orchestrator import GLOBAL_SYSTEM_PROMPT
+
+    assert "赛果" in GLOBAL_SYSTEM_PROMPT
+    assert "上一场" in GLOBAL_SYSTEM_PROMPT
+    assert "每位球员单独调用" in GLOBAL_SYSTEM_PROMPT
+
+
+@pytest.mark.asyncio
+async def test_player_results_last_returns_typed_history_context(
+    tools: BusinessTools,
+) -> None:
+    result = await tools.execute(
+        "get_player_results",
+        {"player_name": "Sinner", "scope": "last", "limit": 5},
+        GLOBAL,
+    )
+
+    assert result.kind == "player_history"
+    assert result.metadata == {}
+    context = result.player_history
+    assert context is not None
+    assert context.player.name == "Jannik Sinner"
+    assert context.scope == "last"
+    assert context.season is None
+    assert context.availability is CapabilityStatus.AVAILABLE
+    assert context.season_record is None
+    assert context.empty_reason is None
+    # `last` normalizes any model-supplied limit to exactly one match.
+    assert len(result.matches) == 1
+    assert result.matches[0].status is MatchStatus.FINISHED
+
+
+@pytest.mark.asyncio
+async def test_player_results_empty_sets_typed_empty_reason(
+    tools: BusinessTools,
+) -> None:
+    result = await tools.execute(
+        "get_player_results",
+        {"player_name": "Sinner", "scope": "yesterday", "limit": 5},
+        GLOBAL,
+    )
+
+    assert result.kind == "player_history"
+    assert result.matches == []
+    context = result.player_history
+    assert context is not None
+    assert context.scope == "yesterday"
+    assert context.availability is CapabilityStatus.AVAILABLE
+    assert context.empty_reason is PlayerHistoryEmptyReason.NO_RESULTS_IN_SCOPE
+
+
+@pytest.mark.asyncio
+async def test_player_history_carries_bilingual_identity(
+    resolver_service, fake_provider: FakeTennisProvider
+) -> None:
+    from app.players.models import (
+        LocalizedNameUpdate,
+        PlayerAlias,
+        PlayerAliasKind,
+        PlayerAliasSource,
+    )
+    from app.players.normalization import normalize_player_name
+
+    service, directory = resolver_service
+    sinner = next(
+        player for player in fake_provider._players if player.name == "Jannik Sinner"
+    )
+    zh_alias = PlayerAlias(
+        player_id=sinner.id,
+        locale="zh-Hans",
+        alias="辛纳",
+        normalized_alias=normalize_player_name("辛纳"),
+        kind=PlayerAliasKind.PREFERRED,
+        source=PlayerAliasSource.LLM,
+    )
+    await directory.save_localized_names(
+        (
+            LocalizedNameUpdate(
+                player_id=sinner.id,
+                localized_name="辛纳",
+                aliases=(zh_alias,),
+            ),
+        )
+    )
+    tools = BusinessTools(service)
+
+    result = await tools.execute(
+        "get_player_results",
+        {"player_name": "辛纳", "scope": "last"},
+        GLOBAL,
+    )
+
+    assert result.kind == "player_history"
+    context = result.player_history
+    assert context is not None
+    assert context.player.id == sinner.id
+    assert context.player.name == "Jannik Sinner"
+    assert context.player.localized_name == "辛纳"
+
+
+@pytest.mark.asyncio
+async def test_season_record_returns_selected_year_and_supplier_record(
+    tools: BusinessTools,
+) -> None:
+    result = await tools.execute(
+        "get_player_season_record",
+        {"player_name": "Sinner"},
+        GLOBAL,
+    )
+
+    assert result.kind == "player_history"
+    assert result.matches == []
+    context = result.player_history
+    assert context is not None
+    assert context.player.name == "Jannik Sinner"
+    assert context.scope == "season"
+    assert context.season == 2026
+    assert context.availability is CapabilityStatus.AVAILABLE
+    assert context.empty_reason is None
+    assert context.season_record is not None
+    assert context.season_record.season == 2026
+    assert context.season_record.matches_won == 30
+
+
+@pytest.mark.asyncio
+async def test_season_record_absent_is_typed_unavailable() -> None:
+    class SingleSeasonProvider(FakeTennisProvider):
+        async def get_player_profile(self, player_id: str):
+            profile = await super().get_player_profile(player_id)
+            return profile.model_copy(
+                update={
+                    "seasons": tuple(
+                        record for record in profile.seasons if record.season == 2026
+                    )
+                }
+            )
+
+    provider = await SingleSeasonProvider.create(
+        identities=MemoryIdentityRepository(), now=lambda: NOW
+    )
+    cache: AsyncTTLCache[str, object] = AsyncTTLCache(max_entries=64)
+    service = TennisService(
+        provider, cache, now=lambda: NOW, timezone="Asia/Macau"
+    )
+    tools = BusinessTools(service)
+
+    result = await tools.execute(
+        "get_player_season_record",
+        {"player_name": "Sinner", "season": 2025},
+        GLOBAL,
+    )
+
+    assert result.kind == "player_history"
+    context = result.player_history
+    assert context is not None
+    assert context.scope == "season"
+    assert context.season == 2025
+    assert context.season_record is None
+    assert context.availability is CapabilityStatus.UNAVAILABLE
+    assert (
+        context.empty_reason is PlayerHistoryEmptyReason.SEASON_RECORD_UNAVAILABLE
+    )
+
+
+@pytest.mark.asyncio
+async def test_season_record_out_of_window_is_invalid_request(
+    tools: BusinessTools,
+) -> None:
+    with pytest.raises(AppError) as error_info:
+        await tools.execute(
+            "get_player_season_record",
+            {"player_name": "Sinner", "season": 2019},
+            GLOBAL,
+        )
+    assert error_info.value.code == "invalid_request"
+    assert error_info.value.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_season_record_unknown_player_is_recoverable_resolution(
+    tools: BusinessTools,
+) -> None:
+    result = await tools.execute(
+        "get_player_season_record",
+        {"player_name": "Federer"},
         GLOBAL,
     )
     assert result.kind == "player_resolution"

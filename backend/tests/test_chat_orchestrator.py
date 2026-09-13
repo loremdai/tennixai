@@ -630,8 +630,8 @@ async def test_supported_yesterday_query_uses_history_tool() -> None:
         "done",
     ]
     data = next(event for event in events if event.type is ChatEventType.DATA)
-    assert data.payload["kind"] == "matches"
-    assert data.payload["metadata"]["scope"] == "yesterday"
+    assert data.payload["kind"] == "player_history"
+    assert data.payload["player_history"]["scope"] == "yesterday"
     assert recording.calls["get_recent_results"] == 1
 
 
@@ -1421,3 +1421,196 @@ async def test_mixed_broad_history_keeps_supported_tools_and_notes_unsupported()
         if message.get("role") == "user" and "已核验" in str(message.get("content"))
     )
     assert "超出产品支持范围" in note["content"]
+
+
+# ------------------------------------------- T54 typed multi-player history
+
+
+@pytest.mark.asyncio
+async def test_two_players_emit_two_ordered_history_data_events() -> None:
+    model = FakeChatModel(
+        turns=[
+            ModelTurn(
+                tool_calls=[
+                    ToolCall(
+                        id="call_sinner",
+                        name="get_player_results",
+                        arguments={"player_name": "Sinner", "scope": "recent", "limit": 3},
+                    ),
+                    ToolCall(
+                        id="call_zheng",
+                        name="get_player_results",
+                        arguments={"player_name": "Zheng", "scope": "yesterday", "limit": 5},
+                    ),
+                ]
+            ),
+            ModelTurn(),
+        ],
+        text_chunks=["已整理两位球员的赛果。"],
+    )
+    orchestrator, _ = build_orchestrator(model)
+
+    events = [
+        event
+        async for event in orchestrator.stream(
+            global_request("Sinner 最近赛果如何？Zheng 昨天赢了吗？")
+        )
+    ]
+
+    data_events = [event for event in events if event.type is ChatEventType.DATA]
+    kinds = [event.payload["kind"] for event in data_events]
+    assert kinds == ["player_history", "player_history"]
+    scopes = [event.payload["player_history"]["scope"] for event in data_events]
+    assert scopes == ["recent", "yesterday"]
+    names = [event.payload["player_history"]["player"]["name"] for event in data_events]
+    assert names == ["Jannik Sinner", "Qinwen Zheng"]
+    # Sinner recent is non-empty; Zheng yesterday is empty but must not erase Sinner.
+    assert data_events[0].payload["matches"]
+    assert data_events[1].payload["matches"] == []
+    assert data_events[1].payload["player_history"]["empty_reason"] == "no_results_in_scope"
+    assert events[-1].type is ChatEventType.DONE
+    assert not any(event.type is ChatEventType.ERROR for event in events)
+
+
+@pytest.mark.asyncio
+async def test_season_record_tool_emits_typed_history_with_supplier_record() -> None:
+    model = FakeChatModel(
+        turns=[
+            tool_turn(
+                "get_player_season_record",
+                {"player_name": "Sinner"},
+            ),
+            ModelTurn(),
+        ],
+        text_chunks=["Sinner 本赛季 30 胜。"],
+    )
+    orchestrator, recording = build_orchestrator(model)
+
+    events = [
+        event
+        async for event in orchestrator.stream(
+            global_request("Sinner 本赛季战绩如何？")
+        )
+    ]
+
+    data = next(event for event in events if event.type is ChatEventType.DATA)
+    assert data.payload["kind"] == "player_history"
+    context = data.payload["player_history"]
+    assert context["scope"] == "season"
+    assert context["season"] == 2026
+    assert context["season_record"]["matches_won"] == 30
+    assert recording.calls["get_player_profile"] == 1
+    # season record must not trigger live/upcoming requests
+    assert recording.calls["get_live_matches"] == 0
+    assert recording.calls["get_fixtures"] == 0
+    assert events[-1].type is ChatEventType.DONE
+
+
+@pytest.mark.asyncio
+async def test_synthesis_facts_carry_player_history_without_provider_leak() -> None:
+    model = FakeChatModel(
+        turns=[
+            tool_turn(
+                "get_player_results",
+                {"player_name": "Sinner", "scope": "recent", "limit": 3},
+            ),
+            ModelTurn(),
+        ],
+        text_chunks=["已整理赛果。"],
+    )
+    orchestrator, _ = build_orchestrator(model)
+
+    events = [event async for event in orchestrator.stream(global_request("Sinner 最近赛果"))]
+    assert events[-1].type is ChatEventType.DONE
+
+    synthesis = model.stream_calls[-1]
+    fact_message = next(
+        message
+        for message in synthesis
+        if message.get("role") == "user" and "已核验" in str(message.get("content"))
+    )
+    facts_json = str(fact_message["content"]).rsplit("\n", 1)[-1]
+    facts = json.loads(facts_json)
+    assert facts and facts[0]["kind"] == "player_history"
+    assert facts[0]["player_history"]["player"]["name"] == "Jannik Sinner"
+    assert facts[0]["player_history"]["scope"] == "recent"
+    assert facts[0]["match_count"] == len(facts[0]["matches"]) > 0
+    lowered = facts_json.lower()
+    for forbidden in ("event_key", "event_first_player", "api-tennis", "x-api-key", "authorization"):
+        assert forbidden not in lowered
+
+
+@pytest.mark.asyncio
+async def test_one_optional_history_failure_keeps_the_other_success() -> None:
+    model = FakeChatModel(
+        turns=[
+            ModelTurn(
+                tool_calls=[
+                    ToolCall(
+                        id="call_ok",
+                        name="get_player_results",
+                        arguments={"player_name": "Sinner", "scope": "recent", "limit": 3},
+                    ),
+                    ToolCall(
+                        id="call_bad",
+                        name="get_player_results",
+                        arguments={"player_name": "Sinner", "scope": "recent", "limit": 99},
+                    ),
+                ]
+            ),
+            ModelTurn(),
+        ],
+        text_chunks=["已整理可用赛果。"],
+    )
+    orchestrator, _ = build_orchestrator(model)
+
+    events = [
+        event
+        async for event in orchestrator.stream(global_request("Sinner 最近赛果"))
+    ]
+
+    data_events = [event for event in events if event.type is ChatEventType.DATA]
+    assert len(data_events) == 1
+    assert data_events[0].payload["kind"] == "player_history"
+    assert data_events[0].payload["matches"]
+    assert any(
+        event.type is ChatEventType.WARNING
+        and event.payload["code"] == "optional_data_unavailable"
+        for event in events
+    )
+    assert events[-1].type is ChatEventType.DONE
+    assert not any(event.type is ChatEventType.ERROR for event in events)
+
+
+@pytest.mark.asyncio
+async def test_runtime_heuristics_route_last_recent_and_season() -> None:
+    model = FakeChatModel()
+    orchestrator, recording = build_orchestrator(model)
+
+    last_events = [
+        event async for event in orchestrator.stream(global_request("Sinner last match?"))
+    ]
+    last_data = next(e for e in last_events if e.type is ChatEventType.DATA)
+    assert last_data.payload["kind"] == "player_history"
+    assert last_data.payload["player_history"]["scope"] == "last"
+    assert len(last_data.payload["matches"]) == 1
+    assert last_events[-1].type is ChatEventType.DONE
+
+    recent_events = [
+        event async for event in orchestrator.stream(global_request("Sinner 赛果如何？"))
+    ]
+    recent_data = next(e for e in recent_events if e.type is ChatEventType.DATA)
+    assert recent_data.payload["player_history"]["scope"] == "recent"
+
+    season_events = [
+        event
+        async for event in orchestrator.stream(
+            global_request("Sinner 本赛季战绩如何？")
+        )
+    ]
+    season_data = next(e for e in season_events if e.type is ChatEventType.DATA)
+    assert season_data.payload["kind"] == "player_history"
+    assert season_data.payload["player_history"]["scope"] == "season"
+    assert season_data.payload["player_history"]["season_record"] is not None
+    assert recording.calls["get_player_profile"] == 1
+    assert season_events[-1].type is ChatEventType.DONE
