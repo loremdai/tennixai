@@ -102,7 +102,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | T52 | P2.6 | Run the P2.6 Real-Service Completion Gate and Close the Milestone | `done` | `6be739c`、`f9cc03f`、`d0120ac`、`7bbb541` | 净库 sync/enrich/status、真实 API-Tennis/LLM/目录和浏览器证据已入库：sync 3876/failed=0，中文覆盖 100%，重跑零模型调用且同步幂等；backend deterministic 463 passed/45 deselected、infra 22、api_tennis_live 2、llm_live 14、player_directory_e2e_live 3；frontend 206/206、typecheck/build、目录 e2e 14/14、真实目录 e2e 18/18。T52 记录的 14 个确定性 Playwright 失败属于最终收口遗留，已由 T53 逐项关闭 |
 
 | T53 | P2 final gate | P2 Final Completion Gate Repair | `done` | `348110c` | 领取提交 `891b4d5`（起始 `7bbb541`）；Home 默认显式四性别 URL 契约断言修复，`config.py` 删除重复 `api_tennis_ws_url`；10 张 prototype expected/actual/diff 逐张人工审查，确认 T38/T41/T52 批准演进后仅更新对应基线；PostgreSQL/Redis healthy，backend 463/45 与 infrastructure 22/486，frontend 206/206+typecheck/build，完整 Playwright 56 passed/32 skipped/0 failed，`git diff --check` 与供应商字段/凭据扫描通过 |
-| T54 | P2.6 corrective gate | Close Home Historical Player Queries | `in_progress` | — | 用户批准方案 A；先冻结历史意图与查询语义、typed structured results、多条 SSE 聚合、Home 历史结果展示和内容级真实验收，再实施并重新关闭 P2.6 |
+| T54 | P2.6 corrective gate | Close Home Historical Player Queries | `in_progress` | — | 领取提交 `259235c`（起始 `5d8e3f2`）；用户批准方案 A；[设计规格](./docs/superpowers/specs/2026-09-13-tennixai-home-historical-player-query-closure-design.md) 正在冻结，用户确认后再编写实施计划并进入产品代码 |
 
 ## P2 完成门摘要
 
