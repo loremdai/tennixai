@@ -36,6 +36,7 @@ from app.players.models import (
     PlayerResolution,
     PlayerResolutionStatus,
     PlayerResultPage,
+    PlayerSeasonRecord,
     RankingPage,
     ResultOutcome,
     Tour,
@@ -91,6 +92,7 @@ class MatchCatalog(BaseModel):
 
 class PlayerResultsScope(StrEnum):
     YESTERDAY = "yesterday"
+    LAST = "last"
     RECENT = "recent"
 
 
@@ -416,6 +418,52 @@ class TennisService:
             raise AppError("not_found", "Player not found", 404)
         return cast(tuple[Match, ...], outcome.value)
 
+    async def get_latest_player_results(
+        self, player_id: str, *, limit: int
+    ) -> tuple[Match, ...]:
+        """Result-count semantics for `last`/`recent` across the five-season window.
+
+        Seasons are queried newest first through the cached on-demand season
+        path and loading stops as soon as enough finished matches are known;
+        the fixed 30-day recent fetch never implements this scope.
+        """
+        if not 1 <= limit <= 10:
+            raise AppError("invalid_request", "Limit must be between 1 and 10", 422)
+        await self._ensure_seeded()
+        current_year = self._now().astimezone(self._timezone).year
+        collected: dict[str, Match] = {}
+        for season in range(current_year, current_year - 5, -1):
+            raw = await self._load_season_results(player_id, season)
+            for match in raw:
+                if match.status is not MatchStatus.FINISHED:
+                    continue
+                if match.scheduled_at is None:
+                    continue
+                collected.setdefault(match.id, match)
+            if len(collected) >= limit:
+                break
+        ordered = sorted(
+            collected.values(),
+            key=lambda match: (match.scheduled_at, match.id),
+            reverse=True,
+        )
+        return tuple(ordered[:limit])
+
+    async def get_player_season_record(
+        self, player_id: str, *, season: int | None = None
+    ) -> tuple[int, PlayerSeasonRecord | None]:
+        """Profile-only season record: never triggers live/upcoming requests."""
+        current_year = self._now().astimezone(self._timezone).year
+        selected = season if season is not None else current_year
+        if not current_year - 4 <= selected <= current_year:
+            raise AppError("invalid_request", "Season outside the five-season window", 422)
+        await self._ensure_seeded()
+        profile = await self._load_profile(player_id)
+        record = next(
+            (item for item in profile.seasons if item.season == selected), None
+        )
+        return selected, record
+
     async def _resolve_player(self, query: str) -> Player:
         resolution = await self.resolve_player(query)
         if (
@@ -677,10 +725,24 @@ class TennisService:
             results_scope = PlayerResultsScope(scope)
         except ValueError:
             raise AppError(
-                "invalid_request", "Scope must be yesterday or recent", 422
+                "invalid_request", "Scope must be yesterday, last, or recent", 422
             ) from None
         if not 1 <= limit <= 10:
             raise AppError("invalid_request", "Limit must be between 1 and 10", 422)
+
+        if results_scope is not PlayerResultsScope.YESTERDAY:
+            # `last`/`recent` use result-count semantics over the bounded
+            # five-season window; `last` always means exactly one match.
+            effective_limit = 1 if results_scope is PlayerResultsScope.LAST else limit
+            matches = await self.get_latest_player_results(
+                player_id, limit=effective_limit
+            )
+            return PlayerResults(
+                player_id=player_id,
+                scope=results_scope,
+                availability=CapabilityStatus.AVAILABLE,
+                matches=matches,
+            )
 
         fetched = await self._fetch_recent_history(player_id)
         if fetched is None:
@@ -699,27 +761,19 @@ class TennisService:
             or datetime.min.replace(tzinfo=timezone.utc),
             reverse=True,
         )
-        if results_scope is PlayerResultsScope.YESTERDAY:
-            yesterday = (
-                self._now().astimezone(self._timezone) - timedelta(days=1)
-            ).date()
-            matches = [
-                match
-                for match in matches
-                if match.scheduled_at is not None
-                and match.scheduled_at.astimezone(self._timezone).date() == yesterday
-            ]
-            availability = CapabilityStatus.AVAILABLE
-        else:
-            availability = (
-                CapabilityStatus.PARTIAL
-                if len(matches) >= HISTORY_FETCH_LIMIT
-                else CapabilityStatus.AVAILABLE
-            )
+        yesterday = (
+            self._now().astimezone(self._timezone) - timedelta(days=1)
+        ).date()
+        matches = [
+            match
+            for match in matches
+            if match.scheduled_at is not None
+            and match.scheduled_at.astimezone(self._timezone).date() == yesterday
+        ]
         return PlayerResults(
             player_id=player_id,
             scope=results_scope,
-            availability=availability,
+            availability=CapabilityStatus.AVAILABLE,
             matches=tuple(matches[:limit]),
         )
 

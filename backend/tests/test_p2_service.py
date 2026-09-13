@@ -192,40 +192,48 @@ async def test_yesterday_results_use_macau_calendar(
 
 
 @pytest.mark.asyncio
-async def test_recent_results_sorted_desc_and_limited(
+async def test_recent_results_use_season_window_not_fetch_window(
     service: TennisService, catalog_provider: CatalogFakeProvider
 ) -> None:
-    now_utc = P2_NOW
-    catalog_provider.recent_results = [
-        catalog_provider.finished_match("old", now_utc - timedelta(days=5)),
-        catalog_provider.finished_match("newest", now_utc - timedelta(hours=6)),
-        catalog_provider.finished_match("middle", now_utc - timedelta(days=2)),
-    ]
     sinner = await _sinner_id(catalog_provider)
+    # The bounded 30-day fetch window is no longer the recent-scope source.
+    catalog_provider.recent_results = [
+        catalog_provider.finished_match("newest", P2_NOW - timedelta(hours=6)),
+    ]
 
     results = await service.get_player_results(sinner, scope="recent", limit=2)
 
+    assert catalog_provider.recent_calls == 0
     assert results.availability is CapabilityStatus.AVAILABLE
+    assert len(results.matches) == 2
+    assert all(match.status is MatchStatus.FINISHED for match in results.matches)
+    expected = sorted(
+        (
+            match
+            for match in catalog_provider.finished_results
+            if any(player.id == sinner for player in match.players)
+        ),
+        key=lambda match: (match.scheduled_at, match.id),
+        reverse=True,
+    )[:2]
     assert [match.id for match in results.matches] == [
-        "mat_hist_newest",
-        "mat_hist_middle",
+        match.id for match in expected
     ]
 
 
 @pytest.mark.asyncio
-async def test_recent_results_are_partial_when_fetch_window_truncated(
+async def test_last_scope_returns_exactly_one_newest_finished(
     service: TennisService, catalog_provider: CatalogFakeProvider
 ) -> None:
-    catalog_provider.recent_results = [
-        catalog_provider.finished_match(f"m{i}", P2_NOW - timedelta(days=i))
-        for i in range(10)
-    ]
     sinner = await _sinner_id(catalog_provider)
 
-    results = await service.get_player_results(sinner, scope="recent", limit=3)
+    results = await service.get_player_results(sinner, scope="last", limit=5)
 
-    assert results.availability is CapabilityStatus.PARTIAL
-    assert len(results.matches) == 3
+    assert results.scope == "last"
+    assert results.availability is CapabilityStatus.AVAILABLE
+    assert len(results.matches) == 1
+    assert results.matches[0].status is MatchStatus.FINISHED
+    assert catalog_provider.recent_calls == 0
 
 
 @pytest.mark.asyncio
@@ -287,8 +295,10 @@ async def test_history_and_h2h_are_cached_with_negative_ttl(
         catalog_provider.finished_match("h", P2_NOW - timedelta(days=3))
     ]
 
-    await service.get_player_results(sinner, scope="recent", limit=5)
-    await service.get_player_results(sinner, scope="recent", limit=5)
+    # `yesterday` is the only remaining consumer of the bounded recent fetch
+    # and its negative-TTL cache; `recent`/`last` now use the season window.
+    await service.get_player_results(sinner, scope="yesterday", limit=5)
+    await service.get_player_results(sinner, scope="yesterday", limit=5)
     assert catalog_provider.recent_calls == 1
 
     await service.get_head_to_head(sinner, ruud, limit=5)
@@ -298,8 +308,8 @@ async def test_history_and_h2h_are_cached_with_negative_ttl(
     # Empty responses are still cached (negative TTL), not refetched.
     catalog_provider.recent_results = []
     catalog_provider.recent_calls = 0
-    await service.get_player_results(ruud, scope="recent", limit=5)
-    await service.get_player_results(ruud, scope="recent", limit=5)
+    await service.get_player_results(ruud, scope="yesterday", limit=5)
+    await service.get_player_results(ruud, scope="yesterday", limit=5)
     assert catalog_provider.recent_calls == 1
 
 

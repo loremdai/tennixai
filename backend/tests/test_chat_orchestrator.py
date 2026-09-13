@@ -58,6 +58,16 @@ class RecordingProvider:
         self.calls["get_recent_results"] += 1
         return await self.inner.get_recent_results(player_id, limit=limit)
 
+    async def get_player_results_for_period(self, player_id: str, *, start, end):
+        self.calls["get_player_results_for_period"] += 1
+        return await self.inner.get_player_results_for_period(
+            player_id, start=start, end=end
+        )
+
+    async def get_player_profile(self, player_id: str):
+        self.calls["get_player_profile"] += 1
+        return await self.inner.get_player_profile(player_id)
+
     async def get_head_to_head(self, first_player_id: str, second_player_id: str, *, limit: int):
         self.calls["get_head_to_head"] += 1
         return await self.inner.get_head_to_head(first_player_id, second_player_id, limit=limit)
@@ -1403,7 +1413,7 @@ async def test_mixed_broad_history_keeps_supported_tools_and_notes_unsupported()
     assert events[-1].type is ChatEventType.DONE
     assert not any(event.type is ChatEventType.ERROR for event in events)
     assert "get_player_results" in model.catalog_calls[0]
-    assert recording.calls["get_recent_results"] == 1
+    assert recording.calls["get_player_results_for_period"] == 1
     synthesis = model.stream_calls[-1]
     note = next(
         message

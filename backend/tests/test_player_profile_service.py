@@ -7,6 +7,7 @@ import pytest
 
 from app.cache import AsyncTTLCache
 from app.domain import (
+    CapabilityStatus,
     CircuitTier,
     DataFreshness,
     Match,
@@ -276,3 +277,289 @@ async def test_profile_view_windows_supplier_history_to_five_seasons(
         2023,
         2022,
     ]
+
+
+# ------------------------------------------------- T54 latest-results semantics
+
+
+def _result(
+    match_id: str,
+    scheduled_at: datetime | None,
+    status: MatchStatus = MatchStatus.FINISHED,
+) -> Match:
+    return Match(
+        id=match_id,
+        status=status,
+        players=(ZHENG, OPPONENT),
+        tournament=Tournament(id="trn_hist", name="History Event", tour="wta"),
+        scheduled_at=scheduled_at,
+        winner_player_id=ZHENG.id,
+        freshness=DataFreshness(provider="fake", observed_at=NOW_UTC),
+    )
+
+
+class SeasonResultsProvider(ProfileProvider):
+    """Per-season finished results with explicit season-load counting."""
+
+    def __init__(self, by_season: dict[int, tuple[Match, ...]] | None = None) -> None:
+        super().__init__()
+        self.by_season = by_season or {}
+        self.season_loads: list[int] = []
+
+    async def get_player_results_for_period(
+        self, player_id: str, *, start: date, end: date
+    ) -> tuple[Match, ...]:
+        self.calls["results"] += 1
+        self.season_loads.append(start.year)
+        return tuple(self.by_season.get(start.year, ()))
+
+
+def build_service_with_now(provider: ProfileProvider, now: datetime):
+    cache: AsyncTTLCache[str, object] = AsyncTTLCache(max_entries=64)
+    return TennisService(
+        provider,
+        cache,
+        now=lambda: now,
+        timezone="Asia/Macau",
+    )
+
+
+@pytest.mark.asyncio
+async def test_latest_results_return_match_older_than_thirty_days() -> None:
+    old = _result("mat_old", datetime(2026, 6, 1, 10, 0, tzinfo=UTC))
+    provider = SeasonResultsProvider({2026: (old,)})
+    service = build_service(provider, MemoryPlayerDirectoryRepository())
+
+    results = await service.get_latest_player_results(ZHENG.id, limit=1)
+
+    assert [match.id for match in results] == ["mat_old"]
+    assert provider.season_loads == [2026]
+
+
+@pytest.mark.asyncio
+async def test_latest_results_limit_one_queries_only_newest_season() -> None:
+    newest = _result("mat_new", datetime(2026, 8, 20, 10, 0, tzinfo=UTC))
+    older = _result("mat_older", datetime(2026, 7, 1, 10, 0, tzinfo=UTC))
+    prior = _result("mat_prior", datetime(2025, 12, 1, 10, 0, tzinfo=UTC))
+    provider = SeasonResultsProvider({2026: (older, newest), 2025: (prior,)})
+    service = build_service(provider, MemoryPlayerDirectoryRepository())
+
+    results = await service.get_latest_player_results(ZHENG.id, limit=1)
+
+    assert [match.id for match in results] == ["mat_new"]
+    assert provider.season_loads == [2026]
+
+
+@pytest.mark.asyncio
+async def test_latest_results_span_year_boundary_and_stop_early() -> None:
+    jan_10 = _result("mat_jan10", datetime(2026, 1, 10, 10, 0, tzinfo=UTC))
+    jan_5 = _result("mat_jan5", datetime(2026, 1, 5, 10, 0, tzinfo=UTC))
+    dec_28 = _result("mat_dec28", datetime(2025, 12, 28, 10, 0, tzinfo=UTC))
+    dec_20 = _result("mat_dec20", datetime(2025, 12, 20, 10, 0, tzinfo=UTC))
+    dec_10 = _result("mat_dec10", datetime(2025, 12, 10, 10, 0, tzinfo=UTC))
+    provider = SeasonResultsProvider(
+        {2026: (jan_5, jan_10), 2025: (dec_10, dec_20, dec_28)}
+    )
+    service = build_service(provider, MemoryPlayerDirectoryRepository())
+
+    results = await service.get_latest_player_results(ZHENG.id, limit=4)
+
+    assert [match.id for match in results] == [
+        "mat_jan10",
+        "mat_jan5",
+        "mat_dec28",
+        "mat_dec20",
+    ]
+    assert provider.season_loads == [2026, 2025]
+
+
+@pytest.mark.asyncio
+async def test_latest_results_deduplicate_by_canonical_id() -> None:
+    shared = _result("mat_shared", datetime(2026, 6, 1, 10, 0, tzinfo=UTC))
+    prior = _result("mat_prior", datetime(2025, 5, 1, 10, 0, tzinfo=UTC))
+    provider = SeasonResultsProvider(
+        {2026: (shared,), 2025: (shared.model_copy(), prior)}
+    )
+    service = build_service(provider, MemoryPlayerDirectoryRepository())
+
+    results = await service.get_latest_player_results(ZHENG.id, limit=2)
+
+    assert [match.id for match in results] == ["mat_shared", "mat_prior"]
+    assert provider.season_loads == [2026, 2025]
+
+
+@pytest.mark.asyncio
+async def test_latest_results_exclude_non_finished_and_undated() -> None:
+    finished = _result("mat_fin", datetime(2026, 3, 1, 10, 0, tzinfo=UTC))
+    noise = (
+        _result("mat_live", datetime(2026, 8, 1, 10, 0, tzinfo=UTC), MatchStatus.LIVE),
+        _result("mat_sch", datetime(2026, 9, 20, 10, 0, tzinfo=UTC), MatchStatus.SCHEDULED),
+        _result("mat_can", datetime(2026, 7, 1, 10, 0, tzinfo=UTC), MatchStatus.CANCELLED),
+        _result("mat_post", datetime(2026, 7, 2, 10, 0, tzinfo=UTC), MatchStatus.POSTPONED),
+        _result("mat_unk", datetime(2026, 7, 3, 10, 0, tzinfo=UTC), MatchStatus.UNKNOWN),
+        _result("mat_nodate", None),
+    )
+    provider = SeasonResultsProvider({2026: (*noise, finished)})
+    service = build_service(provider, MemoryPlayerDirectoryRepository())
+
+    results = await service.get_latest_player_results(ZHENG.id, limit=1)
+
+    assert [match.id for match in results] == ["mat_fin"]
+    assert provider.season_loads == [2026]
+
+
+@pytest.mark.asyncio
+async def test_latest_results_tie_break_by_internal_id() -> None:
+    same_time = datetime(2026, 5, 1, 10, 0, tzinfo=UTC)
+    match_a = _result("mat_a", same_time)
+    match_b = _result("mat_b", same_time)
+    provider = SeasonResultsProvider({2026: (match_a, match_b)})
+    service = build_service(provider, MemoryPlayerDirectoryRepository())
+
+    results = await service.get_latest_player_results(ZHENG.id, limit=2)
+
+    assert [match.id for match in results] == ["mat_b", "mat_a"]
+
+
+@pytest.mark.asyncio
+async def test_latest_results_exhaust_exactly_five_seasons_with_empty_success() -> None:
+    provider = SeasonResultsProvider({})
+    service = build_service(provider, MemoryPlayerDirectoryRepository())
+
+    results = await service.get_latest_player_results(ZHENG.id, limit=10)
+
+    assert results == ()
+    assert provider.season_loads == [2026, 2025, 2024, 2023, 2022]
+
+
+@pytest.mark.asyncio
+async def test_latest_results_invalid_limit_fails_before_provider_access() -> None:
+    provider = SeasonResultsProvider({})
+    service = build_service(provider, MemoryPlayerDirectoryRepository())
+
+    for invalid_limit in (0, 11):
+        with pytest.raises(AppError) as failure:
+            await service.get_latest_player_results(ZHENG.id, limit=invalid_limit)
+        assert failure.value.code == "invalid_request"
+    assert provider.season_loads == []
+
+
+@pytest.mark.asyncio
+async def test_latest_results_use_macau_calendar_year() -> None:
+    # 2026-12-31T18:00Z is already 2027-01-01 02:00 in Asia/Macau.
+    new_year_edge = datetime(2026, 12, 31, 18, 0, tzinfo=UTC)
+    provider = SeasonResultsProvider({})
+    service = build_service_with_now(provider, new_year_edge)
+
+    await service.get_latest_player_results(ZHENG.id, limit=1)
+
+    assert provider.season_loads == [2027, 2026, 2025, 2024, 2023]
+
+
+@pytest.mark.asyncio
+async def test_get_player_results_last_scope_normalizes_limit_to_one() -> None:
+    newest = _result("mat_new", datetime(2026, 8, 20, 10, 0, tzinfo=UTC))
+    older = _result("mat_older", datetime(2026, 7, 1, 10, 0, tzinfo=UTC))
+    provider = SeasonResultsProvider({2026: (older, newest)})
+    service = build_service(provider, MemoryPlayerDirectoryRepository())
+
+    results = await service.get_player_results(ZHENG.id, "last", 5)
+
+    assert results.scope == "last"
+    assert results.availability is CapabilityStatus.AVAILABLE
+    assert [match.id for match in results.matches] == ["mat_new"]
+
+
+@pytest.mark.asyncio
+async def test_get_player_results_recent_scope_uses_season_window() -> None:
+    matches = tuple(
+        _result(f"mat_{index}", datetime(2026, 5, 1 + index, 10, 0, tzinfo=UTC))
+        for index in range(4)
+    )
+    provider = SeasonResultsProvider({2026: matches})
+    service = build_service(provider, MemoryPlayerDirectoryRepository())
+
+    results = await service.get_player_results(ZHENG.id, "recent", 3)
+
+    assert results.scope == "recent"
+    assert results.availability is CapabilityStatus.AVAILABLE
+    assert [match.id for match in results.matches] == ["mat_3", "mat_2", "mat_1"]
+    assert provider.calls["live"] == 0
+    assert provider.calls["fixtures"] == 0
+
+
+# --------------------------------------------- T54 profile-only season records
+
+
+@pytest.mark.asyncio
+async def test_season_record_defaults_to_current_year_and_uses_profile_cache(
+    seeded_directory,
+) -> None:
+    provider = ProfileProvider()
+    service = build_service(provider, seeded_directory)
+
+    season, record = await service.get_player_season_record(ZHENG.id)
+    assert season == 2026
+    assert record is not None
+    assert record.matches_won == 30
+
+    await service.get_player_season_record(ZHENG.id)
+    assert provider.calls["profile"] == 1
+    assert provider.calls["live"] == 0
+    assert provider.calls["fixtures"] == 0
+    assert provider.calls["results"] == 0
+
+
+@pytest.mark.asyncio
+async def test_season_record_rejects_out_of_window_before_profile_access(
+    seeded_directory,
+) -> None:
+    provider = ProfileProvider()
+    service = build_service(provider, seeded_directory)
+
+    for invalid_season in (2021, 2027):
+        with pytest.raises(AppError) as failure:
+            await service.get_player_season_record(ZHENG.id, season=invalid_season)
+        assert failure.value.code == "invalid_request"
+    assert provider.calls["profile"] == 0
+
+
+@pytest.mark.asyncio
+async def test_season_record_zero_match_record_is_not_unavailable(
+    seeded_directory,
+) -> None:
+    class ZeroSeasonProvider(ProfileProvider):
+        async def get_player_profile(self, player_id: str) -> PlayerProfileData:
+            return PlayerProfileData(
+                player=ZHENG,
+                seasons=(
+                    PlayerSeasonRecord(
+                        season=2025, matches_won=0, matches_lost=0, titles=0
+                    ),
+                ),
+            )
+
+    service = build_service(ZeroSeasonProvider(), seeded_directory)
+
+    season, record = await service.get_player_season_record(ZHENG.id, season=2025)
+    assert season == 2025
+    assert record is not None
+    assert record.matches_won == 0
+
+    missing_season, missing = await service.get_player_season_record(
+        ZHENG.id, season=2024
+    )
+    assert missing_season == 2024
+    assert missing is None
+
+
+@pytest.mark.asyncio
+async def test_season_record_uses_macau_calendar_year() -> None:
+    new_year_edge = datetime(2026, 12, 31, 18, 0, tzinfo=UTC)
+    provider = ProfileProvider()
+    service = build_service_with_now(provider, new_year_edge)
+
+    season, record = await service.get_player_season_record(SINNER.id)
+
+    assert season == 2027
+    assert record is None  # the supplier fixture has no 2027 record yet

@@ -70,7 +70,7 @@ def test_p2_tool_schemas_inline_topics_and_bounds(tools: BusinessTools) -> None:
     assert topic["enum"] == [item.value for item in IntelligenceTopic]
 
     history = catalog["get_player_results"]["function"]["parameters"]
-    assert history["properties"]["scope"]["enum"] == ["yesterday", "recent"]
+    assert history["properties"]["scope"]["enum"] == ["yesterday", "last", "recent"]
     assert history["properties"]["limit"]["minimum"] == 1
     assert history["properties"]["limit"]["maximum"] == 10
 
@@ -164,8 +164,24 @@ async def test_match_intelligence_requires_page_context(tools: BusinessTools) ->
 
 
 @pytest.mark.asyncio
-async def test_player_results_resolves_name_and_keeps_empty_availability(
+async def test_player_results_yesterday_keeps_empty_availability(
     tools: BusinessTools,
+) -> None:
+    result = await tools.execute(
+        "get_player_results",
+        {"player_name": "Sinner", "scope": "yesterday", "limit": 3},
+        GLOBAL,
+    )
+
+    assert result.kind == "matches"
+    assert result.matches == []
+    assert result.metadata["scope"] == "yesterday"
+    assert result.metadata["availability"] == "available"
+
+
+@pytest.mark.asyncio
+async def test_player_results_recent_uses_five_season_window(
+    tools: BusinessTools, fake_provider: FakeTennisProvider
 ) -> None:
     result = await tools.execute(
         "get_player_results",
@@ -174,9 +190,24 @@ async def test_player_results_resolves_name_and_keeps_empty_availability(
     )
 
     assert result.kind == "matches"
-    assert result.matches == []
     assert result.metadata["scope"] == "recent"
     assert result.metadata["availability"] == "available"
+    sinner = next(
+        player for player in fake_provider._players if player.name == "Jannik Sinner"
+    )
+    expected = sorted(
+        (
+            match
+            for match in fake_provider.finished_results
+            if any(player.id == sinner.id for player in match.players)
+        ),
+        key=lambda match: (match.scheduled_at, match.id),
+        reverse=True,
+    )[:3]
+    assert [match.id for match in result.matches] == [
+        match.id for match in expected
+    ]
+    assert all(match.status.value == "finished" for match in result.matches)
 
 
 @pytest.mark.asyncio
