@@ -26,7 +26,10 @@ async def test_rankings_default_page_is_atp_top200(client: AsyncClient) -> None:
     assert payload["page_size"] == 50
     ranks = [entry["rank"] for entry in payload["entries"]]
     assert ranks == sorted(ranks)
-    assert payload["total"] == 5  # fake directory seeds five ATP entries
+    # The fake directory seeds five ATP entries incl. one rank outside the
+    # official Top 200; the page is bounded to the Top 200 snapshot.
+    assert payload["total"] == 4
+    assert all(rank <= 200 for rank in ranks)
 
 
 @pytest.mark.asyncio

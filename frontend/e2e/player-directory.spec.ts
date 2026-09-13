@@ -21,10 +21,11 @@ test.describe('player directory', () => {
 
     await expect(page.getByRole('heading', { name: 'ATP 单打世界排名' })).toBeVisible()
     await expect(page.getByRole('link', { name: /Jannik Sinner/ })).toBeVisible()
-    // Top-200 boundary row and the seeded rank outside the Top 200.
+    // The page is bounded to the official Top 200; the rank-200 boundary row
+    // shows while the seeded rank-201 player stays search-only (next test).
     await expect(page.getByRole('link', { name: /Zhizhen Zhang/ })).toBeVisible()
-    await expect(page.getByRole('link', { name: /Coleman Wong/ })).toBeVisible()
-    await expect(page.getByText('共 5 位')).toBeVisible()
+    await expect(page.getByRole('link', { name: /Coleman Wong/ })).toHaveCount(0)
+    await expect(page.getByText('共 4 位')).toBeVisible()
 
     await page.getByRole('tab', { name: 'WTA' }).click()
     await expect(page.getByRole('heading', { name: 'WTA 单打世界排名' })).toBeVisible()

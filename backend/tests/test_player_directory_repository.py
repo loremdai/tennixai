@@ -310,8 +310,8 @@ async def test_tied_ranks_keep_one_row_per_rank_but_both_players(
     # one row per rank while every tied player stays in the directory.
     await repository.save_ranking_snapshot(
         (
-            entry("ply_a", "Alpha", Tour.ATP, 780),
-            entry("ply_b", "Beta", Tour.ATP, 780),
+            entry("ply_a", "Alpha", Tour.ATP, 78),
+            entry("ply_b", "Beta", Tour.ATP, 78),
         )
     )
 
@@ -319,3 +319,23 @@ async def test_tied_ranks_keep_one_row_per_rank_but_both_players(
     assert total == 1
     assert entries[0].player.id == "ply_a"
     assert await repository.get_player("ply_b") is not None
+
+
+@pytest.mark.asyncio
+async def test_rankings_page_is_bounded_to_the_official_top_200(
+    repository: MemoryPlayerDirectoryRepository,
+) -> None:
+    # The supplier snapshot can carry ranks far beyond the official Top 200;
+    # the rankings page shows only the bounded snapshot while outside-200
+    # members stay searchable through the directory.
+    await repository.save_ranking_snapshot(
+        (
+            entry("ply_in", "Inside", Tour.ATP, 200),
+            entry("ply_out", "Outside", Tour.ATP, 201),
+        )
+    )
+
+    entries, total = await repository.get_rankings(Tour.ATP, page=1, page_size=50, country_code=None)
+    assert total == 1
+    assert [item.player.id for item in entries] == ["ply_in"]
+    assert await repository.get_player("ply_out") is not None

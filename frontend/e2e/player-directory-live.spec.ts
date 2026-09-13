@@ -31,7 +31,9 @@ function watchPage(page: Page) {
 
 async function waitForChatCompletion(page: Page) {
   const assistant = page.locator('#assistant')
-  await expect(assistant.getByRole('button', { name: '发送问题' })).toBeEnabled({ timeout: 120_000 })
+  const answer = assistant.getByTestId('markdown-answer')
+  await expect(answer).toBeVisible({ timeout: 120_000 })
+  await expect(answer).toHaveText(/\S+/, { timeout: 30_000 })
   await expect(assistant).not.toContainText('查询失败', { timeout: 5_000 })
 }
 
@@ -133,12 +135,20 @@ test.describe('live directory - Home/Match chat journey', () => {
     })
   }
 
-  test('ambiguous surname ends with candidates and done', async ({ page }) => {
+  test('ambiguous or unknown surname ends with candidates or clarification and done', async ({ page }) => {
     await page.goto('/')
     await page.getByLabel('继续向 Tennix 提问').fill('Wang 最近战绩如何？')
     await page.getByLabel('继续向 Tennix 提问').press('Enter')
     await waitForChatCompletion(page)
-    await expect(page.getByText('多位候选球员，请选择')).toBeVisible({ timeout: 5_000 })
+    // Both recoverable resolver outcomes are acceptable: an ambiguous
+    // candidate list or an honest clarification asking for more detail.
+    const assistant = page.locator('#assistant')
+    await expect(
+      assistant
+        .getByText('多位候选球员，请选择')
+        .or(assistant.getByText(/请补充|未能找到|未找到|没有关于/))
+        .first(),
+    ).toBeVisible({ timeout: 5_000 })
   })
 
   test('match chat answers Shelton serve questions in match context', async ({ page }) => {

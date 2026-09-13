@@ -15,6 +15,7 @@ from app.players.models import (
     DirectoryPlayer,
     LocalizedNameUpdate,
     PlayerAlias,
+    RANKINGS_TOP_RANK,
     RankingEntry,
     Tour,
 )
@@ -177,7 +178,9 @@ class MemoryPlayerDirectoryRepository:
         rows = [
             entry
             for entry in self._rankings
-            if entry.tour is tour and entry.ranking_date == latest
+            if entry.tour is tour
+            and entry.ranking_date == latest
+            and entry.rank <= RANKINGS_TOP_RANK
         ]
         if country_code is not None:
             rows = [entry for entry in rows if entry.player.country_code == country_code]

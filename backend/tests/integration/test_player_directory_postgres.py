@@ -166,6 +166,24 @@ async def test_ranking_snapshot_roundtrip_with_country_filter_and_pagination(
 
 
 @pytest.mark.asyncio
+async def test_rankings_page_bounded_to_top_200(database: Database) -> None:
+    repository = PostgresPlayerDirectoryRepository(database)
+    namespace = _namespace()
+    await repository.save_ranking_snapshot(
+        (
+            _entry(namespace, 200, Tour.ATP, 200),
+            _entry(namespace, 201, Tour.ATP, 201),
+        )
+    )
+
+    entries, total = await repository.get_rankings(Tour.ATP, page=1, page_size=50, country_code=None)
+    assert total == 1
+    assert [item.rank for item in entries] == [200]
+    # Outside-200 members remain directory players for search/resolution.
+    assert await repository.get_player(f"ply_{namespace}_201") is not None
+
+
+@pytest.mark.asyncio
 async def test_alias_idempotency_and_ambiguity(database: Database) -> None:
     repository = PostgresPlayerDirectoryRepository(database)
     namespace = _namespace()

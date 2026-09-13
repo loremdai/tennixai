@@ -248,3 +248,31 @@ async def test_result_page_rejects_out_of_range_season(seeded_directory) -> None
             ZHENG.id, season=2021, tiers=(), outcome=ResultOutcome.ALL, page=1
         )
     assert failure.value.code == "invalid_request"
+
+
+class LongHistoryProvider(ProfileProvider):
+    """Supplier payload carrying seasons outside the product window."""
+
+    async def get_player_profile(self, player_id: str) -> PlayerProfileData:
+        base = await super().get_player_profile(player_id)
+        extra = tuple(
+            PlayerSeasonRecord(season=2021 - index, matches_won=1, matches_lost=1, titles=0)
+            for index in range(3)
+        )
+        return base.model_copy(update={"seasons": base.seasons + extra})
+
+
+@pytest.mark.asyncio
+async def test_profile_view_windows_supplier_history_to_five_seasons(
+    seeded_directory,
+) -> None:
+    service = build_service(LongHistoryProvider(), seeded_directory)
+
+    view = await service.get_player_profile_view(SINNER.id)
+    assert [record.season for record in view.profile.seasons] == [
+        2026,
+        2025,
+        2024,
+        2023,
+        2022,
+    ]

@@ -142,6 +142,11 @@ class PlayerProfileView(FrozenModel):
     current_match: Match | None = None
 
 
+# The official rankings page is bounded to the Top 200 snapshot; the wider
+# directory (incl. outside-200 and unranked members) stays searchable.
+RANKINGS_TOP_RANK = 200
+
+
 class RankingPage(FrozenModel):
     tour: Tour
     page: int

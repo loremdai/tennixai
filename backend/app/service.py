@@ -296,6 +296,16 @@ class TennisService:
             if directory_player is None:
                 raise AppError("not_found", "Player not found", 404)
         profile = await self._load_profile(player_id)
+        # The product window is the current season plus the four prior ones;
+        # supplier payloads can carry longer histories, and the view never
+        # exposes seasons outside the selectable window.
+        windowed = tuple(
+            record
+            for record in profile.seasons
+            if current_year - 4 <= record.season <= current_year
+        )
+        if len(windowed) != len(profile.seasons):
+            profile = profile.model_copy(update={"seasons": windowed})
         season_record = next(
             (record for record in profile.seasons if record.season == selected), None
         )

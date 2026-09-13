@@ -22,6 +22,7 @@ from app.players.models import (
     PlayerAlias,
     PlayerAliasKind,
     PlayerAliasSource,
+    RANKINGS_TOP_RANK,
     RankingEntry,
     RankingMovement,
     Tour,
@@ -208,6 +209,7 @@ class PostgresPlayerDirectoryRepository:
             conditions = [
                 PlayerRankingRow.tour == tour.value,
                 PlayerRankingRow.ranking_date == latest,
+                PlayerRankingRow.rank <= RANKINGS_TOP_RANK,
             ]
             if country_code is not None:
                 conditions.append(PlayerRow.country_code == country_code)
