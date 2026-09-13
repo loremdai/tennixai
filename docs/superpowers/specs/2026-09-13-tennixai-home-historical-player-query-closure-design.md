@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-13
 
-**Status:** Approved approach A; written design awaiting final user review
+**Status:** Approved
 
 **Task:** T54 — Close Home Historical Player Queries
 

@@ -2,7 +2,7 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-13 17:53 CST
+**最后更新：** 2026-09-13 18:04 CST
 
 **当前任务：** T54 — Close Home Historical Player Queries
 
@@ -16,7 +16,9 @@
 
 **领取提交：** `259235c`
 
-**当前动作：** 已落盘 [T54 设计规格](./docs/superpowers/specs/2026-09-13-tennixai-home-historical-player-query-closure-design.md)；当前只写设计，不修改产品代码。设计经用户确认后再编写实施计划和 Goal Prompt。
+**设计提交：** `831459b`
+
+**当前动作：** 用户已确认 [T54 设计规格](./docs/superpowers/specs/2026-09-13-tennixai-home-historical-player-query-closure-design.md)；[T54 实施计划](./docs/superpowers/plans/2026-09-13-tennixai-home-historical-player-query-closure.md) 已按 7 个可独立提交的 TDD/真实内容验收任务落盘。当前不修改产品代码，等待用户把 T54 显式交接给 Goal ADE。
 
 **当前状态：** 真实首页查询已证明 P2.6 的多语言 PlayerResolver 可用，但历史意图、最近一场/近期/赛季语义、多球员结构化结果和内容级真实验收未闭环。P3 保持 `planned`，T54 完成前不进入 P3 设计。
 
@@ -43,12 +45,12 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
+| 2026-09-13 | `831459b` | 冻结并推送用户确认的 T54 方案 A 设计规格 |
 | 2026-09-13 | `259235c` | 领取 T54，锁定 `main` 与起始提交 `5d8e3f2` |
 | 2026-09-13 | `5d8e3f2` | 记录 T53 最终验证；随后真实首页查询暴露 T54 验收缺口 |
 | 2026-09-13 | `348110c` | T53 修复 Home 断言、配置重复和旧视觉基线 |
 | 2026-09-13 | `7bbb541` | T52 真实服务与 P2.6 数据门证据入库 |
-| 2026-09-13 | `501f229` | T51 球员页面接入真实结构化 API |
 
 ## 下一步
 
-完成并提交 T54 设计规格，自审后交用户确认；未经确认不得写实施计划或修改产品代码。
+接手 ADE 必须把本次用户指令视为 T54 的显式交接：先按根目录启动入口将 `CURRENT.md` 执行者改为本 ADE，记录 `main`、接手起始提交和时间，提交并推送领取记录；然后严格逐项执行 [T54 实施计划](./docs/superpowers/plans/2026-09-13-tennixai-home-historical-player-query-closure.md)。T54 全部门通过前不得开始 P3。

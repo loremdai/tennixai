@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-13 17:53 CST
+**最后更新：** 2026-09-13 18:04 CST
 
 **总体状态：** `in_progress`
 
 **当前里程碑：** P2.6 — Home Historical Player Query Closure（T54，`in_progress`）
 
-**当前阶段：** 真实首页查询发现历史球员问答未达到已批准规格；T54 正在先冻结修正设计，再实施内容级验收；P3 保持 `planned` 且暂不具备进入设计的条件
+**当前阶段：** T54 方案 A 的设计与实施计划已冻结，等待显式交接后按 TDD 进入产品实现和内容级真实验收；P3 保持 `planned` 且暂不具备进入设计的条件
 
 ## 状态说明
 
@@ -59,7 +59,7 @@
 | P2.5 — Acceptance and hardening | `done` | Replay、恢复门、真实 smoke、双视口视觉、本地 runbook 与真实数据回归修复 | T32 `ac9c6e5`–T41 `5c3d469` 已完成；Home 与 Match 详情页的问答用户展示策略已同步 |
 | P2.6 — Player Discovery and Multilingual Identity | `in_progress` | ATP/WTA 单打 Top 200 目录、球员详情与历史赛果、共享多语言球员主数据和确定性名称解析 | T43–T53 已交付；T54 补齐 Home 历史意图、最近一场/近期/赛季语义、多球员结构化结果和内容级真实验收 |
 
-P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md)，逐任务步骤见 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md)。P2.6 的唯一详细基线是 [球员目录设计规格](./docs/superpowers/specs/2026-09-12-tennixai-player-directory-multilingual-identity-design.md)、[P2.6 实施计划](./docs/superpowers/plans/2026-09-12-tennixai-player-directory-multilingual-identity-implementation.md) 和 [v0 球员页面 Prompt](./docs/v0/2026-09-12-player-pages-prompt.md)。
+P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md)，逐任务步骤见 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md)。P2.6 的详细基线是 [球员目录设计规格](./docs/superpowers/specs/2026-09-12-tennixai-player-directory-multilingual-identity-design.md)、[P2.6 实施计划](./docs/superpowers/plans/2026-09-12-tennixai-player-directory-multilingual-identity-implementation.md)、[T54 修正设计](./docs/superpowers/specs/2026-09-13-tennixai-home-historical-player-query-closure-design.md)、[T54 实施计划](./docs/superpowers/plans/2026-09-13-tennixai-home-historical-player-query-closure.md) 和 [v0 球员页面 Prompt](./docs/v0/2026-09-12-player-pages-prompt.md)。
 
 ## P2 任务登记表
 
@@ -102,7 +102,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | T52 | P2.6 | Run the P2.6 Real-Service Completion Gate and Close the Milestone | `done` | `6be739c`、`f9cc03f`、`d0120ac`、`7bbb541` | 净库 sync/enrich/status、真实 API-Tennis/LLM/目录和浏览器证据已入库：sync 3876/failed=0，中文覆盖 100%，重跑零模型调用且同步幂等；backend deterministic 463 passed/45 deselected、infra 22、api_tennis_live 2、llm_live 14、player_directory_e2e_live 3；frontend 206/206、typecheck/build、目录 e2e 14/14、真实目录 e2e 18/18。T52 记录的 14 个确定性 Playwright 失败属于最终收口遗留，已由 T53 逐项关闭 |
 
 | T53 | P2 final gate | P2 Final Completion Gate Repair | `done` | `348110c` | 领取提交 `891b4d5`（起始 `7bbb541`）；Home 默认显式四性别 URL 契约断言修复，`config.py` 删除重复 `api_tennis_ws_url`；10 张 prototype expected/actual/diff 逐张人工审查，确认 T38/T41/T52 批准演进后仅更新对应基线；PostgreSQL/Redis healthy，backend 463/45 与 infrastructure 22/486，frontend 206/206+typecheck/build，完整 Playwright 56 passed/32 skipped/0 failed，`git diff --check` 与供应商字段/凭据扫描通过 |
-| T54 | P2.6 corrective gate | Close Home Historical Player Queries | `in_progress` | — | 领取提交 `259235c`（起始 `5d8e3f2`）；用户批准方案 A；[设计规格](./docs/superpowers/specs/2026-09-13-tennixai-home-historical-player-query-closure-design.md) 正在冻结，用户确认后再编写实施计划并进入产品代码 |
+| T54 | P2.6 corrective gate | Close Home Historical Player Queries | `in_progress` | — | 领取提交 `259235c`（起始 `5d8e3f2`）；方案 A [设计规格](./docs/superpowers/specs/2026-09-13-tennixai-home-historical-player-query-closure-design.md) 已由用户确认并在 `831459b` 冻结；[实施计划](./docs/superpowers/plans/2026-09-13-tennixai-home-historical-player-query-closure.md) 已拆分为 7 个 TDD/真实内容验收任务，等待显式交接执行 |
 
 ## P2 完成门摘要
 

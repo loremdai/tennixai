@@ -3,11 +3,11 @@
 > 本文件回答“这个项目是什么、为什么做、哪些原则不能被破坏”。
 > 全局进度见 [ROADMAP.md](./ROADMAP.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-13 17:53 CST
+**最后更新：** 2026-09-13 18:04 CST
 
 **产品阶段：** P1 — 比赛信息查询助手（`done`，2026-09-08）；P2.0–P2.5（`done`），P2.6 正在补齐 Home 历史球员问答的已验证验收缺口；P3 — Market & Decision Support（`planned`，待 P2.6 修正门重新关闭后再进入设计）
 
-**详细基线：** [产品与架构上下文](./docs/product-context.md) · [产品路线设计](./docs/superpowers/specs/2026-09-08-tennixai-product-roadmap-design.md) · [P1 实施计划](./docs/superpowers/plans/2026-09-08-tennixai-p1-implementation.md) · [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) · [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md) · [P2.6 球员目录设计](./docs/superpowers/specs/2026-09-12-tennixai-player-directory-multilingual-identity-design.md) · [P2.6 实施计划](./docs/superpowers/plans/2026-09-12-tennixai-player-directory-multilingual-identity-implementation.md) · [T54 Home 历史球员问答修正设计](./docs/superpowers/specs/2026-09-13-tennixai-home-historical-player-query-closure-design.md) · [v0 球员页面 Prompt](./docs/v0/2026-09-12-player-pages-prompt.md)
+**详细基线：** [产品与架构上下文](./docs/product-context.md) · [产品路线设计](./docs/superpowers/specs/2026-09-08-tennixai-product-roadmap-design.md) · [P1 实施计划](./docs/superpowers/plans/2026-09-08-tennixai-p1-implementation.md) · [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) · [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md) · [P2.6 球员目录设计](./docs/superpowers/specs/2026-09-12-tennixai-player-directory-multilingual-identity-design.md) · [P2.6 实施计划](./docs/superpowers/plans/2026-09-12-tennixai-player-directory-multilingual-identity-implementation.md) · [T54 Home 历史球员问答修正设计](./docs/superpowers/specs/2026-09-13-tennixai-home-historical-player-query-closure-design.md) · [T54 实施计划](./docs/superpowers/plans/2026-09-13-tennixai-home-historical-player-query-closure.md) · [v0 球员页面 Prompt](./docs/v0/2026-09-12-player-pages-prompt.md)
 
 ## 5 分钟恢复入口
 
