@@ -3,11 +3,11 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-12 14:24 CST
+**最后更新：** 2026-09-13 13:18 CST
 
 **总体状态：** `in_progress`
 
-**当前里程碑：** P2.6 — Player Discovery and Multilingual Identity（`done`，2026-09-13 关闭）
+**当前里程碑：** T53 — P2 Final Completion Gate Repair（`in_progress`）
 
 **当前阶段：** 无进行中阶段；P3 — Market & Decision Support 保持 `planned`，设计启动需用户另行授权
 
@@ -100,6 +100,8 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | T50 | P2.6 | Route Home and Match Chat Through the Shared Resolver | `done` | `7f78c33`+`c593f36` | 所有按名 Chat 工具经共享 resolver（context 消歧、by-id 查询）；`player_resolution` kind 与公共候选字段；executor SUCCESS；system guidance 与首提双语格式；Home 候选列表链接 `/players/{id}`；chat tools 28 + orchestrator 38 + chat api 7 passed；真实 LLM 门 14 passed（Shelton/谢尔顿 结构化 done、Wang 歧义与未知名字 resolution+done 无终止 error）；frontend typecheck/build exit 0，vitest 174/179（5 个 match-page 失败在干净 HEAD 同样复现=高负载时序，非回归） |
 | T51 | P2.6 | Connect the v0 Player Pages to Real Structured APIs | `completed` | `501f229` | 2026-09-13 05:35 CST 完成：proxy 路由+typed client+view-models 映射+全状态生产页+`?preview=1` 视觉开关；frontend 206/206、typecheck/build exit 0；player-directory 功能+视觉 e2e 14/14 双视口（4 张 T43 基线不更新通过）；回归 28 passed/6 skipped/14 failed（10 prototype.visual+4 p2-home-filters 均为 T41/T43 已归因旧债） |
 | T52 | P2.6 | Run the P2.6 Real-Service Completion Gate and Close the Milestone | `done` | `d0120ac`+收尾提交 | 领取 `6be739c`、门工具 `f9cc03f`、门槛缺陷修复 `d0120ac`。净库链路：reset→sync 3876/failed=0→enrich 3876/3876=100%（156 批、failed=0）→enrich 重跑 0 批零模型调用→sync 重跑 inserted=0/skipped=15483；backend 确定性 463 passed/45 deselected、infrastructure 22、api_tennis_live 2、llm_live 14、player_directory_e2e_live 3（Shelton/Zheng/Djokovic 五/四/三形式同内部 ID、Wang 歧义候选、五年窗 profile+20/页赛果）；frontend vitest 206/206、typecheck/build exit 0、确定性全量 e2e 42 passed/32 skipped/14 failed（10 prototype.visual+4 p2-home-filters 旧债）、player-directory 14/14（T43 四基线零更新）、live 目录 e2e 18/18（真实 provider+真实 LLM，双视口浏览器旅程含中文搜索→Ben Shelton 资料、Finished 导航、Home/Match Chat 与可恢复歧义/未找到）；总门暴露两处缺陷并在最窄层修复（排名页 Top 200 边界、profile 五年窗）红→绿；泄漏扫描生产代码零命中、`git diff --check` 干净、未跟踪用户文件未动 |
+
+| T53 | P2 final gate | P2 Final Completion Gate Repair | `in_progress` | — | 领取于 `7bbb541`；关闭 14 个 Playwright 失败、删除配置重复声明、逐张审查 prototype 视觉差异并同步三份总控；完成前不得标记 `done` 或启动 P3 |
 
 ## P2 完成门摘要
 
