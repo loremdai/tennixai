@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-13 13:18 CST
+**最后更新：** 2026-09-13 13:34 CST
 
-**总体状态：** `in_progress`
+**总体状态：** `ready`
 
-**当前里程碑：** T53 — P2 Final Completion Gate Repair（`in_progress`）
+**当前里程碑：** P3 — Market & Decision Support（`planned`；`ready for design`，启动需用户明确授权）
 
-**当前阶段：** 无进行中阶段；P3 — Market & Decision Support 保持 `planned`，设计启动需用户另行授权
+**当前阶段：** P2 正式关闭；当前没有进行中的任务；P3 保持 `planned`，已具备设计启动前置条件但仍需用户明确授权
 
 ## 状态说明
 
@@ -29,7 +29,7 @@
 | 里程碑 | 状态 | 目标 | 进入/完成条件 |
 |---|---|---|---|
 | P1 — Match Information Assistant | `done` | 跑通真实结构化比赛查询、卡片、Match Page 与上下文 Chat | T17/T18/T19 均已完成（`69c8238`、`5572960`、`fdb0131`）；P1 已关闭 |
-| P2 — Live Match Intelligence | `done` | 技术统计、PBP、近期控制指数、持久化、多进程实时协调，以及球员目录、多语言身份与历史赛果入口 | P2.0–P2.6 全部任务完成；P2.6 于 2026-09-13 经 T52 真实服务总门关闭 |
+| P2 — Live Match Intelligence | `done` | 技术统计、PBP、近期控制指数、持久化、多进程实时协调，以及球员目录、多语言身份与历史赛果入口 | P2.0–P2.6 全部任务完成；P2.6 的最终 Playwright、配置和视觉收口由 T53 于 2026-09-13 完成 |
 | P3 — Market & Decision Support | `planned` | 市场状态、预测、edge、confidence 和 paper trading | P2 数据可信；映射、模型评估和风控设计另行批准 |
 | Optional — Automated Execution | `deferred` | 在满足法律、风控、安全和可审计条件后考虑自动下单 | 不属于 P3 默认范围，必须单独批准 |
 
@@ -57,7 +57,7 @@
 | P2.3 — Realtime pipeline | `done` | Reducer、WebSocket worker、租约、持久化、snapshot + SSE | T26–T28 完成（`98a1a22`、`d354aba`、`f03985b`）；T29/T30 已在 P2.4 完成 |
 | P2.4 — Match intelligence | `done` | 完整 PBP、22 项统计、近期控制指数、版本化上下文 Chat | T29（`ecd916b`）、T30（`8c9e161`）、T31（`128518f`）完成；P2.5 可开始 |
 | P2.5 — Acceptance and hardening | `done` | Replay、恢复门、真实 smoke、双视口视觉、本地 runbook 与真实数据回归修复 | T32 `ac9c6e5`–T41 `5c3d469` 已完成；Home 与 Match 详情页的问答用户展示策略已同步 |
-| P2.6 — Player Discovery and Multilingual Identity | `done` | ATP/WTA 单打 Top 200 目录、球员详情与历史赛果、共享多语言球员主数据和确定性名称解析 | T43–T52 全部完成；T52 真实服务总门（`d0120ac`+收尾提交）于 2026-09-13 关闭里程碑 |
+| P2.6 — Player Discovery and Multilingual Identity | `done` | ATP/WTA 单打 Top 200 目录、球员详情与历史赛果、共享多语言球员主数据和确定性名称解析 | T43–T53 全部完成；T53 于 2026-09-13 关闭最终验收门并正式关闭 P2.6 |
 
 P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md)，逐任务步骤见 [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md)。P2.6 的唯一详细基线是 [球员目录设计规格](./docs/superpowers/specs/2026-09-12-tennixai-player-directory-multilingual-identity-design.md)、[P2.6 实施计划](./docs/superpowers/plans/2026-09-12-tennixai-player-directory-multilingual-identity-implementation.md) 和 [v0 球员页面 Prompt](./docs/v0/2026-09-12-player-pages-prompt.md)。
 
@@ -98,10 +98,10 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | T48 | P2.6 | Add the Deterministic PlayerResolver and Cut Runtime Queries to Internal IDs | `done` | `1f480df` | `resolver.py`（resolved/ambiguous/not_found、kind 优先级、Match context 唯一消歧、§8.3 单一明显候选规则：非身份级别名且恰一名 Top 200 候选才解析）；`TennisService.resolve_player/list_matches_by_player_id/find_player_matches_by_id`，无 resolver 时保留旧 provider-search fallback；`ApiTennisProvider.search_players` 委托本地目录、无目录 typed unsupported，删除三日扫描与 `SEARCH_WINDOW_DAYS`；`create_app` 装配 api_tennis→Postgres 目录、fake→Memory 目录 + 一次性 seeder、livetennis/replay→fallback；resolver 26 项 + service/provider 契约全绿（focused 111 passed）、确定性 441 passed/36 deselected、infrastructure 21 passed；真实目录五形式（Ben Shelton/B. Shelton/Shelton/本·谢尔顿/谢尔顿）同内部 ID，按 ID 取 live/fixtures 成功且只打印 ID/计数 |
 | T49 | P2.6 | Expose Rankings, Profile, and Five-Season Result APIs | `done` | `ae0fa44` | canonical `RankingPage/PlayerProfileView/PlayerResultPage/ResultOutcome/SurfaceRecord/PlayerSeasonRecord` 与 `PlayerProfileProvider`；API-Tennis profile（logo、singles-only 赛季、空白场地 None、DD.MM.YYYY 生日）与按年有界赛果（FINISHED、最新优先）；fake 8 球员目录 + 确定性 profile/赛果；service 组合（profile 1h/负 60s、赛果 10min/空 60s、live→next→None）；四路由（rankings/search 先注册、page_size 固定 50/20、season 五年窗口 422、search 返回 resolution 信封）；新增 test_player_api/test_player_profile_service 23 项、test_p2_api/test_api 契约更新；确定性 454 passed/36 deselected、infrastructure 21 passed；真实 smoke：Top 200（Ben 11 赛季全含场地、2026 赛果 65）与 Top 200 外（Sheldon #1339 8 赛季、5 场）均诚实映射 |
 | T50 | P2.6 | Route Home and Match Chat Through the Shared Resolver | `done` | `7f78c33`+`c593f36` | 所有按名 Chat 工具经共享 resolver（context 消歧、by-id 查询）；`player_resolution` kind 与公共候选字段；executor SUCCESS；system guidance 与首提双语格式；Home 候选列表链接 `/players/{id}`；chat tools 28 + orchestrator 38 + chat api 7 passed；真实 LLM 门 14 passed（Shelton/谢尔顿 结构化 done、Wang 歧义与未知名字 resolution+done 无终止 error）；frontend typecheck/build exit 0，vitest 174/179（5 个 match-page 失败在干净 HEAD 同样复现=高负载时序，非回归） |
-| T51 | P2.6 | Connect the v0 Player Pages to Real Structured APIs | `completed` | `501f229` | 2026-09-13 05:35 CST 完成：proxy 路由+typed client+view-models 映射+全状态生产页+`?preview=1` 视觉开关；frontend 206/206、typecheck/build exit 0；player-directory 功能+视觉 e2e 14/14 双视口（4 张 T43 基线不更新通过）；回归 28 passed/6 skipped/14 failed（10 prototype.visual+4 p2-home-filters 均为 T41/T43 已归因旧债） |
-| T52 | P2.6 | Run the P2.6 Real-Service Completion Gate and Close the Milestone | `done` | `d0120ac`+收尾提交 | 领取 `6be739c`、门工具 `f9cc03f`、门槛缺陷修复 `d0120ac`。净库链路：reset→sync 3876/failed=0→enrich 3876/3876=100%（156 批、failed=0）→enrich 重跑 0 批零模型调用→sync 重跑 inserted=0/skipped=15483；backend 确定性 463 passed/45 deselected、infrastructure 22、api_tennis_live 2、llm_live 14、player_directory_e2e_live 3（Shelton/Zheng/Djokovic 五/四/三形式同内部 ID、Wang 歧义候选、五年窗 profile+20/页赛果）；frontend vitest 206/206、typecheck/build exit 0、确定性全量 e2e 42 passed/32 skipped/14 failed（10 prototype.visual+4 p2-home-filters 旧债）、player-directory 14/14（T43 四基线零更新）、live 目录 e2e 18/18（真实 provider+真实 LLM，双视口浏览器旅程含中文搜索→Ben Shelton 资料、Finished 导航、Home/Match Chat 与可恢复歧义/未找到）；总门暴露两处缺陷并在最窄层修复（排名页 Top 200 边界、profile 五年窗）红→绿；泄漏扫描生产代码零命中、`git diff --check` 干净、未跟踪用户文件未动 |
+| T51 | P2.6 | Connect the v0 Player Pages to Real Structured APIs | `done` | `501f229` | 2026-09-13 05:35 CST 完成：proxy 路由+typed client+view-models 映射+全状态生产页+`?preview=1` 视觉开关；frontend 206/206、typecheck/build exit 0；player-directory 功能+视觉 e2e 14/14 双视口（4 张 T43 基线不更新通过）；当时回归中的 14 个 Playwright 失败已由 T53 收口 |
+| T52 | P2.6 | Run the P2.6 Real-Service Completion Gate and Close the Milestone | `done` | `6be739c`、`f9cc03f`、`d0120ac`、`7bbb541` | 净库 sync/enrich/status、真实 API-Tennis/LLM/目录和浏览器证据已入库：sync 3876/failed=0，中文覆盖 100%，重跑零模型调用且同步幂等；backend deterministic 463 passed/45 deselected、infra 22、api_tennis_live 2、llm_live 14、player_directory_e2e_live 3；frontend 206/206、typecheck/build、目录 e2e 14/14、真实目录 e2e 18/18。T52 记录的 14 个确定性 Playwright 失败属于最终收口遗留，已由 T53 逐项关闭 |
 
-| T53 | P2 final gate | P2 Final Completion Gate Repair | `in_progress` | — | 领取于 `7bbb541`；关闭 14 个 Playwright 失败、删除配置重复声明、逐张审查 prototype 视觉差异并同步三份总控；完成前不得标记 `done` 或启动 P3 |
+| T53 | P2 final gate | P2 Final Completion Gate Repair | `done` | `348110c` | 领取提交 `891b4d5`（起始 `7bbb541`）；Home 默认显式四性别 URL 契约断言修复，`config.py` 删除重复 `api_tennis_ws_url`；10 张 prototype expected/actual/diff 逐张人工审查，确认 T38/T41/T52 批准演进后仅更新对应基线；PostgreSQL/Redis healthy，backend 463/45 与 infrastructure 22/486，frontend 206/206+typecheck/build，完整 Playwright 56 passed/32 skipped/0 failed，`git diff --check` 与供应商字段/凭据扫描通过 |
 
 ## P2 完成门摘要
 
