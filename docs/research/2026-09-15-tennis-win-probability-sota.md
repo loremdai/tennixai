@@ -277,6 +277,25 @@ Jeff Sackmann 数据的现存归档镜像可用于复现实验，包含 ATP/WTA 
 5. 根据统一 out-of-time 结果选择首个 champion，再让 v0 按真实状态与解释契约修改原型。
 6. 首版只运行 paper decision。若没有模型在扣成本的市场回放中显示可信增量，产品应诚实停在概率对照和 `NO BET`，而不是为了“功能完整”强行给 BUY。
 
+## 11. T55 后续批准：Market-to-Match 组合方式
+
+**批准日期：** 2026-09-15
+
+Polymarket 的网球 moneyline 提供完整 outcome 球员名、赛事上下文和独立 event/market/token ID，但实际网球事件的 `gameId` 可以为空，因此不能假设存在可与 API-Tennis 直接连接的公共比赛 ID。
+
+T55 已批准使用 **市场独立展示 + 内部 Player ID 运行时精确组合**：
+
+- Polymarket 与 API-Tennis 各自保留 provider identity，不创建人工维护的永久 link。
+- 两个 Polymarket outcome 通过已有 Player Identity Registry 解析为内部 Player ID。
+- API-Tennis 比赛也转换为同一内部 Player ID 对。
+- 只有无序双方 ID 完全相同且候选唯一、上下文无冲突时，才临时组成 `DecisionContext`。
+- 不使用 LLM、模糊相似度或人工确认完成最终连接。
+- 未连接市场仍正常展示；只有大满贯及 ATP/WTA 主巡赛单打的成功连接项显示 `模型覆盖`，Challenger/ITF 不显示未覆盖警告。
+
+只读真实 spike 使用 2026-09-15 至 09-16 窗口：125 个有效 Polymarket 网球 moneyline 对 477 条 API-Tennis 记录，得到 79 个唯一连接（63.2%）、0 个多候选；成功项时间差中位数 0 分钟、最大 45 分钟。成功项包含 18 场 WTA Singles、42 场男子 Challenger 和 19 场女子 Challenger；该窗口没有 ATP 主巡赛样本。25 个失败来自市场球员目录缺口，21 个来自无 API 当期球员对，主要集中在低级别赛事。
+
+该 spike 证明“精确连接不会被迫退化为模糊人工绑定”，但不证明所有高级别赛事已经达到生产覆盖。P3 实施计划必须包含 ATP/WTA/大满贯 shadow coverage gate；连接缺失只能抑制模型标记，不能猜测或误绑。
+
 ---
 
 这份研究的核心判断是：**TennixAI 的 SOTA 不应是一篇论文的名字，而应是一套不会被数据泄漏、概率失准和不可成交价格欺骗的持续基准与晋升机制。**

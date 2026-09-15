@@ -2,7 +2,7 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-15 11:53 CST
+**最后更新：** 2026-09-15 14:04 CST
 
 **当前任务：** T55 — Freeze P3 Market & Decision Support Design and Prototype Brief
 
@@ -22,9 +22,9 @@
 
 **关闭提交：** —
 
-**当前动作：** 已完成 P3 胜率预测、概率校准、选择性弃权和可执行市场比较的论文/SOTA 调研，等待用户审阅研究方向。调研不预先指定唯一模型，建议在统一时间外基准下比较 surface-aware dynamic rating、Markov、Bayesian shrinkage 与 hybrid HGBM，并将独立网球概率和 Polymarket 市场数据严格分层。设计获批前不写实现代码。
+**当前动作：** P3 SOTA 研究方向、首版模型覆盖标记和 market-to-match 运行时组合方案已获用户批准。下一步继续逐项冻结 decision/abstention、paper opportunity、实时数据流和页面信息架构；全部设计获批前不写实现代码。
 
-**当前状态：** P2（含 T54）保持已关闭；P3.0 仅进入 design freeze。研究报告位于 `docs/research/2026-09-15-tennis-win-probability-sota.md`，状态为研究建议而非已批准规格；具体 champion、校准器和 decision 阈值必须在数据覆盖审计与统一 benchmark 后决定。P4 已确定为 P1–P3 框架完成后的统一打磨阶段；当前没有 P3 provider、schema、prediction、decision、paper ledger、页面或交易能力，自动下单仍属独立延期阶段。
+**当前状态：** P2（含 T54）保持已关闭；P3.0 仅进入 design freeze。研究报告位于 `docs/research/2026-09-15-tennis-win-probability-sota.md`；其模型选择方法和 market-to-match 方向已批准，但仍不是完整 P3 规格。具体 champion、校准器和 decision 阈值必须在数据覆盖审计与统一 benchmark 后决定。P4 已确定为 P1–P3 框架完成后的统一打磨阶段；当前没有 P3 provider、schema、prediction、decision、paper ledger、页面或交易能力，自动下单仍属独立延期阶段。
 
 ## T55 研究节点（2026-09-15）
 
@@ -33,6 +33,14 @@
 - 市场门修正为可执行价格：Polymarket 页面展示价通常不是实际买入价；paper decision 必须使用 ask/订单簿深度、市场实际费率、滑点和不确定性边际。
 - 推荐边界：LLM 只解释结构化输出；当前市场价不进入独立网球模型；证据、数据、映射或流动性不足时输出明确 `NO BET`。
 - 尚未批准或实施：候选模型 champion、绝对阈值、训练数据许可方案、P3 数据/服务契约、页面改版和任何交易能力。
+
+## T55 已批准边界与 market-to-match spike（2026-09-15）
+
+- 模型覆盖：只为大满贯和 ATP/WTA 主巡赛单打显示正向 `模型覆盖` 标记，并在这些比赛上提供胜率、edge 与 `BUY / NO BET`；Challenger/ITF 仍展示比赛和 Polymarket 市场，但不显示“未验证”等负向标记，也不提供模型建议。
+- 数据关系：Polymarket 市场与 API-Tennis 比赛各自保留 provider ID；不建立需要人工维护的永久绑定，不用 LLM 或模糊置信分做最终连接。
+- 组合规则：先把 Polymarket moneyline 的两个完整 outcome 名称解析为内部 Player ID，再与 API-Tennis 的无序 Player ID 对做运行时精确连接；只有唯一且上下文无冲突的结果才能组成 `DecisionContext`。失败时市场照常展示、不显示模型标记，后续同步自动重试。
+- 真实只读 spike：2026-09-15 至 09-16 共 125 个有效 Polymarket 网球 moneyline、477 条 API-Tennis 赛程/比赛记录；79 个唯一连接（63.2%）、0 个多候选，成功项开赛时间差中位数 0 分钟、最大 45 分钟。成功项含 WTA Singles 18、男子 Challenger 42、女子 Challenger 19；该窗口无 ATP 主巡赛样本。
+- 失败分布：25 个市场至少一名球员未进入当前目录，21 个已解析球员对没有 API 当期记录，样本主要集中在低级别赛事；这不阻塞低级别市场独立展示。ATP 主巡赛及更多大满贯/WTA 样本仍须在实施阶段 shadow 验证，不能用本次窗口宣称全面覆盖。
 
 ## 上一任务 T54 完成证据（2026-09-13）
 
@@ -63,4 +71,4 @@
 
 ## 下一步
 
-用户审阅 P3 胜率 SOTA 研究方向；确认后继续 T55 的单问题设计讨论，将获批结论写入 P3 设计规格。规格获批前不得编写实施计划、修改 v0 原型或实现 P3 功能。
+继续 T55 的单问题设计讨论；下一项先冻结“一个合格 paper opportunity”的定义和同场去重规则，再讨论实时流与页面。全部设计经用户批准后写入 P3 设计规格；规格获批前不得编写实施计划、修改 v0 原型或实现 P3 功能。
