@@ -297,6 +297,60 @@ T55 已批准使用 **市场独立展示 + 内部 Player ID 运行时精确组�
 
 该 spike 证明“精确连接不会被迫退化为模糊人工绑定”，但不证明所有高级别赛事已经达到生产覆盖。P3 实施计划必须包含 ATP/WTA/大满贯 shadow coverage gate；连接缺失只能抑制模型标记，不能猜测或误绑。
 
+## 12. T55 追加调研：规则化退出不是固定止盈
+
+**调研日期：** 2026-09-15
+
+**状态：** 研究结论已记录；默认退出策略仍待用户批准。
+
+### 12.1 没有脱离目标函数的“最佳卖点”
+
+对持有 `N` 份、结算为 `$1 / $0` 的二元合约，在当前信息下可先写出两个值：
+
+```text
+hold_expected_value = N × current_model_probability
+sell_net_value      = delayed_executable_bid_proceeds - exit_fee
+```
+
+若目标是风险中性的期望现金最大化，入场成本已经是 sunk cost；是否卖出只应比较“现在净卖出”和“继续持有”的当前价值。两者毛价值相同的时候，卖出只是把不确定收益换成确定收益，并不凭空增加期望值；计入 bid/ask spread 与 taker fee 后，机械卖出通常更差。只有净卖出价值高于模型继续持有价值，才存在纯期望值意义上的卖出理由；“模型相对入场时转弱”本身仍不足以取代这次重新估值。
+
+风险厌恶、资金需要复用或希望降低回撤时，确定现金的效用可以高于同等期望的二元回报，此时可在市场回到模型合理区间后锁定利润。但这属于 risk-adjusted preference，不能包装成“期望值更高”。[Manski 对二元预测市场的分析](https://www.nber.org/papers/w10359)指出，主观概率、价格、预算与风险偏好共同决定交易；[Gârleanu 与 Pedersen](https://www.nber.org/papers/w15205)则说明存在交易成本时，动态策略取决于信号持续性和移动目标，而不是一个脱离过程的固定止盈百分比。
+
+### 12.2 固定盈利百分比容易混入 disposition effect
+
+[Brown 与 Yang（2017）](https://doi.org/10.1002/soej.12202)发现 cash-out 功能提高了“更快卖掉盈利持仓、继续持有亏损持仓”的 disposition effect。[Newall 等关于 cash-out 的研究](https://doi.org/10.1016/j.jmp.2021.102534)也指出，早退决策会受到损失厌恶和概率加权影响，而且 cash-out 价格可能低于持仓期望价值。这些研究主要针对 bookmaker cash-out，并不直接等同于 Polymarket CLOB，但足以否定“盈利达到固定百分比就卖”可以天然视为理性基线。
+
+### 12.3 网球市场可能收敛，但不能预设收敛路径
+
+[Brown（2014）](https://doi.org/10.1111/ecoj.12057)用 Wimbledon Betfair 数据观察到 in-play 信息处理约束可造成暂时错价；这支持记录和检验“模型—市场 gap 是否收敛”。另一方面，[Brown 与同事关于 courtsiding 的研究](https://doi.org/10.1016/j.jebo.2018.09.020)发现快速交易者承担了重要比赛事件后完整价格反应的约 60%–70%，说明主胜市场会很快吸收显著公开信息。研究证据因此支持“收集轨迹并实证比较退出策略”，不支持预先承诺市场必然在某一比分或价格向模型收敛。
+
+### 12.4 Polymarket 的可成交退出比图表价格更严格
+
+Polymarket 是 CLOB：买入穿过 ask、卖出取得 bid；[订单生命周期](https://docs.polymarket.com/concepts/order-lifecycle)还说明，配置了 sports/game delay 的可成交订单会先进入不可取消的延迟窗口，再重新校验和撮合。[费用文档](https://docs.polymarket.com/trading/fees)表明费率按市场参数计算，maker 与 taker 不同。2026-09-15 对真实 tennis moneyline 的只读抽样还观察到：当期样本常见 `secondsDelay=1`，而不同市场版本的 `feeSchedule.rate` 出现 `0.03` 和 `0.05`。
+
+因此 paper fill 不能使用触发瞬间 midpoint、last trade 或 best bid：必须在该市场实际 delay 后，按届时订单簿逐档计算固定持仓能否成交、平均成交价、部分成交和费用。官方 `prices-history` 只返回按分钟 fidelity 的价格点，不能替代决策时的完整深度；P3 必须自行保存决策相关的 WebSocket 订单簿状态与版本，才能诚实回放。[Polymarket Price History](https://docs.polymarket.com/api-reference/markets/get-prices-history)
+
+### 12.5 推荐的 P3 实验结构（待批准）
+
+不要现在凭直觉挑一个“最佳退出”，而是让一次真实 paper position 同时产生互不计入真实组合的反事实轨道：
+
+1. `HODL_BASELINE`：始终持有至结算，衡量原始预测与入场 edge。
+2. `EV_EXIT`：只有延迟、深度和费用后的净卖出价值超过稳健继续持有价值时才退出；这是默认决策建议的候选。
+3. `CONVERGENCE_LOCK`：市场回到模型合理区间后锁定利润，明确标记为风险降低策略；这是用户所描述交易逻辑的候选。
+4. `FIXED_TAKE_PROFIT`：只作为诊断 benchmark，检验固定阈值是否偶然有效，不作为默认策略候选。
+
+对于提前退出，可在每份合约层面做近似归因：
+
+```text
+gross_price_pnl = (p_exit - p_entry) + (entry_gap - exit_gap)
+entry_gap       = p_entry - executable_entry_ask
+exit_gap        = p_exit  - executable_exit_bid
+```
+
+第一项近似表示赛况使模型基本面发生的变化，第二项近似表示模型—市场错价的收敛或扩张；交易费和滑点另行扣除。该分解不能证明模型概率就是真实概率，但能防止把“球员后来打得更好带来的涨价”全部误报成市场终于认可了模型。
+
+模型概率必须先单独通过 proper scoring 与校准门；默认退出策略只能在独立的 walk-forward / shadow paper 窗口按净 P&L、回撤、周转成本、覆盖率和样本不确定性比较后选择。若没有稳定胜者，产品应同时展示持有价值与可锁定价值，不伪装存在唯一最优动作。
+
 ---
 
 这份研究的核心判断是：**TennixAI 的 SOTA 不应是一篇论文的名字，而应是一套不会被数据泄漏、概率失准和不可成交价格欺骗的持续基准与晋升机制。**
