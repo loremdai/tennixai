@@ -380,6 +380,38 @@ Polymarket WebSocket -> canonical MarketState --/
 - 进入追踪窗口且完成精确组合的模型覆盖比赛由后端持续追踪；未结 paper position 必须跟踪到退出或结算，即使浏览器关闭。Challenger/ITF 无模型轨迹，市场按查看需求加载。
 - REST 只用于初始 snapshot、断线重建和校准。本地后端离线或中间缺失的数据记录为 `tracking_gap`，不得根据事后结果回填当时不存在的信号或模拟成交。
 
+## 15. T55 追加核验：实时热路径与耐久写入
+
+**核验日期：** 2026-09-15
+
+**状态：** 官方资料、现有实现和本机延迟探针已核验；以下事件分类方案是待用户批准的设计建议，不授权实现。
+
+### 15.1 外部系统的共同经验
+
+- [Coinbase WebSocket Best Practices](https://docs.cdp.coinbase.com/exchange/websocket-feed/best-practices)明确建议限制 WebSocket callback 中的 I/O，并把处理排队到其他执行路径，以避免 slow-consumer 断开；其 [WebSocket sequence 文档](https://docs.cdp.coinbase.com/coinbase-app/advanced-trade-apis/websocket/websocket-overview)也要求处理丢帧和乱序。对 TennixAI 的含义是：供应商读取循环不能等待模型、数据库或 SSE 客户端。
+- [Polymarket market channel](https://docs.polymarket.com/api-reference/wss/market)提供完整 `book`、增量 `price_change`、timestamp 与 book hash；[Order Lifecycle](https://docs.polymarket.com/concepts/order-lifecycle)把 delayed、matched、unmatched、partial fill 等状态分开。paper order 因而需要可恢复状态机，不能把一次 `BUY` 计算直接记成已成交。
+- [Redis Pub/Sub 官方文档](https://redis.io/docs/latest/develop/pubsub/)明确其为 at-most-once：订阅者断开时消息永久丢失。Redis 官方也建议需要 replay/ack 时使用 Streams，但 Streams 仍要求配置持久化、幂等消费和 retention；它不是在当前规模下必须引入的新事实源。
+- [PostgreSQL WAL 文档](https://www.postgresql.org/docs/current/wal-async-commit.html)说明默认同步提交会在确认前把 WAL 刷入持久存储，而异步提交可能丢失最近事务，不应在确认后还会触发外部动作的场景使用。paper 持仓转换属于必须同步提交的类别。
+- 类似支付系统使用的[幂等键](https://docs.stripe.com/api/idempotent_requests)可避免断线重试产生重复副作用；P3 的 paper intent/fill 应使用稳定键和数据库唯一约束实现同一性质，而不是依赖进程内标志。
+
+### 15.2 TennixAI 当前基线与本机探针
+
+- P2 `RealtimeWorker._apply()` 当前先执行完整 `save_reduction()`，提交成功后才更新热状态和 Redis/SSE；`save_reduction()` 在一个 PostgreSQL 事务中写 snapshot、points、revisions、statistics 与 momentum。它给低频比赛事实提供了清晰一致性，但不适合原样复制到高频订单簿每个 delta。
+- 当前 compose PostgreSQL 实测 `synchronous_commit=on`、`fsync=on`；Redis 实测 `appendonly=no`，仅配置周期 RDB snapshot，因此 Redis 只能作热状态和通知层，不能作 paper ledger。
+- 只使用 PostgreSQL TEMP TABLE 和临时 Redis key 的本机探针：300 次 PostgreSQL 同步小事务 median `0.945ms`、p95 `1.116ms`、max `6.795ms`；500 次 Redis set+publish median `0.571ms`、p95 `0.696ms`、max `5.290ms`。
+- 现有 `test_load_snapshot_rebuilds_the_canonical_view` 的完整 integration call（包含 identity、reduction 持久化和读回断言）为 `0.08s`。这些数字只代表当前机器与当前负载，不能当生产 SLO，但足以说明“同步提交本身”不是主要风险；高频路径真正的风险是每个 book delta 重复完整 SQL/序列化和队列积压。
+
+### 15.3 证据支持的事件分类方案
+
+1. **Ingress：** API-Tennis 与 Polymarket WebSocket callback 只验证 envelope、记录 received time 并放入有界的 per-match queue；不做 SQL、模型推理或 SSE。
+2. **网球 canonical 事实：** P3 首版保留现有 API-Tennis reduction 的 DB-first 顺序。网球 point 频率低于订单簿，当前完整一致性已有测试；同时增加分段耗时指标，只有实际延迟超门才优化。
+3. **市场热状态：** Polymarket book 在单写者内存 reducer 中按版本/hash 更新，并把最新 hot snapshot 送 Redis/SSE；不把每个原始 delta 同步写 PostgreSQL。只将改变 `$10` 可执行价、动作、模型对照或周期采样点的 observation 异步批量落库。
+4. **paper 状态转换：** `order_intent`、delay 后的 `fill/no_fill`、`exit` 与 `settlement` 使用 PostgreSQL 同步事务和唯一幂等键；事务提交后才向 Redis/SSE 发布已确认状态。若提交后、发布前崩溃，SSE 重连从 PostgreSQL 当前状态恢复。
+5. **故障语义：** 普通 observation 写入队列若因进程崩溃留下缺口，必须形成 `tracking_gap`，不能事后补造；不可丢的 paper 状态不进入这条弱保证队列。
+6. **暂不增加 broker：** P3 本地私人测试先复用 PostgreSQL、Redis 和进程内有界队列，不引入 Kafka。只有实测出现 observation backlog、恢复需求或多消费者压力时，才评估 Redis Streams；即使引入也不能取代 PostgreSQL paper ledger。
+
+这个结论修正了笼统的“普通更新全部先发布、以后再写库”：**应按事件价值与频率分类，而不是用一套顺序处理所有消息。**
+
 ---
 
 这份研究的核心判断是：**TennixAI 的 SOTA 不应是一篇论文的名字，而应是一套不会被数据泄漏、概率失准和不可成交价格欺骗的持续基准与晋升机制。**

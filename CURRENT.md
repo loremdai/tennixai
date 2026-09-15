@@ -2,7 +2,7 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-15 16:44 CST
+**最后更新：** 2026-09-15 16:55 CST
 
 **当前任务：** T55 — Freeze P3 Market & Decision Support Design and Prototype Brief
 
@@ -22,7 +22,7 @@
 
 **关闭提交：** —
 
-**当前动作：** P3 SOTA 研究方向、首版模型覆盖标记、market-to-match 运行时组合、“独立估值而非延迟套利”原则、持仓前后的动作语义、paper 生命周期，以及后端拥有的双 WebSocket 事件流与后台追踪边界均已获用户批准；用户明确数据及时性为首要目标。下一步冻结热路径与持久化的分工，再继续讨论页面信息架构。
+**当前动作：** P3 SOTA 研究方向、首版模型覆盖标记、market-to-match 运行时组合、“独立估值而非延迟套利”原则、持仓前后的动作语义、paper 生命周期，以及后端拥有的双 WebSocket 事件流与后台追踪边界均已获用户批准；用户明确数据及时性为首要目标。热路径与持久化已完成官方资料、现有 P2 代码和本机延迟核验，下一步批准或修正按事件类别分流的建议，再继续讨论页面信息架构。
 
 **当前状态：** P2（含 T54）保持已关闭；P3.0 仅进入 design freeze。研究报告位于 `docs/research/2026-09-15-tennis-win-probability-sota.md`；其模型选择方法和 market-to-match 方向已批准，但仍不是完整 P3 规格。具体 champion、校准器和 decision 阈值必须在数据覆盖审计与统一 benchmark 后决定。P4 已确定为 P1–P3 框架完成后的统一打磨阶段；当前没有 P3 provider、schema、prediction、decision、paper ledger、页面或交易能力，自动下单仍属独立延期阶段。
 
@@ -34,6 +34,7 @@
 - 推荐边界：LLM 只解释结构化输出；当前市场价不进入独立网球模型；证据、数据、映射或流动性不足时输出明确 `NO BET`。
 - 退出研究结论：不存在脱离目标函数、风险偏好、交易成本和 alpha 持续性的通用最优卖点；“市场价追上模型点估计就自动卖”不能直接冻结为唯一规则。风险中性时应比较净可执行卖出所得与模型继续持有价值；锁定同等期望利润属于降低方差的选择，必须单独标识。
 - Polymarket 执行事实：卖出须使用实际订单簿 bid/depth，且要计入逐市场费率与 sports order delay；2026-09-15 只读样本显示当期 tennis moneyline 常见 `secondsDelay=1`，不同市场版本的 `feeSchedule.rate` 出现 `0.03` 与 `0.05`，进一步证明不能硬编码或按信号时盘口假装成交。
+- 热路径核验：交易所官方经验要求 WebSocket 回调避免 I/O 与慢消费；Redis Pub/Sub 是 at-most-once，当前本地 Redis 又是 `appendonly=no`，不能承担不可丢账本；PostgreSQL 当前 `synchronous_commit=on`、`fsync=on`。本机临时探针中 PostgreSQL 300 次同步小事务 median/p95 为 0.945/1.116ms，Redis 500 次 set+publish 为 0.571/0.696ms；现有完整 reduction 集成用例单次 call 0.08s。证据支持按事件类别分流，而不是全同步或全异步。
 - 已批准退出语义：`SELL` 是净可执行卖出价值高于稳健持有价值时的期望值动作；`LOCK PROFIT` 是市场回到模型合理区间时的可选风险降低动作，两者不得混用。具体数值阈值和候选规则仍须由 walk-forward/shadow 数据选择。
 - 尚未批准或实施：候选模型 champion、绝对阈值、训练数据许可方案、P3 数据/服务契约、页面改版和任何交易能力。
 
@@ -115,4 +116,4 @@
 
 ## 下一步
 
-继续 T55 的单问题设计讨论；下一项冻结实时热路径和 PostgreSQL 持久化的先后关系，明确普通快照与 paper position 状态转换的耐久性要求，随后讨论页面信息架构。全部设计经用户批准后写入 P3 设计规格；规格获批前不得编写实施计划、修改 v0 原型或实现 P3 功能。
+继续 T55 的单问题设计讨论；下一项决定是否采用核验后的事件分类方案：WebSocket ingress 只入队，API-Tennis canonical reduction 暂保留现有 DB-first，Polymarket 高频订单簿走内存/Redis 热路径并异步批量保存决策相关 observation，paper order intent/fill/exit/settlement 使用 PostgreSQL 同步事务与幂等键后再发布。随后讨论页面信息架构。全部设计经用户批准后写入 P3 设计规格；规格获批前不得编写实施计划、修改 v0 原型或实现 P3 功能。
