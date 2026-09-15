@@ -2,31 +2,31 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-13 21:05 CST
+**最后更新：** 2026-09-15 11:11 CST
 
-**当前任务：** T54 — Close Home Historical Player Queries
+**当前任务：** T55 — Freeze P3 Market & Decision Support Design and Prototype Brief
 
-**任务状态：** `done`
+**任务状态：** `in_progress`
 
-**执行者 / ADE：** Claude Code / Claude Code ADE（用户显式交接，接替 Codex）
+**执行者 / ADE：** Codex / Codex Desktop
 
 **分支：** `main`
 
-**任务起始提交：** `5d8e3f2`
+**任务起始提交：** `7409806`
 
-**领取提交：** `259235c`（Codex）；ADE 接手领取 `8e0b706`（接手起始提交 `559fdf7`，2026-09-13 18:12 CST）
+**领取提交：** 待本次总控提交完成后回填
 
-**设计提交：** `831459b`
+**设计提交：** —
 
-**产品提交：** `7a66e6a`（Task 1 能力路由）、`eef5724`（Task 2 五赛季语义）、`8818304`（Task 3 typed player_history）、`edb2b89`（Task 4 dataItems 聚合）、`4b23f1b`（Task 5 Home 分组渲染+双基线）、`8d1233f`（Task 6 真实内容门+候选链接修复）
+**产品提交：** —（T55 只授权设计，不授权实现）
 
-**关闭提交：** `86ea404`
+**关闭提交：** —
 
-**当前动作：** T54 已按 [实施计划](./docs/superpowers/plans/2026-09-13-tennixai-home-historical-player-query-closure.md) Task 1–7 全部完成并关闭；P2.6 与 P2 重新关闭，P3 恢复 `planned / ready for design`，未开始任何 P3 设计。
+**当前动作：** 依据用户 2026-09-15 的显式授权开展 P3 架构级设计讨论：先核实 Polymarket 官方能力与现有 P2/原型基线，再逐项确认产品目标、市场映射、预测评估、决策与 abstention、paper trading、实时数据流、页面信息架构、v0 原型范围和验收路线；设计获批前不写实现代码。
 
-**当前状态：** Home 历史球员问答闭环：确定性能力路由（`app/chat/history.py`）、last/recent 五赛季按需语义与 profile-only 赛季战绩、typed `player_history` Chat/SSE、前端 `dataItems` 多结果聚合、Home 分组历史展示与两张专用视觉基线、真实 API-Tennis + 真实 Qwen + 真实浏览器内容级验收全部通过。
+**当前状态：** P2（含 T54）保持已关闭；P3.0 仅进入 design freeze。当前没有 P3 provider、schema、prediction、decision、paper ledger、页面或交易能力；自动下单仍属独立延期阶段。
 
-## T54 完成证据（2026-09-13）
+## 上一任务 T54 完成证据（2026-09-13）
 
 - 确定性后端：`543 passed / 51 deselected`；infrastructure `22 passed / 572 deselected`。
 - 前端：`pnpm test` 228 passed；`pnpm typecheck` 干净；`pnpm build` 编译成功。
@@ -55,4 +55,4 @@
 
 ## 下一步
 
-无进行中任务。P3（Market & Decision Support）已恢复 `planned / ready for design`，但必须经用户显式授权后才能领取设计任务；领取前按根目录入口重新核对 Git 与总控状态。
+继续 T55 的单问题设计讨论；经用户逐段批准后写入 P3 设计规格并提交，随后由用户审阅。规格获批前不得编写实施计划、修改 v0 原型或实现 P3 功能。

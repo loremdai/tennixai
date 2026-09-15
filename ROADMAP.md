@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-13 21:05 CST
+**最后更新：** 2026-09-15 11:11 CST
 
 **总体状态：** `in_progress`
 
-**当前里程碑：** P2 已全部关闭（P2.6 经 T54 修正门重新关闭）；无进行中任务
+**当前里程碑：** P3.0 — Market & Decision Support Design Freeze（T55 设计讨论进行中；尚未授权实现）
 
-**当前阶段：** P3 — Market & Decision Support 恢复 `planned / ready for design`；开始设计前必须获得用户显式授权
+**当前阶段：** P3 — Market & Decision Support（`in_progress`，仅 design freeze）
 
 ## 状态说明
 
@@ -30,7 +30,7 @@
 |---|---|---|---|
 | P1 — Match Information Assistant | `done` | 跑通真实结构化比赛查询、卡片、Match Page 与上下文 Chat | T17/T18/T19 均已完成（`69c8238`、`5572960`、`fdb0131`）；P1 已关闭 |
 | P2 — Live Match Intelligence | `done` | 技术统计、PBP、近期控制指数、持久化、多进程实时协调，以及球员目录、多语言身份与历史赛果入口 | T20–T53 已交付；T54（`8d1233f` 产品/真实验收提交，`86ea404` 关闭提交）补齐 Home 历史意图、last/recent 五赛季语义、多球员结构化结果与内容级真实验收，P2 重新关闭 |
-| P3 — Market & Decision Support | `planned` | 市场状态、预测、edge、confidence 和 paper trading | P2 数据可信（T54 后恢复 ready for design）；映射、模型评估和风控设计另行批准 |
+| P3 — Market & Decision Support | `in_progress` | 市场状态、预测、edge、confidence 和 paper trading | T55 仅开展设计冻结；映射、模型评估、风控、页面与实施路线须经用户批准后才能进入实现 |
 | Optional — Automated Execution | `deferred` | 在满足法律、风控、安全和可审计条件后考虑自动下单 | 不属于 P3 默认范围，必须单独批准 |
 
 ## P1 阶段状态
@@ -103,6 +103,18 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 
 | T53 | P2 final gate | P2 Final Completion Gate Repair | `done` | `348110c` | 领取提交 `891b4d5`（起始 `7bbb541`）；Home 默认显式四性别 URL 契约断言修复，`config.py` 删除重复 `api_tennis_ws_url`；10 张 prototype expected/actual/diff 逐张人工审查，确认 T38/T41/T52 批准演进后仅更新对应基线；PostgreSQL/Redis healthy，backend 463/45 与 infrastructure 22/486，frontend 206/206+typecheck/build，完整 Playwright 56 passed/32 skipped/0 failed，`git diff --check` 与供应商字段/凭据扫描通过 |
 | T54 | P2.6 corrective gate | Close Home Historical Player Queries | `done` | `7a66e6a`、`eef5724`、`8818304`、`edb2b89`、`4b23f1b`、`8d1233f`；关闭 `86ea404` | 领取 `8e0b706`（接手 `559fdf7`）。确定性能力路由 `app/chat/history.py`（中/英短语矩阵、broad-only 零模型/零 provider）；last/recent 走五赛季按需缓存（30 天窗口移除、limit 归一、去重/倒序/五季上限）、profile-only 赛季战绩（零 live/upcoming 调用）；typed `player_history`（player/scope/season/availability/season_record/empty_reason）与合成事实同构；前端 `dataItems` 保序聚合（保留 latest `data` 与首个 `answerContext`）；Home 分组历史（双语标题、scope 徽章、内部链接、空态文案、`没有符合条件的比赛` 仅限当前比赛发现）+ `home-history-answer.png` 双视口专用基线（既有基线零变化）。证据：后端 543+infrastructure 22 passed；前端 228 passed/typecheck/build；全量 Playwright 62 passed/34 skipped/0 failed；home-history e2e 功能 4+视觉 2；`api_tennis_live` 2 passed；`llm_live` 19 passed（含多球员双 data event 与 probe 逐 ID 相等）；`player_directory_e2e_live` 4 passed（同运行 probe-vs-Chat 不变量）；真实浏览器 20 passed（5 历史场景内容级断言、无控制台错误/泄漏）。顺带修复 T50 候选链接契约错位（嵌套域形状 vs 平铺 DTO）。T53 保留为历史事实 |
+
+## P3 阶段状态
+
+| 阶段 | 状态 | 核心交付 | Exit gate / 当前缺口 |
+|---|---|---|---|
+| P3.0 — Design freeze | `in_progress` | 官方能力边界、market mapping、预测评估、decision/risk、paper trading、实时架构、页面信息架构、v0 原型 brief 与分阶段实施路线 | T55 已获用户显式设计授权；设计尚未批准，P3 实现与原型修改均未开始 |
+
+## P3 任务登记表
+
+| ID | 主要阶段 | 任务 | 状态 | 完成提交 | 验收证据 |
+|---|---|---|---|---|---|
+| T55 | P3.0 | Freeze P3 Market & Decision Support Design and Prototype Brief | `in_progress` | — | 2026-09-15 用户显式授权设计；从 `7409806` 开始，先核实最新 Polymarket 官方文档与现有 P2/原型，逐项批准后再落规格；不包含实现 |
 
 ## P2 完成门摘要
 
