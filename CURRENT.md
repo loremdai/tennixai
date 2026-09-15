@@ -2,7 +2,7 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-15 11:11 CST
+**最后更新：** 2026-09-15 11:24 CST
 
 **当前任务：** T55 — Freeze P3 Market & Decision Support Design and Prototype Brief
 
@@ -22,9 +22,9 @@
 
 **关闭提交：** —
 
-**当前动作：** 依据用户 2026-09-15 的显式授权开展 P3 架构级设计讨论：先核实 Polymarket 官方能力与现有 P2/原型基线，再逐项确认产品目标、市场映射、预测评估、决策与 abstention、paper trading、实时数据流、页面信息架构、v0 原型范围和验收路线；设计获批前不写实现代码。
+**当前动作：** 继续 P3 架构级设计讨论。已确认赛前与赛中使用同一概率轨迹、第一版只做单场比赛胜者市场，并以“当前买入并持有至结算”隔离验证预测与入场质量；下一步确认市场映射、模型评估、decision/abstention、paper ledger、实时数据流、页面信息架构、v0 原型范围和验收路线。设计获批前不写实现代码。
 
-**当前状态：** P2（含 T54）保持已关闭；P3.0 仅进入 design freeze。当前没有 P3 provider、schema、prediction、decision、paper ledger、页面或交易能力；自动下单仍属独立延期阶段。
+**当前状态：** P2（含 T54）保持已关闭；P3.0 仅进入 design freeze。P4 已确定为 P1–P3 框架完成后的统一打磨阶段，可基于证据优化模型、阈值、仓位管理、体验和性能；当前没有 P3 provider、schema、prediction、decision、paper ledger、页面或交易能力，自动下单仍属独立延期阶段。
 
 ## 上一任务 T54 完成证据（2026-09-13）
 

@@ -3,7 +3,7 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-15 11:11 CST
+**最后更新：** 2026-09-15 11:24 CST
 
 **总体状态：** `in_progress`
 
@@ -31,6 +31,7 @@
 | P1 — Match Information Assistant | `done` | 跑通真实结构化比赛查询、卡片、Match Page 与上下文 Chat | T17/T18/T19 均已完成（`69c8238`、`5572960`、`fdb0131`）；P1 已关闭 |
 | P2 — Live Match Intelligence | `done` | 技术统计、PBP、近期控制指数、持久化、多进程实时协调，以及球员目录、多语言身份与历史赛果入口 | T20–T53 已交付；T54（`8d1233f` 产品/真实验收提交，`86ea404` 关闭提交）补齐 Home 历史意图、last/recent 五赛季语义、多球员结构化结果与内容级真实验收，P2 重新关闭 |
 | P3 — Market & Decision Support | `in_progress` | 市场状态、预测、edge、confidence 和 paper trading | T55 仅开展设计冻结；映射、模型评估、风控、页面与实施路线须经用户批准后才能进入实现 |
+| P4 — Product Hardening & Optimization | `planned` | 用真实使用、回放和 paper 结果统一打磨 P1–P3 的数据质量、模型、决策策略、体验与性能 | P3 框架和可复现实验链路完成后再设计；动态退出/仓位管理可在证据支持下进入 P4，自动下单不因此获得授权 |
 | Optional — Automated Execution | `deferred` | 在满足法律、风控、安全和可审计条件后考虑自动下单 | 不属于 P3 默认范围，必须单独批准 |
 
 ## P1 阶段状态
@@ -185,6 +186,8 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 - 历史结果：P2 使用 API-Tennis fixtures/H2H 按需提供昨天、近期和有限 H2H；未承诺的数据返回 unavailable/partial。
 - 数据保留：raw provider payload 14 天清理，canonical/derived observations 长期保留。
 - 赔率：即使 API-Tennis 可提供也不接入；P3 由独立 `MarketDataProvider` 对接 Polymarket。
+- P3 决策首轮：覆盖赛前与赛中，只做单场比赛胜者市场；paper decision 先模拟当前买入并持有至结算，以隔离预测/入场质量与退出策略质量。
+- P4：在 P1–P3 框架与证据链完整后集中优化；动态止盈、止损、提前卖出和仓位管理属于可评估的 P4 候选，不提前混入 P3 首轮。
 - 自动交易：不属于 P3 默认范围，必须经过独立法律、风控、安全和执行设计。
 
 ## 更新纪律
