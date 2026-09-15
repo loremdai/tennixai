@@ -3,7 +3,7 @@
 > 本文件回答“这个项目是什么、为什么做、哪些原则不能被破坏”。
 > 全局进度见 [ROADMAP.md](./ROADMAP.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-15 15:10 CST
+**最后更新：** 2026-09-15 16:00 CST
 
 **产品阶段：** P1 — 比赛信息查询助手（`done`，2026-09-08）；P2.0–P2.6 全部 `done`（P2.6 于 2026-09-13 经 T54 修正门重新关闭）；P3 — Market & Decision Support（`in_progress`，仅 design freeze）；P4 — Product Hardening & Optimization（`planned`）
 
@@ -22,7 +22,7 @@
 - 球员身份统一为“英文主名 + 中文辅名 + aliases → 内部 `player_id`”；中文名离线批量补齐（净库覆盖 100%，重跑零模型调用），Home/Match Chat 运行时只使用确定性 PlayerResolver，不调用翻译 LLM。
 - P2.6 首要回归已关闭：`Ben Shelton`/`B. Shelton`/`Shelton`/`本·谢尔顿`/`谢尔顿` 等别名矩阵解析到同一内部 ID；`ambiguous` / `not_found` 为正常可恢复结果（自然澄清 + SSE `done`）。
 - P2 仍严格排除 odds、预测、Polymarket、交易、认证和云部署；完成目标是本地完整运行与少量好友私人测试。
-- P3 当前已确认：同时覆盖赛前与赛中，但第一版只处理单场比赛胜者市场；每场最多一次固定 `$10` paper 入场，允许在市场价格向独立模型估值收敛、剩余 edge 消失或反转时进行一次规则化退出，否则持有至结算。同场不加仓、不换边、不重新入场，并并行记录“持有到结算”的反事实结果。
+- P3 当前已确认：同时覆盖赛前与赛中，但第一版只处理单场比赛胜者市场；每场最多一次固定 `$10` paper 入场和一次退出，同场不加仓、不换边、不重新入场。持仓后严格区分 `SELL` 与 `LOCK PROFIT`：前者只在延迟、深度和费用后的净卖出价值高于稳健继续持有价值时作为期望值建议，后者只表示市场已回到模型合理区间时可选择降低风险，不宣称提高期望值；同时保留 HODL、EV-exit 与 convergence-lock 三条可比较轨道。
 - P4 用于基于真实使用和 paper-trading 证据统一打磨 P1–P3，包括事实查询体验、实时质量、模型校准、决策阈值、仓位管理、性能与产品细节；先搭完整框架，再做细致优化。
 - 不要从本文件猜当前做到哪里；以 [ROADMAP.md](./ROADMAP.md) 和 [CURRENT.md](./CURRENT.md) 为准。
 
@@ -54,7 +54,7 @@ LLM 负责理解意图、选择业务工具和组织表达，不是网球事实�
 |---|---|---|---|
 | P1 | 比赛信息查询助手 | 今日/今晚/下一场、赛事、轮次、场地、状态、比分、发球方 | 不做任意历史结果、技术统计和自动轮询 |
 | P2 | Live Match Intelligence | API-Tennis live/PBP/statistics、近期控制指数、轻量历史/H2H、多进程持久化与协调，以及球员目录、多语言身份和历史赛果入口 | 不接 odds、预测、市场或交易；不镜像完整供应商历史 |
-| P3 | Market & Decision Support | 赛前与赛中的单场胜者市场、预测概率、edge、confidence，以及一次入场/最多一次规则化退出的 paper trading | 不做其他市场类型、加仓、换边、重新入场或自动下单；自动执行必须另立阶段并单独批准 |
+| P3 | Market & Decision Support | 赛前与赛中的单场胜者市场、预测概率、edge、confidence，以及一次入场/最多一次退出的 paper trading；区分期望值 `SELL` 与风险降低 `LOCK PROFIT` | 不做其他市场类型、加仓、换边、重新入场或自动下单；自动执行必须另立阶段并单独批准 |
 | P4 | Product Hardening & Optimization | 基于 P1–P3 的真实使用、回放和 paper 结果优化数据质量、模型、策略、体验与性能 | 以打磨既有框架为主；不默认引入自动下单或未经验证的新产品面 |
 
 ## 稳定架构
