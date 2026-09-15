@@ -3,7 +3,7 @@
 > 本文件回答“这个项目是什么、为什么做、哪些原则不能被破坏”。
 > 全局进度见 [ROADMAP.md](./ROADMAP.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-15 16:19 CST
+**最后更新：** 2026-09-15 16:44 CST
 
 **产品阶段：** P1 — 比赛信息查询助手（`done`，2026-09-08）；P2.0–P2.6 全部 `done`（P2.6 于 2026-09-13 经 T54 修正门重新关闭）；P3 — Market & Decision Support（`in_progress`，仅 design freeze）；P4 — Product Hardening & Optimization（`planned`）
 
@@ -23,6 +23,7 @@
 - P2.6 首要回归已关闭：`Ben Shelton`/`B. Shelton`/`Shelton`/`本·谢尔顿`/`谢尔顿` 等别名矩阵解析到同一内部 ID；`ambiguous` / `not_found` 为正常可恢复结果（自然澄清 + SSE `done`）。
 - P2 仍严格排除 odds、预测、Polymarket、交易、认证和云部署；完成目标是本地完整运行与少量好友私人测试。
 - P3 当前已确认：同时覆盖赛前与赛中，但第一版只处理单场比赛胜者市场。持仓前分开显示模型观点和交易动作：`BUY` 只在保守净 edge 过门时触发，`WAIT` 只表示已有明确低估方向但当前可执行价尚未过线并显示动态最高买入价，市场一致或硬门失败则显示带原因的 `NO BET`。每场最多一次固定 `$10` paper 入场和一次退出，同场不加仓、不换边、不重新入场；持仓后严格区分期望值 `SELL` 与风险降低 `LOCK PROFIT`，并保留 HODL、EV-exit 与 convergence-lock 三条可比较轨道。
+- P3 实时性是首要运行目标：后端同时拥有 API-Tennis 与 Polymarket WebSocket 状态，按事件更新模型或可执行 edge，再通过统一 SSE 向浏览器发布；浏览器生命周期不控制 paper tracking。进入追踪窗口且完成精确组合的模型覆盖比赛由后端持续跟踪，已有持仓跟踪至退出或结算；REST 只用于首次快照、重连和校准。任何断流、版本缺口或离线区间都必须显式降级并禁止新动作，不得补造信号或成交。
 - P4 用于基于真实使用和 paper-trading 证据统一打磨 P1–P3，包括事实查询体验、实时质量、模型校准、决策阈值、仓位管理、性能与产品细节；先搭完整框架，再做细致优化。
 - 不要从本文件猜当前做到哪里；以 [ROADMAP.md](./ROADMAP.md) 和 [CURRENT.md](./CURRENT.md) 为准。
 

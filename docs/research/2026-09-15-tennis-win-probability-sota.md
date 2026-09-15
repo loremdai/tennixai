@@ -363,6 +363,23 @@ P3 不用一个标签同时承担预测、估值与交易建议。页面先展�
 
 动态最高买入价不是固定比例，也不能简单等于模型点概率减一个常数。Decision Engine 应对固定 `$10` 的候选订单逐档计算平均成交价和市场实际费用，求出仍能满足保守净 edge 门的最高价格；模型状态、订单簿深度、费率或不确定性变化时，该价格同步变化。
 
+## 14. T55 后续批准：后端拥有的实时双流
+
+**批准日期：** 2026-09-15
+
+用户明确将数据及时性列为首要目标。P3 因此采用事件驱动、与浏览器生命周期解耦的后台追踪：
+
+```text
+API-Tennis WebSocket -> canonical MatchState  --\
+                                                  -> Prediction/Decision -> DecisionSnapshot -> SSE
+Polymarket WebSocket -> canonical MarketState --/
+```
+
+- 比赛/PBP 事件触发模型概率及决策更新；订单簿的有效变化复用最新有效模型概率，只重算 `$10` 的可执行价、edge 与动作。
+- 不做秒级固定轮询，也不等待两条流时间戳完全一致；两侧各自保存 provider/received time、sequence/version 与 freshness，并在任一关键输入 stale、断流或缺版本时撤销新动作。
+- 进入追踪窗口且完成精确组合的模型覆盖比赛由后端持续追踪；未结 paper position 必须跟踪到退出或结算，即使浏览器关闭。Challenger/ITF 无模型轨迹，市场按查看需求加载。
+- REST 只用于初始 snapshot、断线重建和校准。本地后端离线或中间缺失的数据记录为 `tracking_gap`，不得根据事后结果回填当时不存在的信号或模拟成交。
+
 ---
 
 这份研究的核心判断是：**TennixAI 的 SOTA 不应是一篇论文的名字，而应是一套不会被数据泄漏、概率失准和不可成交价格欺骗的持续基准与晋升机制。**

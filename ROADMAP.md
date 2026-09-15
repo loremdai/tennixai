@@ -3,7 +3,7 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-15 16:19 CST
+**最后更新：** 2026-09-15 16:44 CST
 
 **总体状态：** `in_progress`
 
@@ -187,6 +187,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 - 数据保留：raw provider payload 14 天清理，canonical/derived observations 长期保留。
 - 赔率：即使 API-Tennis 可提供也不接入；P3 由独立 `MarketDataProvider` 对接 Polymarket。
 - P3 决策首轮：覆盖赛前与赛中，只做单场比赛胜者市场。持仓前分开显示模型观点与当前动作：保守净 edge 过门为 `BUY`；已有明确低估方向但当前价未过线为 `WAIT`，并显示动态最高买入价；市场一致或数据、映射、流动性等硬门失败为带原因的 `NO BET`。每场最多一次固定 `$10` paper 入场和一次退出，同场不加仓、不换边、不重新入场。持仓后的默认期望值动作 `SELL` 只在延迟、深度和费用后的净卖出价值高于稳健继续持有价值时触发；市场回到模型合理区间但卖出不提高期望值时，只能显示可选的风险降低动作 `LOCK PROFIT`。每个真实 paper position 同时保留 HODL、EV-exit 与 convergence-lock 三条可比较轨道，固定止盈仅作诊断 benchmark；实际阈值必须由 walk-forward/shadow 证据选择。
+- P3 实时首轮：后端拥有 API-Tennis 与 Polymarket 两条独立 WebSocket 流，比赛事件驱动概率与 decision 更新，订单簿有效变化只重算可执行价、edge 与动作，统一 `DecisionSnapshot` 通过 SSE 到 UI。后台持续跟踪进入窗口且成功组合的模型覆盖比赛和所有未结持仓，不依赖浏览器是否打开；Challenger/ITF 市场仅按需展示。REST 仅作初始、重连和校准；断流、版本缺口或本地离线区间必须显式 stale/gap，撤销新动作且不得回填虚构信号或成交。实时性优先于非关键持久化和界面装饰，但不能绕过交易审计与 stale 防错门。
 - P4：在 P1–P3 框架与证据链完整后集中优化；退出阈值、止盈止损、重复入场和仓位管理只有在 paper 证据支持后才可扩展，自动下单仍不因此获得授权。
 - 自动交易：不属于 P3 默认范围，必须经过独立法律、风控、安全和执行设计。
 

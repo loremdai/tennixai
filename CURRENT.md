@@ -2,7 +2,7 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-15 16:19 CST
+**最后更新：** 2026-09-15 16:44 CST
 
 **当前任务：** T55 — Freeze P3 Market & Decision Support Design and Prototype Brief
 
@@ -22,7 +22,7 @@
 
 **关闭提交：** —
 
-**当前动作：** P3 SOTA 研究方向、首版模型覆盖标记、market-to-match 运行时组合、“独立估值而非延迟套利”原则、持仓前的模型观点与 `BUY / WAIT / NO BET` 双层语义、一次入场/最多一次退出的 paper 生命周期，以及 `SELL` 与 `LOCK PROFIT` 分轨语义均已获用户批准。下一步冻结实时数据流，再继续讨论页面信息架构。
+**当前动作：** P3 SOTA 研究方向、首版模型覆盖标记、market-to-match 运行时组合、“独立估值而非延迟套利”原则、持仓前后的动作语义、paper 生命周期，以及后端拥有的双 WebSocket 事件流与后台追踪边界均已获用户批准；用户明确数据及时性为首要目标。下一步冻结热路径与持久化的分工，再继续讨论页面信息架构。
 
 **当前状态：** P2（含 T54）保持已关闭；P3.0 仅进入 design freeze。研究报告位于 `docs/research/2026-09-15-tennis-win-probability-sota.md`；其模型选择方法和 market-to-match 方向已批准，但仍不是完整 P3 规格。具体 champion、校准器和 decision 阈值必须在数据覆盖审计与统一 benchmark 后决定。P4 已确定为 P1–P3 框架完成后的统一打磨阶段；当前没有 P3 provider、schema、prediction、decision、paper ledger、页面或交易能力，自动下单仍属独立延期阶段。
 
@@ -78,6 +78,14 @@
 - 三条策略轨道不分别生成多笔组合交易；真实 paper position 最多采用一次退出，同时保存未采用轨道和持有到结算的反事实结果。
 - 模型概率必须先通过 proper scoring 与校准门；绝对阈值和具体规则不得凭直觉硬编码，只能依据独立 walk-forward/shadow 证据晋升。
 
+## T55 已批准实时数据流（2026-09-15）
+
+- 实时性是首要运行目标。后端分别维护 API-Tennis canonical match state 与 Polymarket canonical market/order-book state，浏览器不直连供应商，只接收后端统一的版本化 `DecisionSnapshot` SSE。
+- API-Tennis 比赛/PBP 事件触发模型概率及 decision 更新；Polymarket 订单簿有效变化复用最新有效模型概率，只重算固定 `$10` 的可执行价、edge 与动作，避免无意义地重复运行模型。
+- 两条流不等待时间戳完全相同才计算；各自保留 provider timestamp、received timestamp、sequence/version 和 freshness，使用最新且通过有效性门的状态。任一关键输入 stale、断流或出现版本缺口时保留最后画面但撤销新的 `BUY / SELL`，并显示降级原因。
+- 进入赛前追踪窗口且完成精确组合的模型覆盖比赛由后端后台跟踪；已有 paper position 无论浏览器是否打开都持续跟踪至退出或结算。Challenger/ITF 不运行模型与 paper observation，市场只在用户查看时按需加载。
+- REST 只负责首次 snapshot、WebSocket 重连重建和受限校准，不回到常态固定轮询。后端未运行或中间失联时记录 `tracking_gap`，恢复后重新校准，不补造错过的信号、订单簿或成交。
+
 ## 上一任务 T54 完成证据（2026-09-13）
 
 - 确定性后端：`543 passed / 51 deselected`；infrastructure `22 passed / 572 deselected`。
@@ -107,4 +115,4 @@
 
 ## 下一步
 
-继续 T55 的单问题设计讨论；下一项冻结赛前与赛中市场、比赛和模型的实时数据流与降级边界，随后讨论页面信息架构。全部设计经用户批准后写入 P3 设计规格；规格获批前不得编写实施计划、修改 v0 原型或实现 P3 功能。
+继续 T55 的单问题设计讨论；下一项冻结实时热路径和 PostgreSQL 持久化的先后关系，明确普通快照与 paper position 状态转换的耐久性要求，随后讨论页面信息架构。全部设计经用户批准后写入 P3 设计规格；规格获批前不得编写实施计划、修改 v0 原型或实现 P3 功能。
