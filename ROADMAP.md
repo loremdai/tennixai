@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-16 15:55 CST
+**最后更新：** 2026-09-16 16:45 CST
 
 **总体状态：** `in_progress`
 
-**当前里程碑：** P3.1 — v0 Prototype Freeze（T56 `in_progress`，用户确认的 `9c868bf` 正在执行冻结验收）
+**当前里程碑：** P3.1 — v0 Prototype Freeze（T56 `in_progress`，用户确认的 `9c868bf` 已导入；视觉基线仍待运行环境解锁）
 
-**当前阶段：** P3 — Market & Decision Support（`in_progress`；P3.0 已完成，P3.1 原型冻结进行中）
+**当前阶段：** P3 — Market & Decision Support（`in_progress`；P3.0 已完成，P3.1 原型冻结验收进行中）
 
 ## 状态说明
 
@@ -110,7 +110,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | 阶段 | 状态 | 核心交付 | Exit gate / 当前缺口 |
 |---|---|---|---|
 | P3.0 — Design freeze | `done` | 官方能力边界、market mapping、预测评估、decision/risk、paper lifecycle、实时架构、三层页面、v0 brief 与实施路线 | T55 `d7cc25e`：设计规格、T56–T71 计划、v0 Prompt 和研究记录已冻结；不含产品实现 |
-| P3.1 — Prototype freeze | `in_progress` | v0 输出、Home/Markets/Match 完整状态、26 个代表视觉基线 | 用户已批准实施计划；v0 正生成本地候选，仍须用户确认后才可提交视觉真源 |
+| P3.1 — Prototype freeze | `in_progress` | v0 输出、Home/Markets/Match 完整状态、26 个代表视觉基线 | v0 `9c868bf` 已由用户确认并导入；preview/routing/组件回归已通过，仍缺 26 个 desktop/mobile 基线的实际生成、逐张审阅与 P1/P2 浏览器视觉回归 |
 | P3.2 — Market foundation | `planned` | canonical contracts、可逆 schema、只读 Polymarket REST/WS、严格 mapping 与 replay | T56 完成后按 T57–T60 顺序实施 |
 | P3.3 — Prediction, decision and paper | `planned` | 审计 benchmark、live probability、可执行 quote、decision policy、one-shot paper 与后台双流协调 | T60 完成且真实历史数据来源达到 T61 audit 输入门后按 T61–T65 实施 |
 | P3.4 — API and product surfaces | `planned` | 独立 REST/SSE、Chat facts、typed frontend、Home Pulse、`/markets`、Match workbench | T65 完成后按 T66–T69 接入；严格服从 T56 视觉真源 |
@@ -123,7 +123,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | ID | 主要阶段 | 任务 | 状态 | 完成提交 | 验收证据 |
 |---|---|---|---|---|---|
 | T55 | P3.0 | Freeze P3 Market & Decision Support Design and Prototype Brief | `done` | `d7cc25e` | 421 行设计规格 + 847 行 T56–T71 实施计划 + 320 行 v0 Prompt；用户授权剩余项采用推荐方案；官方 Polymarket/API-Tennis 依据、精确映射、模型晋升、one-shot FOK、provider-final settlement、独立 sports/decision SSE、三层 UI 与 26 张视觉矩阵均已冻结；本地链接、占位符/64 位密钥值、`git diff --cached --check` 通过；未写产品代码 |
-| T56 | P3.1 | Generate, Import, and Freeze the P3 v0 Prototype | `in_progress` | `3ce0cbf`、`0e5e06f`、`9c868bf`（候选） | `1f625b2` 由 v0 领取；用户已确认并推送 `9c868bf`，现显式交接 Codex 执行代码、26 张视觉基线及 P1/P2 回归冻结验收；尚未进入 T57 |
+| T56 | P3.1 | Generate, Import, and Freeze the P3 v0 Prototype | `in_progress` | — | `1f625b2` 由 v0 领取；用户已确认并推送 `9c868bf`。Codex 验证 checkpoint `4ad724d`：补齐 P3 状态 URL/赛前赛中完赛路由、Match desktop/mobile 顺序、Home 单一 Market Pulse、stale 保持 HOLD、fixture 内部链接与组件门；`pnpm test` 242/242、typecheck、build、12 状态 SSR 均通过，代表性桌面/移动人工检查通过。`pnpm test:e2e:update --grep "P3 visual"` 已实际运行但 6 个测试均在 Chromium 启动前因本机 Mach-port 权限失败；当前 P3 PNG 基线数为 0，不能标记 done；T57 未开始 |
 | T57 | P3.2 | Add Canonical P3 Domain, Protocols, and Safe Configuration | `planned` | — | 见 P3 实施计划 T57；不接网络、SQL、模型训练或 UI |
 | T58 | P3.2 | Add Reversible P3 Persistence and Idempotent Ledger Repositories | `planned` | — | migration upgrade→downgrade→upgrade、并发幂等、rollback 与 restart recovery |
 | T59 | P3.2 | Implement the Read-Only Polymarket Adapter and Exact Match Mapping | `planned` | — | public REST、两侧 book/rules/fee/delay、严格内部 Player ID 对；零交易认证 |
