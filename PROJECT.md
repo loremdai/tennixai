@@ -3,7 +3,7 @@
 > 本文件回答“这个项目是什么、为什么做、哪些原则不能被破坏”。
 > 全局进度见 [ROADMAP.md](./ROADMAP.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-16 09:00 CST
+**最后更新：** 2026-09-16 09:06 CST
 
 **产品阶段：** P1 — 比赛信息查询助手（`done`，2026-09-08）；P2.0–P2.6 全部 `done`（P2.6 于 2026-09-13 经 T54 修正门重新关闭）；P3 — Market & Decision Support（`in_progress`，仅 design freeze）；P4 — Product Hardening & Optimization（`planned`）
 
@@ -25,7 +25,7 @@
 - P3 当前已确认：同时覆盖赛前与赛中，但第一版只处理单场比赛胜者市场。持仓前分开显示模型观点和交易动作：`BUY` 只在保守净 edge 过门时触发，`WAIT` 只表示已有明确低估方向但当前可执行价尚未过线并显示动态最高买入价，市场一致或硬门失败则显示带原因的 `NO BET`。每场最多一次固定 `$10` paper 入场和一次退出，同场不加仓、不换边、不重新入场；持仓后严格区分期望值 `SELL` 与风险降低 `LOCK PROFIT`，并保留 HODL、EV-exit 与 convergence-lock 三条可比较轨道。
 - P3 实时性是首要运行目标：后端同时拥有 API-Tennis 与 Polymarket WebSocket 状态，按事件更新模型或可执行 edge，再通过统一 SSE 向浏览器发布；浏览器生命周期不控制 paper tracking。进入追踪窗口且完成精确组合的模型覆盖比赛由后端持续跟踪，已有持仓跟踪至退出或结算；REST 只用于首次快照、重连和校准。任何断流、版本缺口或离线区间都必须显式降级并禁止新动作，不得补造信号或成交。
 - P3 实时写入按事件价值和频率分流：WebSocket ingress 只入有界队列；低频 API-Tennis canonical reduction 首版保留 PostgreSQL DB-first；高频 Polymarket order book 走内存/Redis 热状态，只异步批量保存决策相关 observation；paper intent、成交/未成交、退出与结算必须以幂等键同步提交 PostgreSQL 后才对外确认。P3 本地阶段不新增 Kafka 或 Redis Streams。
-- P3 页面采用三层结构：Home 只做少量高价值机会和未结持仓摘要；独立 `/markets` 负责跨比赛机会发现、赛前/赛中筛选、开放 paper positions 与近期结算；Match Page 是单场决策工作台，承载概率、市场、edge、动作、轨迹、依据与本场 position lifecycle。
+- P3 页面采用三层结构：Home 只做少量高价值机会和未结持仓摘要；独立 `/markets` 以“机会 / 全部市场 / Paper 账本”三视图负责跨比赛发现与跟踪；Match Page 是单场决策工作台，承载概率、市场、edge、动作、轨迹、依据与本场 position lifecycle。
 - P4 用于基于真实使用和 paper-trading 证据统一打磨 P1–P3，包括事实查询体验、实时质量、模型校准、决策阈值、仓位管理、性能与产品细节；先搭完整框架，再做细致优化。
 - 不要从本文件猜当前做到哪里；以 [ROADMAP.md](./ROADMAP.md) 和 [CURRENT.md](./CURRENT.md) 为准。
 
@@ -49,7 +49,13 @@ LLM 负责理解意图、选择业务工具和组织表达，不是网球事实�
 
 ### Markets
 
-`/markets` 承担跨比赛 Market Discovery 与 Paper Tracking：当前机会、即将开始的市场、开放 paper positions 和近期已结算结果。它不是自动交易终端，不替代 Match Page 的单场深度调查；点击任一市场或持仓进入对应内部 `match_id` 的 Match Page。
+`/markets` 承担跨比赛 Market Discovery 与 Paper Tracking，并固定为三个页面级视图：
+
+- `机会` 是默认视图，只展示模型覆盖的大满贯及 ATP/WTA 主巡赛单打中当前为 `BUY` 或 `WAIT` 的项目，Live 在前、Upcoming 在后；`NO BET` 不占用机会流。
+- `全部市场` 展示所有可用的 Polymarket 网球单场胜者市场，按 ATP/WTA → Challenger → ITF → other 排序，并提供赛事级别、性别和赛前/赛中筛选。模型覆盖项目的 `NO BET` 显示具体原因；Challenger/ITF 仅展示市场，不显示“未覆盖”等负向标签。
+- `Paper 账本` 先展示开放持仓，再展示近期退出与结算；这里只做组合概览，单场详情回到 Match Page。
+
+它不是自动交易终端，不替代 Match Page 的单场深度调查；点击任一市场、机会或持仓都进入对应内部 `match_id` 的 Match Page。
 
 ### Players
 

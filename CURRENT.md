@@ -2,7 +2,7 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-16 09:00 CST
+**最后更新：** 2026-09-16 09:06 CST
 
 **当前任务：** T55 — Freeze P3 Market & Decision Support Design and Prototype Brief
 
@@ -22,7 +22,7 @@
 
 **关闭提交：** —
 
-**当前动作：** P3 SOTA 研究方向、覆盖与组合边界、独立估值、持仓前后动作语义、paper 生命周期、实时架构，以及 Home → `/markets` → Match 三层页面结构均已获用户批准。下一步冻结 `/markets` 默认视图与全量市场的关系，再细化 Home、Match 和 v0 原型状态。
+**当前动作：** P3 SOTA 研究方向、覆盖与组合边界、独立估值、持仓前后动作语义、paper 生命周期、实时架构、三层页面结构，以及 `/markets` 三视图均已获用户批准。下一步冻结 Home 的市场/持仓摘要，再细化 Match 工作台和 v0 原型状态。
 
 **当前状态：** P2（含 T54）保持已关闭；P3.0 仅进入 design freeze。研究报告位于 `docs/research/2026-09-15-tennis-win-probability-sota.md`；其模型选择方法和 market-to-match 方向已批准，但仍不是完整 P3 规格。具体 champion、校准器和 decision 阈值必须在数据覆盖审计与统一 benchmark 后决定。P4 已确定为 P1–P3 框架完成后的统一打磨阶段；当前没有 P3 provider、schema、prediction、decision、paper ledger、页面或交易能力，自动下单仍属独立延期阶段。
 
@@ -104,6 +104,13 @@
 - Match Page 是单场决策工作台，承载 calibrated probability、实际可执行市场价、edge/confidence、当前动作、概率轨迹、结构化解释和本场 paper lifecycle。
 - 所有机会、市场和持仓卡片通过内部 `match_id` 进入 Match Page；`/markets` 不负责单场深度分析，也不是自动下单终端。
 
+## T55 已批准 `/markets` 三视图（2026-09-16）
+
+- `机会` 为默认视图，只展示模型覆盖的大满贯及 ATP/WTA 主巡赛单打中的 `BUY / WAIT`；Live 在前、Upcoming 在后，`NO BET` 不进入机会流。
+- `全部市场` 展示所有可用的 Polymarket 网球单场胜者市场，按 ATP/WTA → Challenger → ITF → other 排序，并允许按赛事级别、性别和赛前/赛中筛选。模型覆盖比赛的 `NO BET` 显示原因；Challenger/ITF 只显示市场，不出现“未覆盖”等负向标签。
+- `Paper 账本` 先列开放持仓，再列近期退出和结算；页面只提供组合概览，点击后通过内部 `match_id` 进入 Match Page 查看完整 lifecycle。
+- 三个视图是同一路由内的页面级切换，不把 current/upcoming/open/settled 拆成四个并列首页区块，也不提供自动下单。
+
 ## 上一任务 T54 完成证据（2026-09-13）
 
 - 确定性后端：`543 passed / 51 deselected`；infrastructure `22 passed / 572 deselected`。
@@ -133,4 +140,4 @@
 
 ## 下一步
 
-继续 T55 的单问题设计讨论；下一项决定 `/markets` 默认是机会优先还是全量市场优先，并明确 Challenger/ITF 的入口；随后细化 Home 摘要、Match 工作台和 v0 原型状态。全部设计经用户批准后写入 P3 设计规格；规格获批前不得编写实施计划、修改 v0 原型或实现 P3 功能。
+继续 T55 的单问题设计讨论；下一项冻结 Home 的高价值机会与开放持仓摘要，随后细化 Match 工作台和 v0 原型状态。全部设计经用户批准后写入 P3 设计规格；规格获批前不得编写实施计划、修改 v0 原型或实现 P3 功能。
