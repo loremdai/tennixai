@@ -3,11 +3,11 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-16 14:21 CST
+**最后更新：** 2026-09-16 15:55 CST
 
 **总体状态：** `in_progress`
 
-**当前里程碑：** P3.1 — v0 Prototype Freeze（T56 `in_progress`，正在生成待用户确认的候选原型）
+**当前里程碑：** P3.1 — v0 Prototype Freeze（T56 `in_progress`，用户确认的 `9c868bf` 正在执行冻结验收）
 
 **当前阶段：** P3 — Market & Decision Support（`in_progress`；P3.0 已完成，P3.1 原型冻结进行中）
 
@@ -123,7 +123,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | ID | 主要阶段 | 任务 | 状态 | 完成提交 | 验收证据 |
 |---|---|---|---|---|---|
 | T55 | P3.0 | Freeze P3 Market & Decision Support Design and Prototype Brief | `done` | `d7cc25e` | 421 行设计规格 + 847 行 T56–T71 实施计划 + 320 行 v0 Prompt；用户授权剩余项采用推荐方案；官方 Polymarket/API-Tennis 依据、精确映射、模型晋升、one-shot FOK、provider-final settlement、独立 sports/decision SSE、三层 UI 与 26 张视觉矩阵均已冻结；本地链接、占位符/64 位密钥值、`git diff --cached --check` 通过；未写产品代码 |
-| T56 | P3.1 | Generate, Import, and Freeze the P3 v0 Prototype | `in_progress` | — | 用户已批准实施计划；v0 / v0 从 `0dab24c` 领取，正在生成待确认候选，确认前不提交原型成果 |
+| T56 | P3.1 | Generate, Import, and Freeze the P3 v0 Prototype | `in_progress` | `3ce0cbf`、`0e5e06f`、`9c868bf`（候选） | `1f625b2` 由 v0 领取；用户已确认并推送 `9c868bf`，现显式交接 Codex 执行代码、26 张视觉基线及 P1/P2 回归冻结验收；尚未进入 T57 |
 | T57 | P3.2 | Add Canonical P3 Domain, Protocols, and Safe Configuration | `planned` | — | 见 P3 实施计划 T57；不接网络、SQL、模型训练或 UI |
 | T58 | P3.2 | Add Reversible P3 Persistence and Idempotent Ledger Repositories | `planned` | — | migration upgrade→downgrade→upgrade、并发幂等、rollback 与 restart recovery |
 | T59 | P3.2 | Implement the Read-Only Polymarket Adapter and Exact Match Mapping | `planned` | — | public REST、两侧 book/rules/fee/delay、严格内部 Player ID 对；零交易认证 |
