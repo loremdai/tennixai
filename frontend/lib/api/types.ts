@@ -392,6 +392,7 @@ export type ModelAvailabilityValue = 'available' | 'degraded' | 'unpromoted' | '
 export type QuoteSideValue = 'entry' | 'exit'
 export type PositionStatusValue =
   | 'entry_pending'
+  | 'missed'
   | 'open'
   | 'exit_pending'
   | 'exited'
@@ -518,6 +519,38 @@ export type PositionSummaryDto = {
   status: PositionStatusValue
   entry_cost: string
   shares: string
+  average_entry_price: string | null
+  current_exit_value: string | null
+  net_pnl: string | null
+  events: PaperEventDto[]
+}
+
+export type PaperEventKindValue =
+  | 'entry_intent'
+  | 'entry_fill'
+  | 'entry_no_fill'
+  | 'exit_intent'
+  | 'exit_fill'
+  | 'exit_no_fill'
+  | 'settled'
+
+export type PaperEventDto = {
+  id: string
+  kind: PaperEventKindValue
+  at: string | null
+  reason_code: string | null
+}
+
+export type GateDto = {
+  gate: string
+  passed: boolean
+  reason_code: string | null
+}
+
+export type OutcomeLevelDto = {
+  player_id: string
+  best_bid: string | null
+  best_ask: string | null
 }
 
 export type DecisionSnapshotDto = {
@@ -525,12 +558,21 @@ export type DecisionSnapshotDto = {
   market_id: string | null
   action: DecisionActionValue
   reason_code: string | null
+  target_player_id: string | null
   observation_version: number
   model_probabilities: Record<string, number> | null
   model_availability: ModelAvailabilityValue | null
   quote_average_price: string | null
   quote_side: QuoteSideValue | null
   conservative_net_edge: string | null
+  max_acceptable_price: string | null
+  hold_value: string | null
+  model_version: string | null
+  calibration_version: string | null
+  policy_version: string | null
+  data_version: string | null
+  gates: GateDto[]
+  outcome_levels: OutcomeLevelDto[]
   position: PositionSummaryDto | null
   lifecycle: LifecycleStateValue[]
   is_stale: boolean

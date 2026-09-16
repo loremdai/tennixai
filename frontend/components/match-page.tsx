@@ -7,20 +7,40 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useChatStream } from '@/hooks/use-chat-stream'
+import { useDecisionStream } from '@/hooks/use-decision-stream'
 import { useMatchStream } from '@/hooks/use-match-stream'
 import type { MatchViewModel } from '@/lib/view-models'
 import { toMatchViewModel } from '@/lib/view-models'
+import {
+  appendTrajectoryPoint,
+  toChartSides,
+  toDecisionSummaryModel,
+  toEvidenceModel,
+  toPaperModel,
+  workbenchOverlay,
+  type TrajectoryPointModel,
+} from '@/lib/p3-workbench-models'
 
 import {
   matchStatusLabels,
   type MatchHighlight,
   type MatchStatus,
 } from './match/match-data'
+import { DecisionEvidenceLive } from './match/decision-evidence-live'
+import { DecisionSummaryLive } from './match/decision-summary-live'
 import { ProductHeader } from './match/match-header'
 import { MatchHero } from './match/match-hero'
-import { MatchMainColumn } from './match/match-main'
+import {
+  MatchMainColumn,
+  OverviewCard,
+  ScoreProgressCard,
+  StatsCard,
+} from './match/match-main'
+import { MatchMomentumCard } from './match/match-momentum'
 import { buildPreviewMatch } from './match/match-preview-data'
-import { MatchSidebar } from './match/match-sidebar'
+import { AssistantPanel, KeyFactsCard, MatchSidebar } from './match/match-sidebar'
+import { PaperLifecycleLive } from './match/paper-lifecycle-live'
+import { ProbabilityMarketChart } from './match/probability-market-chart'
 
 const statuses = Object.keys(matchStatusLabels) as MatchStatus[]
 
@@ -47,6 +67,19 @@ export function MatchPage({ matchId, previewMatch, preview = false }: MatchPageP
   const chat = useChatStream('match', isPreview ? undefined : matchId)
 
   const stream = useMatchStream(isPreview ? undefined : matchId)
+  // The decision stream keeps its own cursor; a decision gap never touches
+  // the sports stream above and vice versa.
+  const decisionStream = useDecisionStream(isPreview ? undefined : matchId)
+
+  const [trajectory, setTrajectory] = useState<TrajectoryPointModel[]>([])
+  useEffect(() => {
+    setTrajectory([])
+  }, [matchId])
+  const decision = isPreview ? null : decisionStream.decision
+  useEffect(() => {
+    if (!decision) return
+    setTrajectory((points) => appendTrajectoryPoint(points, decision))
+  }, [decision])
 
   const load = useCallback(async () => {
     await stream.refresh()
@@ -108,6 +141,23 @@ export function MatchPage({ matchId, previewMatch, preview = false }: MatchPageP
   }
 
   const activeViewModel = isPreview ? previewViewModel : match
+
+  // Workbench models: one current-action source (the server snapshot);
+  // React never derives probability, edge, fill, settlement or lifecycle.
+  const playerNameById: Record<string, string> = Object.fromEntries(
+    (stream.snapshot?.match.players ?? []).map((player) => [player.id, player.name]),
+  )
+  const selectionName =
+    decision?.target_player_id != null
+      ? (playerNameById[decision.target_player_id] ?? null)
+      : null
+  const summaryModel = decision
+    ? toDecisionSummaryModel(decision, selectionName, new Date())
+    : null
+  const evidenceModel = decision ? toEvidenceModel(decision) : null
+  const paperModel = decision ? toPaperModel(decision) : null
+  const chartSides = decision ? toChartSides(decision, playerNameById) : []
+  const hasWorkbench = !isPreview && decision !== null && activeViewModel !== null
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -236,27 +286,95 @@ export function MatchPage({ matchId, previewMatch, preview = false }: MatchPageP
               />
             </div>
 
-            <div
-              id="content"
-              className="match-reveal grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]"
-            >
-              <MatchSidebar
-                match={activeViewModel}
-                preview={false}
-                chat={chat.state}
-                onSubmit={(value) => void chat.send(value)}
-                currentStateVersion={stream.snapshot?.state_version ?? null}
-              />
-              <div className="min-w-0 lg:col-start-1 lg:row-start-1">
-                <MatchMainColumn
+            {hasWorkbench && summaryModel ? (
+              <>
+                <div className="match-reveal">
+                  <DecisionSummaryLive decision={summaryModel} onAsk={focusAssistant} />
+                </div>
+                {decisionStream.degraded ? (
+                  <p role="status" className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                    决策流已降级：保留最后可信决策快照，仅重新获取决策状态；比赛实时流不受影响。
+                  </p>
+                ) : null}
+                <div
+                  id="content"
+                  className="match-reveal grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]"
+                >
+                  <div className="min-w-0 lg:col-start-1 lg:row-start-2">
+                    <ScoreProgressCard match={activeViewModel} preview={false} highlight={highlight} />
+                  </div>
+                  <aside className="min-w-0 lg:col-start-2 lg:row-start-2" aria-label="比赛关键事实">
+                    <KeyFactsCard match={activeViewModel} preview={false} />
+                  </aside>
+                  <div className="min-w-0 lg:col-start-1 lg:row-start-1">
+                    <OverviewCard match={activeViewModel} preview={false} />
+                  </div>
+                  <div className="min-w-0 lg:col-start-1 lg:row-start-3">
+                    <ProbabilityMarketChart
+                      sides={chartSides}
+                      trajectory={trajectory}
+                      overlay={decision ? workbenchOverlay(decision) : 'none'}
+                    />
+                  </div>
+                  <div className="min-w-0 lg:col-start-1 lg:row-start-4">
+                    {evidenceModel ? <DecisionEvidenceLive evidence={evidenceModel} /> : null}
+                  </div>
+                  <div className="min-w-0 lg:col-start-1 lg:row-start-5">
+                    <StatsCard
+                      match={activeViewModel}
+                      preview={false}
+                      highlight={highlight}
+                      snapshot={stream.snapshot}
+                    />
+                  </div>
+                  <div className="min-w-0 lg:col-start-1 lg:row-start-6">
+                    <MatchMomentumCard
+                      match={activeViewModel}
+                      preview={false}
+                      highlight={highlight}
+                      snapshot={stream.snapshot}
+                    />
+                  </div>
+                  <div className="min-w-0 lg:col-start-1 lg:row-start-7">
+                    {paperModel ? <PaperLifecycleLive paper={paperModel} /> : null}
+                  </div>
+                  <aside
+                    className="min-w-0 lg:sticky lg:top-20 lg:col-start-2 lg:row-start-1"
+                    aria-label="比赛助手"
+                  >
+                    <AssistantPanel
+                      match={activeViewModel}
+                      preview={false}
+                      chat={chat.state}
+                      onSubmit={(value) => void chat.send(value)}
+                      currentStateVersion={stream.snapshot?.state_version ?? null}
+                    />
+                  </aside>
+                </div>
+              </>
+            ) : (
+              <div
+                id="content"
+                className="match-reveal grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]"
+              >
+                <MatchSidebar
                   match={activeViewModel}
                   preview={false}
-                  highlight={highlight}
-                  onPromptSelect={handlePromptSelect}
-                  snapshot={stream.snapshot}
+                  chat={chat.state}
+                  onSubmit={(value) => void chat.send(value)}
+                  currentStateVersion={stream.snapshot?.state_version ?? null}
                 />
+                <div className="min-w-0 lg:col-start-1 lg:row-start-1">
+                  <MatchMainColumn
+                    match={activeViewModel}
+                    preview={false}
+                    highlight={highlight}
+                    onPromptSelect={handlePromptSelect}
+                    snapshot={stream.snapshot}
+                  />
+                </div>
               </div>
-            </div>
+            )}
           </>
         ) : null}
       </main>

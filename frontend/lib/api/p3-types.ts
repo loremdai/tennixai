@@ -6,7 +6,10 @@ import type {
   DecisionActionValue,
   DecisionSnapshotDto,
   DecisionStreamEvent,
+  GateDto,
   LifecycleStateValue,
+  OutcomeLevelDto,
+  PaperEventDto,
   MarketPageDto,
   MarketStreamEvent,
   MarketsSnapshotDto,
@@ -44,6 +47,7 @@ const MODEL_AVAILABILITY = ['available', 'degraded', 'unpromoted', 'unavailable'
 const QUOTE_SIDES = ['entry', 'exit'] as const
 const POSITION_STATUSES = [
   'entry_pending',
+  'missed',
   'open',
   'exit_pending',
   'exited',
@@ -356,14 +360,57 @@ export function decodePulse(body: unknown): PulseViewDto {
   }
 }
 
+const PAPER_EVENT_KINDS = [
+  'entry_intent',
+  'entry_fill',
+  'entry_no_fill',
+  'exit_intent',
+  'exit_fill',
+  'exit_no_fill',
+  'settled',
+] as const
+
+function decodePaperEvent(value: unknown, path: string): PaperEventDto {
+  const item = raw(value, path)
+  return {
+    id: str(item.id, `${path}.id`),
+    kind: oneOf(item.kind, PAPER_EVENT_KINDS, `${path}.kind`) as PaperEventDto['kind'],
+    at: strOrNull(item.at, `${path}.at`),
+    reason_code: strOrNull(item.reason_code, `${path}.reason_code`),
+  }
+}
+
+function decodeGate(value: unknown, path: string): GateDto {
+  const item = raw(value, path)
+  return {
+    gate: str(item.gate, `${path}.gate`),
+    passed: bool(item.passed, `${path}.passed`),
+    reason_code: strOrNull(item.reason_code, `${path}.reason_code`),
+  }
+}
+
+function decodeOutcomeLevel(value: unknown, path: string): OutcomeLevelDto {
+  const item = raw(value, path)
+  return {
+    player_id: str(item.player_id, `${path}.player_id`),
+    best_bid: decimalOrNull(item.best_bid, `${path}.best_bid`),
+    best_ask: decimalOrNull(item.best_ask, `${path}.best_ask`),
+  }
+}
+
 function decodePositionSummary(value: unknown, path: string): PositionSummaryDto {
   const item = raw(value, path)
+  const events = item.events === undefined || item.events === null ? [] : rawList(item.events, `${path}.events`)
   return {
     position_id: str(item.position_id, `${path}.position_id`),
     outcome_player_id: str(item.outcome_player_id, `${path}.outcome_player_id`),
     status: oneOf(item.status, POSITION_STATUSES, `${path}.status`) as PositionStatusValue,
     entry_cost: decimal(item.entry_cost, `${path}.entry_cost`),
     shares: decimal(item.shares, `${path}.shares`),
+    average_entry_price: decimalOrNull(item.average_entry_price, `${path}.average_entry_price`),
+    current_exit_value: decimalOrNull(item.current_exit_value, `${path}.current_exit_value`),
+    net_pnl: decimalOrNull(item.net_pnl, `${path}.net_pnl`),
+    events: events.map((event, index) => decodePaperEvent(event, `${path}.events[${index}]`)),
   }
 }
 
@@ -387,6 +434,7 @@ function decodeDecisionSnapshot(value: unknown, path: string): DecisionSnapshotD
     market_id: strOrNull(item.market_id, `${path}.market_id`),
     action: oneOf(item.action, DECISION_ACTIONS, `${path}.action`) as DecisionActionValue,
     reason_code: strOrNull(item.reason_code, `${path}.reason_code`),
+    target_player_id: strOrNull(item.target_player_id, `${path}.target_player_id`),
     observation_version: int(item.observation_version, `${path}.observation_version`, { min: 0 }),
     model_probabilities: probabilities,
     model_availability: oneOfOrNull(
@@ -402,6 +450,23 @@ function decodeDecisionSnapshot(value: unknown, path: string): DecisionSnapshotD
       item.conservative_net_edge,
       `${path}.conservative_net_edge`,
     ),
+    max_acceptable_price: decimalOrNull(
+      item.max_acceptable_price,
+      `${path}.max_acceptable_price`,
+    ),
+    hold_value: decimalOrNull(item.hold_value, `${path}.hold_value`),
+    model_version: strOrNull(item.model_version, `${path}.model_version`),
+    calibration_version: strOrNull(item.calibration_version, `${path}.calibration_version`),
+    policy_version: strOrNull(item.policy_version, `${path}.policy_version`),
+    data_version: strOrNull(item.data_version, `${path}.data_version`),
+    gates: (item.gates === undefined || item.gates === null
+      ? []
+      : rawList(item.gates, `${path}.gates`)
+    ).map((gate, index) => decodeGate(gate, `${path}.gates[${index}]`)),
+    outcome_levels: (item.outcome_levels === undefined || item.outcome_levels === null
+      ? []
+      : rawList(item.outcome_levels, `${path}.outcome_levels`)
+    ).map((level, index) => decodeOutcomeLevel(level, `${path}.outcome_levels[${index}]`)),
     position:
       item.position === null || item.position === undefined
         ? null

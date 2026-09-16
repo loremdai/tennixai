@@ -303,6 +303,90 @@ describe('P3 DTO decoding', () => {
     expect(decision.position?.status).toBe('open')
   })
 
+  it('decodes workbench enrichment: versions, gates, levels and ledger events', () => {
+    const decision = decodeMatchDecision({
+      data: decisionSnapshot({
+        max_acceptable_price: '0.5500',
+        hold_value: '10.80',
+        model_version: 'prematch-elo-v1',
+        calibration_version: 'platt-v1',
+        policy_version: 'policy-v1',
+        data_version: 'apidata-v1',
+        gates: [
+          { gate: 'mapping', passed: true, reason_code: null },
+          { gate: 'net_edge', passed: false, reason_code: 'NO_NET_EDGE' },
+        ],
+        outcome_levels: [
+          { player_id: 'ply_a', best_bid: '0.55', best_ask: '0.57' },
+          { player_id: 'ply_b', best_bid: null, best_ask: '0.45' },
+        ],
+        position: {
+          position_id: 'pos_1',
+          outcome_player_id: 'ply_a',
+          status: 'open',
+          entry_cost: '10.00',
+          shares: '19.05',
+          average_entry_price: '0.525',
+          current_exit_value: '11.40',
+          net_pnl: null,
+          events: [
+            { id: 'e1', kind: 'entry_intent', at: NOW, reason_code: null },
+            { id: 'e2', kind: 'entry_fill', at: NOW, reason_code: null },
+          ],
+        },
+      }),
+    })
+    expect(decision.max_acceptable_price).toBe('0.5500')
+    expect(decision.hold_value).toBe('10.80')
+    expect(decision.model_version).toBe('prematch-elo-v1')
+    expect(decision.data_version).toBe('apidata-v1')
+    expect(decision.gates).toHaveLength(2)
+    expect(decision.gates[1]).toEqual({
+      gate: 'net_edge',
+      passed: false,
+      reason_code: 'NO_NET_EDGE',
+    })
+    expect(decision.outcome_levels[1].best_bid).toBeNull()
+    expect(decision.position?.average_entry_price).toBe('0.525')
+    expect(decision.position?.events.map((event) => event.kind)).toEqual([
+      'entry_intent',
+      'entry_fill',
+    ])
+  })
+
+  it('tolerates snapshots without the additive workbench fields', () => {
+    const decision = decodeMatchDecision({ data: decisionSnapshot() })
+    expect(decision.gates).toEqual([])
+    expect(decision.outcome_levels).toEqual([])
+    expect(decision.max_acceptable_price).toBeNull()
+    expect(decision.model_version).toBeNull()
+  })
+
+  it('fails visibly on an unknown ledger event kind or non-boolean gate', () => {
+    expect(() =>
+      decodeMatchDecision({
+        data: decisionSnapshot({
+          position: {
+            position_id: 'p',
+            outcome_player_id: 'ply_a',
+            status: 'open',
+            entry_cost: '10.00',
+            shares: '19.05',
+            average_entry_price: null,
+            current_exit_value: null,
+            net_pnl: null,
+            events: [{ id: 'e', kind: 'margin_call', at: NOW, reason_code: null }],
+          },
+        }),
+      }),
+    ).toThrow(P3DecodeError)
+    expect(() =>
+      decodeMatchDecision({
+        data: decisionSnapshot({ gates: [{ gate: 'x', passed: 'yes', reason_code: null }] }),
+      }),
+    ).toThrow(P3DecodeError)
+  })
+
   it('fails visibly on an unknown lifecycle state or decision action', () => {
     expect(() => decodeMatchDecision({ data: decisionSnapshot({ lifecycle: ['entry_pending', 'reentered'] }) })).toThrow(
       P3DecodeError,

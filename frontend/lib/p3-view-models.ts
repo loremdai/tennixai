@@ -223,6 +223,7 @@ export function toMarketRow(dto: MarketSummaryDto, now: Date): MarketRowModel {
 
 const PAPER_STATE_MAP: Record<PaperPositionDto['status'], PaperRowModel['state']> = {
   entry_pending: 'entry_pending',
+  missed: 'missed',
   open: 'hold',
   exit_pending: 'exit_pending',
   exited: 'exited',

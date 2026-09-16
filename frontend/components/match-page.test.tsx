@@ -6,22 +6,39 @@ import { MatchPage } from './match-page'
 import { buildPreviewMatch } from './match/match-preview-data'
 import type { ChatEvent, MatchDto, MatchSnapshotDto, StructuredData } from '@/lib/api/types'
 
-const { getMatchSnapshotMock, openMatchStreamMock, streamChatMock } = vi.hoisted(() => ({
+const {
+  getMatchSnapshotMock,
+  openMatchStreamMock,
+  streamChatMock,
+  getMatchDecisionMock,
+  openDecisionStreamMock,
+  parseDecisionStreamMock,
+} = vi.hoisted(() => ({
   getMatchSnapshotMock: vi.fn(),
   openMatchStreamMock: vi.fn(),
   streamChatMock: vi.fn(),
+  getMatchDecisionMock: vi.fn(),
+  openDecisionStreamMock: vi.fn(),
+  parseDecisionStreamMock: vi.fn(),
 }))
 
-vi.mock('@/lib/api/client', () => ({
-  getMatchSnapshot: getMatchSnapshotMock,
-  openMatchStream: openMatchStreamMock,
-  parseMatchStream: async function* parseMatchStreamMock() {
-    await new Promise(() => {})
-  },
-  getMatches: vi.fn(),
-  getPlayers: vi.fn(),
-  streamChat: streamChatMock,
-}))
+vi.mock('@/lib/api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api/client')>()
+  return {
+    ...actual,
+    getMatchSnapshot: getMatchSnapshotMock,
+    openMatchStream: openMatchStreamMock,
+    parseMatchStream: async function* parseMatchStreamMock() {
+      await new Promise(() => {})
+    },
+    getMatches: vi.fn(),
+    getPlayers: vi.fn(),
+    streamChat: streamChatMock,
+    getMatchDecision: getMatchDecisionMock,
+    openDecisionStream: openDecisionStreamMock,
+    parseDecisionStream: parseDecisionStreamMock,
+  }
+})
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -116,6 +133,18 @@ function mockStream(options: {
   })
 }
 
+async function notFoundDecision() {
+  const { ApiError } = await import('@/lib/api/client')
+  throw new ApiError(404, 'not_found', 'No P3 decision context for this match')
+}
+
+function parkedStreamResponse(): Response {
+  return new Response(new ReadableStream({ start() {} }), {
+    status: 200,
+    headers: { 'content-type': 'text/event-stream' },
+  })
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   Element.prototype.scrollIntoView = vi.fn()
@@ -123,6 +152,12 @@ beforeEach(() => {
   getMatchSnapshotMock.mockImplementation(async () => wrapSnapshot(nextMatch as MatchDto))
   openMatchStreamMock.mockResolvedValue(new Response(null, { status: 200 }))
   mockStream({ data: { kind: 'match', matches: [makeMatch()] }, text: 'Sinner 正在发球。' })
+  // Default: no P3 decision context → the classic P2 layout stays.
+  getMatchDecisionMock.mockImplementation(notFoundDecision)
+  openDecisionStreamMock.mockResolvedValue(parkedStreamResponse())
+  parseDecisionStreamMock.mockImplementation(async function* parked() {
+    await new Promise(() => {})
+  })
 })
 
 afterEach(() => {
@@ -456,5 +491,172 @@ describe('prototype preview route', () => {
       expect(screen.getByText('比赛状态预览')).toBeVisible()
     })
     expect(getMatchSnapshotMock).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// T69: production decision workbench.
+// ---------------------------------------------------------------------------
+
+import type { DecisionSnapshotDto } from '@/lib/api/types'
+
+function workbenchDecision(overrides: Partial<DecisionSnapshotDto> = {}): DecisionSnapshotDto {
+  return {
+    match_id: 'mat_1',
+    market_id: 'mkt_1',
+    action: 'hold',
+    reason_code: null,
+    target_player_id: 'ply_1',
+    observation_version: 3,
+    model_probabilities: { ply_1: 0.62, ply_2: 0.38 },
+    model_availability: 'available',
+    quote_average_price: '0.525',
+    quote_side: 'exit',
+    conservative_net_edge: '0.0400',
+    max_acceptable_price: null,
+    hold_value: '10.80',
+    model_version: 'prematch-elo-v1',
+    calibration_version: 'platt-v1',
+    policy_version: 'policy-v1',
+    data_version: 'apidata-v1',
+    gates: [{ gate: 'net_edge', passed: true, reason_code: null }],
+    outcome_levels: [
+      { player_id: 'ply_1', best_bid: '0.55', best_ask: '0.57' },
+      { player_id: 'ply_2', best_bid: '0.43', best_ask: '0.45' },
+    ],
+    position: {
+      position_id: 'pos_1',
+      outcome_player_id: 'ply_1',
+      status: 'open',
+      entry_cost: '10.00',
+      shares: '19.05',
+      average_entry_price: '0.525',
+      current_exit_value: '11.40',
+      net_pnl: null,
+      events: [
+        { id: 'e1', kind: 'entry_intent', at: '2026-09-08T10:00:00Z', reason_code: null },
+        { id: 'e2', kind: 'entry_fill', at: '2026-09-08T10:00:20Z', reason_code: null },
+      ],
+    },
+    lifecycle: ['entry_pending', 'filled'],
+    is_stale: false,
+    has_gap: false,
+    lock_profit_available: false,
+    as_of: '2026-09-08T10:00:00Z',
+    ...overrides,
+  }
+}
+
+function sectionLabels(container: Element): (string | null)[] {
+  return Array.from(container.children).map((child) => {
+    const heading = child.querySelector('h2')
+    return heading ? heading.textContent : child.getAttribute('aria-label')
+  })
+}
+
+describe('production decision workbench (T69)', () => {
+  beforeEach(() => {
+    getMatchDecisionMock.mockResolvedValue(workbenchDecision())
+  })
+
+  it('renders exactly one full-width DecisionSummary outside the content grid', async () => {
+    const { container } = render(<MatchPage matchId="mat_1" />)
+
+    await waitFor(() =>
+      expect(container.querySelectorAll('#decision-summary-title')).toHaveLength(1),
+    )
+    const content = container.querySelector('#content')!
+    expect(content.querySelector('#decision-summary-title')).toBeNull()
+    const summary = container.querySelector('#decision-summary-title')!
+    expect(
+      summary.compareDocumentPosition(content) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+  })
+
+  it('follows the frozen mobile DOM order inside the content grid', async () => {
+    const { container } = render(<MatchPage matchId="mat_1" />)
+
+    const content = await waitFor(() => {
+      const element = container.querySelector('#content')!
+      expect(sectionLabels(element)).toHaveLength(9)
+      return element
+    })
+    expect(sectionLabels(content)).toEqual([
+      '比分与比赛进程',
+      '关键事实',
+      '比赛概览',
+      '概率—市场轨迹',
+      'Decision Evidence & Gates',
+      '技术统计',
+      '逐分与动量',
+      'Paper lifecycle',
+      '本场比赛助手',
+    ])
+  })
+
+  it('removes the legacy MarketCard and the duplicate AI insight card', async () => {
+    render(<MatchPage matchId="mat_1" />)
+
+    await waitFor(() => expect(screen.getByText('概率—市场轨迹')).toBeTruthy())
+    expect(screen.queryByText('市场智能')).toBeNull()
+    expect(screen.queryByText('P3 后可用')).toBeNull()
+    expect(screen.queryByText('本场比赛问题建议')).toBeNull()
+  })
+
+  it('preserves the P2 score, stats, PBP and assistant sections', async () => {
+    render(<MatchPage matchId="mat_1" />)
+
+    await waitFor(() => expect(screen.getByText('概率—市场轨迹')).toBeTruthy())
+    for (const heading of [
+      '比赛概览',
+      '比分与比赛进程',
+      '技术统计',
+      '逐分与动量',
+      '本场比赛助手',
+      '关键事实',
+    ]) {
+      expect(screen.getByText(heading)).toBeTruthy()
+    }
+  })
+
+  it('surfaces decision-stream degradation without touching the sports stream', async () => {
+    // A gap delta (version 99 after 3) degrades the decision stream; the
+    // failing refetch keeps the last trusted snapshot visible.
+    parseDecisionStreamMock.mockImplementation(async function* gap() {
+      yield {
+        type: 'decision_delta',
+        id: '99',
+        payload: {
+          type: 'decision_delta',
+          match_id: 'mat_1',
+          observation_version: 99,
+          action: 'hold',
+          as_of: '2026-09-08T10:00:00Z',
+        },
+      }
+      await new Promise(() => {})
+    })
+    getMatchDecisionMock
+      .mockResolvedValueOnce(workbenchDecision())
+      .mockRejectedValue(new Error('decision rest boom'))
+
+    render(<MatchPage matchId="mat_1" />)
+
+    await waitFor(() =>
+      expect(screen.getByText(/决策流已降级：保留最后可信决策快照/)).toBeTruthy(),
+    )
+    expect(screen.getByText(/比赛实时流不受影响/)).toBeTruthy()
+    // The last trusted workbench view stays rendered.
+    expect(screen.getByText('概率—市场轨迹')).toBeTruthy()
+  })
+
+  it('keeps the P2 layout minus MarketCard without decision context', async () => {
+    getMatchDecisionMock.mockImplementation(notFoundDecision)
+    render(<MatchPage matchId="mat_1" />)
+
+    await waitFor(() => expect(screen.getByText('比赛概览')).toBeTruthy())
+    expect(screen.queryByText('市场智能')).toBeNull()
+    expect(screen.queryByText('概率—市场轨迹')).toBeNull()
+    expect(screen.getByText('本场比赛问题建议')).toBeTruthy()
   })
 })

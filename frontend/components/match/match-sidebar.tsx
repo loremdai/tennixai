@@ -345,7 +345,9 @@ export function MatchSidebar(props: AssistantPanelProps & { keyFactsPreview?: bo
         currentStateVersion={props.currentStateVersion}
       />
       <KeyFactsCard match={match} preview={preview} />
-      <MarketCard />
+      {/* The placeholder card belongs to the frozen prototype baselines;
+          production pages use the T69 workbench instead. */}
+      {preview ? <MarketCard /> : null}
     </aside>
   )
 }
