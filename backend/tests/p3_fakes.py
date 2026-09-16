@@ -153,7 +153,9 @@ def make_observation(
         model_version="prematch-elo-v1",
         calibration_version="platt-v1",
         policy_version="policy-v1",
-        quote=make_quote(),
+        quote=make_quote(
+            side=QuoteSide.EXIT if action is DecisionAction.SELL else QuoteSide.ENTRY
+        ),
         conservative_net_edge=Decimal("0.041"),
         gates=(GateResult(gate="liquidity", passed=True),),
         as_of=NOW,

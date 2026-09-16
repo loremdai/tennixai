@@ -80,6 +80,7 @@ class OpportunityDto(BaseModel):
     phase: str  # "live" | "upcoming"
     action: str  # "buy" | "wait"
     target_player_id: str | None = None
+    player_ids: tuple[str, str] | None = None
     player_names: tuple[str, str] | None = None
     model_probability: float | None = None
     executable_probability: float | None = None
@@ -87,6 +88,8 @@ class OpportunityDto(BaseModel):
     max_acceptable_price: str | None = None
     tournament_tier: str | None = None
     tournament_name: str | None = None
+    is_stale: bool = False
+    has_gap: bool = False
     as_of: datetime | None = None
 
 
@@ -101,8 +104,21 @@ class MarketSummaryDto(BaseModel):
     model_covered: bool = False
     action: str | None = None
     reason_code: str | None = None
+    player_ids: tuple[str, str] | None = None
+    player_names: tuple[str, str] | None = None
+    model_probability: float | None = None
     best_bid: tuple[str, str] | None = None
     best_ask: tuple[str, str] | None = None
+    # Per-outcome top levels aligned with player_ids order; None when the
+    # hot book is absent or one-sided (never fabricated zeros).
+    outcome_bids: tuple[str | None, str | None] | None = None
+    outcome_asks: tuple[str | None, str | None] | None = None
+    # Mean top-of-book spread (ask-bid) over outcomes quoting both sides.
+    spread: str | None = None
+    # Sum of top-level notional USD across both sides of both outcomes.
+    depth_usd: str | None = None
+    is_stale: bool = False
+    has_gap: bool = False
     as_of: datetime | None = None
 
 
@@ -118,10 +134,14 @@ class PaperPositionDto(BaseModel):
     match_id: str
     market_id: str
     outcome_player_id: str
+    player_ids: tuple[str, str] | None = None
     player_names: tuple[str, str] | None = None
+    # "open" | "exit_pending" | "exited" | "exit_missed" | "settled", or
+    # "entry_pending" for a ledger row synthesized from a pending intent.
     status: str
     entry_cost: str
     shares: str
+    average_entry_price: str | None = None
     current_exit_value: str | None = None
     net_pnl: str | None = None
     freshness_as_of: datetime | None = None
@@ -132,9 +152,14 @@ class PulseRowDto(BaseModel):
     market_id: str | None = None
     kind: str  # "position" | "opportunity"
     action: str
+    phase: str | None = None  # "live" | "upcoming" | "closed"
     player_names: tuple[str, str] | None = None
     model_probability: float | None = None
     executable_probability: float | None = None
+    conservative_net_edge: str | None = None
+    tournament_name: str | None = None
+    is_stale: bool = False
+    has_gap: bool = False
     as_of: datetime | None = None
 
 

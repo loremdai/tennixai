@@ -1130,7 +1130,11 @@ class P3QueryService:
                     if names[0] is not None and names[1] is not None
                     else None
                 ),
-                "player_ids": (row.player1_id, row.player2_id),
+                "player_ids": (
+                    (row.player1_id, row.player2_id)
+                    if row.player1_id is not None and row.player2_id is not None
+                    else None
+                ),
                 "tier": tournament.circuit if tournament else None,
                 "gender": tournament.gender if tournament else None,
                 "tournament_name": tournament.name if tournament else None,
@@ -1167,6 +1171,45 @@ class P3QueryService:
             (side.outcome_player_id, str(side.asks[0].price)) if side.asks else None
         )
         return best_bid, best_ask
+
+    @staticmethod
+    def _outcome_levels(book, outcome_ids):
+        """Per-outcome top levels aligned to outcome_ids, plus mean spread
+        and top-of-book notional depth. Missing sides stay None."""
+        if book is None:
+            return None, None, None, None
+        by_player = {side.outcome_player_id: side for side in book.books}
+        bids: list[str | None] = []
+        asks: list[str | None] = []
+        spreads: list = []
+        depth = Decimal("0")
+        for player_id in outcome_ids:
+            side = by_player.get(player_id) if player_id else None
+            if side is None:
+                bids.append(None)
+                asks.append(None)
+                continue
+            bid = str(side.bids[0].price) if side.bids else None
+            ask = str(side.asks[0].price) if side.asks else None
+            bids.append(bid)
+            asks.append(ask)
+            if side.bids:
+                depth += side.bids[0].price * side.bids[0].size
+            if side.asks:
+                depth += side.asks[0].price * side.asks[0].size
+            if bid is not None and ask is not None:
+                spreads.append(Decimal(ask) - Decimal(bid))
+        spread = (
+            (sum(spreads) / Decimal(len(spreads))).quantize(Decimal("0.0001"))
+            if spreads
+            else None
+        )
+        return (
+            (bids[0], bids[1]) if len(bids) == 2 else None,
+            (asks[0], asks[1]) if len(asks) == 2 else None,
+            spread,
+            depth.quantize(Decimal("0.01")) if (spreads or depth) else None,
+        )
 
     async def match_decision(self, match_id: str):
         from app.api.schemas import DecisionSnapshotDto, PositionSummaryDto
@@ -1284,6 +1327,7 @@ class P3QueryService:
                         phase="live" if phase == "live" else "upcoming",
                         action=observation.action.value,
                         target_player_id=observation.target_player_id,
+                        player_ids=match_facts.get("player_ids"),
                         player_names=match_facts.get("player_names"),
                         model_probability=model_probability,
                         executable_probability=(
@@ -1297,6 +1341,8 @@ class P3QueryService:
                         ),
                         tournament_tier=match_facts.get("tier"),
                         tournament_name=match_facts.get("tournament_name"),
+                        is_stale=observation.is_stale,
+                        has_gap=observation.has_gap,
                         as_of=observation.as_of,
                     ),
                 )
@@ -1325,7 +1371,12 @@ class P3QueryService:
                 decision_by_match.get(row.match_id) if row.match_id else None
             )
             book = await self._hot_book(row.id)
-            best_bid, best_ask = self._best_levels(book, None)
+            outcome_ids = (row.outcome_a_player_id, row.outcome_b_player_id)
+            outcome_names = (row.outcome_a_name, row.outcome_b_name)
+            best_bid, best_ask = self._best_levels(book, row.outcome_a_player_id)
+            outcome_bids, outcome_asks, spread, depth = self._outcome_levels(
+                book, outcome_ids
+            )
             prediction = (
                 await self._markets.latest_prediction(row.match_id)
                 if row.match_id
@@ -1334,6 +1385,30 @@ class P3QueryService:
             model_covered = prediction is not None and prediction.availability.value in (
                 "available",
                 "degraded",
+            )
+            model_probability = None
+            if prediction is not None and row.outcome_a_player_id is not None:
+                for outcome in prediction.outcomes:
+                    if outcome.player_id == row.outcome_a_player_id:
+                        model_probability = outcome.probability
+                        break
+            # Canonical directory names win; provider outcome labels are the
+            # fallback so a row is never nameless when the market knows them.
+            fact_ids = match_facts.get("player_ids")
+            fact_names = match_facts.get("player_names")
+            name_by_id = (
+                dict(zip(fact_ids, fact_names, strict=False))
+                if fact_ids is not None and fact_names is not None
+                else {}
+            )
+            resolved_names = [
+                (name_by_id.get(player_id) if player_id else None) or outcome_name
+                for player_id, outcome_name in zip(outcome_ids, outcome_names, strict=False)
+            ]
+            player_names = (
+                (resolved_names[0], resolved_names[1])
+                if resolved_names[0] is not None and resolved_names[1] is not None
+                else None
             )
             summaries.append(
                 MarketSummaryDto(
@@ -1348,9 +1423,27 @@ class P3QueryService:
                     action=(
                         observation.action.value if observation is not None else None
                     ),
-                    reason_code=None,
+                    reason_code=(
+                        observation.reason_code if observation is not None else None
+                    ),
+                    player_ids=(
+                        outcome_ids
+                        if outcome_ids[0] is not None and outcome_ids[1] is not None
+                        else None
+                    ),
+                    player_names=player_names,
+                    model_probability=model_probability,
                     best_bid=best_bid,
                     best_ask=best_ask,
+                    outcome_bids=outcome_bids,
+                    outcome_asks=outcome_asks,
+                    spread=_p3_decimal_text(spread),
+                    depth_usd=_p3_decimal_text(depth),
+                    is_stale=(
+                        (observation.is_stale if observation is not None else False)
+                        or (book.is_stale if book is not None else False)
+                    ),
+                    has_gap=observation.has_gap if observation is not None else False,
                     as_of=row.observed_at,
                 )
             )
@@ -1390,6 +1483,14 @@ class P3QueryService:
                     if track.track.value == "ev_exit":
                         net_pnl = str(track.net_pnl)
                         break
+            average_entry_price = None
+            for intent in await self._paper.load_intents_for_match(position.match_id):
+                if intent.side.value != "entry":
+                    continue
+                fill = await self._paper.get_fill_for_intent(intent.id)
+                if fill is not None and fill.filled and fill.average_price is not None:
+                    average_entry_price = str(fill.average_price)
+                break
             match_facts = facts.get(position.match_id, {})
             rows.append(
                 PaperPositionDto(
@@ -1397,13 +1498,56 @@ class P3QueryService:
                     match_id=position.match_id,
                     market_id=position.market_id,
                     outcome_player_id=position.outcome_player_id,
+                    player_ids=match_facts.get("player_ids"),
                     player_names=match_facts.get("player_names"),
                     status=position.status.value,
                     entry_cost=str(position.entry_cost),
                     shares=str(position.shares),
+                    average_entry_price=average_entry_price,
                     current_exit_value=current_exit_value,
                     net_pnl=net_pnl,
                     freshness_as_of=freshness,
+                )
+            )
+        return rows
+
+    async def _pending_entry_rows(self, excluded_match_ids):
+        """Ledger-derived entry_pending rows: pending entry intents that have
+        no position yet. Never reconstructed from browser state."""
+        from app.api.schemas import PaperPositionDto
+
+        pending = await self._paper.load_pending_intents()
+        intents = sorted(
+            (
+                intent
+                for intent in pending
+                if intent.side.value == "entry"
+                and intent.match_id not in excluded_match_ids
+            ),
+            key=lambda intent: intent.created_at,
+            reverse=True,
+        )
+        if not intents:
+            return []
+        facts = await self._match_facts([intent.match_id for intent in intents])
+        rows = []
+        for intent in intents:
+            match_facts = facts.get(intent.match_id, {})
+            rows.append(
+                PaperPositionDto(
+                    position_id=intent.id,
+                    match_id=intent.match_id,
+                    market_id=intent.market_id,
+                    outcome_player_id=intent.outcome_player_id,
+                    player_ids=match_facts.get("player_ids"),
+                    player_names=match_facts.get("player_names"),
+                    status="entry_pending",
+                    entry_cost=str(intent.stake),
+                    shares=str(intent.quote.shares),
+                    average_entry_price=str(intent.quote.average_price),
+                    current_exit_value=None,
+                    net_pnl=None,
+                    freshness_as_of=intent.created_at,
                 )
             )
         return rows
@@ -1420,26 +1564,72 @@ class P3QueryService:
             for position in positions
             if position.status.value not in _P3_OPEN_POSITION_STATUSES
         ][:_P3_RECENT_POSITION_LIMIT]
+        open_rows = await self._position_dtos(open_positions)
+        open_rows.extend(
+            await self._pending_entry_rows(
+                {position.match_id for position in positions}
+            )
+        )
         return {
-            "open": await self._position_dtos(open_positions),
+            "open": open_rows,
             "recent": await self._position_dtos(recent),
         }
+
+    @staticmethod
+    def _pulse_urgency(position, decision):
+        """Most urgent open position first: an actionable SELL, then a
+        lock-profit exit, then stale/gap overlays, then plain holds."""
+        if decision is not None and decision.action == "sell":
+            first = 0
+        elif decision is not None and decision.lock_profit_available:
+            first = 1
+        elif decision is not None and (decision.is_stale or decision.has_gap):
+            first = 2
+        elif position.status == "exit_pending":
+            first = 3
+        elif position.status == "entry_pending":
+            first = 5
+        else:
+            first = 4
+        freshness = (
+            position.freshness_as_of.timestamp()
+            if position.freshness_as_of is not None
+            else 0.0
+        )
+        decision_recency = (
+            decision.as_of.timestamp() if decision is not None else 0.0
+        )
+        return (first, -decision_recency, -freshness, position.position_id)
 
     async def pulse(self):
         from app.api.schemas import PulseRowDto
 
         view = await self.paper_positions()
+        open_rows = view["open"]
         rows = []
-        for position in view["open"]:
-            decision = await self.match_decision(position.match_id)
+        if open_rows:
+            # Reserve exactly one row for the most urgent open position,
+            # then fill the remaining slots with the strongest opportunities.
+            best = None
+            for position in open_rows:
+                decision = await self.match_decision(position.match_id)
+                key = self._pulse_urgency(position, decision)
+                if best is None or key < best[0]:
+                    best = (key, position, decision)
+            _, position, decision = best
+            facts = (await self._match_facts([position.match_id])).get(
+                position.match_id, {}
+            )
+            phase = facts.get("phase")
+            if phase == "prematch":
+                phase = "upcoming"
             rows.append(
                 PulseRowDto(
                     match_id=position.match_id,
                     market_id=position.market_id,
                     kind="position",
-                    action=(
-                        decision.action if decision is not None else "hold"
-                    ),
+                    action=(decision.action if decision is not None else "hold"),
+                    phase=phase,
                     player_names=position.player_names,
                     model_probability=(
                         None
@@ -1450,28 +1640,45 @@ class P3QueryService:
                         )
                     ),
                     executable_probability=(
-                        float(Decimal(position.current_exit_value) / Decimal(position.shares))
+                        float(
+                            (
+                                Decimal(position.current_exit_value)
+                                / Decimal(position.shares)
+                            ).quantize(Decimal("0.0001"))
+                        )
                         if position.current_exit_value is not None
                         else None
                     ),
+                    conservative_net_edge=(
+                        decision.conservative_net_edge
+                        if decision is not None
+                        else None
+                    ),
+                    tournament_name=facts.get("tournament_name"),
+                    is_stale=decision.is_stale if decision is not None else False,
+                    has_gap=decision.has_gap if decision is not None else False,
                     as_of=position.freshness_as_of,
                 )
             )
-        if len(rows) < 3:
-            for opportunity in (await self.opportunities())[: 3 - len(rows)]:
-                rows.append(
-                    PulseRowDto(
-                        match_id=opportunity.match_id,
-                        market_id=opportunity.market_id,
-                        kind="opportunity",
-                        action=opportunity.action,
-                        player_names=opportunity.player_names,
-                        model_probability=opportunity.model_probability,
-                        executable_probability=opportunity.executable_probability,
-                        as_of=opportunity.as_of,
-                    )
+        for opportunity in (await self.opportunities())[: 3 - len(rows)]:
+            rows.append(
+                PulseRowDto(
+                    match_id=opportunity.match_id,
+                    market_id=opportunity.market_id,
+                    kind="opportunity",
+                    action=opportunity.action,
+                    phase=opportunity.phase,
+                    player_names=opportunity.player_names,
+                    model_probability=opportunity.model_probability,
+                    executable_probability=opportunity.executable_probability,
+                    conservative_net_edge=opportunity.conservative_net_edge,
+                    tournament_name=opportunity.tournament_name,
+                    is_stale=opportunity.is_stale,
+                    has_gap=opportunity.has_gap,
+                    as_of=opportunity.as_of,
                 )
-        return {"data": rows[:3], "has_open_position": bool(view["open"])}
+            )
+        return {"data": rows[:3], "has_open_position": bool(open_rows)}
 
     async def markets_snapshot(self):
         market_rows = await self._markets.list_market_overviews()
