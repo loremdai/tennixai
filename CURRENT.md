@@ -2,23 +2,21 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-16 19:20 CST
+**最后更新：** 2026-09-16 19:28 CST
 
-**当前任务：** T57 — Add Canonical P3 Domain, Protocols, and Safe Configuration（已完成；T58 `ready`，尚未领取）
+**当前任务：** T58 — Add Reversible P3 Persistence and Idempotent Ledger Repositories
 
-**任务状态：** `done`
+**任务状态：** `in_progress`
 
 **执行者 / ADE：** Claude (Fable 5) / Claude Code（用户已明确授权按顺序连续执行 T57–T71，无需逐项再次确认）
 
 **分支：** `main`
 
-**任务起始提交：** `5df1fe0`
+**任务起始提交：** `507b0ac`
 
-**领取提交：** `63e0ff8`
+**领取提交：** 本次提交（T58 领取记录）
 
-**产品提交：** `e7da341`（feat: define P3 canonical contracts）
-
-**当前动作：** T57 已关闭。TDD 先红（`app.decision` ModuleNotFoundError + 4 项 config 失败）后绿；新增 `app/markets/{models,providers}.py`、`app/prediction/models.py`、`app/decision/models.py`、`app/paper/models.py`、9 项 P3 安全 config 与 `.env.example` 对应条目。未接网络、SQL、模型训练或 UI。下一步由同一执行者按 `AGENTS.md` 领取 T58。
+**当前动作：** T57 已以 `e7da341`（代码）与 `507b0ac`（关闭）交付并推送。现按 [P3 实施计划 T58](./docs/superpowers/plans/2026-09-16-tennixai-p3-implementation.md#t58-add-reversible-p3-persistence-and-idempotent-ledger-repositories) 以 TDD 实施可逆 P3 schema（migration `0004`）与幂等 ledger repositories；验收门为 upgrade→downgrade→upgrade 往返、20 路并发幂等收敛、事务回滚、重启恢复与 raw cleanup 不删 canonical evidence，需要本地 PostgreSQL healthy。
 
 ## 当前已验证状态
 
@@ -44,6 +42,5 @@
 
 ## 下一步
 
-1. T58 已 `ready`：按 [P3 实施计划 T58](./docs/superpowers/plans/2026-09-16-tennixai-p3-implementation.md#t58-add-reversible-p3-persistence-and-idempotent-ledger-repositories) 实施可逆 P3 schema 与幂等 ledger repositories；开始前先写入并推送领取记录。
-2. T58 验收门：migration `0004` upgrade→downgrade `0003`→upgrade 往返、20 路并发幂等收敛、事务回滚、重启恢复、raw cleanup 不删 canonical rules/ledger；需要本地 PostgreSQL healthy。
-3. 其后按顺序 T59–T71，不得并行领取。
+1. 完成 T58 的 TDD 实施与验收门（migration 往返、并发幂等、回滚、重启恢复、raw cleanup），更新三份总控，提交并推送 `origin/main`。
+2. T58 关闭后按同一流程领取 T59（只读 Polymarket adapter 与精确 mapping），顺序执行至 T71，不得并行领取。
