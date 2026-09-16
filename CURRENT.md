@@ -2,7 +2,7 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-16 11:01 CST
+**最后更新：** 2026-09-16 11:43 CST
 
 **当前任务：** T55 — Freeze P3 Market & Decision Support Design and Prototype Brief
 
@@ -22,7 +22,7 @@
 
 **关闭提交：** —
 
-**当前动作：** P3 SOTA 研究方向、覆盖与组合边界、独立估值、paper 生命周期、实时架构、三层页面结构、`/markets` 三视图、Home「市场脉搏」、Match Page 决策布局、双边摘要、成交后原地切换、one-shot entry intent 及 FOK paper 执行均已获用户批准。下一步冻结完整 UI 状态序列，再确定详细模块与 v0 原型状态矩阵。
+**当前动作：** P3 SOTA 研究方向、覆盖与组合边界、独立估值、paper 生命周期、实时架构、三层页面结构、`/markets` 三视图、Home「市场脉搏」、Match Page 决策布局、one-shot FOK 执行及 EV-exit 主 paper 轨道均已获用户批准。下一步冻结 exit `NO_FILL` 和完整 UI 状态序列，再确定详细模块与 v0 原型状态矩阵。
 
 **当前状态：** P2（含 T54）保持已关闭；P3.0 仅进入 design freeze。研究报告位于 `docs/research/2026-09-15-tennis-win-probability-sota.md`；其模型选择方法和 market-to-match 方向已批准，但仍不是完整 P3 规格。具体 champion、校准器和 decision 阈值必须在数据覆盖审计与统一 benchmark 后决定。P4 已确定为 P1–P3 框架完成后的统一打磨阶段；当前没有 P3 provider、schema、prediction、decision、paper ledger、页面或交易能力，自动下单仍属独立延期阶段。
 
@@ -139,7 +139,7 @@
 
 - 用户在“原地切换 / 机会与持仓叠放 / 摘要内部标签”中选择方案 A：首屏始终只有一个 `DecisionSummary` 和一个当前动作真源。
 - 入场前摘要承载 `BUY / WAIT / NO BET` 与双边模型—市场对照；paper fill 经 PostgreSQL 确认后，同一组件原地切换为 position 管理，所有入场动作立即消失，避免重复买入暗示。
-- position 视图显示持仓球员、固定 `$10` 入场成本与平均价、份额、当前可执行退出价值、净 P&L、稳健持有价值，以及 `HOLD / SELL / LOCK PROFIT` 中唯一适用动作。
+- position 视图显示持仓球员、固定 `$10` 入场成本与平均价、份额、当前可执行退出价值、净 P&L、稳健持有价值，以及 EV 主动作 `HOLD / SELL`；`LOCK PROFIT` 只能作为单独标注的可选降风险方案。
 - 入场时的 prediction、order book、费用、fill 和 decision version 不会丢失；它们进入下方 position lifecycle 和审计记录，不在首屏叠加第二张历史卡。
 - 此节点尚未冻结 intent/pending/no-fill、stale/gap、退出后和结算后的完整状态序列。
 
@@ -158,6 +158,14 @@
 - exit 对全部持仓份额使用同一全额成交原则；不能完整按门槛成交时不产生部分退出或残余 position。exit 未成交后的重试/终态规则仍由完整状态序列单独冻结。
 - 所有成交均保存实际逐档平均价、深度、费用、delay 和订单簿版本；FOK 只消除 partial 状态，不允许按触发时价格假装成交。
 - FAK、partial position 和 partial exit 推迟至 P4，只有真实 paper 数据证明它们能改善执行评估时才考虑。
+
+## T55 已批准 EV-exit 主 paper 轨道（2026-09-16）
+
+- `EV_EXIT` 是 Paper 账本、Home 持仓摘要与 Match Page position 主状态的默认轨道，由后台按预先冻结规则自动模拟，不依赖浏览器或用户响应时间。
+- 主轨道的 position 动作只有 `HOLD` 与 `SELL`：净可执行退出价值未高于稳健持有价值时为 `HOLD`，过门后创建一次 FOK exit intent。
+- `HODL_BASELINE` 和 `CONVERGENCE_LOCK` 使用同一 entry 作为完整反事实轨道；它们不生成额外 position，也不计入主组合 P&L。
+- `LOCK PROFIT` 可在 UI 作为明确的风险降低选项展示，但不替代 EV 主动作、不自动改写主账本，也不得宣称提高期望值。
+- 用户未来真实下注或主观退出选择与这套确定性 paper 绩效分开；P3 不新增必须在线点击的 paper 操作按钮。
 
 ## 上一任务 T54 完成证据（2026-09-13）
 
@@ -188,4 +196,4 @@
 
 ## 下一步
 
-继续 T55 的单问题设计讨论；下一项冻结 `DecisionSummary` 从入场观察、one-shot FOK intent、开放持仓到退出/结算及数据降级的完整状态序列，尤其明确 exit `NO_FILL` 的终态；随后确定详细模块、移动端顺序及 v0 原型状态矩阵。全部设计经用户批准后写入 P3 设计规格；规格获批前不得编写实施计划、修改 v0 原型或实现 P3 功能。
+继续 T55 的单问题设计讨论；下一项冻结主 EV-exit intent 若 `NO_FILL` 后的终态，再汇总 `DecisionSummary` 从入场观察到退出/结算及数据降级的完整状态序列；随后确定详细模块、移动端顺序及 v0 原型状态矩阵。全部设计经用户批准后写入 P3 设计规格；规格获批前不得编写实施计划、修改 v0 原型或实现 P3 功能。

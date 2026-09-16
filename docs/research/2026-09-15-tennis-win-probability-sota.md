@@ -483,7 +483,7 @@ Home 不复制 `/markets`，而把现有市场情报占位升级为最多三行�
 
 - 入场前 `DecisionSummary` 显示双边模型—市场对照及 `BUY / WAIT / NO BET`。
 - 固定 `$10` paper fill 只有在 PostgreSQL ledger 同步提交后才算确认；确认后同一摘要原地切换成 position 管理，入场动作从首屏消失，不再同时显示历史 BUY 与当前持仓动作。
-- position 摘要围绕持仓球员显示入场成本/平均价、份额、按当前 bid/depth/费用计算的可退出价值、净 P&L、稳健持有价值，以及 `HOLD / SELL / LOCK PROFIT` 中的唯一当前动作。
+- position 摘要围绕持仓球员显示入场成本/平均价、份额、按当前 bid/depth/费用计算的可退出价值、净 P&L、稳健持有价值，以及 EV 主动作 `HOLD / SELL`；`LOCK PROFIT` 另列为可选降风险方案。
 - 原始 prediction、市场快照、费用、intent、fill 和版本仍由下方 lifecycle 与 PostgreSQL 审计记录保留；原地切换只改变首屏当前视图，不删除历史证据。
 
 该选择避免两个动作真源并自然执行“同场不加仓、不换边、不重新入场”。intent/pending/no-fill、stale/gap、退出和结算状态仍须在完整状态矩阵中冻结。
@@ -513,6 +513,19 @@ Home 不复制 `/markets`，而把现有市场情报占位升级为最多三行�
 - P3 的 paper 仓位因此始终是 0 或完整固定 `$10` entry，策略轨道之间可直接比较。FAK、partial position 与 partial exit 留待 P4 基于真实 no-fill 证据再评估。
 
 FOK 解决了 partial 状态，但尚未决定一次 exit intent 若 `NO_FILL` 后是否允许未来再次尝试；该分支需在完整状态机中明确。
+
+## 24. T55 后续批准：EV-exit 作为主 paper 轨道
+
+**批准日期：** 2026-09-16
+
+用户在“EV-exit 主轨道、用户操作决定主轨道、三轨并列无主结果”中选择 EV-exit：
+
+- Paper 账本的主 position、组合 P&L 和首页持仓摘要由确定性的 `EV_EXIT` 规则驱动。后台持续计算并在规则首次触发时模拟 FOK exit，不依赖浏览器开启或用户点击速度。
+- 主动作只有 `HOLD` 或 `SELL`。`LOCK PROFIT` 仍可作为降低方差的可选方案展示，但不替代主动作、不改变主 ledger，也不被描述为更高期望值。
+- `HODL_BASELINE` 与 `CONVERGENCE_LOCK` 从同一 entry 分叉，保存完整反事实退出/结算和 P&L；它们不是额外下注，不计入主组合收益。
+- 用户未来是否据此进行真实下注、是否主观提前退出，属于独立决策记录，不能混入用于评价模型与默认策略的 paper 主结果。
+
+这个选择让 P3 能分别评价模型、首次入场、EV-exit 和风险锁利策略。仍待决定的是主 EV-exit FOK intent 若 `NO_FILL` 后是否允许再次尝试。
 
 ---
 
