@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-16 19:20 CST
+**最后更新：** 2026-09-16 19:55 CST
 
 **总体状态：** `in_progress`
 
-**当前里程碑：** P3.2 — Safe Foundations（T57 `done`，T58 `in_progress`）
+**当前里程碑：** P3.2 — Safe Foundations（T58 `done`，T59 `ready`）
 
-**当前阶段：** P3 — Market & Decision Support（`in_progress`；P3.0/P3.1 已完成，T57 canonical contracts 已交付）
+**当前阶段：** P3 — Market & Decision Support（`in_progress`；P3.0/P3.1 已完成，T57/T58 canonical contracts 与持久化已交付）
 
 ## 状态说明
 
@@ -111,7 +111,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 |---|---|---|---|
 | P3.0 — Design freeze | `done` | 官方能力边界、market mapping、预测评估、decision/risk、paper lifecycle、实时架构、三层页面、v0 brief 与实施路线 | T55 `d7cc25e`：设计规格、T56–T71 计划、v0 Prompt 和研究记录已冻结；不含产品实现 |
 | P3.1 — Prototype freeze | `done` | v0 输出、Home/Markets/Match 完整状态、26 个代表视觉基线 | `f29a789`：26 个状态 × desktop/mobile 的 52 张基线入库；P3 visual 通过，且 Codex 在强制 fake 配置下复跑 `prototype|visual` 为 34 passed / 4 skipped（四项是 replay-off 时按设计跳过的 P2 Replay 用例）；逐张人工核验，P1/P2 既有基线零改动 |
-| P3.2 — Market foundation | `in_progress` | canonical contracts、可逆 schema、只读 Polymarket REST/WS、严格 mapping 与 replay | T56/T57 已完成；T58 可按计划领取，之后再依序实施 T59–T60 |
+| P3.2 — Market foundation | `in_progress` | canonical contracts、可逆 schema、只读 Polymarket REST/WS、严格 mapping 与 replay | T56/T57/T58 已完成；T59 可按计划领取，之后再实施 T60 |
 | P3.3 — Prediction, decision and paper | `planned` | 审计 benchmark、live probability、可执行 quote、decision policy、one-shot paper 与后台双流协调 | T60 完成且真实历史数据来源达到 T61 audit 输入门后按 T61–T65 实施 |
 | P3.4 — API and product surfaces | `planned` | 独立 REST/SSE、Chat facts、typed frontend、Home Pulse、`/markets`、Match workbench | T65 完成后按 T66–T69 接入；严格服从 T56 视觉真源 |
 | P3.5 — Completion gates | `planned` | 双流 replay/recovery/latency、全回归、26 张视觉门与真实只读 shadow | T70–T71 完成且证据写回三份总控后关闭 P3 |
@@ -125,8 +125,8 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | T55 | P3.0 | Freeze P3 Market & Decision Support Design and Prototype Brief | `done` | `d7cc25e` | 421 行设计规格 + 847 行 T56–T71 实施计划 + 320 行 v0 Prompt；用户授权剩余项采用推荐方案；官方 Polymarket/API-Tennis 依据、精确映射、模型晋升、one-shot FOK、provider-final settlement、独立 sports/decision SSE、三层 UI 与 26 张视觉矩阵均已冻结；本地链接、占位符/64 位密钥值、`git diff --cached --check` 通过；未写产品代码 |
 | T56 | P3.1 | Generate, Import, and Freeze the P3 v0 Prototype | `done` | `f29a789` | 用户确认的 `9c868bf` 已导入；`4ad724d` 补齐 preview/routing/状态/布局回归，`0f18f7b` 修复跨 project 的桌面/移动基线覆盖。用户在普通终端重建 26 个状态 × 双视口的 52 张 PNG；P3 visual 通过，desktop=1440px、mobile=390px，全部逐张人工核验。Codex 再在 `CI=1`、显式 fake provider/replay-off 环境复跑 `prototype|visual`，结果 34 passed / 4 skipped（四项均为 replay-off 时按设计跳过的 P2 Replay 用例）；`pnpm test` 242/242、typecheck、build 通过。仅这 52 张基线以 `f29a789` 入库，P1/P2 基线零改动 |
 | T57 | P3.2 | Add Canonical P3 Domain, Protocols, and Safe Configuration | `done` | `e7da341` | 领取 `63e0ff8`（起始 `5df1fe0`）。TDD 先红后绿：`app/markets`（Market/私有 MarketExternalId/MarketRules/OrderBookState/ExecutableQuote/MarketResolution/MarketEnvelope + 只读 `MarketDataProvider` protocol）、`app/prediction`（互补校准概率、版本化输入、typed abstention）、`app/decision`（`DecisionAction` 六值、GateResult 失败须 reason、DecisionObservation 缺版本化输入即拒、stale/gap 撤销新 BUY/SELL）、`app/paper`（one-shot FOK intent/fill/position/track 与合法 transition 表，STALE/GAP 非账本状态）；config 仅新增 p3_mode(disabled\|shadow\|paper)、固定 `$10` stake、公开 Gamma/CLOB/WS URL、artifact 目录、有界订阅与 freshness 上限，测试证明无任何 wallet/private-key 字段。验收 `uv run pytest tests/test_p3_domain.py tests/test_config.py tests/test_p2_domain.py tests/test_domain.py` 80 passed；全量确定性 622 passed/29 deselected；新文件 `ruff check` 零告警（31 个既有 format/check 债务未触碰） |
-| T58 | P3.2 | Add Reversible P3 Persistence and Idempotent Ledger Repositories | `in_progress` | — | Claude 已领取（起始 `507b0ac`）；migration upgrade→downgrade→upgrade、并发幂等、rollback 与 restart recovery |
-| T59 | P3.2 | Implement the Read-Only Polymarket Adapter and Exact Match Mapping | `planned` | — | public REST、两侧 book/rules/fee/delay、严格内部 Player ID 对；零交易认证 |
+| T58 | P3.2 | Add Reversible P3 Persistence and Idempotent Ledger Repositories | `done` | `02516c6` | 领取 `982bfef`（起始 `507b0ac`）。migration `0004` 创建 12 张 P3 表（markets/私有 external_ids/不可变 rules/match_links 部分唯一 active 索引/observations/版本化 prediction+decision evidence/one-shot paper ledger/resolutions），downgrade 只删新表；schema 元数据测试 8 passed（表名、FK、JSONB evidence、全列 timestamptz、精确 unique 约束、provider ID 只在私有映射表）；integration 16 passed：20 路并发注册收敛同一 `mkt_` ID、intent 按幂等键重放相等且同场同 side 第二把 `UniqueViolationError`、`record_fill` 单事务提交 fill+status+唯一 position 且 pre-commit 注入失败完整回滚、position 状态 forward-only 幂等、intent 后 link 冻结（`LinkFrozenError`）、FINAL resolution 终态不降级、全新 Database 实例重启恢复 pending/unsettled、raw purge 不删 rules/ledger；`alembic upgrade head→downgrade 0003→upgrade head` 往返 exit 0 后 paper ledger 复跑 8 passed；infrastructure 全套 38 passed、确定性 608 passed/67 deselected、新文件 ruff check/format 干净 |
+| T59 | P3.2 | Implement the Read-Only Polymarket Adapter and Exact Match Mapping | `ready` | — | T58 已关闭；public REST、两侧 book/rules/fee/delay、严格内部 Player ID 对；零交易认证 |
 | T60 | P3.2 | Build the Market WebSocket Reducer, Hot State, and Replay Feed | `planned` | — | reducer/hash/gap/reconnect、Redis 热状态、确定性 replay 与公开 WS smoke |
 | T61 | P3.3 | Add the Audited Walk-Forward Pre-Match Benchmark Pipeline | `planned` | — | 数据来源/许可/泄漏 audit、chronological walk-forward、校准与 versioned model card |
 | T62 | P3.3 | Implement Live Tennis Probability, Calibration Loading, and Safe Degradation | `planned` | — | 确定性计分、empirical-Bayes 收缩、主巡覆盖与 typed abstention |
