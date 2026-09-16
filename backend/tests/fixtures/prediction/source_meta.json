@@ -1,0 +1,17 @@
+{
+  "source_id": "tennix-synth-fixture-v1",
+  "license_id": "CC0-1.0-synthetic",
+  "description": "Deterministic synthetic tennis results for pipeline tests; no real player, match or provider data.",
+  "generated_by": "seed=20260916",
+  "coverage": {
+    "seasons": [
+      "2024",
+      "2025",
+      "2026"
+    ],
+    "tours": [
+      "atp",
+      "wta"
+    ]
+  }
+}
