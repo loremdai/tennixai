@@ -1180,21 +1180,18 @@ class P3QueryService:
         lifecycle: list[str] = []
         for intent in intents:
             if intent.side.value == "entry":
-                lifecycle.append(
-                    {
-                        "pending": "entry_pending",
-                        "filled": "filled",
-                        "no_fill": "missed",
-                    }[intent.status.value]
-                )
+                # Cumulative history: a filled entry passed through pending.
+                lifecycle.append("entry_pending")
+                if intent.status.value == "filled":
+                    lifecycle.append("filled")
+                elif intent.status.value == "no_fill":
+                    lifecycle.append("missed")
             else:
-                lifecycle.append(
-                    {
-                        "pending": "exit_pending",
-                        "filled": "exited",
-                        "no_fill": "exit_missed",
-                    }[intent.status.value]
-                )
+                lifecycle.append("exit_pending")
+                if intent.status.value == "filled":
+                    lifecycle.append("exited")
+                elif intent.status.value == "no_fill":
+                    lifecycle.append("exit_missed")
         if position is not None and position.status.value == "settled":
             lifecycle.append("settled")
         return DecisionSnapshotDto(
