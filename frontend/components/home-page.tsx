@@ -311,7 +311,7 @@ export function HomePage({
               onPromptSelect={showAnswer}
             />
             <RecentResultsCard />
-            <MarketIntelligenceCard phase={showP3Preview ? 'p2' : phase} />
+            {showP3Preview ? null : <MarketIntelligenceCard phase={phase} />}
           </aside>
 
           <div className="flex min-w-0 flex-col gap-6 lg:col-start-1 lg:row-start-1">

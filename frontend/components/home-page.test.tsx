@@ -358,6 +358,15 @@ describe('HomePage slate', () => {
   })
 })
 
+describe('HomePage P3 preview', () => {
+  it('replaces the legacy Market Intelligence card with one market pulse section', async () => {
+    render(<HomePage previewP3 initialPulseState="populated" />)
+
+    expect(await screen.findByRole('heading', { name: '市场脉搏' })).toBeVisible()
+    expect(screen.queryByRole('heading', { name: 'Market Intelligence' })).toBeNull()
+  })
+})
+
 describe('HomePage facets', () => {
   it('shows the filter groups with default active facets', async () => {
     render(<HomePage />)

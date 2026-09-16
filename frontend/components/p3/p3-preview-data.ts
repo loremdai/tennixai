@@ -446,7 +446,7 @@ const pulseRows: HomePulseRow[] = [
     state: 'hold',
     freshness: '4 秒前',
     stale: false,
-    href: '/match?preview=p3&status=live&decision=hold',
+    href: '/match?preview=p3&status=live&state=hold',
   },
   {
     id: 'pulse-buy-live',
@@ -460,7 +460,7 @@ const pulseRows: HomePulseRow[] = [
     state: 'buy',
     freshness: '8 秒前',
     stale: false,
-    href: '/match?preview=p3&status=live&decision=buy&selection=sinner',
+    href: '/match?preview=p3&status=live&state=buy&selection=sinner',
   },
   {
     id: 'pulse-wait-upcoming',
@@ -474,7 +474,7 @@ const pulseRows: HomePulseRow[] = [
     state: 'wait',
     freshness: '12 秒前',
     stale: false,
-    href: '/match?preview=p3&status=upcoming&decision=wait',
+    href: '/match?preview=p3&status=upcoming&state=wait',
   },
 ]
 
@@ -496,11 +496,9 @@ export function getHomePulseRows(state: HomePulseState): HomePulseRow[] {
   if (state === 'stale') {
     rows[0] = {
       ...rows[0],
-      priority: 'sell',
-      state: 'sell',
       stale: true,
       freshness: '最后可信 · 2 分 14 秒前',
-      href: '/match?preview=p3&status=live&decision=sell&overlay=stale',
+      href: '/match?preview=p3&status=live&state=hold&overlay=stale',
     }
   }
   return sortHomePulseRows(rows)
@@ -520,7 +518,7 @@ export const opportunityFixtures: OpportunityPreview[] = [
     maxBuyPrice: 0.55,
     freshness: '盘口 4 秒前 · 模型 11 秒前',
     stale: false,
-    href: '/match?preview=p3&status=live&decision=buy',
+    href: '/match?preview=p3&status=live&state=buy',
   },
   {
     id: 'opp-sabalenka',
@@ -535,7 +533,7 @@ export const opportunityFixtures: OpportunityPreview[] = [
     maxBuyPrice: 0.61,
     freshness: '盘口 8 秒前 · 模型 14 秒前',
     stale: false,
-    href: '/match?preview=p3&status=live&decision=buy&selection=sinner',
+    href: '/match?preview=p3&status=live&state=buy&selection=sinner',
   },
   {
     id: 'opp-zheng',
@@ -550,7 +548,7 @@ export const opportunityFixtures: OpportunityPreview[] = [
     maxBuyPrice: 0.54,
     freshness: '盘口 12 秒前 · 模型 19 秒前',
     stale: false,
-    href: '/match?preview=p3&status=upcoming&decision=wait',
+    href: '/match?preview=p3&status=upcoming&state=wait',
   },
 ]
 
@@ -574,7 +572,7 @@ export const marketListingFixtures: MarketListingPreview[] = [
     reason: '净 edge +1.6pp，低于 3.0pp hard gate',
     freshness: '4 秒前',
     stale: false,
-    href: '/match?preview=p3&status=live&decision=no_bet',
+    href: '/match?preview=p3&status=live&state=no_bet',
   },
   {
     id: 'market-zheng',
@@ -595,7 +593,7 @@ export const marketListingFixtures: MarketListingPreview[] = [
     reason: '当前价高于 54.0% 最高可买价',
     freshness: '12 秒前',
     stale: false,
-    href: '/match?preview=p3&status=upcoming&decision=wait',
+    href: '/match?preview=p3&status=upcoming&state=no_bet',
   },
   {
     id: 'market-challenger',
@@ -616,7 +614,7 @@ export const marketListingFixtures: MarketListingPreview[] = [
     reason: 'Challenger 暂无模型覆盖',
     freshness: '21 秒前',
     stale: false,
-    href: '/match?preview=p3&status=live&decision=market_only',
+    href: '/match?preview=p3&status=live&state=market_only',
   },
   {
     id: 'market-itf',
@@ -637,7 +635,7 @@ export const marketListingFixtures: MarketListingPreview[] = [
     reason: 'ITF 暂无模型覆盖',
     freshness: '39 秒前',
     stale: true,
-    href: '/match?preview=p3&status=upcoming&decision=market_only&overlay=stale',
+    href: '/match?preview=p3&status=upcoming&state=market_only&overlay=stale',
   },
   {
     id: 'market-other',
@@ -658,7 +656,7 @@ export const marketListingFixtures: MarketListingPreview[] = [
     reason: '表演赛不进入模型覆盖',
     freshness: '18 秒前',
     stale: false,
-    href: '/match?preview=p3&status=upcoming&decision=market_only',
+    href: '/match?preview=p3&status=upcoming&state=market_only',
   },
 ]
 
@@ -676,7 +674,7 @@ export const openPaperFixtures: PaperLedgerPreview[] = [
     netPnl: 2.26,
     freshness: '4 秒前',
     detail: '开放仓位 · 当前建议 HOLD',
-    href: '/match?preview=p3&status=live&decision=hold',
+    href: '/match?preview=p3&status=live&state=hold',
   },
   {
     id: 'paper-pending',
@@ -691,7 +689,7 @@ export const openPaperFixtures: PaperLedgerPreview[] = [
     netPnl: null,
     freshness: '等待 6 秒',
     detail: '入场 intent 等待报价确认 · 尚未成交',
-    href: '/match?preview=p3&status=live&decision=entry_pending',
+    href: '/match?preview=p3&status=live&state=entry_pending',
   },
   {
     id: 'paper-resolution',
@@ -706,7 +704,7 @@ export const openPaperFixtures: PaperLedgerPreview[] = [
     netPnl: 1.48,
     freshness: '等待 9 秒',
     detail: '退出 intent 等待确认 · 仓位仍开放',
-    href: '/match?preview=p3&status=live&decision=exit_pending',
+    href: '/match?preview=p3&status=live&state=exit_pending',
   },
 ]
 
@@ -724,7 +722,7 @@ export const terminalPaperFixtures: PaperLedgerPreview[] = [
     netPnl: 2.5,
     freshness: '18 分钟前',
     detail: 'EV exit · 63.0% 退出',
-    href: '/match?preview=p3&status=finished&decision=exited',
+    href: '/match?preview=p3&status=finished&state=exited',
   },
   {
     id: 'paper-missed',
@@ -739,7 +737,7 @@ export const terminalPaperFixtures: PaperLedgerPreview[] = [
     netPnl: 0,
     freshness: '1 小时前',
     detail: '入场报价跳离上限 · 未产生仓位',
-    href: '/match?preview=p3&status=upcoming&decision=missed',
+    href: '/match?preview=p3&status=upcoming&state=missed',
   },
   {
     id: 'paper-settled-positive',
@@ -754,7 +752,7 @@ export const terminalPaperFixtures: PaperLedgerPreview[] = [
     netPnl: 7.24,
     freshness: '昨天',
     detail: 'HODL · 胜出结算',
-    href: '/match?preview=p3&status=finished&decision=settled',
+    href: '/match?preview=p3&status=finished&state=settled',
   },
   {
     id: 'paper-settled-negative',
@@ -769,7 +767,7 @@ export const terminalPaperFixtures: PaperLedgerPreview[] = [
     netPnl: -10,
     freshness: '2 天前',
     detail: 'HODL · 方向落败',
-    href: '/match?preview=p3&status=finished&decision=settled&selection=alcaraz',
+    href: '/match?preview=p3&status=finished&state=settled&selection=alcaraz',
   },
   {
     id: 'paper-settled-void',
@@ -784,7 +782,7 @@ export const terminalPaperFixtures: PaperLedgerPreview[] = [
     netPnl: 0,
     freshness: '3 天前',
     detail: '退赛规则 · 50–50 结算',
-    href: '/match?preview=p3&status=finished&decision=settled',
+    href: '/match?preview=p3&status=finished&state=settled',
   },
 ]
 

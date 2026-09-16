@@ -27,10 +27,12 @@ const validStatuses = new Set<MatchStatus>(['upcoming', 'live', 'finished'])
 export default async function Page({ searchParams }: PageProps) {
   const params = await searchParams
   const rawPreview = Array.isArray(params.preview) ? params.preview[0] : params.preview
+  const rawStatus = Array.isArray(params.status) ? params.status[0] : params.status
 
   if (rawPreview === 'p3') {
     return (
       <MatchDecisionPage
+        initialStatus={rawStatus && validStatuses.has(rawStatus as MatchStatus) ? rawStatus as MatchStatus : 'live'}
         initialState={parseDecisionState(params.state)}
         initialSelection={parseSelectionState(params.selection)}
         initialOverlay={parseDecisionOverlay(params.overlay)}
@@ -41,7 +43,6 @@ export default async function Page({ searchParams }: PageProps) {
     )
   }
 
-  const rawStatus = Array.isArray(params.status) ? params.status[0] : params.status
   const initialStatus = rawStatus && validStatuses.has(rawStatus as MatchStatus)
     ? rawStatus as MatchStatus
     : 'upcoming'

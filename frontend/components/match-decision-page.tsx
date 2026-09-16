@@ -7,6 +7,7 @@ import { DecisionEvidence } from '@/components/match/decision-evidence'
 import { DecisionSummary } from '@/components/match/decision-summary'
 import { MatchHero } from '@/components/match/match-hero'
 import { OverviewCard, ScoreProgressCard, StatsCard } from '@/components/match/match-main'
+import type { MatchStatus } from '@/components/match/match-data'
 import { MatchMomentumCard } from '@/components/match/match-momentum'
 import { KeyFactsCard } from '@/components/match/match-sidebar'
 import { PaperLifecycle } from '@/components/match/paper-lifecycle'
@@ -25,6 +26,7 @@ import {
 } from '@/components/p3/p3-preview-data'
 
 export function MatchDecisionPage({
+  initialStatus,
   initialState,
   initialSelection,
   initialOverlay,
@@ -32,6 +34,7 @@ export function MatchDecisionPage({
   initialMethodology,
   initialConfidence,
 }: {
+  initialStatus: MatchStatus
   initialState: DecisionState
   initialSelection: SelectionState
   initialOverlay: DecisionOverlay
@@ -45,7 +48,7 @@ export function MatchDecisionPage({
   const [analysis, setAnalysis] = useState(initialAnalysis)
   const [methodology, setMethodology] = useState(initialMethodology)
   const [confidence, setConfidence] = useState(initialConfidence)
-  const match = buildPreviewMatch('live')
+  const match = buildPreviewMatch(initialStatus)
   const decision = getDecisionPreview(state, overlay, confidence, selection)
 
   function changeControl(key: string, value: string) {
@@ -151,21 +154,33 @@ export function MatchDecisionPage({
         <DecisionSummary decision={decision} onAsk={focusDecisionAssistant} />
 
         <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
-          <ProbabilityMarketTrajectory decision={decision} analysisState={analysis} />
-
-          <aside className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-20 lg:col-start-2 lg:row-start-1" aria-label="比赛决策解释与关键事实">
-            <div className="order-1 lg:order-2"><DecisionAssistant key={`${state}-${overlay}-${selection}-${confidence}`} decision={decision} /></div>
-            <div className="order-2 lg:order-1"><KeyFactsCard match={match} preview /></div>
-          </aside>
-
-          <div className="flex min-w-0 flex-col gap-4 lg:col-start-1">
-            <OverviewCard match={match} preview />
+          <div className="min-w-0 lg:col-start-1 lg:row-start-2">
             <ScoreProgressCard match={match} preview highlight={null} />
-            <StatsCard match={match} preview highlight={null} snapshot={null} />
-            <MatchMomentumCard match={match} preview highlight={null} snapshot={null} />
+          </div>
+          <aside className="min-w-0 lg:col-start-2 lg:row-start-2" aria-label="比赛关键事实">
+            <KeyFactsCard match={match} preview />
+          </aside>
+          <div className="min-w-0 lg:col-start-1 lg:row-start-1">
+            <OverviewCard match={match} preview />
+          </div>
+          <div className="min-w-0 lg:col-start-1 lg:row-start-3">
+            <ProbabilityMarketTrajectory decision={decision} analysisState={analysis} />
+          </div>
+          <div className="min-w-0 lg:col-start-1 lg:row-start-4">
             <DecisionEvidence decision={decision} methodologyState={methodology} />
+          </div>
+          <div className="min-w-0 lg:col-start-1 lg:row-start-5">
+            <StatsCard match={match} preview highlight={null} snapshot={null} />
+          </div>
+          <div className="min-w-0 lg:col-start-1 lg:row-start-6">
+            <MatchMomentumCard match={match} preview highlight={null} snapshot={null} />
+          </div>
+          <div className="min-w-0 lg:col-start-1 lg:row-start-7">
             <PaperLifecycle decision={decision} />
           </div>
+          <aside className="min-w-0 lg:sticky lg:top-20 lg:col-start-2 lg:row-start-1" aria-label="比赛决策助手">
+            <DecisionAssistant key={`${state}-${overlay}-${selection}-${confidence}`} decision={decision} />
+          </aside>
         </div>
       </main>
 

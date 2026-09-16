@@ -1,10 +1,10 @@
-import { test, type Page } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
 const homeCases = [
   ['populated', 'home-populated'],
   ['stale', 'home-stale'],
   ['empty', 'home-empty'],
-  ['populated', 'home-query-preserved'],
+  ['populated&q=Sinner%20%E4%BB%8A%E6%99%9A%E5%87%A0%E7%82%B9%E6%AF%94%E8%B5%9B%EF%BC%9F', 'home-query-preserved'],
 ] as const
 
 const marketCases = [
@@ -39,10 +39,20 @@ async function capture(page: Page, url: string, name: string, mobile: boolean) {
   await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 1000 })
   await page.goto(url)
   await page.getByRole('main').waitFor()
-  await page.screenshot({ path: `/tmp/agent-browser/p3-candidates/${name}-${mobile ? 'mobile' : 'desktop'}.png`, fullPage: true })
+  await page.addStyleTag({ content: 'nextjs-portal { display: none !important; }' })
+  await page.evaluate(() => {
+    window.scrollTo(0, 0)
+    return document.fonts.ready
+  })
+  await page.waitForTimeout(600)
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }))
+  await expect(page).toHaveScreenshot(`${name}.png`, {
+    animations: 'disabled',
+    fullPage: true,
+  })
 }
 
-test.describe('P3 preview candidate baselines', () => {
+test.describe('P3 visual preview baselines', () => {
   test('Home 4 candidate baselines', async ({ page, baseURL }) => {
     for (const [query, name] of homeCases) {
       await capture(page, `${baseURL}/?preview=p3&pulse=${query}`, name, false)

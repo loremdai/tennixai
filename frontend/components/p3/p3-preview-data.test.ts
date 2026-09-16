@@ -4,10 +4,15 @@ import {
   DECISION_STATES,
   getDecisionPreview,
   getHomePulseRows,
+  marketListingFixtures,
+  openPaperFixtures,
+  opportunityFixtures,
   parseDecisionState,
   parseMarketView,
   parseMarketsState,
   sortHomePulseRows,
+  terminalPaperFixtures,
+  type DecisionState,
   type HomePulseRow,
 } from './p3-preview-data'
 
@@ -39,10 +44,46 @@ describe('P3 preview state matrix', () => {
     expect(sortHomePulseRows([...rows, position])[0].id).toBe('open')
   })
 
+  it('keeps stale overlays on the open position without inventing a sell action', () => {
+    const stalePosition = getHomePulseRows('stale').find((row) => row.id === 'pulse-position')
+
+    expect(stalePosition).toMatchObject({
+      priority: 'position',
+      state: 'hold',
+      stale: true,
+    })
+    expect(stalePosition?.href).toContain('state=hold')
+    expect(stalePosition?.href).toContain('overlay=stale')
+  })
+
   it('falls back safely for invalid URL parameters', () => {
     expect(parseDecisionState('unknown')).toBe('buy')
     expect(parseMarketView('unknown')).toBe('opportunities')
     expect(parseMarketsState('unknown')).toBe('populated')
     expect(getHomePulseRows('empty')).toHaveLength(0)
+  })
+
+  it('links every Home, Markets, and Paper fixture to its internal P3 preview state', () => {
+    const homeFixtures = [
+      ...getHomePulseRows('populated'),
+      ...getHomePulseRows('stale').filter((fixture) => fixture.stale),
+    ]
+    const fixtureLinks: Array<{ id: string; href: string; expectedState: DecisionState }> = [
+      ...homeFixtures.map((fixture) => ({ id: fixture.id, href: fixture.href, expectedState: fixture.state })),
+      ...opportunityFixtures.map((fixture) => ({ id: fixture.id, href: fixture.href, expectedState: fixture.state })),
+      ...marketListingFixtures.map((fixture) => ({ id: fixture.id, href: fixture.href, expectedState: fixture.state as DecisionState })),
+      ...openPaperFixtures.map((fixture) => ({ id: fixture.id, href: fixture.href, expectedState: fixture.state })),
+      ...terminalPaperFixtures.map((fixture) => ({ id: fixture.id, href: fixture.href, expectedState: fixture.state })),
+    ]
+
+    for (const { id, href, expectedState } of fixtureLinks) {
+      const url = new URL(href, 'https://tennix.test')
+      expect(href, id).toMatch(/^\/(?!\/)/)
+      expect(url.origin, id).toBe('https://tennix.test')
+      expect(url.searchParams.get('preview'), id).toBe('p3')
+      const targetState = url.searchParams.get('state')
+      expect(targetState, id).toBe(expectedState)
+      expect(parseDecisionState(targetState ?? undefined), id).toBe(expectedState)
+    }
   })
 })
