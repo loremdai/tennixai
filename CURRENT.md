@@ -2,7 +2,7 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-16 09:06 CST
+**最后更新：** 2026-09-16 09:14 CST
 
 **当前任务：** T55 — Freeze P3 Market & Decision Support Design and Prototype Brief
 
@@ -22,7 +22,7 @@
 
 **关闭提交：** —
 
-**当前动作：** P3 SOTA 研究方向、覆盖与组合边界、独立估值、持仓前后动作语义、paper 生命周期、实时架构、三层页面结构，以及 `/markets` 三视图均已获用户批准。下一步冻结 Home 的市场/持仓摘要，再细化 Match 工作台和 v0 原型状态。
+**当前动作：** P3 SOTA 研究方向、覆盖与组合边界、独立估值、持仓前后动作语义、paper 生命周期、实时架构、三层页面结构、`/markets` 三视图及 Home「市场脉搏」均已获用户批准。下一步冻结 Match Page 决策工作台的信息层级，再确定 v0 原型状态矩阵。
 
 **当前状态：** P2（含 T54）保持已关闭；P3.0 仅进入 design freeze。研究报告位于 `docs/research/2026-09-15-tennis-win-probability-sota.md`；其模型选择方法和 market-to-match 方向已批准，但仍不是完整 P3 规格。具体 champion、校准器和 decision 阈值必须在数据覆盖审计与统一 benchmark 后决定。P4 已确定为 P1–P3 框架完成后的统一打磨阶段；当前没有 P3 provider、schema、prediction、decision、paper ledger、页面或交易能力，自动下单仍属独立延期阶段。
 
@@ -111,6 +111,14 @@
 - `Paper 账本` 先列开放持仓，再列近期退出和结算；页面只提供组合概览，点击后通过内部 `match_id` 进入 Match Page 查看完整 lifecycle。
 - 三个视图是同一路由内的页面级切换，不把 current/upcoming/open/settled 拆成四个并列首页区块，也不提供自动下单。
 
+## T55 已批准 Home「市场脉搏」（2026-09-16）
+
+- 将现有 Home 市场情报占位升级为单个紧凑模块，不在首页新增完整市场区；最多展示三行。
+- 若存在开放 paper position，固定保留一行，优先显示 `SELL`、`LOCK PROFIT` 或 stale/gap 等需要关注的持仓；无此类状态时显示最相关的开放持仓。
+- 剩余行按赛中 `BUY` → 赛前 `BUY` → 最强 `WAIT` 选择；没有开放持仓时，三行都可用于机会。
+- 每行只展示比赛、模型概率、固定 `$10` 的可执行市场概率、当前动作与 freshness。点击整行通过内部 `match_id` 进入 Match Page；模块入口进入 `/markets`。
+- Home 不提供 paper 动作按钮、价格/概率轨迹或详细账本；没有符合条件的持仓与机会时显示“暂无可执行机会”等诚实空态，但仍允许查看全部市场。
+
 ## 上一任务 T54 完成证据（2026-09-13）
 
 - 确定性后端：`543 passed / 51 deselected`；infrastructure `22 passed / 572 deselected`。
@@ -140,4 +148,4 @@
 
 ## 下一步
 
-继续 T55 的单问题设计讨论；下一项冻结 Home 的高价值机会与开放持仓摘要，随后细化 Match 工作台和 v0 原型状态。全部设计经用户批准后写入 P3 设计规格；规格获批前不得编写实施计划、修改 v0 原型或实现 P3 功能。
+继续 T55 的单问题设计讨论；下一项冻结 Match Page 决策工作台的信息层级，随后确定 v0 原型状态矩阵。全部设计经用户批准后写入 P3 设计规格；规格获批前不得编写实施计划、修改 v0 原型或实现 P3 功能。
