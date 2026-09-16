@@ -154,6 +154,26 @@ class OutcomePayout(FrozenModel):
     payout_per_share: Decimal = Field(ge=Decimal("0"), le=Decimal("1"))
 
 
+class MarketExecutionMetadata(FrozenModel):
+    """Dynamic per-market execution parameters read from provider metadata.
+
+    Tick size, minimum order size, fee curve and sports delay are never
+    hardcoded; quotes and FOK simulation must consume this record.
+    """
+
+    market_id: str = Field(min_length=1)
+    tick_size: Decimal = Field(gt=Decimal("0"), le=Decimal("1"))
+    min_order_size: Decimal = Field(ge=Decimal("0"))
+    fee_rate: Decimal = Field(ge=Decimal("0"), le=Decimal("1"))
+    fee_exponent: Decimal = Field(ge=Decimal("0"))
+    taker_only: bool = True
+    maker_base_fee: Decimal = Field(ge=Decimal("0"))
+    taker_base_fee: Decimal = Field(ge=Decimal("0"))
+    sports_delay_seconds: int = Field(ge=0)
+    game_start_time: AwareDatetime | None = None
+    fetched_at: AwareDatetime
+
+
 class MarketResolution(FrozenModel):
     """Provider-final resolution. Paper settlement only obeys this record."""
 

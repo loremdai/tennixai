@@ -205,6 +205,37 @@ def create_app(
         seeder=seeder.ensure if seeder is not None else None,
     )
 
+    # P3 read-only market provider. Assembled only when explicitly enabled;
+    # public Polymarket endpoints plus the durable identity mapping. No
+    # wallet, key, signing or trading channel exists anywhere in this path.
+    market_provider = None
+    if settings.p3_mode != "disabled" and resolver is not None and database is not None:
+        from app.markets.polymarket import PolymarketProvider
+        from app.persistence.market_repositories import MarketRepository
+
+        market_repository = MarketRepository(database)
+
+        async def register_market(
+            provider_event_id: str, condition_id: str, token_ids: tuple[str, str]
+        ) -> str:
+            return await market_repository.get_or_create_market_id(
+                provider="polymarket",
+                provider_event_id=provider_event_id,
+                condition_id=condition_id,
+                token_ids=token_ids,
+            )
+
+        async def lookup_market_external(market_id: str):
+            return await market_repository.get_external_id(market_id)
+
+        market_provider = PolymarketProvider(
+            gamma_base_url=settings.polymarket_gamma_base_url,
+            clob_base_url=settings.polymarket_clob_base_url,
+            resolver=resolver,
+            registrar=register_market,
+            external_lookup=lookup_market_external,
+        )
+
     if chat_orchestrator is None:
         if settings.llm_mode == "openai_compatible":
             api_key = settings.llm_api_key
@@ -242,6 +273,8 @@ def create_app(
             await live_client.aclose()
         if api_tennis_client is not None:
             await api_tennis_client.aclose()
+        if market_provider is not None:
+            await market_provider.aclose()
         if owns_realtime and redis_client is not None:
             await redis_client.aclose()
         if owns_realtime and database is not None:
@@ -252,6 +285,7 @@ def create_app(
     app.state.tennis_service = service
     app.state.chat_orchestrator = chat_orchestrator
     app.state.realtime = realtime
+    app.state.market_provider = market_provider
 
     @app.middleware("http")
     async def request_id(request: Request, call_next):
