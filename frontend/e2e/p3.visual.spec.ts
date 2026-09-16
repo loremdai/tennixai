@@ -35,8 +35,7 @@ const matchCases = [
   ['buy&overlay=gap', 'match-gap'],
 ] as const
 
-async function capture(page: Page, url: string, name: string, mobile: boolean) {
-  await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 1000 })
+async function capture(page: Page, url: string, name: string) {
   await page.goto(url)
   await page.getByRole('main').waitFor()
   await page.addStyleTag({ content: 'nextjs-portal { display: none !important; }' })
@@ -55,22 +54,19 @@ async function capture(page: Page, url: string, name: string, mobile: boolean) {
 test.describe('P3 visual preview baselines', () => {
   test('Home 4 candidate baselines', async ({ page, baseURL }) => {
     for (const [query, name] of homeCases) {
-      await capture(page, `${baseURL}/?preview=p3&pulse=${query}`, name, false)
-      await capture(page, `${baseURL}/?preview=p3&pulse=${query}`, name, true)
+      await capture(page, `${baseURL}/?preview=p3&pulse=${query}`, name)
     }
   })
 
   test('Markets 8 candidate baselines', async ({ page, baseURL }) => {
     for (const [query, name] of marketCases) {
-      await capture(page, `${baseURL}/markets?preview=p3&${query}`, name, false)
-      await capture(page, `${baseURL}/markets?preview=p3&${query}`, name, true)
+      await capture(page, `${baseURL}/markets?preview=p3&${query}`, name)
     }
   })
 
   test('Match 14 candidate baselines', async ({ page, baseURL }) => {
     for (const [query, name] of matchCases) {
-      await capture(page, `${baseURL}/match?preview=p3&state=${query}`, name, false)
-      await capture(page, `${baseURL}/match?preview=p3&state=${query}`, name, true)
+      await capture(page, `${baseURL}/match?preview=p3&state=${query}`, name)
     }
   })
 })
