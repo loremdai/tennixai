@@ -384,7 +384,7 @@ Polymarket WebSocket -> canonical MarketState --/
 
 **核验日期：** 2026-09-15
 
-**状态：** 官方资料、现有实现和本机延迟探针已核验；以下事件分类方案是待用户批准的设计建议，不授权实现。
+**状态：** 官方资料、现有实现和本机延迟探针已核验；以下事件分类方案已于 2026-09-16 获用户批准，但仍不授权实现。
 
 ### 15.1 外部系统的共同经验
 
@@ -401,7 +401,7 @@ Polymarket WebSocket -> canonical MarketState --/
 - 只使用 PostgreSQL TEMP TABLE 和临时 Redis key 的本机探针：300 次 PostgreSQL 同步小事务 median `0.945ms`、p95 `1.116ms`、max `6.795ms`；500 次 Redis set+publish median `0.571ms`、p95 `0.696ms`、max `5.290ms`。
 - 现有 `test_load_snapshot_rebuilds_the_canonical_view` 的完整 integration call（包含 identity、reduction 持久化和读回断言）为 `0.08s`。这些数字只代表当前机器与当前负载，不能当生产 SLO，但足以说明“同步提交本身”不是主要风险；高频路径真正的风险是每个 book delta 重复完整 SQL/序列化和队列积压。
 
-### 15.3 证据支持的事件分类方案
+### 15.3 已批准的事件分类方案
 
 1. **Ingress：** API-Tennis 与 Polymarket WebSocket callback 只验证 envelope、记录 received time 并放入有界的 per-match queue；不做 SQL、模型推理或 SSE。
 2. **网球 canonical 事实：** P3 首版保留现有 API-Tennis reduction 的 DB-first 顺序。网球 point 频率低于订单簿，当前完整一致性已有测试；同时增加分段耗时指标，只有实际延迟超门才优化。
@@ -410,7 +410,7 @@ Polymarket WebSocket -> canonical MarketState --/
 5. **故障语义：** 普通 observation 写入队列若因进程崩溃留下缺口，必须形成 `tracking_gap`，不能事后补造；不可丢的 paper 状态不进入这条弱保证队列。
 6. **暂不增加 broker：** P3 本地私人测试先复用 PostgreSQL、Redis 和进程内有界队列，不引入 Kafka。只有实测出现 observation backlog、恢复需求或多消费者压力时，才评估 Redis Streams；即使引入也不能取代 PostgreSQL paper ledger。
 
-这个结论修正了笼统的“普通更新全部先发布、以后再写库”：**应按事件价值与频率分类，而不是用一套顺序处理所有消息。**
+这个已批准结论修正了笼统的“普通更新全部先发布、以后再写库”：**应按事件价值与频率分类，而不是用一套顺序处理所有消息。**
 
 ---
 

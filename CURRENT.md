@@ -2,7 +2,7 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-15 16:55 CST
+**最后更新：** 2026-09-16 08:55 CST
 
 **当前任务：** T55 — Freeze P3 Market & Decision Support Design and Prototype Brief
 
@@ -22,7 +22,7 @@
 
 **关闭提交：** —
 
-**当前动作：** P3 SOTA 研究方向、首版模型覆盖标记、market-to-match 运行时组合、“独立估值而非延迟套利”原则、持仓前后的动作语义、paper 生命周期，以及后端拥有的双 WebSocket 事件流与后台追踪边界均已获用户批准；用户明确数据及时性为首要目标。热路径与持久化已完成官方资料、现有 P2 代码和本机延迟核验，下一步批准或修正按事件类别分流的建议，再继续讨论页面信息架构。
+**当前动作：** P3 SOTA 研究方向、覆盖与组合边界、独立估值、持仓前后动作语义、paper 生命周期、后端双 WebSocket 与后台追踪，以及经核验的实时事件分类持久化方案均已获用户批准；用户明确数据及时性为首要目标。下一步讨论 P3 页面信息架构与 v0 原型范围。
 
 **当前状态：** P2（含 T54）保持已关闭；P3.0 仅进入 design freeze。研究报告位于 `docs/research/2026-09-15-tennis-win-probability-sota.md`；其模型选择方法和 market-to-match 方向已批准，但仍不是完整 P3 规格。具体 champion、校准器和 decision 阈值必须在数据覆盖审计与统一 benchmark 后决定。P4 已确定为 P1–P3 框架完成后的统一打磨阶段；当前没有 P3 provider、schema、prediction、decision、paper ledger、页面或交易能力，自动下单仍属独立延期阶段。
 
@@ -87,6 +87,15 @@
 - 进入赛前追踪窗口且完成精确组合的模型覆盖比赛由后端后台跟踪；已有 paper position 无论浏览器是否打开都持续跟踪至退出或结算。Challenger/ITF 不运行模型与 paper observation，市场只在用户查看时按需加载。
 - REST 只负责首次 snapshot、WebSocket 重连重建和受限校准，不回到常态固定轮询。后端未运行或中间失联时记录 `tracking_gap`，恢复后重新校准，不补造错过的信号、订单簿或成交。
 
+## T55 已批准实时持久化分流（2026-09-16）
+
+- API-Tennis 与 Polymarket WebSocket ingress 只做轻量 envelope 校验、记录接收时间并进入有界 per-match queue；不得在读取循环中等待模型、SQL 或 SSE 客户端。
+- API-Tennis point/比赛事实频率较低且现有 transaction/recovery 已验证，P3 首版保留 canonical reduction 的 PostgreSQL DB-first 顺序，并增加分段 p50/p95/p99 与 backlog 指标；只有实际超门才改造。
+- Polymarket 高频 order book 由单写者内存 reducer 按 timestamp/hash/version 更新，Redis 只承载热快照和实时通知；不逐 delta 同步写 PostgreSQL。改变 `$10` 可执行价、动作或模型对照的 observation 及周期采样异步批量落库。
+- `order_intent`、sports delay 后的 `fill/no_fill`、`exit` 与 `settlement` 使用 PostgreSQL 同步事务和唯一幂等键；事务提交后才能向 Redis/SSE 确认状态，重启后以 PostgreSQL ledger 恢复。
+- 普通 observation 队列丢失或进程离线形成显式 `tracking_gap`，不得事后补造；不可丢的 paper 状态不得进入弱保证队列。
+- 当前本地私人测试规模不新增 Kafka 或 Redis Streams；只有实测 observation backlog、跨进程 replay 或多消费者恢复需求达到升级门后才重新评估，且 broker 不能替代 PostgreSQL paper ledger。
+
 ## 上一任务 T54 完成证据（2026-09-13）
 
 - 确定性后端：`543 passed / 51 deselected`；infrastructure `22 passed / 572 deselected`。
@@ -116,4 +125,4 @@
 
 ## 下一步
 
-继续 T55 的单问题设计讨论；下一项决定是否采用核验后的事件分类方案：WebSocket ingress 只入队，API-Tennis canonical reduction 暂保留现有 DB-first，Polymarket 高频订单簿走内存/Redis 热路径并异步批量保存决策相关 observation，paper order intent/fill/exit/settlement 使用 PostgreSQL 同步事务与幂等键后再发布。随后讨论页面信息架构。全部设计经用户批准后写入 P3 设计规格；规格获批前不得编写实施计划、修改 v0 原型或实现 P3 功能。
+继续 T55 的单问题设计讨论；下一项冻结 P3 页面层级、Home/Match/独立页面职责和 v0 原型改造范围。全部设计经用户批准后写入 P3 设计规格；规格获批前不得编写实施计划、修改 v0 原型或实现 P3 功能。
