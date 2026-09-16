@@ -147,7 +147,7 @@ export function MatchDecisionPage({
           onChange={changeControl}
         />
 
-        <MatchHero match={match} highlight="none" onAsk={focusDecisionAssistant} preview />
+        <MatchHero match={match} highlight={null} onAsk={focusDecisionAssistant} preview />
         <DecisionSummary decision={decision} onAsk={focusDecisionAssistant} />
 
         <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
@@ -160,9 +160,9 @@ export function MatchDecisionPage({
 
           <div className="flex min-w-0 flex-col gap-4 lg:col-start-1">
             <OverviewCard match={match} preview />
-            <ScoreProgressCard match={match} preview highlight="none" />
-            <StatsCard match={match} preview highlight="none" snapshot={null} />
-            <MatchMomentumCard match={match} preview highlight="none" snapshot={null} />
+            <ScoreProgressCard match={match} preview highlight={null} />
+            <StatsCard match={match} preview highlight={null} snapshot={null} />
+            <MatchMomentumCard match={match} preview highlight={null} snapshot={null} />
             <DecisionEvidence decision={decision} methodologyState={methodology} />
             <PaperLifecycle decision={decision} />
           </div>
