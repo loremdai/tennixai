@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-16 23:05 CST
+**最后更新：** 2026-09-16 23:40 CST
 
 **总体状态：** `in_progress`
 
-**当前里程碑：** P3.3 — Prediction, decision and paper（T64 `done`，T65 `in_progress`）
+**当前里程碑：** P3.4 — API and product surfaces（P3.3 已完成，T66 `in_progress`）
 
-**当前阶段：** P3 — Market & Decision Support（`in_progress`；P3.0–P3.2 已完成，T61–T64 已交付）
+**当前阶段：** P3 — Market & Decision Support（`in_progress`；P3.0–P3.3 已完成，T61–T65 已交付）
 
 ## 状态说明
 
@@ -112,8 +112,8 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | P3.0 — Design freeze | `done` | 官方能力边界、market mapping、预测评估、decision/risk、paper lifecycle、实时架构、三层页面、v0 brief 与实施路线 | T55 `d7cc25e`：设计规格、T56–T71 计划、v0 Prompt 和研究记录已冻结；不含产品实现 |
 | P3.1 — Prototype freeze | `done` | v0 输出、Home/Markets/Match 完整状态、26 个代表视觉基线 | `f29a789`：26 个状态 × desktop/mobile 的 52 张基线入库；P3 visual 通过，且 Codex 在强制 fake 配置下复跑 `prototype|visual` 为 34 passed / 4 skipped（四项是 replay-off 时按设计跳过的 P2 Replay 用例）；逐张人工核验，P1/P2 既有基线零改动 |
 | P3.2 — Market foundation | `done` | canonical contracts、可逆 schema、只读 Polymarket REST/WS、严格 mapping 与 replay | T56–T60 全部完成；P3.3 的 T61 可按计划领取 |
-| P3.3 — Prediction, decision and paper | `in_progress` | 审计 benchmark、live probability、可执行 quote、decision policy、one-shot paper 与后台双流协调 | T61–T64 已完成；T65 执行中，完成后 P3.3 关闭 |
-| P3.4 — API and product surfaces | `planned` | 独立 REST/SSE、Chat facts、typed frontend、Home Pulse、`/markets`、Match workbench | T65 完成后按 T66–T69 接入；严格服从 T56 视觉真源 |
+| P3.3 — Prediction, decision and paper | `done` | 审计 benchmark、live probability、可执行 quote、decision policy、one-shot paper 与后台双流协调 | T61–T65 全部完成；P3.4 的 T66 可领取 |
+| P3.4 — API and product surfaces | `in_progress` | 独立 REST/SSE、Chat facts、typed frontend、Home Pulse、`/markets`、Match workbench | T65 完成；T66 已领取执行中，之后按 T67–T69 接入 |
 | P3.5 — Completion gates | `planned` | 双流 replay/recovery/latency、全回归、26 张视觉门与真实只读 shadow | T70–T71 完成且证据写回三份总控后关闭 P3 |
 
 详细产品语义见 [P3 设计规格](./docs/superpowers/specs/2026-09-16-tennixai-p3-market-decision-support-design.md)，逐任务步骤见 [P3 实施计划](./docs/superpowers/plans/2026-09-16-tennixai-p3-implementation.md)，原型输入见 [P3 v0 Prompt](./docs/v0/2026-09-16-p3-market-decision-pages-prompt.md)。
@@ -132,8 +132,8 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | T62 | P3.3 | Implement Live Tennis Probability, Calibration Loading, and Safe Degradation | `done` | `5031856` | 领取 `57190c1`（起始 `9ef4937`）。确定性 DP 计分引擎（memoized sets/games/points、deuce 与抢七 6-6 平局尾用两点块闭式、精确终态、BO3/BO5、标准与决胜盘抢七、未知赛制 typed `ScoringFormatUnknown` 弃权；引擎修复了终止态按 server 而非 p1 视角返回的缺陷，对称先验下 match 级 0.5、BO3 一盘领先 0.75、BO5 0.6875 均为数学精确值）；发球分计数只用预测时点前的确定分（不可判定 winner/未知 server 跳过），beta-binomial 收缩（小样本贴 prior、大样本单调趋近观察值、PBP 修正确定性重算）；PredictionService：主巡单打覆盖、Challenger/ITF/双打 `OUT_OF_DOMAIN`、赛前 surface-Elo、live DP + shrinkage、无 server 时 score-only `DEGRADED` 降级、终态精确 0/1 绕过校准、typed abstention（MODEL_UNPROMOTED/PROMOTION_NOT_GRANTED/ARTIFACT_INVALID/FORMAT_UNKNOWN/DATA_INCOMPLETE/MATCH_NOT_PLAYABLE）；artifact 装载逐文件 SHA-256 + promotion 校验 fail-closed；输出互补概率 + 不确定区间 + 版本溯源；prediction 模块零 `app.markets` import（源码级断言）。焦点 39 passed；加 P2 reducer/momentum 回归 70 passed；确定性 backend 735 passed/70 deselected；新文件 ruff 干净 |
 | T63 | P3.3 | Implement Executable Quotes and the Versioned Decision Engine | `done` | `6012fcc` | 领取 `b0ecac6`（起始 `5031856`）。`$10` 逐档 quote：entry 用目标 outcome asks、exit 用持仓 outcome bids、价格优先走档、动态费用曲线 `rate·min(p,1-p)^exponent` 逐档计费、精确 Decimal 舍入（shares/average/fee 6 位）、stale/深度不足/低于 min-size 一律不可执行、两侧 book 独立无强制互补；`max_acceptable_average_price` 用与 BUY 门相同的 fee-aware 保守净 edge 不等式二分求解并向下取整（非固定折扣，含 fee 时精确解 0.5816 经手算核对）；policy artifact 只读装载，hash 不符/阈值选自 test/缺 validation+shadow 证据/net-EV 保守下界非正全部 fail-closed；引擎决策表 17 项测试覆盖 MARKET_ONLY（unmapped/out-of-domain）、NO BET 全部稳定 reason code（MODEL_UNPROMOTED/PROMOTION_NOT_GRANTED/ARTIFACT_INVALID/POLICY_DISABLED/DATA_INCOMPLETE/MODEL_DISAGREEMENT/RULE_CHANGED/STALE/GAP/INSUFFICIENT_LIQUIDITY/NO_NET_EDGE）、WAIT 动态最高价、BUY quote+target+edge、HOLD/SELL 对 uncertainty hold value、LOCK PROFIT 独立标注不改主动作；stale/gap 覆盖层保留 HOLD 撤销新 BUY/SELL。焦点 36 passed + domain 回归 52 passed；确定性 backend 771 passed/70 deselected；新文件 ruff 干净 |
 | T64 | P3.3 | Implement the One-Shot FOK Paper Lifecycle and Provider-Final Settlement | `done` | `d5ae409` | 领取 `2b69c89`（起始 `6012fcc`）。纯状态机：duplicate entry/exit、MISSED/EXIT_MISSED 后 retry、partial fill、side switch、add-on、out-of-order、frozen evidence 变更全部以稳定 reason code 拒绝（15 项 transition 表测试）；settlement 解释器：pending/proposed/disputed 永不本地结算、condition replacement 不迁移旧仓位、显式 50–50 按 $0.50/share、EV/HODL/convergence-lock 三轨出自单一 entry、函数签名不接受网球结果（inspect 断言）；service：首个合格 BUY/首个 EV SELL 为每场唯一 intent（幂等键冻结 evidence + delay + 冻结价格上限），实际 sports delay 后才 requote，FOK 全额否则 typed no-fill（DEPTH_INSUFFICIENT/PRICE_EXCEEDED/EXPIRED/BOOK_UNVERIFIABLE——绝不伪造成交），settlement 三轨 + SETTLED，commit 先于 publish（fake ledger 日志序证明）。integration：双 worker 并发同一 BUY → 恰一 intent/fill/position；commit 后 publish 前崩溃 → 重启恢复恰一次、三轨、一个 SETTLED。焦点 31 passed、infrastructure 41 passed、确定性 backend 802 passed/72 deselected、新文件 ruff 干净；TrackExitKind 扩展 HELD_TO_SETTLEMENT（T57 domain 测试同步更新） |
-| T65 | P3.3 | Orchestrate Dual Live Inputs, Durable Tracking, and Pipeline Metrics | `in_progress` | — | Claude 已领取；后台 tracking 不依赖 viewer、bounded queues、DB-first ledger 与 p50/p95/p99 |
-| T66 | P3.4 | Expose Read-Only P3 REST, Independent SSE, and Chat Tools | `planned` | — | markets + decision snapshot/独立 SSE；P2 match stream 契约不变；两个只读业务工具 |
+| T65 | P3.3 | Orchestrate Dual Live Inputs, Durable Tracking, and Pipeline Metrics | `done` | `8cc3c26` | 领取 `b0a3f42`（起始 `d5ae409`）。DecisionWorker 编排契约全部经测试证明：sports 变化 → prediction → decision；book 变化复用最新 prediction 零模型调用（无 prediction 时不决策）；rule change → RULE_CHANGED 抑制且 paper 零调用；resolution → settlement 路由；decision evidence 与 ledger commit 均先于 publish（共享日志序证明）；有界队列 coalesce 到最新 book（5 提交 → 1 决策周期）；重启从 PostgreSQL 恢复 decision version cursor（integration：v1–v3 已存 → 恢复后 cursor=3）。TrackingDemand：赛前覆盖窗口（默认 120min 可配 5..2880）+ live + 未结持仓；Challenger/ITF/双打不后台跟踪；未知上下文保守跟踪；`ViewerLeaseStore` 结构性缺席（inspect 断言）。P3Metrics：六段 histogram + 五类 counter，export 零 ID 标签；独立 `tnx:p3:decision` 命名空间不触 P2 match stream。markets/worker `on_state` 钩子（下游失败不污染热状态）+ overflow/reconnect/gap counter 接线。本地延迟门实测：10,000 book + 1,000 sports 变更 × 2 轮，book→decision p95 < 500ms、sports→decision p95 < 1s、零 overflow、两轮 action digest 字节一致。焦点 27+1 passed；P2 realtime 回归 19 passed；确定性 backend 822 passed/73 deselected；infrastructure 42 passed；paper-mode 装配 smoke（DecisionWorker/TrackingDemand/P3Metrics 挂载 state）；新文件 ruff 干净 |
+| T66 | P3.4 | Expose Read-Only P3 REST, Independent SSE, and Chat Tools | `in_progress` | — | Claude 已领取；markets + decision snapshot/独立 SSE；P2 match stream 契约不变；两个只读业务工具 |
 | T67 | P3.4 | Add Typed Frontend Transport, Thin Proxies, and Independent Stream Hooks | `planned` | — | Next Route Handler、runtime DTO、`useMarketStream`/`useDecisionStream` 与 gap resync |
 | T68 | P3.4 | Connect Home Market Pulse and the `/markets` Discovery Workspace | `planned` | — | Home ≤3 行；机会/全部/Paper 三视图、筛选、排序与局部降级 |
 | T69 | P3.4 | Connect the Match Decision Workbench and Ledger-Driven State Sequence | `planned` | — | 全宽摘要、双边对照、轨迹/依据/lifecycle、desktop/mobile 顺序与完整状态 |
