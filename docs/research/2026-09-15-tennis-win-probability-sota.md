@@ -412,6 +412,18 @@ Polymarket WebSocket -> canonical MarketState --/
 
 这个已批准结论修正了笼统的“普通更新全部先发布、以后再写库”：**应按事件价值与频率分类，而不是用一套顺序处理所有消息。**
 
+## 16. T55 后续批准：三层页面信息架构
+
+**批准日期：** 2026-09-16
+
+P3 采用 Home → `/markets` → Match Page 三层结构：
+
+- **Home：** 继续承担全局比赛发现、搜索、赛程与 AI 查询，只增加少量高价值机会和开放 paper position 摘要，避免被完整市场列表与决策细节占满。
+- **`/markets`：** 独立的跨比赛机会发现和 paper tracking 页面；首版包含当前机会、即将开始、开放 positions 和近期结算四类内容。现有“市场 BETA”导航改为该真实路由。
+- **Match Page：** 单场决策工作台；在既有比分、PBP、统计、走势和上下文问答之上，展示模型概率、可执行市场价、edge/confidence、当前动作、概率轨迹、结构化依据与本场 position lifecycle。
+
+市场、机会和持仓都通过内部 `match_id` 回到同一个 Match Page。`/markets` 不复制单场深度分析，也不提供自动下单；它解决“跨比赛发现什么值得看”和“paper positions 现在怎样”，Match Page 解决“为什么以及本场接下来怎么办”。
+
 ---
 
 这份研究的核心判断是：**TennixAI 的 SOTA 不应是一篇论文的名字，而应是一套不会被数据泄漏、概率失准和不可成交价格欺骗的持续基准与晋升机制。**

@@ -2,7 +2,7 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-16 08:55 CST
+**最后更新：** 2026-09-16 09:00 CST
 
 **当前任务：** T55 — Freeze P3 Market & Decision Support Design and Prototype Brief
 
@@ -22,7 +22,7 @@
 
 **关闭提交：** —
 
-**当前动作：** P3 SOTA 研究方向、覆盖与组合边界、独立估值、持仓前后动作语义、paper 生命周期、后端双 WebSocket 与后台追踪，以及经核验的实时事件分类持久化方案均已获用户批准；用户明确数据及时性为首要目标。下一步讨论 P3 页面信息架构与 v0 原型范围。
+**当前动作：** P3 SOTA 研究方向、覆盖与组合边界、独立估值、持仓前后动作语义、paper 生命周期、实时架构，以及 Home → `/markets` → Match 三层页面结构均已获用户批准。下一步冻结 `/markets` 默认视图与全量市场的关系，再细化 Home、Match 和 v0 原型状态。
 
 **当前状态：** P2（含 T54）保持已关闭；P3.0 仅进入 design freeze。研究报告位于 `docs/research/2026-09-15-tennis-win-probability-sota.md`；其模型选择方法和 market-to-match 方向已批准，但仍不是完整 P3 规格。具体 champion、校准器和 decision 阈值必须在数据覆盖审计与统一 benchmark 后决定。P4 已确定为 P1–P3 框架完成后的统一打磨阶段；当前没有 P3 provider、schema、prediction、decision、paper ledger、页面或交易能力，自动下单仍属独立延期阶段。
 
@@ -96,6 +96,14 @@
 - 普通 observation 队列丢失或进程离线形成显式 `tracking_gap`，不得事后补造；不可丢的 paper 状态不得进入弱保证队列。
 - 当前本地私人测试规模不新增 Kafka 或 Redis Streams；只有实测 observation backlog、跨进程 replay 或多消费者恢复需求达到升级门后才重新评估，且 broker 不能替代 PostgreSQL paper ledger。
 
+## T55 已批准页面层级（2026-09-16）
+
+- 采用 Home → `/markets` → Match Page 三层结构；现有导航中的“市场 BETA”从 Home 锚点升级为独立 `/markets` 路由。
+- Home 保持全局比赛发现和查询主职责，只显示少量高价值机会与未结 paper position 摘要；不铺完整市场列表、价格轨迹或详细 ledger。
+- `/markets` 负责跨比赛 Market Discovery 与 Paper Tracking，首版仅包含当前机会、即将开始、开放 paper positions、近期已结算结果四类内容。
+- Match Page 是单场决策工作台，承载 calibrated probability、实际可执行市场价、edge/confidence、当前动作、概率轨迹、结构化解释和本场 paper lifecycle。
+- 所有机会、市场和持仓卡片通过内部 `match_id` 进入 Match Page；`/markets` 不负责单场深度分析，也不是自动下单终端。
+
 ## 上一任务 T54 完成证据（2026-09-13）
 
 - 确定性后端：`543 passed / 51 deselected`；infrastructure `22 passed / 572 deselected`。
@@ -125,4 +133,4 @@
 
 ## 下一步
 
-继续 T55 的单问题设计讨论；下一项冻结 P3 页面层级、Home/Match/独立页面职责和 v0 原型改造范围。全部设计经用户批准后写入 P3 设计规格；规格获批前不得编写实施计划、修改 v0 原型或实现 P3 功能。
+继续 T55 的单问题设计讨论；下一项决定 `/markets` 默认是机会优先还是全量市场优先，并明确 Challenger/ITF 的入口；随后细化 Home 摘要、Match 工作台和 v0 原型状态。全部设计经用户批准后写入 P3 设计规格；规格获批前不得编写实施计划、修改 v0 原型或实现 P3 功能。
