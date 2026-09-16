@@ -176,9 +176,11 @@ class PaperTradingService:
                 continue  # never requote before the actual sports delay
             if now > intent.expires_at:
                 await self._no_fill(intent, "EXPIRED", now)
+                await self._record_exit_missed(intent)
                 continue
             if book is None or book.is_stale or metadata is None:
                 await self._no_fill(intent, "BOOK_UNVERIFIABLE", now)
+                await self._record_exit_missed(intent)
                 continue
             if intent.side is IntentSide.ENTRY:
                 await self._execute_entry(intent, book, metadata, now)
@@ -249,17 +251,11 @@ class PaperTradingService:
         )
         if quote is None or not quote.is_fillable:
             await self._no_fill(intent, "DEPTH_INSUFFICIENT", now, book=book)
-            await self._ledger.update_position_status(
-                intent.match_id, PositionStatus.EXIT_MISSED
-            )
-            await self._publish(f"exit_missed:{intent.match_id}")
+            await self._record_exit_missed(intent)
             return
         if quote.average_price < intent.quote.average_price:
             await self._no_fill(intent, "PRICE_EXCEEDED", now, book=book)
-            await self._ledger.update_position_status(
-                intent.match_id, PositionStatus.EXIT_MISSED
-            )
-            await self._publish(f"exit_missed:{intent.match_id}")
+            await self._record_exit_missed(intent)
             return
         fill = PaperFill(
             intent_id=intent.id,
@@ -293,6 +289,16 @@ class PaperTradingService:
         )
         await self._ledger.record_fill(fill)
         await self._publish(f"no_fill:{intent.match_id}:{reason}")
+
+    async def _record_exit_missed(self, intent: PaperOrderIntent) -> None:
+        """An exit intent that can never fill is terminal: the position moves
+        to EXIT_MISSED, holds to settlement and never retries or re-quotes."""
+        if intent.side is not IntentSide.EXIT:
+            return
+        await self._ledger.update_position_status(
+            intent.match_id, PositionStatus.EXIT_MISSED
+        )
+        await self._publish(f"exit_missed:{intent.match_id}")
 
     # ------------------------------------------------------------------
     # Provider-final settlement

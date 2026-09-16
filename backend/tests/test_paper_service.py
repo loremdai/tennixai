@@ -243,6 +243,40 @@ async def test_sell_creates_single_exit_intent_and_exit_missed_holds(env):
     assert len(exit_intents) == 1
 
 
+async def test_unverifiable_exit_no_fill_still_terminates_as_exit_missed(env):
+    service, ledger, clock = env["service"], env["ledger"], env["clock"]
+    intent = make_intent("mat_1", "mkt_1")
+    await ledger.create_intent(intent)
+    from p3_fakes import make_entry_fill
+
+    await ledger.record_fill(
+        make_entry_fill(intent.id), position=make_position("mat_1", "mkt_1")
+    )
+    await service.on_decision(
+        env["sell_observation"],
+        book=env["book"],
+        metadata=env["metadata"],
+        rules_hash="rules_v1",
+    )
+    clock.advance(11)
+
+    # Book lost after the disconnect: no synthetic fill, but the position may
+    # not stay exit_pending forever — settlement requires a terminal state.
+    await service.execute_due_intents(
+        book=None, metadata=env["metadata"], market_id="mkt_1"
+    )
+
+    position = await ledger.get_position("mat_1")
+    assert position is not None
+    assert position.status is PositionStatus.EXIT_MISSED
+    exit_intents = [
+        item for item in await ledger.load_all_intents() if item.side is IntentSide.EXIT
+    ]
+    assert len(exit_intents) == 1
+    assert exit_intents[0].status is IntentStatus.NO_FILL
+    assert exit_intents[0].no_fill_reason == "BOOK_UNVERIFIABLE"
+
+
 async def test_settlement_uses_provider_resolution_and_writes_three_tracks(env):
     service, ledger = env["service"], env["ledger"]
     intent = make_intent("mat_1", "mkt_1")
