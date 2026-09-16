@@ -297,3 +297,206 @@ export function getPlayerResults(
     signal,
   )
 }
+
+// ---------------------------------------------------------------------------
+// P3 market decision support clients (T67). Every payload passes a runtime
+// decoder; unknown enums or malformed shapes fail visibly (P3DecodeError)
+// instead of being coerced. Stream parsers convert undecodable frames into
+// explicit `malformed` events so hooks can degrade without losing the stream.
+// ---------------------------------------------------------------------------
+
+import {
+  decodeDecisionStreamEvent,
+  decodeMarketPage,
+  decodeMarketStreamEvent,
+  decodeMatchDecision,
+  decodeOpportunityList,
+  decodePaperPositions,
+  decodePulse,
+} from './p3-types'
+import type {
+  DecisionSnapshotDto,
+  DecisionStreamEvent,
+  Gender,
+  MarketPageDto,
+  MarketPhase,
+  MarketStreamEvent,
+  OpportunityDto,
+  PaperPositionsViewDto,
+  PulseViewDto,
+} from './types'
+
+async function requestP3<T>(
+  path: string,
+  decode: (body: unknown) => T,
+  signal?: AbortSignal,
+): Promise<T> {
+  const response = await fetch(path, { cache: 'no-store', signal })
+  if (!response.ok) {
+    throw await toApiError(response)
+  }
+  return decode(await response.json())
+}
+
+export function listMarketOpportunities(signal?: AbortSignal): Promise<OpportunityDto[]> {
+  return requestP3('/api/markets/opportunities', decodeOpportunityList, signal)
+}
+
+export type MarketListParams = {
+  tier?: CircuitTier
+  gender?: Gender
+  phase?: MarketPhase
+  page?: number
+  pageSize?: number
+}
+
+export function listMarkets(params: MarketListParams = {}, signal?: AbortSignal): Promise<MarketPageDto> {
+  const search = new URLSearchParams()
+  if (params.tier) search.set('tier', params.tier)
+  if (params.gender) search.set('gender', params.gender)
+  if (params.phase) search.set('phase', params.phase)
+  if (params.page !== undefined) search.set('page', String(params.page))
+  if (params.pageSize !== undefined) search.set('page_size', String(params.pageSize))
+  const query = search.toString()
+  return requestP3(`/api/markets${query ? `?${query}` : ''}`, decodeMarketPage, signal)
+}
+
+export function getPaperPositions(signal?: AbortSignal): Promise<PaperPositionsViewDto> {
+  return requestP3('/api/paper/positions', decodePaperPositions, signal)
+}
+
+export function getMarketPulse(signal?: AbortSignal): Promise<PulseViewDto> {
+  return requestP3('/api/markets/pulse', decodePulse, signal)
+}
+
+export function getMatchDecision(
+  matchId: string,
+  signal?: AbortSignal,
+): Promise<DecisionSnapshotDto> {
+  return requestP3(
+    `/api/matches/${encodeURIComponent(matchId)}/decision`,
+    decodeMatchDecision,
+    signal,
+  )
+}
+
+async function openP3Stream(
+  path: string,
+  options: { signal?: AbortSignal; lastEventId?: string | null },
+): Promise<Response> {
+  const headers: Record<string, string> = { Accept: 'text/event-stream' }
+  if (options.lastEventId) headers['Last-Event-ID'] = options.lastEventId
+  let response: Response
+  try {
+    response = await fetch(path, { cache: 'no-store', headers, signal: options.signal })
+  } catch (error) {
+    if (isAbortError(error)) throw error
+    throw new ApiError(502, 'internal_error', 'P3 stream request failed')
+  }
+  if (!response.ok) throw await toApiError(response)
+  if (!response.body) throw new ApiError(502, 'internal_error', 'P3 stream has no body')
+  return response
+}
+
+export function openMarketStream(
+  options: { signal?: AbortSignal; lastEventId?: string | null } = {},
+): Promise<Response> {
+  return openP3Stream('/api/markets/stream', options)
+}
+
+export function openDecisionStream(
+  matchId: string,
+  options: { signal?: AbortSignal; lastEventId?: string | null } = {},
+): Promise<Response> {
+  return openP3Stream(
+    `/api/matches/${encodeURIComponent(matchId)}/decision/stream`,
+    options,
+  )
+}
+
+type RawSseFrame = { type: string; id: string | null; data: string }
+
+function parseRawSseFrame(frame: string): RawSseFrame | null {
+  let type: string | null = null
+  let id: string | null = null
+  const dataLines: string[] = []
+  for (const line of frame.split(/\r?\n/)) {
+    if (!line || line.startsWith(':')) continue
+    if (line.startsWith('event:')) {
+      type = line.slice('event:'.length).trim()
+    } else if (line.startsWith('id:')) {
+      id = line.slice('id:'.length).trim()
+    } else if (line.startsWith('data:')) {
+      dataLines.push(line.slice('data:'.length).trim())
+    }
+  }
+  if (!type) return null
+  return { type, id, data: dataLines.join('\n') }
+}
+
+async function* splitSseFrames(
+  stream: ReadableStream<Uint8Array>,
+): AsyncGenerator<RawSseFrame> {
+  const decoder = new TextDecoder()
+  const reader = stream.getReader()
+  let buffer = ''
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const frames = buffer.split(/\r?\n\r?\n/)
+      buffer = frames.pop() ?? ''
+      for (const frame of frames) {
+        const parsed = parseRawSseFrame(frame)
+        if (parsed) yield parsed
+      }
+    }
+    buffer += decoder.decode()
+    if (buffer.trim()) {
+      const parsed = parseRawSseFrame(buffer)
+      if (parsed) yield parsed
+    }
+  } finally {
+    reader.releaseLock()
+  }
+}
+
+export type MarketStreamFrame = MarketStreamEvent & { id: string | null }
+export type DecisionStreamFrame = DecisionStreamEvent & { id: string | null }
+
+export async function* parseMarketStream(
+  stream: ReadableStream<Uint8Array>,
+): AsyncGenerator<MarketStreamFrame> {
+  for await (const rawFrame of splitSseFrames(stream)) {
+    try {
+      const payload: unknown = rawFrame.data ? JSON.parse(rawFrame.data) : {}
+      const event = decodeMarketStreamEvent(rawFrame.type, payload)
+      yield Object.assign({ id: rawFrame.id }, event) as MarketStreamFrame
+    } catch {
+      yield {
+        type: 'malformed',
+        id: rawFrame.id,
+        payload: { reason: `undecodable ${rawFrame.type} frame` },
+      }
+    }
+  }
+}
+
+export async function* parseDecisionStream(
+  stream: ReadableStream<Uint8Array>,
+): AsyncGenerator<DecisionStreamFrame> {
+  for await (const rawFrame of splitSseFrames(stream)) {
+    try {
+      const payload: unknown = rawFrame.data ? JSON.parse(rawFrame.data) : {}
+      const event = decodeDecisionStreamEvent(rawFrame.type, payload)
+      yield Object.assign({ id: rawFrame.id }, event) as DecisionStreamFrame
+    } catch {
+      yield {
+        type: 'malformed',
+        id: rawFrame.id,
+        payload: { reason: `undecodable ${rawFrame.type} frame` },
+      }
+    }
+  }
+}

@@ -377,3 +377,221 @@ export type PlayerResultPageDto = {
   matches: MatchDto[]
   availability: CapabilityStatus
 }
+
+// ---------------------------------------------------------------------------
+// P3 market decision support DTOs (T67). Mirror the backend public schemas:
+// internal IDs only, decimals as strings, canonical enums.
+// ---------------------------------------------------------------------------
+
+export type MarketPhase = 'prematch' | 'live' | 'closed'
+export type MarketStatusValue = 'scheduled' | 'open' | 'closed' | 'resolved' | 'unknown'
+export type DecisionActionValue = 'market_only' | 'no_bet' | 'wait' | 'buy' | 'hold' | 'sell'
+export type OpportunityActionValue = 'buy' | 'wait'
+export type OpportunityPhaseValue = 'live' | 'upcoming'
+export type ModelAvailabilityValue = 'available' | 'degraded' | 'unpromoted' | 'unavailable'
+export type QuoteSideValue = 'entry' | 'exit'
+export type PositionStatusValue = 'open' | 'exit_pending' | 'exited' | 'exit_missed' | 'settled'
+export type LifecycleStateValue =
+  | 'entry_pending'
+  | 'filled'
+  | 'missed'
+  | 'exit_pending'
+  | 'exited'
+  | 'exit_missed'
+  | 'settled'
+export type PulseKindValue = 'position' | 'opportunity'
+export type PaperDeltaStateValue =
+  | 'entry_pending'
+  | 'filled'
+  | 'missed'
+  | 'exit_pending'
+  | 'exited'
+  | 'exit_missed'
+  | 'settlement_blocked'
+  | 'settled'
+export type ResolutionStatusValue = 'pending' | 'proposed' | 'disputed' | 'final'
+
+export type OpportunityDto = {
+  match_id: string
+  market_id: string
+  phase: OpportunityPhaseValue
+  action: OpportunityActionValue
+  target_player_id: string | null
+  player_names: [string, string] | null
+  model_probability: number | null
+  executable_probability: number | null
+  conservative_net_edge: string | null
+  max_acceptable_price: string | null
+  tournament_tier: CircuitTier | null
+  tournament_name: string | null
+  as_of: string | null
+}
+
+export type MarketSummaryDto = {
+  market_id: string
+  match_id: string | null
+  question: string | null
+  status: MarketStatusValue
+  tier: CircuitTier | null
+  gender: Gender | null
+  phase: MarketPhase | null
+  model_covered: boolean
+  action: DecisionActionValue | null
+  reason_code: string | null
+  best_bid: [string, string] | null
+  best_ask: [string, string] | null
+  as_of: string | null
+}
+
+export type MarketPageDto = {
+  markets: MarketSummaryDto[]
+  page: number
+  page_size: number
+  total: number
+}
+
+export type PaperPositionDto = {
+  position_id: string
+  match_id: string
+  market_id: string
+  outcome_player_id: string
+  player_names: [string, string] | null
+  status: PositionStatusValue
+  entry_cost: string
+  shares: string
+  current_exit_value: string | null
+  net_pnl: string | null
+  freshness_as_of: string | null
+}
+
+export type PaperPositionsViewDto = {
+  open: PaperPositionDto[]
+  recent: PaperPositionDto[]
+}
+
+export type PulseRowDto = {
+  match_id: string
+  market_id: string | null
+  kind: PulseKindValue
+  action: DecisionActionValue
+  player_names: [string, string] | null
+  model_probability: number | null
+  executable_probability: number | null
+  as_of: string | null
+}
+
+export type PulseViewDto = {
+  data: PulseRowDto[]
+  has_open_position: boolean
+}
+
+export type PositionSummaryDto = {
+  position_id: string
+  outcome_player_id: string
+  status: PositionStatusValue
+  entry_cost: string
+  shares: string
+}
+
+export type DecisionSnapshotDto = {
+  match_id: string
+  market_id: string | null
+  action: DecisionActionValue
+  reason_code: string | null
+  observation_version: number
+  model_probabilities: Record<string, number> | null
+  model_availability: ModelAvailabilityValue | null
+  quote_average_price: string | null
+  quote_side: QuoteSideValue | null
+  conservative_net_edge: string | null
+  position: PositionSummaryDto | null
+  lifecycle: LifecycleStateValue[]
+  is_stale: boolean
+  has_gap: boolean
+  lock_profit_available: boolean
+  as_of: string | null
+}
+
+export type MarketsSnapshotDto = {
+  markets: number
+  opportunities: number
+  open_positions: number
+}
+
+// --- P3 SSE events ---------------------------------------------------------
+
+export type MarketDeltaDto = {
+  type: 'market_delta'
+  market_id: string
+  sequence: number
+  book_hash: string
+  as_of: string
+}
+
+export type MarketGapEventDto = {
+  type: 'market_gap'
+  market_id: string
+  reason: string
+  as_of: string
+}
+
+export type DecisionDeltaDto = {
+  type: 'decision_delta'
+  match_id: string
+  observation_version: number
+  action: DecisionActionValue
+  as_of: string
+}
+
+export type PaperDeltaDto = {
+  type: 'paper_delta'
+  state: PaperDeltaStateValue
+  id: string
+  reason: string | null
+  as_of: string
+}
+
+export type ResolutionPayoutDto = {
+  player_id: string
+  payout_per_share: string
+}
+
+export type ResolutionDeltaDto = {
+  type: 'resolution_delta'
+  market_id: string
+  status: ResolutionStatusValue
+  rules_version?: number
+  payouts?: ResolutionPayoutDto[]
+  confirmed_at?: string | null
+}
+
+export type MarketStreamReadyEvent = { type: 'ready'; payload: MarketsSnapshotDto }
+export type MarketStreamHeartbeatEvent = { type: 'heartbeat'; payload: Record<string, never> }
+export type MalformedStreamEvent = { type: 'malformed'; payload: { reason: string } }
+export type MarketStreamDeltaEvent =
+  | { type: 'market_delta'; payload: MarketDeltaDto }
+  | { type: 'market_gap'; payload: MarketGapEventDto }
+  | { type: 'decision_delta'; payload: DecisionDeltaDto }
+  | { type: 'paper_delta'; payload: PaperDeltaDto }
+  | { type: 'resolution_delta'; payload: ResolutionDeltaDto }
+export type MarketStreamEvent =
+  | MarketStreamReadyEvent
+  | MarketStreamDeltaEvent
+  | MarketStreamHeartbeatEvent
+  | MalformedStreamEvent
+
+export type DecisionStreamReadyEvent = {
+  type: 'ready'
+  payload: {
+    match_id: string
+    decision: DecisionSnapshotDto | null
+    observation_version: number
+    action: DecisionActionValue | null
+  }
+}
+export type DecisionStreamDeltaEvent = { type: 'decision_delta'; payload: DecisionDeltaDto }
+export type DecisionStreamEvent =
+  | DecisionStreamReadyEvent
+  | DecisionStreamDeltaEvent
+  | { type: 'heartbeat'; payload: Record<string, never> }
+  | MalformedStreamEvent
