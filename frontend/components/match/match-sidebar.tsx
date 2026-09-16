@@ -39,7 +39,7 @@ import {
   type PreviewAnswer,
 } from './match-preview-data'
 
-type AssistantPanelProps = {
+export type AssistantPanelProps = {
   match: MatchViewModel
   preview: boolean
   chat: ChatViewState | null
@@ -61,7 +61,7 @@ const productionContextDescriptions: Record<MatchViewModel['visualStatus'], stri
   unavailable: '比赛状态待确认',
 }
 
-function AssistantPanel({
+export function AssistantPanel({
   match,
   preview,
   chat,
@@ -261,7 +261,7 @@ function KeyFact({ label, value, detail }: { label: string; value: string; detai
   )
 }
 
-function KeyFactsCard({ match, preview }: { match: MatchViewModel; preview: boolean }) {
+export function KeyFactsCard({ match, preview }: { match: MatchViewModel; preview: boolean }) {
   return (
     <Card>
       <CardHeader>

@@ -38,6 +38,7 @@ export type ProductNavKey = 'home' | 'live' | 'schedule' | 'players' | 'markets'
 
 type ProductHeaderProps = {
   active?: ProductNavKey
+  marketsHref?: string
 }
 
 const navItems: Array<{ key: ProductNavKey; label: string; href: string; beta?: boolean }> = [
@@ -48,10 +49,13 @@ const navItems: Array<{ key: ProductNavKey; label: string; href: string; beta?: 
   { key: 'markets', label: '市场', href: '/#markets', beta: true },
 ]
 
-export function ProductHeader({ active = 'home' }: ProductHeaderProps) {
+export function ProductHeader({ active = 'home', marketsHref = '/#markets' }: ProductHeaderProps) {
   const router = useRouter()
   const [search, setSearch] = useState('')
   const [hasNotification, setHasNotification] = useState(true)
+  const resolvedNavItems = navItems.map((item) =>
+    item.key === 'markets' ? { ...item, href: marketsHref } : item,
+  )
 
   function submitSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -78,7 +82,7 @@ export function ProductHeader({ active = 'home' }: ProductHeaderProps) {
         </Link>
 
         <nav className="hidden h-full items-center gap-1 lg:flex" aria-label="主导航">
-          {navItems.map((item) => (
+          {resolvedNavItems.map((item) => (
             <Link
               key={item.key}
               href={item.href}
@@ -185,7 +189,7 @@ export function ProductHeader({ active = 'home' }: ProductHeaderProps) {
             <DropdownMenuContent align="end" className="min-w-52 lg:hidden">
               <DropdownMenuGroup>
                 <DropdownMenuLabel>导航</DropdownMenuLabel>
-                {navItems.map((item) => (
+                {resolvedNavItems.map((item) => (
                   <DropdownMenuItem key={item.key} onClick={() => router.push(item.href)}>
                     <span>{item.label}</span>
                     {item.beta ? <Badge variant="outline">BETA</Badge> : null}

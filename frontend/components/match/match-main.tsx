@@ -80,7 +80,7 @@ function OverviewItem({
   )
 }
 
-function OverviewCard({ match, preview }: Pick<MainColumnProps, 'match' | 'preview'>) {
+export function OverviewCard({ match, preview }: Pick<MainColumnProps, 'match' | 'preview'>) {
   const statusValue =
     match.visualStatus === 'upcoming'
       ? '即将开始'
@@ -199,7 +199,7 @@ function rowsFromMatch(match: MatchViewModel): [ScoreRowView, ScoreRowView] | nu
   })) as [ScoreRowView, ScoreRowView]
 }
 
-function ScoreProgressCard({ match, preview, highlight }: Pick<MainColumnProps, 'match' | 'preview' | 'highlight'>) {
+export function ScoreProgressCard({ match, preview, highlight }: Pick<MainColumnProps, 'match' | 'preview' | 'highlight'>) {
   const visualStatus = match.visualStatus
   const rows = preview
     ? (visualStatus === 'finished'
@@ -312,7 +312,7 @@ function ComparisonRow({
   )
 }
 
-function StatsCard({ match, preview, highlight, snapshot }: Pick<MainColumnProps, 'match' | 'preview' | 'highlight' | 'snapshot'>) {
+export function StatsCard({ match, preview, highlight, snapshot }: Pick<MainColumnProps, 'match' | 'preview' | 'highlight' | 'snapshot'>) {
   const isHighlighted = highlight === 'serve-stats'
   const liveSnapshot = !preview && match.visualStatus !== 'upcoming' ? snapshot ?? null : null
 

@@ -6,6 +6,7 @@ import { Layers3 } from 'lucide-react'
 import { HomeAssistant } from '@/components/home/home-assistant'
 import { HomeHero, HomeQuickActions } from '@/components/home/home-hero'
 import { MarketIntelligenceCard } from '@/components/home/home-intelligence'
+import { MarketPulse } from '@/components/home/market-pulse'
 import {
   FeaturedMatchSection,
   LiveNowSection,
@@ -23,6 +24,7 @@ import {
   type ProductPhase,
 } from '@/components/match/match-data'
 import { ProductHeader } from '@/components/match/match-header'
+import type { HomePulseState } from '@/components/p3/p3-preview-data'
 import { Badge } from '@/components/ui/badge'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useChatStream } from '@/hooks/use-chat-stream'
@@ -35,6 +37,8 @@ const phases = Object.keys(phaseLabels) as ProductPhase[]
 
 type HomePageProps = {
   initialQuestion?: string
+  previewP3?: boolean
+  initialPulseState?: HomePulseState
 }
 
 type SlateStatuses = {
@@ -96,10 +100,16 @@ function hasLiveMatchesOutsideFilters(
   )
 }
 
-export function HomePage({ initialQuestion }: HomePageProps) {
-  const [phase, setPhase] = useState<ProductPhase>('p1')
+export function HomePage({
+  initialQuestion,
+  previewP3 = false,
+  initialPulseState = 'populated',
+}: HomePageProps) {
+  const [phase, setPhase] = useState<ProductPhase>(previewP3 ? 'p3' : 'p1')
+  const [previewEnabled, setPreviewEnabled] = useState(previewP3)
   const [prompt, setPrompt] = useState('')
   const [isPending, startTransition] = useTransition()
+  const showP3Preview = previewEnabled && phase === 'p3'
 
   const chat = useChatStream('global')
   const busy = chat.state.phase === 'loading' || chat.state.phase === 'streaming'
@@ -113,8 +123,8 @@ export function HomePage({ initialQuestion }: HomePageProps) {
     upcoming: null,
   })
   const [slateState, setSlateState] = useState<SlateStatuses>({
-    live: 'loading',
-    upcoming: 'loading',
+    live: previewP3 ? 'success' : 'loading',
+    upcoming: previewP3 ? 'success' : 'loading',
   })
   const [slateErrorCodes, setSlateErrorCodes] = useState<SlateErrorCodes>({
     live: null,
@@ -122,6 +132,13 @@ export function HomePage({ initialQuestion }: HomePageProps) {
   })
 
   const loadSlate = useCallback(async () => {
+    if (previewEnabled) {
+      setCatalogs({ live: null, upcoming: null })
+      setSlateState({ live: 'success', upcoming: 'success' })
+      setSlateErrorCodes({ live: null, upcoming: null })
+      return
+    }
+
     setSlateState({ live: 'loading', upcoming: 'loading' })
     setSlateErrorCodes({ live: null, upcoming: null })
 
@@ -142,14 +159,14 @@ export function HomePage({ initialQuestion }: HomePageProps) {
       live: liveResult.status === 'rejected' ? getErrorCode(liveResult.reason) : null,
       upcoming: upcomingResult.status === 'rejected' ? getErrorCode(upcomingResult.reason) : null,
     })
-  }, [filters])
+  }, [filters, previewEnabled])
 
   useEffect(() => {
     void loadSlate()
   }, [loadSlate])
 
   useEffect(() => {
-    if (!initialQuestion) return
+    if (!initialQuestion || previewEnabled) return
     // StrictMode remounts abort the first send; re-sending on remount keeps the
     // initial question working while production still sends exactly once.
     void chat.send(initialQuestion)
@@ -160,7 +177,7 @@ export function HomePage({ initialQuestion }: HomePageProps) {
     (question: string, scroll = true) => {
       const value = question.trim()
       if (!value || busy) return
-      void chat.send(value)
+      if (!previewEnabled) void chat.send(value)
       setPrompt('')
       if (scroll) {
         window.requestAnimationFrame(() => {
@@ -168,7 +185,7 @@ export function HomePage({ initialQuestion }: HomePageProps) {
         })
       }
     },
-    [busy, chat],
+    [busy, chat, previewEnabled],
   )
 
   function handlePhaseChange(values: string[]) {
@@ -178,6 +195,13 @@ export function HomePage({ initialQuestion }: HomePageProps) {
     startTransition(() => {
       setPhase(nextPhase)
       setPrompt('')
+      if (previewEnabled && nextPhase !== 'p3') {
+        setPreviewEnabled(false)
+        const url = new URL(window.location.href)
+        url.searchParams.delete('preview')
+        url.searchParams.delete('pulse')
+        window.history.replaceState(null, '', url)
+      }
     })
   }
 
@@ -217,7 +241,7 @@ export function HomePage({ initialQuestion }: HomePageProps) {
       >
         跳至主要内容
       </a>
-      <ProductHeader active="home" />
+      <ProductHeader active="home" marketsHref={showP3Preview ? '/markets?preview=p3' : '/#markets'} />
 
       <main
         id="main-content"
@@ -274,7 +298,7 @@ export function HomePage({ initialQuestion }: HomePageProps) {
           onPromptSelect={showAnswer}
         />
 
-        <HomeQuickActions />
+        <HomeQuickActions marketsHref={showP3Preview ? '/markets?preview=p3' : '#markets'} />
 
         <div className="home-reveal grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
           <aside className="flex min-w-0 flex-col gap-4 lg:col-start-2 lg:row-start-1" aria-label="Tennix 智能侧栏">
@@ -287,7 +311,7 @@ export function HomePage({ initialQuestion }: HomePageProps) {
               onPromptSelect={showAnswer}
             />
             <RecentResultsCard />
-            <MarketIntelligenceCard phase={phase} />
+            <MarketIntelligenceCard phase={showP3Preview ? 'p2' : phase} />
           </aside>
 
           <div className="flex min-w-0 flex-col gap-6 lg:col-start-1 lg:row-start-1">
@@ -326,12 +350,14 @@ export function HomePage({ initialQuestion }: HomePageProps) {
             <FollowedPlayersSection />
           </div>
         </div>
+
+        {showP3Preview ? <MarketPulse initialState={initialPulseState} /> : null}
       </main>
 
       <footer className="border-t">
         <div className="mx-auto flex max-w-7xl flex-col justify-between gap-2 px-4 py-6 text-sm text-muted-foreground sm:flex-row md:px-6">
           <span>Tennix · Tennis, data, intelligence.</span>
-          <span>数据由 Tennix 服务提供 · 时间为澳门本地时间</span>
+          <span>{showP3Preview ? 'P3 固定预览数据 · 仅用于研究与 Paper 模拟' : '数据由 Tennix 服务提供 · 时间为澳门本地时间'}</span>
         </div>
       </footer>
     </div>

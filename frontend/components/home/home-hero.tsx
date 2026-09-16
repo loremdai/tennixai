@@ -164,13 +164,13 @@ const quickActions: QuickAction[] = [
   { label: 'Market Watch', detail: '追踪机会', href: '#markets', icon: TrendingUp, beta: true },
 ]
 
-export function HomeQuickActions() {
+export function HomeQuickActions({ marketsHref = '#markets' }: { marketsHref?: string }) {
   return (
     <nav className="home-reveal grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6" aria-label="快捷入口">
       {quickActions.map(({ label, detail, href, icon: Icon, live, beta }) => (
         <Link
           key={label}
-          href={href}
+          href={label === 'Market Watch' ? marketsHref : href}
           className="group rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Card size="sm" className="h-full min-h-24 transition-transform group-hover:-translate-y-0.5 group-hover:ring-primary/35">
