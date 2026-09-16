@@ -21,6 +21,7 @@ from app.chat.models import (
     GetMatchIntelligenceArgs,
     GetPlayerResultsArgs,
     GetPlayerSeasonRecordArgs,
+    MarketOpportunitiesPacket,
     PlayerHistoryContext,
     PlayerHistoryEmptyReason,
     StructuredToolResult,
@@ -48,6 +49,14 @@ DESCRIPTIONS = {
         "seasons are supported. Use one call per player."
     ),
     "get_head_to_head": "Get bounded head-to-head meetings for two players.",
+    "list_market_opportunities": (
+        "List current model-covered tennis market opportunities (BUY/WAIT) as compact "
+        "canonical facts. Read-only; never creates orders."
+    ),
+    "get_match_decision": (
+        "Get the current structured market decision snapshot for this match "
+        "(action, reasons, probabilities, quote summary, paper position). Read-only."
+    ),
 }
 
 TOOL_NAMES = (
@@ -58,7 +67,19 @@ TOOL_NAMES = (
     "get_player_results",
     "get_player_season_record",
     "get_head_to_head",
+    "list_market_opportunities",
+    "get_match_decision",
 )
+
+P3_TOOL_NAMES = frozenset({"list_market_opportunities", "get_match_decision"})
+
+
+class ListMarketOpportunitiesArgs(BaseModel):
+    limit: int = Field(default=5, ge=1, le=10)
+
+
+class GetMatchDecisionArgs(BaseModel):
+    pass
 
 
 class GlobalGetMatchArgs(BaseModel):
@@ -72,6 +93,8 @@ ARGS_MODELS = {
     "get_player_results": GetPlayerResultsArgs,
     "get_player_season_record": GetPlayerSeasonRecordArgs,
     "get_head_to_head": GetHeadToHeadArgs,
+    "list_market_opportunities": ListMarketOpportunitiesArgs,
+    "get_match_decision": GetMatchDecisionArgs,
 }
 
 def _inline_schema(schema: dict[str, Any]) -> dict[str, Any]:
@@ -92,8 +115,9 @@ def _inline_schema(schema: dict[str, Any]) -> dict[str, Any]:
 
 
 class BusinessTools:
-    def __init__(self, service: TennisService) -> None:
+    def __init__(self, service: TennisService, *, p3_queries=None) -> None:
         self._service = service
+        self._p3_queries = p3_queries
 
     def catalog(
         self,
@@ -102,6 +126,12 @@ class BusinessTools:
         scope: ChatScope | None = None,
     ) -> list[dict[str, Any]]:
         selected_names = tuple(names) if names is not None else TOOL_NAMES
+        if self._p3_queries is None:
+            selected_names = tuple(
+                name
+                for name in selected_names
+                if name not in P3_TOOL_NAMES
+            )
         return [
             {
                 "type": "function",
@@ -311,6 +341,36 @@ class BusinessTools:
                             else 0
                         ),
                     },
+                ))
+            if name == "list_market_opportunities":
+                args = ListMarketOpportunitiesArgs.model_validate(arguments)
+                if self._p3_queries is None:
+                    return with_context(StructuredToolResult(
+                        kind="unsupported",
+                        metadata={"reason": "p3_disabled"},
+                    ))
+                rows = await self._p3_queries.opportunities()
+                limited = list(rows)[: args.limit]
+                return with_context(StructuredToolResult(
+                    kind="market_opportunities",
+                    market_opportunities=MarketOpportunitiesPacket(
+                        opportunities=limited,
+                        truncated=len(rows) > len(limited),
+                    ),
+                ))
+            if name == "get_match_decision":
+                GetMatchDecisionArgs.model_validate(arguments)
+                if self._p3_queries is None or context.match_id is None:
+                    return with_context(StructuredToolResult(
+                        kind="unsupported",
+                        metadata={"reason": "p3_disabled"},
+                    ))
+                # The match id always comes from the frozen chat context;
+                # model-provided ids are ignored.
+                decision = await self._p3_queries.match_decision(context.match_id)
+                return with_context(StructuredToolResult(
+                    kind="match_decision",
+                    match_decision=decision,
                 ))
         except ValidationError as error:
             raise AppError(

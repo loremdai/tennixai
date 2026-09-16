@@ -8,6 +8,7 @@ rather than prompt instructions.
 import asyncio
 from collections.abc import Callable
 from datetime import date, datetime, time, timedelta, timezone
+from decimal import Decimal
 from enum import StrEnum
 from typing import cast
 from zoneinfo import ZoneInfo
@@ -1033,3 +1034,464 @@ class TennisService:
             self._resolve_player(second_player_name),
         )
         return await self.get_head_to_head(first_player.id, second_player.id, limit)
+
+
+# ---------------------------------------------------------------------------
+# P3 read-only query facade (T66)
+# ---------------------------------------------------------------------------
+
+_P3_OPEN_POSITION_STATUSES = frozenset({"open", "exit_pending"})
+_P3_RECENT_POSITION_LIMIT = 10
+
+
+def _p3_phase_from_status(status: str | None) -> str:
+    if status == "live":
+        return "live"
+    if status == "scheduled":
+        return "prematch"
+    return "closed"
+
+
+def _p3_decimal_text(value) -> str | None:
+    return None if value is None else str(value)
+
+
+class P3QueryService:
+    """Assembles canonical P3 DTOs from the PostgreSQL ledger (authority)
+    and the Redis hot books (fresh best bid/ask only). Internal IDs only;
+    never touches provider identifiers, wallets or model internals."""
+
+    def __init__(self, *, database, markets, paper, hot_books=None) -> None:
+        self._database = database
+        self._markets = markets
+        self._paper = paper
+        self._hot_books = hot_books
+
+    async def _match_facts(self, match_ids) -> dict:
+        """One batched lookup: players, tournament tier/gender, phase."""
+        ids = {match_id for match_id in match_ids if match_id}
+        if not ids:
+            return {}
+        from sqlalchemy import select
+
+        from app.persistence.models import MatchRow, PlayerRow, TournamentRow
+
+        async with self._database.session() as session:
+            matches = (
+                (await session.execute(select(MatchRow).where(MatchRow.id.in_(ids))))
+                .scalars()
+                .all()
+            )
+            player_ids = {
+                player_id
+                for row in matches
+                for player_id in (row.player1_id, row.player2_id)
+                if player_id
+            }
+            tournament_ids = {
+                row.tournament_id for row in matches if row.tournament_id
+            }
+            players = (
+                (
+                    await session.execute(
+                        select(PlayerRow).where(PlayerRow.id.in_(player_ids))
+                    )
+                )
+                .scalars()
+                .all()
+                if player_ids
+                else []
+            )
+            tournaments = (
+                (
+                    await session.execute(
+                        select(TournamentRow).where(
+                            TournamentRow.id.in_(tournament_ids)
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+                if tournament_ids
+                else []
+            )
+        player_names = {row.id: (row.localized_name or row.name) for row in players}
+        tournament_by_id = {row.id: row for row in tournaments}
+        facts = {}
+        for row in matches:
+            names = tuple(
+                player_names.get(player_id)
+                for player_id in (row.player1_id, row.player2_id)
+            )
+            tournament = tournament_by_id.get(row.tournament_id)
+            facts[row.id] = {
+                "player_names": (
+                    (names[0], names[1])
+                    if names[0] is not None and names[1] is not None
+                    else None
+                ),
+                "player_ids": (row.player1_id, row.player2_id),
+                "tier": tournament.circuit if tournament else None,
+                "gender": tournament.gender if tournament else None,
+                "tournament_name": tournament.name if tournament else None,
+                "phase": _p3_phase_from_status(row.status),
+            }
+        return facts
+
+    async def _hot_book(self, market_id: str):
+        if self._hot_books is None or not market_id:
+            return None
+        try:
+            return await self._hot_books.get_hot_book(market_id)
+        except Exception:
+            return None  # missing hot state degrades to None, never to zeros
+
+    @staticmethod
+    def _best_levels(book, outcome_player_id: str | None):
+        """(best_bid, best_ask) as (player_id, price text) or None."""
+        if book is None:
+            return None, None
+        side = None
+        for candidate in book.books:
+            if outcome_player_id is None or (
+                candidate.outcome_player_id == outcome_player_id
+            ):
+                side = candidate
+                break
+        if side is None:
+            return None, None
+        best_bid = (
+            (side.outcome_player_id, str(side.bids[0].price)) if side.bids else None
+        )
+        best_ask = (
+            (side.outcome_player_id, str(side.asks[0].price)) if side.asks else None
+        )
+        return best_bid, best_ask
+
+    async def match_decision(self, match_id: str):
+        from app.api.schemas import DecisionSnapshotDto, PositionSummaryDto
+
+        observation = await self._markets.latest_decision_observation(match_id)
+        if observation is None:
+            return None
+        prediction = await self._markets.latest_prediction(match_id)
+        position = await self._paper.get_position(match_id)
+        intents = await self._paper.load_intents_for_match(match_id)
+        lifecycle: list[str] = []
+        for intent in intents:
+            if intent.side.value == "entry":
+                lifecycle.append(
+                    {
+                        "pending": "entry_pending",
+                        "filled": "filled",
+                        "no_fill": "missed",
+                    }[intent.status.value]
+                )
+            else:
+                lifecycle.append(
+                    {
+                        "pending": "exit_pending",
+                        "filled": "exited",
+                        "no_fill": "exit_missed",
+                    }[intent.status.value]
+                )
+        if position is not None and position.status.value == "settled":
+            lifecycle.append("settled")
+        return DecisionSnapshotDto(
+            match_id=match_id,
+            market_id=observation.market_id or None,
+            action=observation.action.value,
+            reason_code=observation.reason_code,
+            observation_version=observation.observation_version,
+            model_probabilities=(
+                {
+                    outcome.player_id: outcome.probability
+                    for outcome in prediction.outcomes
+                }
+                if prediction is not None and prediction.outcomes
+                else None
+            ),
+            model_availability=(
+                prediction.availability.value if prediction is not None else None
+            ),
+            quote_average_price=(
+                _p3_decimal_text(observation.quote.average_price)
+                if observation.quote is not None
+                else None
+            ),
+            quote_side=(
+                observation.quote.side.value if observation.quote is not None else None
+            ),
+            conservative_net_edge=_p3_decimal_text(observation.conservative_net_edge),
+            position=(
+                PositionSummaryDto(
+                    position_id=position.id,
+                    outcome_player_id=position.outcome_player_id,
+                    status=position.status.value,
+                    entry_cost=str(position.entry_cost),
+                    shares=str(position.shares),
+                )
+                if position is not None
+                else None
+            ),
+            lifecycle=tuple(lifecycle),
+            is_stale=observation.is_stale,
+            has_gap=observation.has_gap,
+            lock_profit_available=observation.lock_profit_available,
+            as_of=observation.as_of,
+        )
+
+    async def opportunities(self):
+        from app.api.schemas import OpportunityDto
+
+        observations = await self._markets.latest_decision_observations()
+        actionable = [
+            observation
+            for observation in observations
+            if observation.action.value in ("buy", "wait")
+        ]
+        facts = await self._match_facts(
+            [observation.match_id for observation in actionable]
+        )
+        rows = []
+        for observation in actionable:
+            match_facts = facts.get(observation.match_id, {})
+            prediction = await self._markets.latest_prediction(observation.match_id)
+            model_probability = None
+            if (
+                prediction is not None
+                and observation.target_player_id is not None
+            ):
+                for outcome in prediction.outcomes:
+                    if outcome.player_id == observation.target_player_id:
+                        model_probability = outcome.probability
+                        break
+            quote_price = (
+                observation.quote.average_price
+                if observation.quote is not None
+                else None
+            )
+            phase = match_facts.get("phase", "closed")
+            rows.append(
+                (
+                    0 if phase == "live" else 1,
+                    0 if observation.action.value == "buy" else 1,
+                    -(
+                        float(observation.conservative_net_edge)
+                        if observation.conservative_net_edge is not None
+                        else float("-inf")
+                    ),
+                    OpportunityDto(
+                        match_id=observation.match_id,
+                        market_id=observation.market_id,
+                        phase="live" if phase == "live" else "upcoming",
+                        action=observation.action.value,
+                        target_player_id=observation.target_player_id,
+                        player_names=match_facts.get("player_names"),
+                        model_probability=model_probability,
+                        executable_probability=(
+                            float(quote_price) if quote_price is not None else None
+                        ),
+                        conservative_net_edge=_p3_decimal_text(
+                            observation.conservative_net_edge
+                        ),
+                        max_acceptable_price=_p3_decimal_text(
+                            observation.max_acceptable_price
+                        ),
+                        tournament_tier=match_facts.get("tier"),
+                        tournament_name=match_facts.get("tournament_name"),
+                        as_of=observation.as_of,
+                    ),
+                )
+            )
+        rows.sort(key=lambda item: item[:3])
+        return [row[3] for row in rows]
+
+    async def markets(self, *, tier=None, gender=None, phase=None, page=1, page_size=20):
+        from app.api.schemas import MarketPageDto, MarketSummaryDto
+
+        market_rows = await self._markets.list_market_overviews()
+        observations = await self._markets.latest_decision_observations()
+        decision_by_match = {
+            observation.match_id: observation for observation in observations
+        }
+        facts = await self._match_facts([row.match_id for row in market_rows])
+        summaries = []
+        for row in market_rows:
+            match_facts = facts.get(row.match_id, {}) if row.match_id else {}
+            market_phase = match_facts.get("phase")
+            if row.status in ("closed", "resolved"):
+                market_phase = "closed"
+            elif market_phase is None:
+                market_phase = "prematch" if row.status in ("scheduled", "open", "unknown") else "closed"
+            observation = (
+                decision_by_match.get(row.match_id) if row.match_id else None
+            )
+            book = await self._hot_book(row.id)
+            best_bid, best_ask = self._best_levels(book, None)
+            prediction = (
+                await self._markets.latest_prediction(row.match_id)
+                if row.match_id
+                else None
+            )
+            model_covered = prediction is not None and prediction.availability.value in (
+                "available",
+                "degraded",
+            )
+            summaries.append(
+                MarketSummaryDto(
+                    market_id=row.id,
+                    match_id=row.match_id,
+                    question=row.question,
+                    status=row.status,
+                    tier=match_facts.get("tier"),
+                    gender=match_facts.get("gender"),
+                    phase=market_phase,
+                    model_covered=model_covered,
+                    action=(
+                        observation.action.value if observation is not None else None
+                    ),
+                    reason_code=None,
+                    best_bid=best_bid,
+                    best_ask=best_ask,
+                    as_of=row.observed_at,
+                )
+            )
+        if tier is not None:
+            summaries = [item for item in summaries if item.tier == tier]
+        if gender is not None:
+            summaries = [item for item in summaries if item.gender == gender]
+        if phase is not None:
+            summaries = [item for item in summaries if item.phase == phase]
+        total = len(summaries)
+        start = (page - 1) * page_size
+        return MarketPageDto(
+            markets=summaries[start : start + page_size],
+            page=page,
+            page_size=page_size,
+            total=total,
+        )
+
+    async def _position_dtos(self, positions):
+        from app.api.schemas import PaperPositionDto
+
+        facts = await self._match_facts([position.match_id for position in positions])
+        rows = []
+        for position in positions:
+            book = await self._hot_book(position.market_id)
+            best_bid, _ = self._best_levels(book, position.outcome_player_id)
+            current_exit_value = None
+            freshness = position.updated_at
+            if best_bid is not None:
+                current_exit_value = str(
+                    position.shares * Decimal(best_bid[1])
+                )
+                freshness = book.received_at
+            net_pnl = None
+            if position.status.value == "settled":
+                for track in await self._paper.load_track_results(position.id):
+                    if track.track.value == "ev_exit":
+                        net_pnl = str(track.net_pnl)
+                        break
+            match_facts = facts.get(position.match_id, {})
+            rows.append(
+                PaperPositionDto(
+                    position_id=position.id,
+                    match_id=position.match_id,
+                    market_id=position.market_id,
+                    outcome_player_id=position.outcome_player_id,
+                    player_names=match_facts.get("player_names"),
+                    status=position.status.value,
+                    entry_cost=str(position.entry_cost),
+                    shares=str(position.shares),
+                    current_exit_value=current_exit_value,
+                    net_pnl=net_pnl,
+                    freshness_as_of=freshness,
+                )
+            )
+        return rows
+
+    async def paper_positions(self):
+        positions = await self._paper.load_all_positions()
+        open_positions = [
+            position
+            for position in positions
+            if position.status.value in _P3_OPEN_POSITION_STATUSES
+        ]
+        recent = [
+            position
+            for position in positions
+            if position.status.value not in _P3_OPEN_POSITION_STATUSES
+        ][:_P3_RECENT_POSITION_LIMIT]
+        return {
+            "open": await self._position_dtos(open_positions),
+            "recent": await self._position_dtos(recent),
+        }
+
+    async def pulse(self):
+        from app.api.schemas import PulseRowDto
+
+        view = await self.paper_positions()
+        rows = []
+        for position in view["open"]:
+            decision = await self.match_decision(position.match_id)
+            rows.append(
+                PulseRowDto(
+                    match_id=position.match_id,
+                    market_id=position.market_id,
+                    kind="position",
+                    action=(
+                        decision.action if decision is not None else "hold"
+                    ),
+                    player_names=position.player_names,
+                    model_probability=(
+                        None
+                        if decision is None
+                        or decision.model_probabilities is None
+                        else decision.model_probabilities.get(
+                            position.outcome_player_id
+                        )
+                    ),
+                    executable_probability=(
+                        float(Decimal(position.current_exit_value) / Decimal(position.shares))
+                        if position.current_exit_value is not None
+                        else None
+                    ),
+                    as_of=position.freshness_as_of,
+                )
+            )
+        if len(rows) < 3:
+            for opportunity in (await self.opportunities())[: 3 - len(rows)]:
+                rows.append(
+                    PulseRowDto(
+                        match_id=opportunity.match_id,
+                        market_id=opportunity.market_id,
+                        kind="opportunity",
+                        action=opportunity.action,
+                        player_names=opportunity.player_names,
+                        model_probability=opportunity.model_probability,
+                        executable_probability=opportunity.executable_probability,
+                        as_of=opportunity.as_of,
+                    )
+                )
+        return {"data": rows[:3], "has_open_position": bool(view["open"])}
+
+    async def markets_snapshot(self):
+        market_rows = await self._markets.list_market_overviews()
+        observations = await self._markets.latest_decision_observations()
+        actionable = sum(
+            1
+            for observation in observations
+            if observation.action.value in ("buy", "wait")
+        )
+        positions = await self._paper.load_all_positions()
+        open_positions = sum(
+            1
+            for position in positions
+            if position.status.value in _P3_OPEN_POSITION_STATUSES
+        )
+        return {
+            "markets": len(market_rows),
+            "opportunities": actionable,
+            "open_positions": open_positions,
+        }

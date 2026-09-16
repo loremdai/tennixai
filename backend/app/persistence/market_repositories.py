@@ -473,6 +473,60 @@ class MarketRepository:
             )
         return int(version or 0)
 
+    # -- read-only query paths for the P3 API layer (T66) -------------------
+
+    async def list_market_overviews(self) -> list[MarketRow]:
+        """Every known market row (internal IDs only), most recent first."""
+        async with self._database.session() as session:
+            rows = (
+                (
+                    await session.execute(
+                        select(MarketRow).order_by(MarketRow.updated_at.desc())
+                    )
+                )
+                .scalars()
+                .all()
+            )
+        return list(rows)
+
+    async def latest_decision_observations(self) -> list[DecisionObservation]:
+        """The newest decision observation per match, newest decision first."""
+        async with self._database.session() as session:
+            rows = (
+                (
+                    await session.execute(
+                        select(DecisionObservationRow)
+                        .distinct(DecisionObservationRow.match_id)
+                        .order_by(
+                            DecisionObservationRow.match_id,
+                            DecisionObservationRow.observation_version.desc(),
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+        observations = [
+            DecisionObservation.model_validate(row.payload) for row in rows
+        ]
+        observations.sort(key=lambda item: item.as_of, reverse=True)
+        return observations
+
+    async def latest_prediction(self, match_id: str) -> PredictionSnapshot | None:
+        """Most recent prediction evidence for one match."""
+        async with self._database.session() as session:
+            row = await session.scalar(
+                select(PredictionSnapshotRow)
+                .where(PredictionSnapshotRow.match_id == match_id)
+                .order_by(
+                    PredictionSnapshotRow.as_of.desc(), PredictionSnapshotRow.id.desc()
+                )
+                .limit(1)
+            )
+        if row is None:
+            return None
+        return PredictionSnapshot.model_validate(row.payload)
+
 
 __all__ = [
     "LinkFrozenError",

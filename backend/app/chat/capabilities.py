@@ -79,6 +79,22 @@ _CAPABILITIES = {
         parallel_safe=True,
         requiredness=ToolRequiredness.OPTIONAL,
     ),
+    "list_market_opportunities": ToolCapability(
+        name="list_market_opportunities",
+        allowed_scopes=frozenset({ChatScope.GLOBAL}),
+        phases=frozenset({ChatPhase.DISCOVERY, ChatPhase.ENRICHMENT}),
+        requires=frozenset(),
+        parallel_safe=True,
+        requiredness=ToolRequiredness.CORE,
+    ),
+    "get_match_decision": ToolCapability(
+        name="get_match_decision",
+        allowed_scopes=frozenset({ChatScope.MATCH}),
+        phases=frozenset({ChatPhase.CONTEXT, ChatPhase.ENRICHMENT}),
+        requires=frozenset(),
+        parallel_safe=True,
+        requiredness=ToolRequiredness.CORE,
+    ),
 }
 
 TOOL_ORDER = tuple(_CAPABILITIES)

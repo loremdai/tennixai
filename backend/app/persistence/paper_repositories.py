@@ -11,7 +11,7 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 
@@ -432,6 +432,51 @@ class PaperLedgerRepository:
                 .where(PaperOrderIntentRow.match_id == match_id)
             )
         return int(count or 0)
+
+    async def load_all_positions(self) -> list[PaperPosition]:
+        """Read-only API path (T66): open positions first, newest update first."""
+        async with self._database.session() as session:
+            rows = (
+                (
+                    await session.execute(
+                        select(PaperPositionRow)
+                        .order_by(
+                            case(
+                                (
+                                    PaperPositionRow.status.in_(
+                                        [
+                                            PositionStatus.OPEN.value,
+                                            PositionStatus.EXIT_PENDING.value,
+                                        ]
+                                    ),
+                                    0,
+                                ),
+                                else_=1,
+                            ),
+                            PaperPositionRow.updated_at.desc(),
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+        return [_position_from_row(row) for row in rows]
+
+    async def load_intents_for_match(self, match_id: str) -> list[PaperOrderIntent]:
+        """Read-only API path (T66): entry/exit intents in creation order."""
+        async with self._database.session() as session:
+            rows = (
+                (
+                    await session.execute(
+                        select(PaperOrderIntentRow)
+                        .where(PaperOrderIntentRow.match_id == match_id)
+                        .order_by(PaperOrderIntentRow.created_at)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+        return [_intent_from_row(row) for row in rows]
 
     async def unsettled_position_market_ids(self) -> tuple[str, ...]:
         """Durable tracking demand: every market with an unsettled position."""

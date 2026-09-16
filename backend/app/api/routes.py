@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 
 from app.api.schemas import (
+    DecisionSnapshotDto,
     HeadToHeadResultResponse,
     MatchCatalogResponse,
     MatchListResponse,
@@ -17,6 +18,11 @@ from app.api.schemas import (
     PlayerResolutionResponse,
     PlayerResultPageResponse,
     PlayerResultsResponse,
+    MarketListResponse,
+    MatchDecisionResponse,
+    OpportunityListResponse,
+    PaperPositionsResponse,
+    PulseResponse,
     RankingPageResponse,
 )
 from app.chat.models import ChatEvent, ChatEventType, ChatRequest
@@ -227,6 +233,210 @@ async def head_to_head(
 ) -> HeadToHeadResultResponse:
     return HeadToHeadResultResponse(
         data=await service.get_head_to_head(first_player_id, second_player_id, limit)
+    )
+
+
+# ---------------------------------------------------------------------------
+# P3 read-only market/decision endpoints (T66). Snapshots come from durable
+# PostgreSQL evidence and Redis hot state; streams use the independent P3
+# namespace and never touch the P2 match-stream contract.
+# ---------------------------------------------------------------------------
+
+P3_STREAM_PATTERNS = (
+    "tnx:p3:market:*",
+    "tnx:p3:decision:*",
+    "tnx:p3:paper:*",
+    "tnx:p3:resolution:*",
+)
+MARKET_EVENT_TYPES = {
+    "market_delta",
+    "market_gap",
+    "decision_delta",
+    "paper_delta",
+    "resolution_delta",
+}
+
+
+def get_p3_queries(request: Request):
+    queries = getattr(request.app.state, "p3_queries", None)
+    if queries is None:
+        raise AppError(
+            "p3_disabled", "P3 market decision support is disabled", 503
+        )
+    return queries
+
+
+def get_p3_redis(request: Request):
+    p3_redis = getattr(request.app.state, "p3_redis", None)
+    if getattr(request.app.state, "p3_queries", None) is None or p3_redis is None:
+        raise AppError(
+            "p3_disabled", "P3 market decision support is disabled", 503
+        )
+    return p3_redis
+
+
+@router.get("/markets/opportunities", response_model=OpportunityListResponse)
+async def market_opportunities(queries=Depends(get_p3_queries)):
+    rows = await queries.opportunities()
+    return OpportunityListResponse(data=list(rows))
+
+
+@router.get("/markets/pulse", response_model=PulseResponse)
+async def market_pulse(queries=Depends(get_p3_queries)):
+    pulse = await queries.pulse()
+    return PulseResponse(**pulse)
+
+
+@router.get("/markets", response_model=MarketListResponse)
+async def list_markets(
+    tier: Literal["atp", "wta", "challenger", "itf", "other"] | None = Query(None),
+    gender: Literal["men", "women", "mixed", "unknown"] | None = Query(None),
+    phase: Literal["prematch", "live", "closed"] | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=50),
+    queries=Depends(get_p3_queries),
+):
+    page_dto = await queries.markets(
+        tier=tier, gender=gender, phase=phase, page=page, page_size=page_size
+    )
+    return MarketListResponse(
+        data=list(page_dto.markets),
+        page=page_dto.page,
+        page_size=page_dto.page_size,
+        total=page_dto.total,
+    )
+
+
+@router.get("/paper/positions", response_model=PaperPositionsResponse)
+async def paper_positions(queries=Depends(get_p3_queries)):
+    view = await queries.paper_positions()
+    return PaperPositionsResponse(
+        open=list(view["open"]), recent=list(view["recent"])
+    )
+
+
+@router.get("/matches/{match_id}/decision", response_model=MatchDecisionResponse)
+async def match_decision(match_id: str, queries=Depends(get_p3_queries)):
+    decision = await queries.match_decision(match_id)
+    if decision is None:
+        raise AppError("not_found", "No P3 decision context for this match", 404)
+    return MatchDecisionResponse(data=decision)
+
+
+@router.get("/markets/stream")
+async def markets_stream(request: Request, p3_redis=Depends(get_p3_redis)):
+    queries = request.app.state.p3_queries
+    settings = request.app.state.settings
+
+    async def event_stream():
+        pubsub = p3_redis.pubsub()
+        await pubsub.psubscribe(*P3_STREAM_PATTERNS)
+        try:
+            snapshot = await queries.markets_snapshot()
+            yield _frame("ready", snapshot)
+            last_heartbeat = asyncio.get_running_loop().time()
+            while True:
+                message = await pubsub.get_message(
+                    ignore_subscribe_messages=True,
+                    timeout=settings.sse_heartbeat_seconds,
+                )
+                if message is None:
+                    now = asyncio.get_running_loop().time()
+                    if now - last_heartbeat >= settings.sse_heartbeat_seconds:
+                        last_heartbeat = now
+                        yield _frame("heartbeat", {})
+                    continue
+                last_heartbeat = asyncio.get_running_loop().time()
+                event = json.loads(message["data"])
+                event_type = str(event.get("type", ""))
+                if event_type not in MARKET_EVENT_TYPES:
+                    continue
+                frame_id = event.get("sequence")
+                if frame_id is None:
+                    frame_id = event.get("observation_version")
+                yield _frame(
+                    event_type,
+                    event,
+                    frame_id=str(frame_id) if frame_id is not None else None,
+                )
+        finally:
+            await pubsub.aclose()
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.get("/matches/{match_id}/decision/stream")
+async def decision_stream(
+    match_id: str, request: Request, p3_redis=Depends(get_p3_redis)
+):
+    queries = request.app.state.p3_queries
+    settings = request.app.state.settings
+
+    async def event_stream():
+        pubsub = p3_redis.pubsub()
+        await pubsub.psubscribe("tnx:p3:decision:*")
+        try:
+            decision: DecisionSnapshotDto | None = await queries.match_decision(
+                match_id
+            )
+            yield _frame(
+                "ready",
+                {
+                    "match_id": match_id,
+                    "decision": (
+                        json.loads(decision.model_dump_json())
+                        if decision is not None
+                        else None
+                    ),
+                    "observation_version": (
+                        decision.observation_version if decision is not None else 0
+                    ),
+                    "action": decision.action if decision is not None else None,
+                },
+                frame_id=(
+                    str(decision.observation_version) if decision is not None else None
+                ),
+            )
+            last_heartbeat = asyncio.get_running_loop().time()
+            while True:
+                message = await pubsub.get_message(
+                    ignore_subscribe_messages=True,
+                    timeout=settings.sse_heartbeat_seconds,
+                )
+                if message is None:
+                    now = asyncio.get_running_loop().time()
+                    if now - last_heartbeat >= settings.sse_heartbeat_seconds:
+                        last_heartbeat = now
+                        yield _frame("heartbeat", {})
+                    continue
+                last_heartbeat = asyncio.get_running_loop().time()
+                event = json.loads(message["data"])
+                if str(event.get("type", "")) != "decision_delta":
+                    continue
+                if event.get("match_id") != match_id:
+                    continue  # this stream serves exactly one match
+                yield _frame(
+                    "decision_delta",
+                    event,
+                    frame_id=str(event.get("observation_version")),
+                )
+        finally:
+            await pubsub.aclose()
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 

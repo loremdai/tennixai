@@ -246,6 +246,7 @@ def create_app(
     decision_worker = None
     tracking_demand = None
     paper_service = None
+    p3_queries = None
     if settings.p3_mode != "disabled":
         from pathlib import Path
 
@@ -363,6 +364,15 @@ def create_app(
                 clock=clock,
             )
 
+            from app.service import P3QueryService
+
+            p3_queries = P3QueryService(
+                database=database,
+                markets=market_repository,
+                paper=paper_ledger,
+                hot_books=market_publisher,
+            )
+
     if chat_orchestrator is None:
         if settings.llm_mode == "openai_compatible":
             api_key = settings.llm_api_key
@@ -376,7 +386,9 @@ def create_app(
             )
         else:
             chat_model = FakeChatModel()
-        chat_orchestrator = ChatOrchestrator(BusinessTools(service), chat_model)
+        chat_orchestrator = ChatOrchestrator(
+            BusinessTools(service, p3_queries=p3_queries), chat_model
+        )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -420,6 +432,8 @@ def create_app(
     app.state.p3_metrics = p3_metrics
     app.state.p3_tracking_demand = tracking_demand
     app.state.p3_paper_service = paper_service
+    app.state.p3_queries = p3_queries
+    app.state.p3_redis = redis_client if p3_queries is not None else None
 
     @app.middleware("http")
     async def request_id(request: Request, call_next):

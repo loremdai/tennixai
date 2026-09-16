@@ -5,6 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.api.schemas import DecisionSnapshotDto, OpportunityDto
 from app.domain import CapabilityStatus, Match, MatchSnapshot, Player
 from app.intelligence import IntelligencePacket, IntelligenceTopic
 from app.players.models import PlayerResolution, PlayerSeasonRecord
@@ -67,6 +68,13 @@ class PlayerHistoryContext(BaseModel):
     empty_reason: PlayerHistoryEmptyReason | None = None
 
 
+class MarketOpportunitiesPacket(BaseModel):
+    """Bounded compact canonical opportunity facts (max 10 rows)."""
+
+    opportunities: list[OpportunityDto] = Field(default_factory=list)
+    truncated: bool = False
+
+
 class StructuredToolResult(BaseModel):
     kind: Literal[
         "matches",
@@ -74,12 +82,16 @@ class StructuredToolResult(BaseModel):
         "intelligence",
         "player_resolution",
         "player_history",
+        "market_opportunities",
+        "match_decision",
         "unsupported",
     ]
     matches: list[Match] = Field(default_factory=list)
     packet: IntelligencePacket | None = None
     resolution: PlayerResolution | None = None
     player_history: PlayerHistoryContext | None = None
+    market_opportunities: MarketOpportunitiesPacket | None = None
+    match_decision: DecisionSnapshotDto | None = None
     metadata: dict[str, object] = Field(default_factory=dict)
     answer_context: AnswerContext | None = None
 
