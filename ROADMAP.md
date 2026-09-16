@@ -3,11 +3,11 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-17 05:10 CST
+**最后更新：** 2026-09-17 06:40 CST
 
 **总体状态：** `in_progress`
 
-**当前里程碑：** P3.5 — Completion gates（T70 已完成；T71 `in_progress`，关闭 P3 的最后一项）
+**当前里程碑：** P3 已关闭（T57–T71 全部 `done`，Completion Gate 逐条有证据）；下一里程碑 P4 `planned` 未领取
 
 **当前阶段：** P3 — Market & Decision Support（`in_progress`；P3.0–P3.3 已完成，T61–T65 已交付）
 
@@ -30,7 +30,7 @@
 |---|---|---|---|
 | P1 — Match Information Assistant | `done` | 跑通真实结构化比赛查询、卡片、Match Page 与上下文 Chat | T17/T18/T19 均已完成（`69c8238`、`5572960`、`fdb0131`）；P1 已关闭 |
 | P2 — Live Match Intelligence | `done` | 技术统计、PBP、近期控制指数、持久化、多进程实时协调，以及球员目录、多语言身份与历史赛果入口 | T20–T53 已交付；T54（`8d1233f` 产品/真实验收提交，`86ea404` 关闭提交）补齐 Home 历史意图、last/recent 五赛季语义、多球员结构化结果与内容级真实验收，P2 重新关闭 |
-| P3 — Market & Decision Support | `in_progress` | 市场状态、预测、edge、confidence 和 paper trading | T55 设计已冻结；T56 先取得并冻结用户确认的 v0 原型，随后按 T57–T71 实施与验收 |
+| P3 — Market & Decision Support | `done` | 市场状态、预测、edge、confidence 和 paper trading | T55 设计冻结、T56 v0 原型与 52 张基线冻结；T57–T71 全部完成（2026-09-17 由 T71 证据表关闭）；自动下单仍 `deferred` |
 | P4 — Product Hardening & Optimization | `planned` | 用真实使用、回放和 paper 结果统一打磨 P1–P3 的数据质量、模型、决策策略、体验与性能 | P3 框架和可复现实验链路完成后再设计；退出阈值优化和更复杂仓位管理可在证据支持下进入 P4，自动下单不因此获得授权 |
 | Optional — Automated Execution | `deferred` | 在满足法律、风控、安全和可审计条件后考虑自动下单 | 不属于 P3 默认范围，必须单独批准 |
 
@@ -114,7 +114,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | P3.2 — Market foundation | `done` | canonical contracts、可逆 schema、只读 Polymarket REST/WS、严格 mapping 与 replay | T56–T60 全部完成；P3.3 的 T61 可按计划领取 |
 | P3.3 — Prediction, decision and paper | `done` | 审计 benchmark、live probability、可执行 quote、decision policy、one-shot paper 与后台双流协调 | T61–T65 全部完成；P3.4 的 T66 可领取 |
 | P3.4 — API and product surfaces | `done` | 独立 REST/SSE、Chat facts、typed frontend、Home Pulse、`/markets`、Match workbench | T66–T69 全部完成；P3.5 的 T70 可领取 |
-| P3.5 — Completion gates | `in_progress` | 双流 replay/recovery/latency、全回归、26 张视觉门与真实只读 shadow | T70 已领取执行中；T71 完成且证据写回三份总控后关闭 P3 |
+| P3.5 — Completion gates | `done` | 双流 replay/recovery/latency、全回归、26 张视觉门与真实只读 shadow | T70（`01e6ba0`）与 T71（`3fde00a`）完成；P3 Completion Gate 八条逐项有证据（见 T71 行），2026-09-17 关闭 P3 |
 
 详细产品语义见 [P3 设计规格](./docs/superpowers/specs/2026-09-16-tennixai-p3-market-decision-support-design.md)，逐任务步骤见 [P3 实施计划](./docs/superpowers/plans/2026-09-16-tennixai-p3-implementation.md)，原型输入见 [P3 v0 Prompt](./docs/v0/2026-09-16-p3-market-decision-pages-prompt.md)。
 
@@ -138,7 +138,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | T68 | P3.4 | Connect Home Market Pulse and the `/markets` Discovery Workspace | `done` | `39756f7` | 领取 `d7f0380`（起始 `808b87e`；期间后端补强 `603262a`/`c6ef131`：DTO 追加 player_ids/names、per-outcome top levels、spread/depth、model_probability、average_entry_price、entry_pending 行、pulse phase/tournament/edge 与"最紧急持仓预留 1 行 + live BUY → upcoming BUY → 最强 WAIT、上限 3"选择契约，integration 3 passed 对真实 PostgreSQL）。生产 Home Pulse：≤3 行、紧急持仓预留、整行内部导航、无轨迹/账本细节、服务端选择契约 + 客户端防御性镜像（selectHomePulseRows 0–5 候选测试）；服务端能力探测（+`?p3=1` e2e 强制位）保证 P3 关闭时 P1/P2 Home DOM 字节不变且浏览器零 P3 请求。生产 `/markets` 三视图（机会/全部/Paper）按批准 v0 几何：canonical 枚举筛选 + URL 同步、整行导航、降级矩阵全套（loading 骨架、诚实空态、typed 列表错误 + 重试、刷新失败保留最后可信行、行级 stale/gap overlay、market-only 无负面标签、book 缺失 em-dash、closed 徽章、p3_disabled 诚实面板）；Challenger/ITF 行只展示市场数据；任何行无 BUY/SELL 按钮。冻结 `?preview=p3` 原型保持视觉真源：52 张 P3 基线 + P1/P2/prototype 视觉全部原样通过。验收：前端单测 351 passed（新增 38）、typecheck/build 干净、完整 Playwright 84 passed/34 skipped（新增 p3-markets 16 项：直达/tab/筛选/导航/刷新/键盘/390×844 零横向溢出/44px 目标/disabled 面板）；backend 854 确定性 + 46 infrastructure 保持通过 |
 | T69 | P3.4 | Connect the Match Decision Workbench and Ledger-Driven State Sequence | `done` | `64bb505` | 领取 `5ac7b1e`（起始 `39756f7`；后端补强 `32ab3bd`/`99c980e`/`e96e1a7`/`1f36773`：workbench 快照追加 versions/gates/outcome_levels/position 明细与 events、intent-only 合成时间线、target_player_id，integration 对真实 PostgreSQL 3 passed）。生产 Match Page 单一当前动作来源=服务端快照：全宽 DecisionSummary（12 个 canonical 状态 + 正交 STALE/GAP overlay、entry 控件在 intent 后消失、零"真实下注"文案）、双边独立可执行 ask 与 $10 算术逐字展示（不强制互补）、ledger 派生 Paper lifecycle 永久时间线（intent-only 场含 entry_pending/missed 合成明细）、evidence/gates 与模型—市场轨迹图（缺失样本留缺口不插值、无订单簿不伪造价格、sr-only 数据表）。`useDecisionStream` 生产接线：gap/malformed 仅降级 decision 流并只重取 decision，sports 流不受影响。desktop/mobile 冻结顺序经 DOM 断言；旧 MarketCard 仅 preview 渲染（52 张 P3 基线原样通过），生产移除旧侧栏占位后 4 张 P1 match 基线逐张审阅后重生成（仅卡片区域与其布局位移）。验收：前端 392 单测、typecheck/build 干净、完整 Playwright 110 passed/34 skipped（新增 e2e/p3-match.spec.ts 26 项：六状态家族直接刷新、buy 研究摘要无交易 CTA、entry_pending/settled 账本时间线、decision gap 独立性、键盘焦点、零 console 错误、390×844 零横向溢出 + Ask≥36px）；backend 854 确定性 + infrastructure 保持通过 |
 | T70 | P3.5 | Prove Dual-Stream Replay, Recovery, Full Regression, and Visual Fidelity | `done` | `01e6ba0` | 领取 `2f6fb89`（起始 `64bb505`）。`p3_dual_stream.jsonl`（+50-50/无入场第二 fixture）对真实 PostgreSQL+Redis 证明全链：upcoming→live→finished、双边订单簿、correction、disconnect/reconcile 显式 `tracking_gap`、BUY→FILLED、HOLD→SELL→EXIT_MISSED、provider-final settlement 与三条评估轨；两次运行 digest 相同、restart 仅从 PostgreSQL 恢复 cursor 与 tracking demand、intent/fill 零重复、公共输出零 provider ID/密钥、队列零溢出（integration 3 passed）。延迟门 integration 变体（真实 observation 写入 + Redis hot book）book→decision p95<500ms、sports→decision p95<1s 实测通过且双跑 digest 相同。门同时暴露并修复真实缺陷：exit intent 在 BOOK_UNVERIFIABLE/EXPIRED 短路下位置永久 exit_pending 导致结算非法转移，现统一记 EXIT_MISSED（回归测试入 `tests/test_paper_service.py`）。全量回归：backend 855 确定性 + 50 infrastructure；前端 392 单测、typecheck/build 干净、完整 Playwright 110 passed/34 skipped。视觉门：52 张 P3 基线自 `f29a789` 冻结以来字节不变（git diff 证据），26 场景 × desktop/mobile 全部 actual==expected；本会话唯一像素变化是 4 张 P1 match 基线（生产移除旧侧栏市场占位所致），逐张 expected/actual/diff 审阅后重生成 |
-| T71 | P3.5 | Run the Real Read-Only Shadow Gate and Close P3 | `in_progress` | — | Claude 已领取（起始 `01e6ba0`）；真实只读 shadow、审计/benchmark 复跑、REST/WS smoke、真实浏览器与证据表后关闭 P3 |
+| T71 | P3.5 | Run the Real Read-Only Shadow Gate and Close P3 | `done` | `3fde00a` | 领取 `90dedf3`（起始 `01e6ba0`）。证据表（2026-09-17，全部实际运行）：① 审计/晋升：根 `.env` 无 `TENNIX_MODEL_DATA_PATH`（0 命中），`app.prediction.cli audit` 无源 exit 2、`verify-artifact artifacts/p3` exit 4（manifest 缺失）→ 无晋升产物，模型 `not_promoted`，shadow 快照经 `PredictionService` 返回 UNPROMOTED 且引擎只输出 NO BET/MARKET_ONLY；② REST/WS smoke：`TENNIX_RUN_API_TENNIS_LIVE=1 TENNIX_RUN_POLYMARKET_LIVE=1 pytest -m "api_tennis_live or polymarket_live" tests/live` 3 passed/1 skipped，skip 为带日期诚实记录（UTC 2026-09-16 公共 WS 45s 内网球 token 无 book/price_change，tokens=4、control events=1，通道已验证）；③ shadow backend：`TENNIX_RUN_P3_SHADOW_LIVE=1 pytest -m end_to_end_live tests/live/test_p3_shadow_live.py` 4 passed（配置零交易凭据且 Polymarket 仅公共只读 host；映射网球 moneyline 被只读观察，rules 缺失诚实 fail-closed；公共 REST 面零 wallet/private 材料）；④ 真实浏览器：`TENNIX_RUN_P3_SHADOW_LIVE=1 TENNIX_E2E_API_TENNIS=1 TENNIX_P3_MODE=shadow playwright test e2e/p3-live.spec.ts` 4 passed（desktop+mobile：Home/三 tab/工作台双 SSE/refresh 重基线、零交易 CTA、market-only 404 诚实、DOM/URL 零 provider ID、404 逐路径核验）；⑤ T70 门复跑：backend 855 确定性 + 50 infrastructure、前端 392 单测 + typecheck + 全量 Playwright 110 passed/38 skipped；⑥ 延迟：T70 integration 门 book→decision p95<500ms、sports→decision p95<1s；⑦ 视觉：52 张 P3 基线自 `f29a789` 字节不变，4 张 P1 match 逐张审阅重生成（`64bb505`）；⑧ P4 延期：真实历史数据与晋升证据、artifact 键对齐、`match_info` 真实来源、退出阈值与仓位优化、自动下单（规格 deferred）。P3 Completion Gate 八条逐条满足，P3 关闭 |
 
 ## P2 完成门摘要
 
