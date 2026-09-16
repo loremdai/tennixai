@@ -396,6 +396,18 @@ async def test_enriched_fields_and_pulse_selection(database: Database) -> None:
     ]
     assert decision2.gates[0].gate == "liquidity" and decision2.gates[0].passed
 
+    # match2 has a pending entry intent but no position: the workbench
+    # timeline must still be ledger-driven.
+    decision_m2 = await queries.match_decision(match2)
+    assert decision_m2 is not None
+    assert decision_m2.position is not None
+    assert decision_m2.position.status == "entry_pending"
+    assert [event.kind for event in decision_m2.position.events] == ["entry_intent"]
+    assert Decimal(decision_m2.position.entry_cost) == Decimal("10.00")
+    assert decision_m2.max_acceptable_price is not None
+    assert Decimal(decision_m2.max_acceptable_price) == Decimal("0.55")
+    assert decision_m2.is_stale is True
+
     # --- markets list enrichment -------------------------------------------
     page = await queries.markets(page=1, page_size=50)
     summary2 = next(item for item in page.markets if item.market_id == market2)

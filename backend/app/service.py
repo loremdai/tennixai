@@ -1266,6 +1266,51 @@ class P3QueryService:
         # Ledger-derived position detail and event timeline. Facts only:
         # kinds, timestamps and typed reasons; labels are presentation-side.
         position_dto = None
+        if position is None and intents:
+            # Intent-only lifecycle (entry pending / missed): synthesize the
+            # detail from the entry intent so the workbench timeline is
+            # ledger-driven; never invent numbers beyond the intent record.
+            entry_intent = next(
+                (item for item in intents if item.side.value == "entry"), None
+            )
+            if entry_intent is not None:
+                intent_fill = await self._paper.get_fill_for_intent(entry_intent.id)
+                intent_events = [
+                    PaperEventDto(
+                        id=f"{entry_intent.id}:intent",
+                        kind="entry_intent",
+                        at=entry_intent.created_at,
+                    )
+                ]
+                intent_status = "entry_pending"
+                if intent_fill is not None:
+                    intent_events.append(
+                        PaperEventDto(
+                            id=f"{entry_intent.id}:fill",
+                            kind=(
+                                "entry_fill"
+                                if intent_fill.filled
+                                else "entry_no_fill"
+                            ),
+                            at=intent_fill.executed_at,
+                            reason_code=(
+                                None if intent_fill.filled else intent_fill.reason
+                            ),
+                        )
+                    )
+                    if not intent_fill.filled:
+                        intent_status = "missed"
+                position_dto = PositionSummaryDto(
+                    position_id=entry_intent.id,
+                    outcome_player_id=entry_intent.outcome_player_id,
+                    status=intent_status,
+                    entry_cost=str(entry_intent.stake),
+                    shares=str(entry_intent.quote.shares),
+                    average_entry_price=str(entry_intent.quote.average_price),
+                    current_exit_value=None,
+                    net_pnl=None,
+                    events=tuple(intent_events),
+                )
         if position is not None:
             events: list[PaperEventDto] = []
             average_entry_price = None
