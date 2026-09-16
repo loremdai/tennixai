@@ -1379,6 +1379,7 @@ class P3QueryService:
             market_id=observation.market_id or None,
             action=observation.action.value,
             reason_code=observation.reason_code,
+            target_player_id=observation.target_player_id,
             observation_version=observation.observation_version,
             model_probabilities=(
                 {

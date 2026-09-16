@@ -204,6 +204,7 @@ class DecisionSnapshotDto(BaseModel):
     market_id: str | None = None
     action: str
     reason_code: str | None = None
+    target_player_id: str | None = None
     observation_version: int
     model_probabilities: dict[str, float] | None = None
     model_availability: str | None = None
