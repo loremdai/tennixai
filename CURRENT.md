@@ -2,11 +2,11 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-16 19:58 CST
+**最后更新：** 2026-09-16 20:25 CST
 
-**当前任务：** T59 — Implement the Read-Only Polymarket Adapter and Exact Match Mapping
+**当前任务：** T59 — Implement the Read-Only Polymarket Adapter and Exact Match Mapping（已完成；T60 待领取）
 
-**任务状态：** `in_progress`
+**任务状态：** `done`
 
 **执行者 / ADE：** Claude (Fable 5) / Claude Code（用户已明确授权按顺序连续执行 T57–T71，无需逐项再次确认）
 
@@ -14,16 +14,18 @@
 
 **任务起始提交：** `1dc7766`
 
-**领取提交：** 本次提交（T59 领取记录）
+**领取提交：** `0681527`
 
-**当前动作：** T58 已以 `02516c6`（代码）与 `1dc7766`（关闭）交付并推送。现按 [P3 实施计划 T59](./docs/superpowers/plans/2026-09-16-tennixai-p3-implementation.md#t59-implement-the-read-only-polymarket-adapter-and-exact-match-mapping) 以 TDD 实施只读 Polymarket adapter（permissive vendor DTO、public Gamma/CLOB REST、脱敏 fixture、`httpx.MockTransport`）与 PlayerResolver 精确组合 mapping，外加 opt-in `polymarket_live` smoke。
+**产品提交：** `0d6728c`（feat: add read-only Polymarket provider）
+
+**当前动作：** T59 已关闭。TDD 先红（`app.markets.mapping`/`polymarket` 模块缺失）后绿；只读 adapter、严格 mapping、9 个脱敏 fixture、契约测试与真实公开 REST smoke 全部实际通过。下一动作：领取 T60（market WebSocket reducer、Redis 热状态与 replay feed）。
 
 ## 当前已验证状态
 
-- T58 验收（全部实际运行）：schema 元数据测试 `tests/test_p3_persistence_models.py` 8 passed；`uv run pytest -m infrastructure tests/integration/test_p3_market_persistence.py tests/integration/test_p3_paper_ledger.py` 16 passed；`alembic upgrade head → downgrade 0003 → upgrade head` 往返 exit 0 且 paper ledger 复跑 8 passed；infrastructure 全套 38 passed；确定性 backend 608 passed/67 deselected；新文件 `ruff check`/`ruff format --check` 干净（models.py 既有 format 债务经 stash 基线对照确认，未触碰）。
-- Ledger 不变量已由集成测试证明：20 路并发注册收敛同一 `mkt_` ID 且不含 condition ID；intent 幂等重放相等、同场同 side 第二把 `UniqueViolationError`；`record_fill` 单事务、注入 pre-commit 失败完整回滚（intent 仍 PENDING、零 fill、零 position）；position forward-only；intent 后 link 冻结；FINAL resolution 终态；重启（全新 Database 实例）恢复 pending intents 与 unsettled positions；raw purge 不删 rules/ledger。
-- T57 canonical contracts（`e7da341`）保持：公共模型只有内部 ID，provider ID 仅存在于私有 `market_external_ids`；配置零 wallet/private-key 字段；`p3_mode` 默认 `disabled`。
-- T56 保持关闭（`f29a789`，52 张基线）；P2（含 T54）保持 `done`；仓库尚无 Polymarket adapter、prediction 引擎、decision 引擎或 paper 服务编排；真实下单明确延期。
+- T59 验收（全部实际运行）：契约测试 `tests/test_polymarket_provider.py` + `tests/test_market_match_mapping.py` 31 passed（moneyline 过滤、typed skip、双语别名、两侧独立 book 规范化、动态 tick/fee/delay、rules hash 变更、FINAL/50–50/disputed/pending resolution、429/404/5xx/坏 JSON typed 翻译零泄漏、仅公开 GET 请求审计、45 分钟窗口、AMBIGUOUS/UNRESOLVED/OUT_OF_WINDOW、link 冻结决策表）；确定性 backend 639 passed/68 deselected；infrastructure 38 passed；`create_app` 装配验证（`p3_mode=disabled`→None、`shadow`→PolymarketProvider）；新文件 ruff check/format 干净。
+- 真实 opt-in smoke `TENNIX_RUN_POLYMARKET_LIVE=1 uv run pytest -m polymarket_live tests/live/test_polymarket_live.py` 1 passed（2026-09-16）：discovery events=100 / markets=1608 / tennis_moneylines=84；canonical mapped=27（skipped：closed=352、not_moneyline=1172、unresolved_player=57——本地目录 2026-09-13 快照的覆盖缺口，属诚实数据）；真实 book_levels=52、tick=0.01、delay_s=1、fee_rate=0.05、resolution=pending；仅打印聚合计数与内部 ID，零 condition/token 泄漏。
+- 官方依据：Gamma `/events`、`/markets?condition_ids`；CLOB `/clob-markets/{condition_id}`（V2 紧凑字段 mts/mos/fd{r,e,to}/t[{t,o}]）、`/book?token_id`、`/fee-rate/{token_id}`（404 时回退 fee schedule）。见 [Polymarket Prices & Orderbook](https://docs.polymarket.com/concepts/prices-orderbook)、[CLOB V2 migration](https://docs.polymarket.com/v2-migration)。
+- T57（`e7da341`）/T58（`02516c6`）保持关闭；T56 视觉真源保持；P2 保持 `done`；仓库尚无 market WebSocket、prediction 引擎、decision 引擎或 paper 服务编排；真实下单明确延期。
 - 模型未通过晋升门时生产必须诚实 `NO BET`；不得伪造 `BUY`。
 
 ## 未跟踪文件保护
@@ -34,14 +36,14 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
-| 2026-09-16 | `02516c6` | T58 完成：migration `0004` 十二表可逆 + 幂等 market/paper repositories；integration 16 passed、往返复跑通过 |
-| 2026-09-16 | `982bfef` | Claude 领取 T58（起始 `507b0ac`） |
-| 2026-09-16 | `507b0ac` | T57 关闭：三份总控记录 canonical contracts 证据 |
-| 2026-09-16 | `e7da341` | T57 完成：P3 canonical domain、只读 provider protocol、安全配置与 59 项新测试 |
-| 2026-09-16 | `63e0ff8` | Claude 领取 T57（起始 `5df1fe0`） |
+| 2026-09-16 | `0d6728c` | T59 完成：只读 Polymarket adapter + 精确 mapping + 真实公开 smoke（mapped=27/84） |
+| 2026-09-16 | `0681527` | Claude 领取 T59（起始 `1dc7766`） |
+| 2026-09-16 | `1dc7766` | T58 关闭：三份总控记录持久化证据 |
+| 2026-09-16 | `02516c6` | T58 完成：migration `0004` 十二表可逆 + 幂等 ledger repositories |
+| 2026-09-16 | `e7da341` | T57 完成：P3 canonical domain、provider protocol、安全配置 |
 
 ## 下一步
 
-1. 完成 T59 的 TDD 实施与验收（fixture 契约测试、mapping 测试、确定性回归、opt-in `polymarket_live` smoke），更新三份总控，提交并推送 `origin/main`。
-2. T59 边界：绝不导入 trading SDK、绝不请求 wallet/private key；错误消息零 URL/key/provider-ID 泄漏；opt-in `polymarket_live` smoke 无活跃市场时诚实 skip。
-3. T59 关闭后按同一流程领取 T60（market WS reducer/热状态/replay），顺序执行至 T71，不得并行领取。
+1. T60 待领取：按 [P3 实施计划 T60](./docs/superpowers/plans/2026-09-16-tennixai-p3-implementation.md#t60-build-the-market-websocket-reducer-hot-state-and-replay-feed) 实施公开 market WS feed、canonical book reducer（全量替换/精确档位增删/时间戳与 hash 回退拒绝/tick 变更/reconnect 先 REST reconcile）、Redis 热状态 publisher、有界订阅 worker、确定性 replay fixture 与 infrastructure 恢复测试，外加 opt-in 公开 WS smoke；开始前先写入并推送领取记录。
+2. T60 边界：只订阅公开 market channel，绝不订阅 user/authenticated channel；ping 按官方间隔；不逐 delta 同步写 SQL。
+3. 其后按顺序 T61–T71，不得并行领取。
