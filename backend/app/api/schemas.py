@@ -98,6 +98,7 @@ class MarketSummaryDto(BaseModel):
     match_id: str | None = None
     question: str | None = None
     status: str
+    tournament_name: str | None = None
     tier: str | None = None
     gender: str | None = None
     phase: str | None = None
@@ -133,6 +134,7 @@ class PaperPositionDto(BaseModel):
     position_id: str
     match_id: str
     market_id: str
+    tournament_name: str | None = None
     outcome_player_id: str
     player_ids: tuple[str, str] | None = None
     player_names: tuple[str, str] | None = None

@@ -280,6 +280,7 @@ async def test_enriched_fields_and_pulse_selection(database: Database) -> None:
     # a pending entry intent (no fill → entry_pending ledger row).
     suffix = uuid4().hex[:10]
     match2 = await identity.get_or_create("match", "itest-t68", suffix)
+    tournament2 = await identity.get_or_create("tournament", "itest-t68", suffix)
     async with database.session() as session:
         async with session.begin():
             await session.execute(
@@ -287,14 +288,14 @@ async def test_enriched_fields_and_pulse_selection(database: Database) -> None:
                     "UPDATE matches SET status = 'scheduled', player1_id = :p1,"
                     " player2_id = :p2, tournament_id = :t WHERE id = :m"
                 ),
-                {
-                    "p1": player_a,
-                    "p2": player_b,
-                    "t": (
-                        await identity.get_or_create("tournament", "itest-t68", suffix)
-                    ),
-                    "m": match2,
-                },
+                {"p1": player_a, "p2": player_b, "t": tournament2, "m": match2},
+            )
+            await session.execute(
+                text(
+                    "UPDATE tournaments SET name = 'Test Trophy', circuit = 'wta',"
+                    " gender = 'women' WHERE id = :i"
+                ),
+                {"i": tournament2},
             )
     market2 = await markets.get_or_create_market_id(
         provider="polymarket",
@@ -363,6 +364,7 @@ async def test_enriched_fields_and_pulse_selection(database: Database) -> None:
     # --- markets list enrichment -------------------------------------------
     page = await queries.markets(page=1, page_size=50)
     summary2 = next(item for item in page.markets if item.market_id == market2)
+    assert summary2.tournament_name == "Test Trophy"
     assert summary2.player_ids == (player_a, player_b)
     assert summary2.player_names is not None
     assert summary2.player_names[1] == "Player B"
@@ -393,6 +395,7 @@ async def test_enriched_fields_and_pulse_selection(database: Database) -> None:
     view = await queries.paper_positions()
     open_row = next(item for item in view["open"] if item.match_id == match_id)
     assert Decimal(open_row.average_entry_price) == Decimal("0.525")
+    assert open_row.tournament_name == "Test Open"
     assert open_row.player_ids == (player_a, player_b)
     # exit value from the hot book: 19.047619 shares × 0.58 best bid
     assert open_row.current_exit_value is not None
