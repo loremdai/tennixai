@@ -2,7 +2,7 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-16 17:53 CST
+**最后更新：** 2026-09-16 18:06 CST
 
 **当前任务：** T56 — Generate, Import, and Freeze the P3 v0 Prototype（已完成；T57 `ready`，尚未领取）
 
@@ -20,7 +20,7 @@
 
 **关闭提交：** `f29a789`
 
-**当前动作：** T56 已关闭。`0f18f7b` 修复 P3 visual harness 的跨 project 视口覆盖后，用户在普通终端重建并复跑 P3 视觉测试；再复跑既有 `prototype|visual` 回归均成功（`.last-run.json`=`passed`）。26 个场景的 desktop（1440px）与 mobile（390px）共 52 张基线已逐张人工核验，并仅以 `f29a789` 入库；既有 P1/P2 基线零改动。T57 已具备领取条件，但没有执行者、没有进行中的新任务。
+**当前动作：** T56 已关闭。`0f18f7b` 修复 P3 visual harness 的跨 project 视口覆盖后，用户在普通终端重建并复跑 P3 视觉测试；随后 Codex 在干净的强制 fake 配置下复跑 `prototype|visual`，实际结果为 34 passed / 4 skipped。四项 skipped 均为未启用 deterministic replay backend 时按设计跳过的 P2 Replay 视觉用例。26 个场景的 desktop（1440px）与 mobile（390px）共 52 张基线已逐张人工核验，并仅以 `f29a789` 入库；既有 P1/P2 基线零改动。T57 已具备领取条件，但没有执行者、没有进行中的新任务。
 
 ## 当前已验证状态
 
@@ -29,7 +29,7 @@
 - T55 验证：本地 Markdown 链接全部存在；占位符与 64 位密钥值模式零命中，交易凭据词只出现在禁止性边界中；`git diff --cached --check` 通过。T55 是设计任务，没有运行或声称产品测试。
 - 当前仓库只有 P3 preview 页面、固定状态数据和验证用例，仍没有 P3 provider、schema、prediction、decision、paper ledger 或真实交易代码。P2（含 T54）保持 `done`；真实下单仍明确延期。
 - T56 checkpoint `4ad724d` 已验证：前端 `pnpm test` 242/242、`pnpm typecheck`、`pnpm build`、12 个决策状态 SSR 与代表性 Home/Markets/Match 双视口人工检查通过；修正了 P3 Match 状态/布局、Home 重复市场区块、stale 状态覆盖和 fixture URL 一致性。
-- 视觉门已关闭。原先 plain run 6/6 失败的根因是 `p3.visual.spec.ts` 在 desktop/mobile 两个 project 内均显式跑两次 `setViewportSize` 并复用快照名，后一次 mobile 捕获覆盖前一次 desktop 捕获；`0f18f7b` 改为完全交由 Playwright project 配置管理视口，每个 project 每场景只捕获一次。用户随后重建 52 张基线，`pnpm exec playwright test --grep 'P3 visual'` 与 `pnpm exec playwright test --grep 'prototype|visual'` 均成功（`.last-run.json`=`passed`）；全部 P3 desktop 图为 1440px、mobile 图为 390px，且逐张人工核验。Codex 复跑 `pnpm test` 242/242、`pnpm typecheck` 和 `pnpm build` 全部通过。
+- 视觉门已关闭。原先 plain run 6/6 失败的根因是 `p3.visual.spec.ts` 在 desktop/mobile 两个 project 内均显式跑两次 `setViewportSize` 并复用快照名，后一次 mobile 捕获覆盖前一次 desktop 捕获；`0f18f7b` 改为完全交由 Playwright project 配置管理视口，每个 project 每场景只捕获一次。用户随后重建 52 张基线，P3 visual 通过；Codex 再用 `CI=1`、显式 fake provider/replay-off 的隔离环境复跑 `pnpm exec playwright test --grep 'prototype|visual'`，结果为 34 passed / 4 skipped。四项 skipped 是未启用 deterministic replay backend 时按设计跳过的 P2 Replay 视觉用例；全部 P3 desktop 图为 1440px、mobile 图为 390px，且逐张人工核验。Codex 复跑 `pnpm test` 242/242、`pnpm typecheck` 和 `pnpm build` 全部通过。
 - 模型未通过许可/覆盖审计、walk-forward、校准和 shadow 晋升门时，生产必须诚实输出 `NO BET`；不得为了演示制造 `BUY`。
 
 ## T56 输入门与边界
