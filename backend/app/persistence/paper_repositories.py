@@ -160,6 +160,39 @@ class PaperLedgerRepository:
             row = await session.get(PaperOrderIntentRow, intent_id)
         return _intent_from_row(row) if row is not None else None
 
+    async def load_all_intents(self) -> list[PaperOrderIntent]:
+        async with self._database.session() as session:
+            rows = (
+                (
+                    await session.execute(
+                        select(PaperOrderIntentRow).order_by(
+                            PaperOrderIntentRow.created_at
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+        return [_intent_from_row(row) for row in rows]
+
+    async def get_fill_for_intent(self, intent_id: str) -> PaperFill | None:
+        async with self._database.session() as session:
+            row = await session.scalar(
+                select(PaperFillRow).where(PaperFillRow.intent_id == intent_id)
+            )
+        if row is None:
+            return None
+        return PaperFill(
+            intent_id=row.intent_id,
+            filled=row.filled,
+            shares=row.shares,
+            average_price=row.average_price,
+            fee=row.fee,
+            reason=row.reason,
+            executed_book_hash=row.executed_book_hash,
+            executed_at=row.executed_at,
+        )
+
     async def record_fill(
         self,
         fill: PaperFill,
@@ -293,6 +326,21 @@ class PaperLedgerRepository:
             )
         assert row is not None  # noqa: S101 - insert-or-read always yields a row
         return _track_from_row(row)
+
+    async def load_track_results(self, position_id: str) -> list[PaperTrackResult]:
+        async with self._database.session() as session:
+            rows = (
+                (
+                    await session.execute(
+                        select(PaperTrackResultRow).where(
+                            PaperTrackResultRow.position_id == position_id
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+        return [_track_from_row(row) for row in rows]
 
     async def record_resolution(self, resolution: MarketResolution) -> None:
         """Upsert the provider resolution; FINAL is terminal and never

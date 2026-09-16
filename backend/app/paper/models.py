@@ -168,13 +168,22 @@ class TrackExitKind(StrEnum):
     SOLD = "sold"
     EXIT_MISSED = "exit_missed"
     HELD = "held"
+    HELD_TO_SETTLEMENT = "held_to_settlement"
     CONVERGENCE_LOCKED = "convergence_locked"
 
 
 _TRACK_EXIT_KINDS: dict[TrackName, frozenset[TrackExitKind]] = {
-    TrackName.EV_EXIT: frozenset({TrackExitKind.SOLD, TrackExitKind.EXIT_MISSED}),
+    TrackName.EV_EXIT: frozenset(
+        {
+            TrackExitKind.SOLD,
+            TrackExitKind.EXIT_MISSED,
+            TrackExitKind.HELD_TO_SETTLEMENT,
+        }
+    ),
     TrackName.HODL_BASELINE: frozenset({TrackExitKind.HELD}),
-    TrackName.CONVERGENCE_LOCK: frozenset({TrackExitKind.CONVERGENCE_LOCKED}),
+    TrackName.CONVERGENCE_LOCK: frozenset(
+        {TrackExitKind.CONVERGENCE_LOCKED, TrackExitKind.HELD_TO_SETTLEMENT}
+    ),
 }
 
 
@@ -199,7 +208,10 @@ class PaperTrackResult(FrozenModel):
                 f"exit kind {self.exit_kind.value} is not valid on track "
                 f"{self.track.value}"
             )
-        if self.exit_kind in (TrackExitKind.SOLD, TrackExitKind.CONVERGENCE_LOCKED):
+        if self.exit_kind in (
+            TrackExitKind.SOLD,
+            TrackExitKind.CONVERGENCE_LOCKED,
+        ):
             if self.exit_average_price is None:
                 raise ValueError(
                     f"{self.exit_kind.value} requires an exit_average_price"

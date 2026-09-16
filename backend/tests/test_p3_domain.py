@@ -858,6 +858,7 @@ def test_three_track_names_are_fixed():
         "sold",
         "exit_missed",
         "held",
+        "held_to_settlement",
         "convergence_locked",
     }
 
