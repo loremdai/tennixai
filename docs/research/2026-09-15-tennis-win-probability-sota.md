@@ -501,6 +501,19 @@ Home 不复制 `/markets`，而把现有市场情报占位升级为最多三行�
 
 这个约束让 P3 可以独立评估首次信号质量、执行损失和真实 fill rate。retry policy、冷却时间与最大尝试次数只有在 paper 数据证明需要时才进入 P4。
 
+## 23. T55 后续批准：FOK paper 执行
+
+**批准日期：** 2026-09-16
+
+[Polymarket Order Lifecycle](https://docs.polymarket.com/concepts/order-lifecycle) 将 FOK 定义为“全部成交或取消”，FAK 定义为“成交可得部分并取消剩余部分”；其 API 也把 `FOK` 与 `FAK` 列为独立 order type。用户选择 P3 使用 FOK 语义：
+
+- 固定 `$10` entry 在 sports delay 后必须于动态最高可接受价格范围内全部成交；否则 `NO_FILL → MISSED`，不建立 partial position。
+- position exit 必须把全部持仓份额按届时 bid/depth/费用完整卖出；否则不生成 partial exit 或残余仓位。
+- FOK 成交仍须保存逐档平均成交价、实际费用、delay、订单簿版本与决策版本，不能退化成“best ask/bid 存在即视为成交”。
+- P3 的 paper 仓位因此始终是 0 或完整固定 `$10` entry，策略轨道之间可直接比较。FAK、partial position 与 partial exit 留待 P4 基于真实 no-fill 证据再评估。
+
+FOK 解决了 partial 状态，但尚未决定一次 exit intent 若 `NO_FILL` 后是否允许未来再次尝试；该分支需在完整状态机中明确。
+
 ---
 
 这份研究的核心判断是：**TennixAI 的 SOTA 不应是一篇论文的名字，而应是一套不会被数据泄漏、概率失准和不可成交价格欺骗的持续基准与晋升机制。**
