@@ -88,3 +88,14 @@ export function MarketIntelligenceCard({ phase }: { phase: ProductPhase }) {
     </Card>
   )
 }
+
+// ---------------------------------------------------------------------------
+// T68: production Home Market Pulse. Renders at most three actionable rows
+// from the canonical /api/markets/pulse endpoint using the approved v0
+// geometry. Selection is server-authoritative; selectHomePulseRows mirrors
+// the contract defensively. When P3 is disabled (typed 503) the component
+// renders nothing and reports unavailability so the placeholder card and the
+// P1/P2 Home visuals stay exactly as they are.
+// ---------------------------------------------------------------------------
+
+export { LiveMarketPulse } from './live-market-pulse'

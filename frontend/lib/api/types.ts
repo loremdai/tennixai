@@ -390,7 +390,13 @@ export type OpportunityActionValue = 'buy' | 'wait'
 export type OpportunityPhaseValue = 'live' | 'upcoming'
 export type ModelAvailabilityValue = 'available' | 'degraded' | 'unpromoted' | 'unavailable'
 export type QuoteSideValue = 'entry' | 'exit'
-export type PositionStatusValue = 'open' | 'exit_pending' | 'exited' | 'exit_missed' | 'settled'
+export type PositionStatusValue =
+  | 'entry_pending'
+  | 'open'
+  | 'exit_pending'
+  | 'exited'
+  | 'exit_missed'
+  | 'settled'
 export type LifecycleStateValue =
   | 'entry_pending'
   | 'filled'
@@ -417,6 +423,7 @@ export type OpportunityDto = {
   phase: OpportunityPhaseValue
   action: OpportunityActionValue
   target_player_id: string | null
+  player_ids: [string, string] | null
   player_names: [string, string] | null
   model_probability: number | null
   executable_probability: number | null
@@ -424,6 +431,8 @@ export type OpportunityDto = {
   max_acceptable_price: string | null
   tournament_tier: CircuitTier | null
   tournament_name: string | null
+  is_stale: boolean
+  has_gap: boolean
   as_of: string | null
 }
 
@@ -432,14 +441,24 @@ export type MarketSummaryDto = {
   match_id: string | null
   question: string | null
   status: MarketStatusValue
+  tournament_name: string | null
   tier: CircuitTier | null
   gender: Gender | null
   phase: MarketPhase | null
   model_covered: boolean
   action: DecisionActionValue | null
   reason_code: string | null
+  player_ids: [string, string] | null
+  player_names: [string, string] | null
+  model_probability: number | null
   best_bid: [string, string] | null
   best_ask: [string, string] | null
+  outcome_bids: [string | null, string | null] | null
+  outcome_asks: [string | null, string | null] | null
+  spread: string | null
+  depth_usd: string | null
+  is_stale: boolean
+  has_gap: boolean
   as_of: string | null
 }
 
@@ -454,11 +473,14 @@ export type PaperPositionDto = {
   position_id: string
   match_id: string
   market_id: string
+  tournament_name: string | null
   outcome_player_id: string
+  player_ids: [string, string] | null
   player_names: [string, string] | null
   status: PositionStatusValue
   entry_cost: string
   shares: string
+  average_entry_price: string | null
   current_exit_value: string | null
   net_pnl: string | null
   freshness_as_of: string | null
@@ -474,9 +496,14 @@ export type PulseRowDto = {
   market_id: string | null
   kind: PulseKindValue
   action: DecisionActionValue
+  phase: OpportunityPhaseValue | 'closed' | null
   player_names: [string, string] | null
   model_probability: number | null
   executable_probability: number | null
+  conservative_net_edge: string | null
+  tournament_name: string | null
+  is_stale: boolean
+  has_gap: boolean
   as_of: string | null
 }
 

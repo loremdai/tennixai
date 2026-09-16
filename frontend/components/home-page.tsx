@@ -6,6 +6,7 @@ import { Layers3 } from 'lucide-react'
 import { HomeAssistant } from '@/components/home/home-assistant'
 import { HomeHero, HomeQuickActions } from '@/components/home/home-hero'
 import { MarketIntelligenceCard } from '@/components/home/home-intelligence'
+import { LiveMarketPulse } from '@/components/home/live-market-pulse'
 import { MarketPulse } from '@/components/home/market-pulse'
 import {
   FeaturedMatchSection,
@@ -39,6 +40,9 @@ type HomePageProps = {
   initialQuestion?: string
   previewP3?: boolean
   initialPulseState?: HomePulseState
+  /** Server-probed P3 availability. When false the production Home makes
+   * zero P3 requests and renders exactly the pre-P3 layout. */
+  p3Enabled?: boolean
 }
 
 type SlateStatuses = {
@@ -104,6 +108,7 @@ export function HomePage({
   initialQuestion,
   previewP3 = false,
   initialPulseState = 'populated',
+  p3Enabled = false,
 }: HomePageProps) {
   const [phase, setPhase] = useState<ProductPhase>(previewP3 ? 'p3' : 'p1')
   const [previewEnabled, setPreviewEnabled] = useState(previewP3)
@@ -113,6 +118,15 @@ export function HomePage({
 
   const chat = useChatStream('global')
   const busy = chat.state.phase === 'loading' || chat.state.phase === 'streaming'
+
+  // Production P3 probe: the live pulse replaces the placeholder card only
+  // when the backend confirms P3 is enabled; a typed 503 keeps the P1/P2
+  // Home visuals exactly as they are.
+  const [p3Pulse, setP3Pulse] = useState<'unknown' | 'active' | 'disabled'>('unknown')
+  const handlePulseAvailability = useCallback((active: boolean) => {
+    setP3Pulse(active ? 'active' : 'disabled')
+  }, [])
+  const productionMarketsHref = p3Pulse === 'active' ? '/markets' : '/#markets'
 
   const [filters, setFilters] = useState<MatchFiltersDto>(DEFAULT_MATCH_FILTERS)
   const [catalogs, setCatalogs] = useState<{
@@ -241,7 +255,7 @@ export function HomePage({
       >
         跳至主要内容
       </a>
-      <ProductHeader active="home" marketsHref={showP3Preview ? '/markets?preview=p3' : '/#markets'} />
+      <ProductHeader active="home" marketsHref={showP3Preview ? '/markets?preview=p3' : productionMarketsHref} />
 
       <main
         id="main-content"
@@ -298,7 +312,7 @@ export function HomePage({
           onPromptSelect={showAnswer}
         />
 
-        <HomeQuickActions marketsHref={showP3Preview ? '/markets?preview=p3' : '#markets'} />
+        <HomeQuickActions marketsHref={showP3Preview ? '/markets?preview=p3' : p3Pulse === 'active' ? '/markets' : '#markets'} />
 
         <div className="home-reveal grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
           <aside className="flex min-w-0 flex-col gap-4 lg:col-start-2 lg:row-start-1" aria-label="Tennix 智能侧栏">
@@ -311,7 +325,7 @@ export function HomePage({
               onPromptSelect={showAnswer}
             />
             <RecentResultsCard />
-            {showP3Preview ? null : <MarketIntelligenceCard phase={phase} />}
+            {showP3Preview || p3Pulse === 'active' ? null : <MarketIntelligenceCard phase={phase} />}
           </aside>
 
           <div className="flex min-w-0 flex-col gap-6 lg:col-start-1 lg:row-start-1">
@@ -351,7 +365,11 @@ export function HomePage({
           </div>
         </div>
 
-        {showP3Preview ? <MarketPulse initialState={initialPulseState} /> : null}
+        {showP3Preview ? (
+          <MarketPulse initialState={initialPulseState} />
+        ) : p3Enabled ? (
+          <LiveMarketPulse onAvailability={handlePulseAvailability} />
+        ) : null}
       </main>
 
       <footer className="border-t">

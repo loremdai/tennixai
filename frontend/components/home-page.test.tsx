@@ -14,21 +14,37 @@ import type {
 } from '@/lib/api/types'
 import { DEFAULT_MATCH_FILTERS } from '@/lib/match-filters'
 
-const { getMatchCatalogMock, getMatchesMock, getPlayersMock, getMatchMock, streamChatMock } = vi.hoisted(() => ({
+const {
+  getMatchCatalogMock,
+  getMatchesMock,
+  getPlayersMock,
+  getMatchMock,
+  streamChatMock,
+  getMarketPulseMock,
+  openMarketStreamMock,
+} = vi.hoisted(() => ({
   getMatchCatalogMock: vi.fn(),
   getMatchesMock: vi.fn(),
   getPlayersMock: vi.fn(),
   getMatchMock: vi.fn(),
   streamChatMock: vi.fn(),
+  getMarketPulseMock: vi.fn(),
+  openMarketStreamMock: vi.fn(),
 }))
 
-vi.mock('@/lib/api/client', () => ({
-  getMatchCatalog: getMatchCatalogMock,
-  getMatches: getMatchesMock,
-  getPlayers: getPlayersMock,
-  getMatch: getMatchMock,
-  streamChat: streamChatMock,
-}))
+vi.mock('@/lib/api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api/client')>()
+  return {
+    ...actual,
+    getMatchCatalog: getMatchCatalogMock,
+    getMatches: getMatchesMock,
+    getPlayers: getPlayersMock,
+    getMatch: getMatchMock,
+    streamChat: streamChatMock,
+    getMarketPulse: getMarketPulseMock,
+    openMarketStream: openMarketStreamMock,
+  }
+})
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -228,13 +244,25 @@ function mockStream(options: {
   })
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.clearAllMocks()
   Element.prototype.scrollIntoView = vi.fn()
   getMatchCatalogMock.mockImplementation(async (status: 'live' | 'upcoming') =>
     makeCatalog(status, status === 'live' ? [liveDto] : [upcomingDto]),
   )
   mockStream({ data: { kind: 'matches', matches: [upcomingDto] }, text: 'Sinner 今晚 20:30 出场。' })
+  // Default: P3 disabled backend — the production Home visuals must match
+  // the pre-P3 baselines exactly (placeholder card, no pulse section).
+  const { ApiError } = await import('@/lib/api/client')
+  getMarketPulseMock.mockRejectedValue(new ApiError(503, 'p3_disabled', 'disabled'))
+  openMarketStreamMock.mockImplementation(() =>
+    Promise.resolve(
+      new Response(new ReadableStream({ start() {} }), {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+      }),
+    ),
+  )
 })
 
 afterEach(() => {
@@ -364,6 +392,49 @@ describe('HomePage P3 preview', () => {
 
     expect(await screen.findByRole('heading', { name: '市场脉搏' })).toBeVisible()
     expect(screen.queryByRole('heading', { name: 'Market Intelligence' })).toBeNull()
+  })
+})
+
+describe('HomePage production P3', () => {
+  it('keeps the placeholder card and anchor link when P3 is disabled', async () => {
+    render(<HomePage />)
+
+    expect(await screen.findByRole('heading', { name: 'Market Intelligence' })).toBeVisible()
+    expect(screen.queryByRole('heading', { name: '市场脉搏' })).toBeNull()
+    expect(screen.getByRole('link', { name: /市场/ })).toHaveAttribute('href', '/#markets')
+    // A disabled deployment makes zero P3 requests from the browser.
+    expect(getMarketPulseMock).not.toHaveBeenCalled()
+  })
+
+  it('replaces the placeholder with the live pulse when P3 is enabled', async () => {
+    getMarketPulseMock.mockResolvedValue({
+      data: [
+        {
+          match_id: 'mat_live1',
+          market_id: 'mkt_1',
+          kind: 'opportunity',
+          action: 'buy',
+          phase: 'live',
+          player_names: ['Jannik Sinner', 'Casper Ruud'],
+          model_probability: 0.62,
+          executable_probability: 0.55,
+          conservative_net_edge: '0.0700',
+          tournament_name: 'ATP Finals',
+          is_stale: false,
+          has_gap: false,
+          as_of: new Date().toISOString(),
+        },
+      ],
+      has_open_position: false,
+    })
+    render(<HomePage p3Enabled />)
+
+    expect(await screen.findByRole('heading', { name: '市场脉搏' })).toBeVisible()
+    expect(screen.queryByRole('heading', { name: 'Market Intelligence' })).toBeNull()
+    expect(screen.getByRole('link', { name: /市场/ })).toHaveAttribute('href', '/markets')
+    expect(
+      screen.getByRole('link', { name: /查看 Jannik Sinner vs\. Casper Ruud 的 buy 决策/ }),
+    ).toHaveAttribute('href', '/matches/mat_live1')
   })
 })
 

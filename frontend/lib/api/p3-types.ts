@@ -42,7 +42,15 @@ const OPPORTUNITY_PHASES = ['live', 'upcoming'] as const
 const MARKET_PHASES = ['prematch', 'live', 'closed'] as const
 const MODEL_AVAILABILITY = ['available', 'degraded', 'unpromoted', 'unavailable'] as const
 const QUOTE_SIDES = ['entry', 'exit'] as const
-const POSITION_STATUSES = ['open', 'exit_pending', 'exited', 'exit_missed', 'settled'] as const
+const POSITION_STATUSES = [
+  'entry_pending',
+  'open',
+  'exit_pending',
+  'exited',
+  'exit_missed',
+  'settled',
+] as const
+const PULSE_PHASES = ['live', 'upcoming', 'closed'] as const
 const LIFECYCLE_STATES = [
   'entry_pending',
   'filled',
@@ -100,6 +108,34 @@ function bool(value: unknown, path: string): boolean {
     throw new P3DecodeError(path, 'expected a boolean')
   }
   return value
+}
+
+function boolOrFalse(value: unknown, path: string): boolean {
+  // Additive overlay flags: absent means "not flagged" for older payloads,
+  // but a present non-boolean still fails visibly.
+  if (value === undefined || value === null) return false
+  return bool(value, path)
+}
+
+function idsTuple(value: unknown, path: string): [string, string] | null {
+  if (value === null || value === undefined) return null
+  const items = rawList(value, path)
+  if (items.length !== 2) {
+    throw new P3DecodeError(path, 'expected exactly two player ids')
+  }
+  return [str(items[0], `${path}[0]`), str(items[1], `${path}[1]`)]
+}
+
+function nullableLevelPair(
+  value: unknown,
+  path: string,
+): [string | null, string | null] | null {
+  if (value === null || value === undefined) return null
+  const items = rawList(value, path)
+  if (items.length !== 2) {
+    throw new P3DecodeError(path, 'expected a two-outcome level pair')
+  }
+  return [decimalOrNull(items[0], `${path}[0]`), decimalOrNull(items[1], `${path}[1]`)]
 }
 
 function int(value: unknown, path: string, options: { min?: number } = {}): number {
@@ -178,6 +214,7 @@ function decodeOpportunity(value: unknown, path: string): OpportunityDto {
     phase: oneOf(item.phase, OPPORTUNITY_PHASES, `${path}.phase`),
     action: oneOf(item.action, OPPORTUNITY_ACTIONS, `${path}.action`),
     target_player_id: strOrNull(item.target_player_id, `${path}.target_player_id`),
+    player_ids: idsTuple(item.player_ids, `${path}.player_ids`),
     player_names: namesTuple(item.player_names, `${path}.player_names`),
     model_probability: probability(item.model_probability, `${path}.model_probability`),
     executable_probability: probability(
@@ -196,6 +233,8 @@ function decodeOpportunity(value: unknown, path: string): OpportunityDto {
       | CircuitTier
       | null,
     tournament_name: strOrNull(item.tournament_name, `${path}.tournament_name`),
+    is_stale: boolOrFalse(item.is_stale, `${path}.is_stale`),
+    has_gap: boolOrFalse(item.has_gap, `${path}.has_gap`),
     as_of: strOrNull(item.as_of, `${path}.as_of`),
   }
 }
@@ -214,6 +253,7 @@ function decodeMarketSummary(value: unknown, path: string): MarketSummaryDto {
     match_id: strOrNull(item.match_id, `${path}.match_id`),
     question: strOrNull(item.question, `${path}.question`),
     status: oneOf(item.status, MARKET_STATUSES, `${path}.status`),
+    tournament_name: strOrNull(item.tournament_name, `${path}.tournament_name`),
     tier: oneOfOrNull(item.tier, TIERS, `${path}.tier`) as CircuitTier | null,
     gender: oneOfOrNull(item.gender, GENDERS, `${path}.gender`) as Gender | null,
     phase: oneOfOrNull(item.phase, MARKET_PHASES, `${path}.phase`),
@@ -222,8 +262,17 @@ function decodeMarketSummary(value: unknown, path: string): MarketSummaryDto {
       | DecisionActionValue
       | null,
     reason_code: strOrNull(item.reason_code, `${path}.reason_code`),
+    player_ids: idsTuple(item.player_ids, `${path}.player_ids`),
+    player_names: namesTuple(item.player_names, `${path}.player_names`),
+    model_probability: probability(item.model_probability, `${path}.model_probability`),
     best_bid: levelTuple(item.best_bid, `${path}.best_bid`),
     best_ask: levelTuple(item.best_ask, `${path}.best_ask`),
+    outcome_bids: nullableLevelPair(item.outcome_bids, `${path}.outcome_bids`),
+    outcome_asks: nullableLevelPair(item.outcome_asks, `${path}.outcome_asks`),
+    spread: decimalOrNull(item.spread, `${path}.spread`),
+    depth_usd: decimalOrNull(item.depth_usd, `${path}.depth_usd`),
+    is_stale: boolOrFalse(item.is_stale, `${path}.is_stale`),
+    has_gap: boolOrFalse(item.has_gap, `${path}.has_gap`),
     as_of: strOrNull(item.as_of, `${path}.as_of`),
   }
 }
@@ -246,11 +295,14 @@ function decodePosition(value: unknown, path: string): PaperPositionDto {
     position_id: str(item.position_id, `${path}.position_id`),
     match_id: str(item.match_id, `${path}.match_id`),
     market_id: str(item.market_id, `${path}.market_id`),
+    tournament_name: strOrNull(item.tournament_name, `${path}.tournament_name`),
     outcome_player_id: str(item.outcome_player_id, `${path}.outcome_player_id`),
+    player_ids: idsTuple(item.player_ids, `${path}.player_ids`),
     player_names: namesTuple(item.player_names, `${path}.player_names`),
     status: oneOf(item.status, POSITION_STATUSES, `${path}.status`) as PositionStatusValue,
     entry_cost: decimal(item.entry_cost, `${path}.entry_cost`),
     shares: decimal(item.shares, `${path}.shares`),
+    average_entry_price: decimalOrNull(item.average_entry_price, `${path}.average_entry_price`),
     current_exit_value: decimalOrNull(item.current_exit_value, `${path}.current_exit_value`),
     net_pnl: decimalOrNull(item.net_pnl, `${path}.net_pnl`),
     freshness_as_of: strOrNull(item.freshness_as_of, `${path}.freshness_as_of`),
@@ -276,12 +328,20 @@ function decodePulseRow(value: unknown, path: string): PulseRowDto {
     market_id: strOrNull(item.market_id, `${path}.market_id`),
     kind: oneOf(item.kind, PULSE_KINDS, `${path}.kind`),
     action: oneOf(item.action, DECISION_ACTIONS, `${path}.action`) as DecisionActionValue,
+    phase: oneOfOrNull(item.phase, PULSE_PHASES, `${path}.phase`) as PulseRowDto['phase'],
     player_names: namesTuple(item.player_names, `${path}.player_names`),
     model_probability: probability(item.model_probability, `${path}.model_probability`),
     executable_probability: probability(
       item.executable_probability,
       `${path}.executable_probability`,
     ),
+    conservative_net_edge: decimalOrNull(
+      item.conservative_net_edge,
+      `${path}.conservative_net_edge`,
+    ),
+    tournament_name: strOrNull(item.tournament_name, `${path}.tournament_name`),
+    is_stale: boolOrFalse(item.is_stale, `${path}.is_stale`),
+    has_gap: boolOrFalse(item.has_gap, `${path}.has_gap`),
     as_of: strOrNull(item.as_of, `${path}.as_of`),
   }
 }

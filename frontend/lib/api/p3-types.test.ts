@@ -441,6 +441,188 @@ describe('decision stream event discriminators', () => {
   })
 })
 
+describe('T68 enriched fields', () => {
+  it('decodes enriched opportunity fields', () => {
+    const rows = decodeOpportunityList({
+      data: [
+        opportunity({
+          player_ids: ['ply_a', 'ply_b'],
+          is_stale: true,
+          has_gap: false,
+        }),
+      ],
+    })
+    expect(rows[0].player_ids).toEqual(['ply_a', 'ply_b'])
+    expect(rows[0].is_stale).toBe(true)
+    expect(rows[0].has_gap).toBe(false)
+  })
+
+  it('fails visibly on a malformed player_ids tuple', () => {
+    expect(() =>
+      decodeOpportunityList({ data: [opportunity({ player_ids: ['ply_a'] })] }),
+    ).toThrow(P3DecodeError)
+  })
+
+  it('decodes enriched market summary fields with per-outcome levels', () => {
+    const page = decodeMarketPage({
+      data: [
+        {
+          market_id: 'mkt_2',
+          match_id: 'mat_2',
+          question: null,
+          status: 'open',
+          tournament_name: 'Test Trophy',
+          tier: 'wta',
+          gender: 'women',
+          phase: 'prematch',
+          model_covered: true,
+          action: 'wait',
+          reason_code: null,
+          player_ids: ['ply_a', 'ply_b'],
+          player_names: ['Alpha One', 'Beta Two'],
+          model_probability: 0.7,
+          best_bid: ['ply_a', '0.68'],
+          best_ask: ['ply_a', '0.70'],
+          outcome_bids: ['0.68', '0.28'],
+          outcome_asks: ['0.70', null],
+          spread: '0.0200',
+          depth_usd: '306.00',
+          is_stale: true,
+          has_gap: false,
+          as_of: NOW,
+        },
+      ],
+      page: 1,
+      page_size: 20,
+      total: 1,
+    })
+    const row = page.markets[0]
+    expect(row.tournament_name).toBe('Test Trophy')
+    expect(row.outcome_asks).toEqual(['0.70', null])
+    expect(row.spread).toBe('0.0200')
+    expect(row.depth_usd).toBe('306.00')
+    expect(row.model_probability).toBe(0.7)
+    expect(row.is_stale).toBe(true)
+  })
+
+  it('fails visibly on a malformed outcome level pair or spread', () => {
+    const base = {
+      market_id: 'm',
+      match_id: null,
+      question: null,
+      status: 'open',
+      tournament_name: null,
+      tier: null,
+      gender: null,
+      phase: null,
+      model_covered: false,
+      action: null,
+      reason_code: null,
+      player_ids: null,
+      player_names: null,
+      model_probability: null,
+      best_bid: null,
+      best_ask: null,
+      outcome_bids: null,
+      outcome_asks: ['0.7'],
+      spread: null,
+      depth_usd: null,
+      is_stale: false,
+      has_gap: false,
+      as_of: null,
+    }
+    expect(() => decodeMarketPage({ data: [base], page: 1, page_size: 20, total: 1 })).toThrow(
+      P3DecodeError,
+    )
+    expect(() =>
+      decodeMarketPage({
+        data: [{ ...base, outcome_asks: ['0.7', '0.3'], spread: 'wide' }],
+        page: 1,
+        page_size: 20,
+        total: 1,
+      }),
+    ).toThrow(P3DecodeError)
+  })
+
+  it('decodes entry_pending paper rows with average entry price', () => {
+    const view = decodePaperPositions({
+      open: [
+        {
+          position_id: 'int_entry_mat_1',
+          match_id: 'mat_1',
+          market_id: 'mkt_1',
+          tournament_name: 'Test Open',
+          outcome_player_id: 'ply_a',
+          player_ids: ['ply_a', 'ply_b'],
+          player_names: ['Alpha One', 'Beta Two'],
+          status: 'entry_pending',
+          entry_cost: '10.00',
+          shares: '19.05',
+          average_entry_price: '0.525',
+          current_exit_value: null,
+          net_pnl: null,
+          freshness_as_of: NOW,
+        },
+      ],
+      recent: [],
+    })
+    expect(view.open[0].status).toBe('entry_pending')
+    expect(view.open[0].average_entry_price).toBe('0.525')
+    expect(view.open[0].tournament_name).toBe('Test Open')
+  })
+
+  it('decodes enriched pulse rows', () => {
+    const pulse = decodePulse({
+      data: [
+        {
+          match_id: 'mat_pos',
+          market_id: 'mkt_pos',
+          kind: 'position',
+          action: 'sell',
+          phase: 'live',
+          player_names: ['Alpha One', 'Beta Two'],
+          model_probability: 0.6,
+          executable_probability: 0.57,
+          conservative_net_edge: '0.041',
+          tournament_name: 'Test Open',
+          is_stale: false,
+          has_gap: false,
+          as_of: NOW,
+        },
+      ],
+      has_open_position: true,
+    })
+    expect(pulse.data[0].phase).toBe('live')
+    expect(pulse.data[0].conservative_net_edge).toBe('0.041')
+    expect(pulse.data[0].tournament_name).toBe('Test Open')
+  })
+
+  it('fails visibly on an unknown pulse phase', () => {
+    expect(() =>
+      decodePulse({
+        data: [
+          {
+            match_id: 'm',
+            market_id: null,
+            kind: 'position',
+            action: 'hold',
+            phase: 'halftime',
+            player_names: null,
+            model_probability: null,
+            executable_probability: null,
+            conservative_net_edge: null,
+            tournament_name: null,
+            is_stale: false,
+            has_gap: false,
+            as_of: null,
+          },
+        ],
+        has_open_position: false,
+      }),
+    ).toThrow(P3DecodeError)
+  })
+})
+
 describe('transport isolation from preview data', () => {
   it('production transport files never import p3-preview-data', () => {
     const files = [
