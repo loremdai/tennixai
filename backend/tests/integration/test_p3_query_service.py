@@ -379,6 +379,23 @@ async def test_enriched_fields_and_pulse_selection(database: Database) -> None:
         database=database, markets=markets, paper=ledger, hot_books=hot_books
     )
 
+    # --- decision snapshot workbench enrichment -----------------------------
+    decision2 = await queries.match_decision(match_id)
+    assert decision2 is not None
+    levels = {level.player_id: level for level in decision2.outcome_levels}
+    assert levels[player_a].best_ask == "0.60"
+    assert levels[player_a].best_bid == "0.58"
+    assert levels[player_b].best_ask == "0.42"
+    position_detail = decision2.position
+    assert position_detail is not None
+    assert Decimal(position_detail.average_entry_price) == Decimal("0.525")
+    assert position_detail.current_exit_value is not None
+    assert [event.kind for event in position_detail.events] == [
+        "entry_intent",
+        "entry_fill",
+    ]
+    assert decision2.gates[0].gate == "liquidity" and decision2.gates[0].passed
+
     # --- markets list enrichment -------------------------------------------
     page = await queries.markets(page=1, page_size=50)
     summary2 = next(item for item in page.markets if item.market_id == market2)

@@ -193,6 +193,12 @@ class PositionSummaryDto(BaseModel):
     events: tuple[PaperEventDto, ...] = ()
 
 
+class OutcomeLevelDto(BaseModel):
+    player_id: str
+    best_bid: str | None = None
+    best_ask: str | None = None
+
+
 class DecisionSnapshotDto(BaseModel):
     match_id: str
     market_id: str | None = None
@@ -211,6 +217,7 @@ class DecisionSnapshotDto(BaseModel):
     policy_version: str | None = None
     data_version: str | None = None
     gates: tuple[GateDto, ...] = ()
+    outcome_levels: tuple[OutcomeLevelDto, ...] = ()
     position: PositionSummaryDto | None = None
     lifecycle: tuple[str, ...] = ()
     is_stale: bool = False

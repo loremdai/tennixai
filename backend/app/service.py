@@ -1215,6 +1215,7 @@ class P3QueryService:
         from app.api.schemas import (
             DecisionSnapshotDto,
             GateDto,
+            OutcomeLevelDto,
             PaperEventDto,
             PositionSummaryDto,
         )
@@ -1242,6 +1243,25 @@ class P3QueryService:
                     lifecycle.append("exit_missed")
         if position is not None and position.status.value == "settled":
             lifecycle.append("settled")
+
+        # Both-side executable levels for the workbench dual comparison;
+        # absent hot book degrades to an empty tuple, never to zeros.
+        outcome_levels: tuple[OutcomeLevelDto, ...] = ()
+        if observation.market_id:
+            decision_book = await self._hot_book(observation.market_id)
+            if decision_book is not None:
+                outcome_levels = tuple(
+                    OutcomeLevelDto(
+                        player_id=side.outcome_player_id,
+                        best_bid=(
+                            str(side.bids[0].price) if side.bids else None
+                        ),
+                        best_ask=(
+                            str(side.asks[0].price) if side.asks else None
+                        ),
+                    )
+                    for side in decision_book.books
+                )
 
         # Ledger-derived position detail and event timeline. Facts only:
         # kinds, timestamps and typed reasons; labels are presentation-side.
@@ -1351,6 +1371,7 @@ class P3QueryService:
                 )
                 for gate in observation.gates
             ),
+            outcome_levels=outcome_levels,
             position=position_dto,
             lifecycle=tuple(lifecycle),
             is_stale=observation.is_stale,
