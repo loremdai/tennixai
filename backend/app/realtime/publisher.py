@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
-from datetime import datetime
+from datetime import UTC, datetime
 
 from app.domain import MatchSnapshot
 from app.realtime.models import LiveReduction
@@ -119,3 +119,43 @@ class DecisionPublisher:
         if isinstance(raw, bytes):
             raw = raw.decode("utf-8")
         return DecisionObservation.model_validate_json(raw)
+
+
+# ---------------------------------------------------------------------------
+# P3 paper lifecycle stream: converts PaperTradingService marker strings
+# (`state:id[:reason]`) into `paper_delta` events on the independent
+# tnx:p3:paper namespace. Internal IDs only; a malformed marker is ignored
+# and can never crash the ledger path (commits precede publishes).
+# ---------------------------------------------------------------------------
+
+
+def paper_channel(entity_id: str) -> str:
+    return f"tnx:p3:paper:{entity_id}"
+
+
+def paper_hot_key(entity_id: str) -> str:
+    return f"tnx:p3:paper:hot:{entity_id}"
+
+
+class PaperPublisher:
+    def __init__(self, redis, *, now_fn=None) -> None:
+        self._redis = redis
+        self._now_fn = now_fn or (lambda: datetime.now(UTC))
+        self.events: list[dict] = []
+
+    async def publish_marker(self, marker: str) -> None:
+        parts = marker.split(":", 2)
+        if len(parts) < 2 or not parts[0] or not parts[1]:
+            return  # malformed marker: ignore, never fabricate an event
+        state, entity_id = parts[0], parts[1]
+        reason = parts[2] if len(parts) == 3 and parts[2] else None
+        event = {
+            "type": "paper_delta",
+            "state": state,
+            "id": entity_id,
+            "reason": reason,
+            "as_of": self._now_fn().isoformat(),
+        }
+        await self._redis.set(paper_hot_key(entity_id), json.dumps(event))
+        await self._redis.publish(paper_channel(entity_id), json.dumps(event))
+        self.events.append(event)

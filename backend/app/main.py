@@ -253,13 +253,15 @@ def create_app(
         from app.markets.live import PolymarketMarketFeed
         from app.markets.publisher import MarketHotPublisher
         from app.realtime.p3_metrics import P3Metrics
-        from app.realtime.publisher import DecisionPublisher
+        from app.realtime.publisher import DecisionPublisher, PaperPublisher
 
         market_feed = PolymarketMarketFeed(ws_url=settings.polymarket_ws_url)
         p3_metrics = P3Metrics()
+        paper_publisher = None
         if redis_client is not None:
             market_publisher = MarketHotPublisher(redis_client, now_fn=clock)
             decision_publisher = DecisionPublisher(redis_client, now_fn=clock)
+            paper_publisher = PaperPublisher(redis_client, now_fn=clock)
         if database is not None and market_provider is not None:
             from datetime import timedelta
 
@@ -332,8 +334,8 @@ def create_app(
                 ledger=paper_ledger,
                 clock=clock,
                 publish=(
-                    decision_publisher.publish_decision
-                    if decision_publisher is not None
+                    paper_publisher.publish_marker
+                    if paper_publisher is not None
                     else _noop_publish
                 ),
             )
