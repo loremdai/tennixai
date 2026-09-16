@@ -6,6 +6,7 @@ observations. Provider identifiers are written only to
 ``market_external_ids``; canonical reads return internal-ID domain models.
 """
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
@@ -38,6 +39,16 @@ from app.prediction.models import PredictionSnapshot
 
 class LinkFrozenError(Exception):
     """Raised when a market/match link would change after an intent exists."""
+
+
+def _parse_observed_at(value: Any) -> datetime:
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        parsed = datetime.fromisoformat(str(value))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed
 
 
 class MarketRepository:
@@ -339,6 +350,64 @@ class MarketRepository:
                 session.add(row)
                 await session.flush()
         return int(row.id)
+
+    async def save_observations(self, batch: Sequence[dict[str, Any]]) -> None:
+        """Bulk append pre-shaped observation entries from the market worker.
+
+        Each entry: market_id, match_id, kind, payload, observed_at (ISO).
+        """
+        if not batch:
+            return
+        rows = [
+            MarketObservationRow(
+                market_id=entry["market_id"],
+                match_id=entry.get("match_id"),
+                kind=entry["kind"],
+                payload=entry.get("payload", {}),
+                observed_at=_parse_observed_at(entry["observed_at"]),
+            )
+            for entry in batch
+        ]
+        async with self._database.session() as session:
+            async with session.begin():
+                session.add_all(rows)
+
+    async def record_tracking_gap(
+        self,
+        *,
+        market_id: str,
+        match_id: str | None,
+        reason: str,
+        started_at: datetime,
+        ended_at: datetime,
+    ) -> int:
+        """Explicit offline/gap interval. Never backfills signals or fills."""
+        return await self.save_observation(
+            market_id=market_id,
+            match_id=match_id,
+            kind="tracking_gap",
+            payload={
+                "reason": reason,
+                "started_at": started_at.isoformat(),
+                "ended_at": ended_at.isoformat(),
+            },
+            observed_at=ended_at,
+        )
+
+    async def list_active_links(self) -> list[MarketMatchLinkRow]:
+        async with self._database.session() as session:
+            rows = (
+                (
+                    await session.execute(
+                        select(MarketMatchLinkRow).where(
+                            MarketMatchLinkRow.status == "active"
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+        return list(rows)
 
     async def save_prediction(self, snapshot: PredictionSnapshot) -> None:
         """Idempotent per (match, model, input state version); evidence is

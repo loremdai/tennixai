@@ -236,6 +236,19 @@ def create_app(
             external_lookup=lookup_market_external,
         )
 
+    # P3 market realtime pieces (public market channel + independent Redis
+    # namespace). The worker loop is orchestrated by T65; nothing here starts
+    # a background task or writes SQL per delta.
+    market_feed = None
+    market_publisher = None
+    if settings.p3_mode != "disabled":
+        from app.markets.live import PolymarketMarketFeed
+        from app.markets.publisher import MarketHotPublisher
+
+        market_feed = PolymarketMarketFeed(ws_url=settings.polymarket_ws_url)
+        if redis_client is not None:
+            market_publisher = MarketHotPublisher(redis_client, now_fn=clock)
+
     if chat_orchestrator is None:
         if settings.llm_mode == "openai_compatible":
             api_key = settings.llm_api_key
@@ -286,6 +299,8 @@ def create_app(
     app.state.chat_orchestrator = chat_orchestrator
     app.state.realtime = realtime
     app.state.market_provider = market_provider
+    app.state.market_feed = market_feed
+    app.state.market_publisher = market_publisher
 
     @app.middleware("http")
     async def request_id(request: Request, call_next):
