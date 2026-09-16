@@ -1,3 +1,4 @@
+from decimal import Decimal
 from pathlib import Path
 from typing import Literal
 
@@ -37,6 +38,20 @@ class Settings(BaseSettings):
     viewer_lease_seconds: int = Field(default=45, ge=30, le=120)
     subscription_grace_seconds: int = Field(default=60, ge=0, le=300)
     sse_heartbeat_seconds: int = Field(default=15, ge=1, le=60)
+    # P3 read-only market intelligence and paper trading. Public Polymarket
+    # endpoints only; no wallet, private key, signing or trading credential
+    # setting may ever be added here.
+    p3_mode: Literal["disabled", "shadow", "paper"] = "disabled"
+    p3_fixed_stake_usd: Decimal = Field(
+        default=Decimal("10"), gt=Decimal("0"), le=Decimal("1000")
+    )
+    polymarket_gamma_base_url: str = "https://gamma-api.polymarket.com"
+    polymarket_clob_base_url: str = "https://clob.polymarket.com"
+    polymarket_ws_url: str = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
+    p3_model_artifact_dir: str = "artifacts/p3"
+    p3_max_market_subscriptions: int = Field(default=8, ge=1, le=100)
+    p3_market_book_freshness_seconds: int = Field(default=5, ge=1, le=60)
+    p3_decision_freshness_seconds: int = Field(default=15, ge=1, le=120)
 
     @model_validator(mode="after")
     def validate_required_credentials(self) -> "Settings":
