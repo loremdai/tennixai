@@ -2,7 +2,7 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-16 09:37 CST
+**最后更新：** 2026-09-16 10:58 CST
 
 **当前任务：** T55 — Freeze P3 Market & Decision Support Design and Prototype Brief
 
@@ -22,7 +22,7 @@
 
 **关闭提交：** —
 
-**当前动作：** P3 SOTA 研究方向、覆盖与组合边界、独立估值、paper 生命周期、实时架构、三层页面结构、`/markets` 三视图、Home「市场脉搏」、Match Page 全宽决策条、`DecisionSummary` 双边对照及成交后原地切换 position 管理均已获用户批准。下一步冻结完整 UI 状态序列，再确定详细模块与 v0 原型状态矩阵。
+**当前动作：** P3 SOTA 研究方向、覆盖与组合边界、独立估值、paper 生命周期、实时架构、三层页面结构、`/markets` 三视图、Home「市场脉搏」、Match Page 决策布局、双边摘要、成交后原地切换及 one-shot entry intent 均已获用户批准。下一步冻结完整 UI 状态序列，再确定详细模块与 v0 原型状态矩阵。
 
 **当前状态：** P2（含 T54）保持已关闭；P3.0 仅进入 design freeze。研究报告位于 `docs/research/2026-09-15-tennis-win-probability-sota.md`；其模型选择方法和 market-to-match 方向已批准，但仍不是完整 P3 规格。具体 champion、校准器和 decision 阈值必须在数据覆盖审计与统一 benchmark 后决定。P4 已确定为 P1–P3 框架完成后的统一打磨阶段；当前没有 P3 provider、schema、prediction、decision、paper ledger、页面或交易能力，自动下单仍属独立延期阶段。
 
@@ -143,6 +143,14 @@
 - 入场时的 prediction、order book、费用、fill 和 decision version 不会丢失；它们进入下方 position lifecycle 和审计记录，不在首屏叠加第二张历史卡。
 - 此节点尚未冻结 intent/pending/no-fill、stale/gap、退出后和结算后的完整状态序列。
 
+## T55 已批准 one-shot entry intent（2026-09-16）
+
+- 每个内部 `match_id` 的第一条合格 `BUY` 是 P3 唯一 paper entry attempt；系统冻结该 observation 和订单簿版本，建立幂等 `order_intent`，模拟市场实际 sports delay。
+- delay 后按届时 ask/depth、部分成交规则和费用判断结果；满足固定 `$10` 成交规则才进入 `FILLED` position。
+- 若结果为 `NO_FILL`，该场 paper 入场终态记为 `MISSED`，不追价、不返回可再次建仓的 `BUY`，也不以稍后的更优时点替换第一次信号。
+- `MISSED` 后仍持续保存后续 DecisionObservation，供赛后判断信号和执行损失，但这些 observation 不生成新的 intent。
+- retry/cooldown/max-attempt 等执行策略只有 paper 证据显示必要时才进入 P4，不在 P3 首版增加参数。
+
 ## 上一任务 T54 完成证据（2026-09-13）
 
 - 确定性后端：`543 passed / 51 deselected`；infrastructure `22 passed / 572 deselected`。
@@ -172,4 +180,4 @@
 
 ## 下一步
 
-继续 T55 的单问题设计讨论；下一项冻结 `DecisionSummary` 从入场观察、paper intent/fill、开放持仓到退出/结算及数据降级的完整状态序列，随后确定详细模块、移动端顺序及 v0 原型状态矩阵。全部设计经用户批准后写入 P3 设计规格；规格获批前不得编写实施计划、修改 v0 原型或实现 P3 功能。
+继续 T55 的单问题设计讨论；下一项冻结 `DecisionSummary` 从入场观察、one-shot intent/fill、开放持仓到退出/结算及数据降级的完整状态序列，随后确定详细模块、移动端顺序及 v0 原型状态矩阵。全部设计经用户批准后写入 P3 设计规格；规格获批前不得编写实施计划、修改 v0 原型或实现 P3 功能。

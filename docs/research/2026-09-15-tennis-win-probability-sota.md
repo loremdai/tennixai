@@ -488,6 +488,19 @@ Home 不复制 `/markets`，而把现有市场情报占位升级为最多三行�
 
 该选择避免两个动作真源并自然执行“同场不加仓、不换边、不重新入场”。intent/pending/no-fill、stale/gap、退出和结算状态仍须在完整状态矩阵中冻结。
 
+## 22. T55 后续批准：one-shot entry intent
+
+**批准日期：** 2026-09-16
+
+用户在“首次合格信号只尝试一次”和“未成交后允许未来信号重试”之间选择 one-shot：
+
+- 每场第一条通过全部硬门的 `BUY` 冻结其 DecisionObservation、订单簿版本和固定 `$10` 候选成交，创建唯一幂等 `order_intent`。
+- intent 经市场实际 sports delay 后，使用届时 ask/depth、费用和部分成交规则决定 `FILLED` 或 `NO_FILL`，不能按触发瞬间价格假装成交。
+- `NO_FILL` 将本场 paper entry 终结为 `MISSED`。系统继续记录后续模型—市场 observation，但不再产生新的 entry intent，不追价，也不事后挑选更有利的 BUY 窗口。
+- `MISSED` 与模型 `NO BET` 必须分开报告：前者表示存在通过门槛的信号但未能按执行规则成交，后者表示没有可论证的入场信号。
+
+这个约束让 P3 可以独立评估首次信号质量、执行损失和真实 fill rate。retry policy、冷却时间与最大尝试次数只有在 paper 数据证明需要时才进入 P4。
+
 ---
 
 这份研究的核心判断是：**TennixAI 的 SOTA 不应是一篇论文的名字，而应是一套不会被数据泄漏、概率失准和不可成交价格欺骗的持续基准与晋升机制。**
