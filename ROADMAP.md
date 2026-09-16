@@ -3,11 +3,11 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-16 17:28 CST
+**最后更新：** 2026-09-16 17:43 CST
 
 **总体状态：** `in_progress`
 
-**当前里程碑：** P3.1 — v0 Prototype Freeze（T56 `in_progress`，用户确认的 `9c868bf` 已导入；视觉基线仍待运行环境解锁）
+**当前里程碑：** P3.1 — v0 Prototype Freeze（T56 `in_progress`，用户确认的 `9c868bf` 已导入；P3 基线已冻结候选并通过，等待 P1/P2 视觉回归）
 
 **当前阶段：** P3 — Market & Decision Support（`in_progress`；P3.0 已完成，P3.1 原型冻结验收进行中）
 
@@ -123,7 +123,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | ID | 主要阶段 | 任务 | 状态 | 完成提交 | 验收证据 |
 |---|---|---|---|---|---|
 | T55 | P3.0 | Freeze P3 Market & Decision Support Design and Prototype Brief | `done` | `d7cc25e` | 421 行设计规格 + 847 行 T56–T71 实施计划 + 320 行 v0 Prompt；用户授权剩余项采用推荐方案；官方 Polymarket/API-Tennis 依据、精确映射、模型晋升、one-shot FOK、provider-final settlement、独立 sports/decision SSE、三层 UI 与 26 张视觉矩阵均已冻结；本地链接、占位符/64 位密钥值、`git diff --cached --check` 通过；未写产品代码 |
-| T56 | P3.1 | Generate, Import, and Freeze the P3 v0 Prototype | `in_progress` | — | `1f625b2` 由 v0 领取；用户已确认并推送 `9c868bf`。Codex 验证 checkpoint `4ad724d`：补齐 P3 状态 URL/赛前赛中完赛路由、Match desktop/mobile 顺序、Home 单一 Market Pulse、stale 保持 HOLD、fixture 内部链接与组件门；`pnpm test` 242/242、typecheck、build、12 状态 SSR 均通过，代表性桌面/移动人工检查通过。用户已生成 52 张候选 PNG，但 plain run 6/6 失败：P3 harness 在每个 Playwright project 内双跑 desktop/mobile 且重用快照名，令 390px mobile 图覆盖 1440px desktop 图；修复后每个 project 只捕获自己的配置视口。typecheck、P3 test collection（6 项）和 unit 242/242 已通过，等待普通终端重建/复跑、逐张审阅并入库正确基线；T57 未开始 |
+| T56 | P3.1 | Generate, Import, and Freeze the P3 v0 Prototype | `in_progress` | — | `1f625b2` 由 v0 领取；用户已确认并推送 `9c868bf`。Codex checkpoint `4ad724d` 已补齐 P3 状态 URL/赛前赛中完赛路由、Match desktop/mobile 顺序、Home 单一 Market Pulse、stale 保持 HOLD、fixture 内部链接与组件门；`pnpm test` 242/242、typecheck、build、12 状态 SSR 均通过。`0f18f7b` 修复 P3 harness 的跨 project 视口覆盖；用户在普通终端重建 52 张基线并复跑 P3 visual 成功（6 项，`.last-run.json`=`passed`），全部 desktop=1440px、mobile=390px，且逐张人工核验通过。只剩 P1/P2 `prototype|visual` 回归、暂存正确 PNG 与关闭提交；T57 未开始 |
 | T57 | P3.2 | Add Canonical P3 Domain, Protocols, and Safe Configuration | `planned` | — | 见 P3 实施计划 T57；不接网络、SQL、模型训练或 UI |
 | T58 | P3.2 | Add Reversible P3 Persistence and Idempotent Ledger Repositories | `planned` | — | migration upgrade→downgrade→upgrade、并发幂等、rollback 与 restart recovery |
 | T59 | P3.2 | Implement the Read-Only Polymarket Adapter and Exact Match Mapping | `planned` | — | public REST、两侧 book/rules/fee/delay、严格内部 Player ID 对；零交易认证 |
