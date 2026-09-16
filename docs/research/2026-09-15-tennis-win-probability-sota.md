@@ -555,6 +555,44 @@ HODL baseline 始终持有至结算。convergence-lock 是独立反事实，不�
 
 `STALE / GAP` 不取代上述业务状态，而是正交可信度覆盖层：保留最后可信快照及其时间，撤销新的 `BUY / SELL`。若 pending intent 在 delay 到期时无法核验订单簿，只能以 `BOOK_UNVERIFIABLE` 原因记录 `NO_FILL` 并进入对应终态，不允许用触发时价格或之后恢复的价格伪造成交。全部转换以 PostgreSQL ledger 提交为确认点，再通过 SSE 发布；浏览器是否在线不影响 paper 生命周期。
 
+## 27. T55 最终批准：页面顺序、结算、模型晋升与实施路线
+
+**批准日期：** 2026-09-16
+
+用户授权其余设计项全部采用推荐方案，最终冻结如下：
+
+### 27.1 Match 与移动端信息顺序
+
+- desktop 固定为 Hero → 全宽 `DecisionSummary` → 主栏 Overview、Score、概率—市场轨迹、依据/硬门、Stats、Recent Control/PBP、Paper lifecycle；粘性侧栏为 Assistant → Key Facts。
+- mobile 使用真实 DOM 顺序：Hero → `DecisionSummary` → Score → Key Facts/Overview → 轨迹 → 依据/硬门 → Stats → Recent Control/PBP → lifecycle → Assistant。Ask 入口只滚动并聚焦助手，不成为交易 CTA。
+- 删除旧侧栏 `MarketCard` 与重复 AI insight/prompt 卡；首屏始终只有一个决策真源。缺失的轨迹点保留为 gap，不用插值掩盖数据缺口。
+
+### 27.2 `/markets` 卡片与降级态
+
+- desktop 使用高密度列表，mobile 压为单列卡片；整行进入内部 Match Page，不放模拟买卖按钮。
+- Opportunities 显示模型/可执行市场概率、保守净 edge、动作、WAIT 最高价和 freshness；All Markets 显示两侧可执行价、spread/depth、映射/模型原因；Paper 显示方向、成本/份额、当前可退出价值、主状态、净 P&L 和 freshness。
+- loading、空态、整页错误、单行 stale/gap、market-only、订单簿不完整和 resolved 分开表达。降级时保留最后可信值与时间，但撤销新动作；Challenger/ITF 不贴“未覆盖”负向标签。
+
+### 27.3 结算例外遵循市场自身规则
+
+[Polymarket Resolution](https://docs.polymarket.com/concepts/resolution) 明确每个市场都有自己的 rules、resolution source、end date 和 edge cases，并可能经历 proposal/dispute；因此 Tennis 结果只能作为旁证，不能直接结算 paper ledger。每个 intent 冻结当时的 rules/hash；rules 改变后禁止新动作，已有 position 等待该 condition 的最终 resolution。退赛、弃权、取消、延期、赛前 walkover 和争议均按该市场实际最终 resolution 处理；若最终为 50–50，则每份按 `$0.50` 结算。condition 被替换时，旧 ledger 不迁移到新 condition。
+
+[CLOB V2 market info](https://docs.polymarket.com/api-reference/markets/get-clob-market-info) 暴露 token、tick/min-size、fee、order delay 等逐市场事实；[Order Lifecycle](https://docs.polymarket.com/concepts/order-lifecycle) 说明 sports order 可进入 delayed 状态且 FOK/FAK 语义不同。实现必须在实际 delay 后按届时完整 book、费率和最小量核验 FOK，不能硬编码模板或用触发时价格结算。
+
+### 27.4 benchmark 与晋升门
+
+- 初始候选固定为 surface Elo、Glicko/动态 Bradley–Terry、Histogram Gradient Boosting；live 层固定为确定性网球计分 + empirical-Bayes 收缩 + hybrid challenger。Platt、isotonic、beta calibration 在相同 validation window 比较。
+- 先做来源/许可、覆盖、缺失、时间顺序、重复与泄漏审计；market/odds/price/book/resolution 禁止进入独立模型。chronological rolling walk-forward 按比赛分组，validation 选择模型/校准器/阈值，test 在选择完成后只打开一次。
+- 以 log loss、Brier、校准误差/曲线、分 tour/surface/phase 指标、bootstrap uncertainty 和 risk–coverage 为主；表现相当时选更简单者。BUY/SELL 阈值来自 validation/shadow 的费用后保守净 EV 下界，不能从 test 反调。
+- 数据、许可、校准或净 EV 证据不过门时，artifact 标记 `not_promoted`，生产只允许 `MARKET_ONLY/NO BET`。这是诚实通过，不是为了展示而强行选择 champion 或制造 BUY。
+
+### 27.5 v0 与实施验收路线
+
+- 先把严格 v0 prompt 交给 v0，冻结 Home Pulse、`/markets` 三视图和 Match 完整状态，再接真实数据；原型导出未获用户确认前，T56 不得自行替代设计。
+- visual switcher 覆盖全部主状态和 stale/gap；最终固定 26 个代表性 P3 基线：Home 4、Markets 8、Match 14，按 brief 指定的 desktop/mobile 组合逐张审阅。
+- 实施拆为 T56–T71：原型冻结、canonical contracts、可逆 persistence、只读 Polymarket、market reducer/replay、模型审计/benchmark、live prediction、decision/quotes、paper lifecycle、双流协调、REST/SSE/Chat、frontend transport、Home/Markets、Match、回放/视觉门、真实只读 shadow gate。
+- P2 Match sports stream 保持不变；P3 使用独立 `/matches/{match_id}/decision/stream` 与独立 cursor。前端并行运行 `useMatchStream`、`useDecisionStream`，任一 gap 只重取自己的 snapshot。
+
 ---
 
 这份研究的核心判断是：**TennixAI 的 SOTA 不应是一篇论文的名字，而应是一套不会被数据泄漏、概率失准和不可成交价格欺骗的持续基准与晋升机制。**
