@@ -3,7 +3,7 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-16 09:23 CST
+**最后更新：** 2026-09-16 09:34 CST
 
 **总体状态：** `in_progress`
 
@@ -189,7 +189,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 - P3 决策首轮：覆盖赛前与赛中，只做单场比赛胜者市场。持仓前分开显示模型观点与当前动作：保守净 edge 过门为 `BUY`；已有明确低估方向但当前价未过线为 `WAIT`，并显示动态最高买入价；市场一致或数据、映射、流动性等硬门失败为带原因的 `NO BET`。每场最多一次固定 `$10` paper 入场和一次退出，同场不加仓、不换边、不重新入场。持仓后的默认期望值动作 `SELL` 只在延迟、深度和费用后的净卖出价值高于稳健继续持有价值时触发；市场回到模型合理区间但卖出不提高期望值时，只能显示可选的风险降低动作 `LOCK PROFIT`。每个真实 paper position 同时保留 HODL、EV-exit 与 convergence-lock 三条可比较轨道，固定止盈仅作诊断 benchmark；实际阈值必须由 walk-forward/shadow 证据选择。
 - P3 实时首轮：后端拥有 API-Tennis 与 Polymarket 两条独立 WebSocket 流，比赛事件驱动概率与 decision 更新，订单簿有效变化只重算可执行价、edge 与动作，统一 `DecisionSnapshot` 通过 SSE 到 UI。后台持续跟踪进入窗口且成功组合的模型覆盖比赛和所有未结持仓，不依赖浏览器是否打开；Challenger/ITF 市场仅按需展示。REST 仅作初始、重连和校准；断流、版本缺口或本地离线区间必须显式 stale/gap，撤销新动作且不得回填虚构信号或成交。实时性优先于非关键持久化和界面装饰，但不能绕过交易审计与 stale 防错门。
 - P3 实时持久化：两条供应商 WebSocket ingress 只做轻量校验并写入有界 per-match queue。低频 API-Tennis canonical reduction 首版延续 DB-first；高频 Polymarket book 由单写者内存 reducer 更新热状态，不逐 delta 同步写 SQL，只异步批量保存改变 `$10` 可执行价/动作/模型对照的 observation 与周期采样。paper intent、delay 后 fill/no-fill、exit 和 settlement 使用 PostgreSQL 同步事务与唯一幂等键，提交后才发布确认。普通 observation 缺口标记 `tracking_gap`；P3 不引入 Kafka/Redis Streams，只有真实 backlog 或恢复需求达到升级门后再评估。
-- P3 页面首轮：采用 Home → `/markets` → Match 三层信息架构。Home 的「市场脉搏」最多三行；存在开放持仓时保留一行并优先 `SELL`、`LOCK PROFIT` 或数据异常，其余位置按赛中 `BUY` → 赛前 `BUY` → 最强 `WAIT` 选择，不放交易按钮、轨迹或详细账本。`/markets` 固定为三个页面级视图：默认“机会”只收模型覆盖比赛的 `BUY / WAIT`（Live 优先、Upcoming 其次）；“全部市场”按 ATP/WTA → Challenger → ITF → other 展示并支持级别、性别、赛前/赛中筛选，覆盖比赛的 `NO BET` 显示原因而低级别赛事只呈现市场；“Paper 账本”先列开放持仓，再列近期退出与结算。Match Page 保留现有 Hero 和两栏事实结构，在 Hero 后加入跨两栏的全宽 `DecisionSummary`；详细概率—市场轨迹、结构化依据与 paper lifecycle 进入主栏，助手和关键事实继续位于粘性侧栏，旧市场占位移除。所有卡片用内部 `match_id` 进入 Match Page；`/markets` 不成为自动交易终端。
+- P3 页面首轮：采用 Home → `/markets` → Match 三层信息架构。Home 的「市场脉搏」最多三行；存在开放持仓时保留一行并优先 `SELL`、`LOCK PROFIT` 或数据异常，其余位置按赛中 `BUY` → 赛前 `BUY` → 最强 `WAIT` 选择，不放交易按钮、轨迹或详细账本。`/markets` 固定为三个页面级视图：默认“机会”只收模型覆盖比赛的 `BUY / WAIT`（Live 优先、Upcoming 其次）；“全部市场”按 ATP/WTA → Challenger → ITF → other 展示并支持级别、性别、赛前/赛中筛选，覆盖比赛的 `NO BET` 显示原因而低级别赛事只呈现市场；“Paper 账本”先列开放持仓，再列近期退出与结算。Match Page 保留现有 Hero 和两栏事实结构，在 Hero 后加入跨两栏的全宽 `DecisionSummary`；摘要顶部给模型观点和唯一动作，下方以两位球员双边对照模型概率、固定 `$10` 可执行平均买入价和保守净 edge，不把两侧 ask 当作互补概率。详细轨迹、依据与 paper lifecycle 进入主栏，助手和关键事实继续位于粘性侧栏，旧市场占位移除。所有卡片用内部 `match_id` 进入 Match Page；`/markets` 不成为自动交易终端。
 - P4：在 P1–P3 框架与证据链完整后集中优化；退出阈值、止盈止损、重复入场和仓位管理只有在 paper 证据支持后才可扩展，自动下单仍不因此获得授权。
 - 自动交易：不属于 P3 默认范围，必须经过独立法律、风控、安全和执行设计。
 
