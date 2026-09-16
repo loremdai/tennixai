@@ -2,23 +2,21 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-16 21:05 CST
+**最后更新：** 2026-09-16 21:10 CST
 
-**当前任务：** T60 — Build the Market WebSocket Reducer, Hot State, and Replay Feed（已完成；T61 `ready`，尚未领取）
+**当前任务：** T61 — Add the Audited Walk-Forward Pre-Match Benchmark Pipeline
 
-**任务状态：** `done`
+**任务状态：** `in_progress`
 
 **执行者 / ADE：** Claude (Fable 5) / Claude Code（用户已明确授权按顺序连续执行 T57–T71，无需逐项再次确认）
 
 **分支：** `main`
 
-**任务起始提交：** `35b08d9`
+**任务起始提交：** `0dbb0dc`
 
-**领取提交：** `2b98ea2`
+**领取提交：** 本次提交（T61 领取记录）
 
-**产品提交：** `6aac68f`（feat: add P3 market realtime pipeline）
-
-**当前动作：** T60 已关闭，P3.2 — Safe Foundations 全部完成（T56–T60）。TDD 先红（reducer/live/worker/replay 模块缺失、feed 测试暴露 keep-alive 饿死消费者的假时钟缺陷）后绿。下一动作：领取 T61（审计 walk-forward 赛前 benchmark 管线）。
+**当前动作：** T60 已以 `6aac68f`（代码）与 `0dbb0dc`（关闭）交付并推送，P3.2 关闭。现按 [P3 实施计划 T61](./docs/superpowers/plans/2026-09-16-tennixai-p3-implementation.md#t61-add-the-audited-walk-forward-pre-match-benchmark-pipeline) 以 TDD 实施数据 source/audit、Elo/dynamic rating/HGBM 候选、chronological walk-forward、校准选择与 versioned model card CLI。CLI 在数据路径/许可/audit 门缺失时 fail closed；仓库只提交脱敏最小 fixture。
 
 ## 当前已验证状态
 
@@ -44,6 +42,6 @@
 
 ## 下一步
 
-1. T61 已 `ready`：按 [P3 实施计划 T61](./docs/superpowers/plans/2026-09-16-tennixai-p3-implementation.md#t61-add-the-audited-walk-forward-pre-match-benchmark-pipeline) 实施数据来源/许可/泄漏 audit、chronological walk-forward、Elo/dynamic/HGBM 候选、校准选择与 versioned model card CLI；开始前先写入并推送领取记录。
-2. T61 边界：`numpy`/`scikit-learn` 可按计划加入依赖；历史数据经可替换 `HistoricalMatchSource` 从本地路径读入，仓库只提交脱敏最小 fixture；CLI 在 `TENNIX_MODEL_DATA_PATH`/许可元数据/audit 门缺失时必须 fail closed；market/odds/price/book/resolution 列一律拒绝。
-3. 若真实历史数据集不可得，按事实记录带日期的诚实缺口与替代路径（fixture benchmark 证明管线可复现），不得伪造审计证据。
+1. 完成 T61 的 TDD 实施与验收（fixture/泄漏测试、确定性候选测试、walk-forward/校准测试、CLI 三条命令与 fail-closed 门、fixture benchmark 报告审阅），更新三份总控，提交并推送 `origin/main`。
+2. T61 边界：真实历史数据集若不可得，按事实记录带日期的诚实缺口（fixture 证明管线可复现，真实数据审计留给 T71 的本地路径输入），不得伪造许可或覆盖审计。
+3. T61 关闭后按同一流程领取 T62（live probability/校准装载/安全降级），顺序执行至 T71。
