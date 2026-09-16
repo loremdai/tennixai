@@ -241,13 +241,127 @@ def create_app(
     # a background task or writes SQL per delta.
     market_feed = None
     market_publisher = None
+    decision_publisher = None
+    p3_metrics = None
+    decision_worker = None
+    tracking_demand = None
+    paper_service = None
     if settings.p3_mode != "disabled":
+        from pathlib import Path
+
         from app.markets.live import PolymarketMarketFeed
         from app.markets.publisher import MarketHotPublisher
+        from app.realtime.p3_metrics import P3Metrics
+        from app.realtime.publisher import DecisionPublisher
 
         market_feed = PolymarketMarketFeed(ws_url=settings.polymarket_ws_url)
+        p3_metrics = P3Metrics()
         if redis_client is not None:
             market_publisher = MarketHotPublisher(redis_client, now_fn=clock)
+            decision_publisher = DecisionPublisher(redis_client, now_fn=clock)
+        if database is not None and market_provider is not None:
+            from datetime import timedelta
+
+            from app.decision.engine import DecisionEngine
+            from app.decision.policy import PolicyArtifact, PolicyRejected
+            from app.decision.worker import (
+                DecisionWorker,
+                MarketRepositoryLinks,
+                TrackingDemand,
+            )
+            from app.paper.service import PaperTradingService
+            from app.persistence.market_repositories import MarketRepository
+            from app.persistence.paper_repositories import PaperLedgerRepository
+            from app.prediction.service import PredictionService
+
+            async def _noop_publish(event) -> None:
+                return None
+
+            class _NullDecisionPublisher:
+                async def publish_decision(self, observation) -> None:
+                    return None
+
+            policy_path = Path(settings.p3_model_artifact_dir) / "policy.json"
+            policy = None
+            if policy_path.is_file():
+                try:
+                    policy = PolicyArtifact.load(policy_path)
+                except PolicyRejected:
+                    policy = None  # fail closed: engine emits NO BET
+
+            class _SnapshotPredictor:
+                def __init__(self, service: PredictionService) -> None:
+                    self._service = service
+
+                async def predict_snapshot(self, match_id: str, snapshot):
+                    if snapshot is None:
+                        return None
+                    return self._service.predict(snapshot)
+
+            class _PublisherBookSource:
+                def __init__(self, provider, publisher, ledger) -> None:
+                    self._provider = provider
+                    self._publisher = publisher
+                    self._ledger = ledger
+
+                async def get_book(self, market_id: str):
+                    if self._publisher is None:
+                        return None
+                    return await self._publisher.get_hot_book(market_id)
+
+                async def get_metadata(self, market_id: str):
+                    return await self._provider.get_execution_metadata(market_id)
+
+                async def get_rules_hash(self, market_id: str):
+                    rules = await self._provider.get_rules(market_id)
+                    return rules.rules_hash
+
+                async def get_frozen_rules_hash(self, match_id: str):
+                    for intent in await self._ledger.load_all_intents():
+                        if intent.match_id == match_id:
+                            return intent.rules_hash
+                    return None
+
+            market_repository = MarketRepository(database)
+            paper_ledger = PaperLedgerRepository(database)
+            prediction_service = PredictionService(
+                artifact_dir=Path(settings.p3_model_artifact_dir)
+            )
+            paper_service = PaperTradingService(
+                ledger=paper_ledger,
+                clock=clock,
+                publish=(
+                    decision_publisher.publish_decision
+                    if decision_publisher is not None
+                    else _noop_publish
+                ),
+            )
+            links = MarketRepositoryLinks(market_repository)
+            tracking_demand = TrackingDemand(
+                links=links,
+                match_info=None,
+                ledger=paper_ledger,
+                now=clock,
+                coverage_window=timedelta(
+                    minutes=settings.p3_tracking_window_minutes
+                ),
+            )
+            decision_worker = DecisionWorker(
+                predictor=_SnapshotPredictor(prediction_service),
+                engine=DecisionEngine(
+                    policy=policy, stake=settings.p3_fixed_stake_usd
+                ),
+                paper=paper_service,
+                books=_PublisherBookSource(
+                    market_provider, market_publisher, paper_ledger
+                ),
+                links=links,
+                observations=market_repository,
+                positions=paper_ledger,
+                publisher=decision_publisher or _NullDecisionPublisher(),
+                metrics=p3_metrics,
+                clock=clock,
+            )
 
     if chat_orchestrator is None:
         if settings.llm_mode == "openai_compatible":
@@ -301,6 +415,11 @@ def create_app(
     app.state.market_provider = market_provider
     app.state.market_feed = market_feed
     app.state.market_publisher = market_publisher
+    app.state.decision_publisher = decision_publisher
+    app.state.decision_worker = decision_worker
+    app.state.p3_metrics = p3_metrics
+    app.state.p3_tracking_demand = tracking_demand
+    app.state.p3_paper_service = paper_service
 
     @app.middleware("http")
     async def request_id(request: Request, call_next):

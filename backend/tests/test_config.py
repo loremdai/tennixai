@@ -38,6 +38,7 @@ def test_p3_defaults_are_disabled_public_and_bounded():
     assert settings.p3_max_market_subscriptions == 8
     assert settings.p3_market_book_freshness_seconds == 5
     assert settings.p3_decision_freshness_seconds == 15
+    assert settings.p3_tracking_window_minutes == 120
 
 
 def test_p3_mode_rejects_unknown_values():
@@ -62,6 +63,10 @@ def test_p3_numeric_bounds_are_enforced():
         Settings(_env_file=None, p3_decision_freshness_seconds=121)
     with pytest.raises(ValidationError):
         Settings(_env_file=None, p3_fixed_stake_usd=Decimal("0"))
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, p3_tracking_window_minutes=4)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, p3_tracking_window_minutes=2881)
 
 
 def test_settings_never_expose_wallet_or_trading_credential_fields():
@@ -98,6 +103,7 @@ def test_env_example_declares_public_p3_settings_without_credentials():
         "TENNIX_P3_MAX_MARKET_SUBSCRIPTIONS=8",
         "TENNIX_P3_MARKET_BOOK_FRESHNESS_SECONDS=5",
         "TENNIX_P3_DECISION_FRESHNESS_SECONDS=15",
+        "TENNIX_P3_TRACKING_WINDOW_MINUTES=120",
     ):
         assert key in text
     # Prohibitive comments may name forbidden concepts; actual config lines

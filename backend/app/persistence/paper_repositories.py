@@ -432,3 +432,20 @@ class PaperLedgerRepository:
                 .where(PaperOrderIntentRow.match_id == match_id)
             )
         return int(count or 0)
+
+    async def unsettled_position_market_ids(self) -> tuple[str, ...]:
+        """Durable tracking demand: every market with an unsettled position."""
+        async with self._database.session() as session:
+            rows = (
+                (
+                    await session.execute(
+                        select(PaperPositionRow.market_id).where(
+                            PaperPositionRow.status
+                            != PositionStatus.SETTLED.value
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+        return tuple({row for row in rows})

@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     p3_max_market_subscriptions: int = Field(default=8, ge=1, le=100)
     p3_market_book_freshness_seconds: int = Field(default=5, ge=1, le=60)
     p3_decision_freshness_seconds: int = Field(default=15, ge=1, le=120)
+    p3_tracking_window_minutes: int = Field(default=120, ge=5, le=2880)
 
     @model_validator(mode="after")
     def validate_required_credentials(self) -> "Settings":

@@ -65,6 +65,8 @@ class MarketWorker:
         batch_size: int = 8,
         retention_days: int = RAW_RETENTION_DAYS,
         cleanup_interval_cycles: int = 50,
+        on_state: Callable[[str, Any], Awaitable[None]] | None = None,
+        metrics: Any = None,
     ) -> None:
         self._deps = _WorkerDeps(feed, rest, publisher, observations, raw)
         self._demand_source = demand_source
@@ -75,6 +77,8 @@ class MarketWorker:
         self._batch_size = batch_size
         self._retention_days = retention_days
         self._cleanup_interval = cleanup_interval_cycles
+        self._on_state = on_state
+        self._metrics = metrics
         self._subs: dict[str, _MarketSubscription] = {}
         self._capacity_blocked: set[str] = set()
         self._observation_buffer: list[dict] = []
@@ -207,6 +211,8 @@ class MarketWorker:
                 except asyncio.QueueFull:
                     sub.dropped += 1
                     sub.needs_reconcile = True
+                    if self._metrics is not None:
+                        self._metrics.increment("queue_overflow")
         except asyncio.CancelledError:
             raise
         except MarketFeedDisconnected:
@@ -237,6 +243,8 @@ class MarketWorker:
         }
         sub.reducer.baseline_from_rest(rest_state, player_tokens)
         await self._deps.publisher.publish_book(sub.market_id, rest_state)
+        if self._metrics is not None:
+            self._metrics.increment("reconnects")
         if record_gap:
             started = sub.last_event_at or sub.started_at or self._now()
             ended = self._now()
@@ -248,6 +256,8 @@ class MarketWorker:
                 ended_at=ended,
             )
             await self._deps.publisher.publish_gap(sub.market_id, reason)
+            if self._metrics is not None:
+                self._metrics.increment("tracking_gaps")
         # Drain anything queued from the dead stream, then restart.
         while not sub.queue.empty():
             sub.queue.get_nowait()
@@ -279,6 +289,14 @@ class MarketWorker:
             state = sub.reducer.current_state()
             if state is not None:
                 await self._deps.publisher.publish_book(sub.market_id, state)
+                if self._on_state is not None:
+                    # Downstream decision orchestration; a failure there must
+                    # never corrupt market hot state.
+                    try:
+                        await self._on_state(sub.market_id, state)
+                    except Exception:
+                        if self._metrics is not None:
+                            self._metrics.increment("decision_suppressed")
                 self._observation_buffer.append(
                     {
                         "market_id": sub.market_id,

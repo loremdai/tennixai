@@ -69,3 +69,53 @@ class RealtimePublisher:
         if raw is None:
             return None
         return MatchSnapshot.model_validate_json(raw)
+
+
+# ---------------------------------------------------------------------------
+# P3 decision stream: an independent namespace and version cursor. A decision
+# gap never touches the P2 sports stream and vice versa.
+# ---------------------------------------------------------------------------
+
+
+def decision_channel(match_id: str) -> str:
+    return f"tnx:p3:decision:{match_id}"
+
+
+def decision_hot_key(match_id: str) -> str:
+    return f"tnx:p3:decision:hot:{match_id}"
+
+
+class DecisionPublisher:
+    def __init__(self, redis, *, now_fn=None) -> None:
+        self._redis = redis
+        self._now_fn = now_fn
+        self.events: list[dict] = []
+
+    async def publish_decision(self, observation) -> None:
+        import json as _json
+
+        event = {
+            "type": "decision_delta",
+            "match_id": observation.match_id,
+            "observation_version": observation.observation_version,
+            "action": observation.action.value,
+            "as_of": observation.as_of.isoformat(),
+        }
+        await self._redis.set(
+            decision_hot_key(observation.match_id),
+            observation.model_dump_json(),
+        )
+        await self._redis.publish(
+            decision_channel(observation.match_id), _json.dumps(event)
+        )
+        self.events.append(event)
+
+    async def get_latest_decision(self, match_id: str):
+        from app.decision.models import DecisionObservation
+
+        raw = await self._redis.get(decision_hot_key(match_id))
+        if raw is None:
+            return None
+        if isinstance(raw, bytes):
+            raw = raw.decode("utf-8")
+        return DecisionObservation.model_validate_json(raw)

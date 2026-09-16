@@ -463,6 +463,16 @@ class MarketRepository:
             return None
         return DecisionObservation.model_validate(row.payload)
 
+    async def latest_observation_version(self, match_id: str) -> int:
+        """Durable decision-stream cursor for restart recovery."""
+        async with self._database.session() as session:
+            version = await session.scalar(
+                select(func.max(DecisionObservationRow.observation_version)).where(
+                    DecisionObservationRow.match_id == match_id
+                )
+            )
+        return int(version or 0)
+
 
 __all__ = [
     "LinkFrozenError",
