@@ -2,7 +2,7 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-16 16:45 CST
+**最后更新：** 2026-09-16 17:18 CST
 
 **当前任务：** T56 — Generate, Import, and Freeze the P3 v0 Prototype
 
@@ -20,7 +20,7 @@
 
 **关闭提交：** —
 
-**当前动作：** 用户已确认 v0 原型并推送 `9c868bf`，现显式交接给 Codex。preview/routing/组件回归已修正并通过；剩余唯一硬缺口是实际生成、逐张审阅并入库 26 个 desktop/mobile 视觉基线，以及受同一浏览器启动阻塞影响的 P1/P2 浏览器视觉回归。不得把 0 张 PNG 标成冻结，不进入 T57。
+**当前动作：** 用户已确认 v0 原型并推送 `9c868bf`，现显式交接给 Codex。preview/routing/组件回归已修正并通过；剩余唯一硬缺口是实际生成、逐张审阅并入库 26 个 desktop/mobile 视觉基线，以及受同一浏览器启动阻塞影响的 P1/P2 浏览器视觉回归。已用已构建前端与 fake backend 绕开 Next dev watcher 重跑，6 个项目仍在 Chromium 启动前被 macOS Mach-port 权限拒绝；不得把 0 张 PNG 标成冻结，不进入 T57。
 
 ## 当前已验证状态
 
@@ -29,7 +29,7 @@
 - T55 验证：本地 Markdown 链接全部存在；占位符与 64 位密钥值模式零命中，交易凭据词只出现在禁止性边界中；`git diff --cached --check` 通过。T55 是设计任务，没有运行或声称产品测试。
 - 当前仓库只有 P3 preview 页面、固定状态数据和验证用例，仍没有 P3 provider、schema、prediction、decision、paper ledger 或真实交易代码。P2（含 T54）保持 `done`；真实下单仍明确延期。
 - T56 checkpoint `4ad724d` 已验证：前端 `pnpm test` 242/242、`pnpm typecheck`、`pnpm build`、12 个决策状态 SSR 与代表性 Home/Markets/Match 双视口人工检查通过；修正了 P3 Match 状态/布局、Home 重复市场区块、stale 状态覆盖和 fixture URL 一致性。
-- 视觉命令 `pnpm test:e2e:update --grep "P3 visual"` 已运行；6 个 Playwright 项目测试均在 Chromium 启动前因 macOS Mach-port 权限失败，未生成基线，因此 T56 仍为 `in_progress`。
+- 视觉门已两次复现：常规自动 webServer 路径额外触发 Next watcher 的 `EMFILE`，但文件句柄上限实际为 1,048,575；改用已构建前端（3100）与 fake backend（8000）后，`PLAYWRIGHT_BROWSERS_PATH=/private/tmp/tennixai-playwright-browsers pnpm exec playwright test --update-snapshots --grep 'P3 visual' --reporter=line` 仍是 6/6 在测试体前失败。Chromium 报 `bootstrap_check_in ... MachPortRendezvousServer ... Permission denied (1100)`；确认不是页面、fixture 或 watcher 根因，未生成 P3 基线，因此 T56 仍为 `in_progress`。
 - 模型未通过许可/覆盖审计、walk-forward、校准和 shadow 晋升门时，生产必须诚实输出 `NO BET`；不得为了演示制造 `BUY`。
 
 ## T56 输入门与边界
