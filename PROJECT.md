@@ -3,11 +3,11 @@
 > 本文件回答“这个项目是什么、为什么做、哪些原则不能被破坏”。
 > 全局进度见 [ROADMAP.md](./ROADMAP.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-16 11:49 CST
+**最后更新：** 2026-09-16 12:17 CST
 
-**产品阶段：** P1 — 比赛信息查询助手（`done`，2026-09-08）；P2.0–P2.6 全部 `done`（P2.6 于 2026-09-13 经 T54 修正门重新关闭）；P3 — Market & Decision Support（`in_progress`，仅 design freeze）；P4 — Product Hardening & Optimization（`planned`）
+**产品阶段：** P1 — 比赛信息查询助手（`done`，2026-09-08）；P2.0–P2.6 全部 `done`（P2.6 于 2026-09-13 经 T54 修正门重新关闭）；P3 — Market & Decision Support（`in_progress`，P3.0 设计已冻结，T56 原型输入 `ready`）；P4 — Product Hardening & Optimization（`planned`）
 
-**详细基线：** [产品与架构上下文](./docs/product-context.md) · [产品路线设计](./docs/superpowers/specs/2026-09-08-tennixai-product-roadmap-design.md) · [P1 实施计划](./docs/superpowers/plans/2026-09-08-tennixai-p1-implementation.md) · [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) · [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md) · [P2.6 球员目录设计](./docs/superpowers/specs/2026-09-12-tennixai-player-directory-multilingual-identity-design.md) · [P2.6 实施计划](./docs/superpowers/plans/2026-09-12-tennixai-player-directory-multilingual-identity-implementation.md) · [T54 Home 历史球员问答修正设计](./docs/superpowers/specs/2026-09-13-tennixai-home-historical-player-query-closure-design.md) · [T54 实施计划](./docs/superpowers/plans/2026-09-13-tennixai-home-historical-player-query-closure.md) · [v0 球员页面 Prompt](./docs/v0/2026-09-12-player-pages-prompt.md)
+**详细基线：** [产品与架构上下文](./docs/product-context.md) · [产品路线设计](./docs/superpowers/specs/2026-09-08-tennixai-product-roadmap-design.md) · [P1 实施计划](./docs/superpowers/plans/2026-09-08-tennixai-p1-implementation.md) · [P2 设计规格](./docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md) · [P2 实施计划](./docs/superpowers/plans/2026-09-09-tennixai-p2-implementation.md) · [P2.6 球员目录设计](./docs/superpowers/specs/2026-09-12-tennixai-player-directory-multilingual-identity-design.md) · [P2.6 实施计划](./docs/superpowers/plans/2026-09-12-tennixai-player-directory-multilingual-identity-implementation.md) · [v0 球员页面 Prompt](./docs/v0/2026-09-12-player-pages-prompt.md) · [T54 Home 历史球员问答修正设计](./docs/superpowers/specs/2026-09-13-tennixai-home-historical-player-query-closure-design.md) · [T54 实施计划](./docs/superpowers/plans/2026-09-13-tennixai-home-historical-player-query-closure.md) · [P3 SOTA 调研](./docs/research/2026-09-15-tennis-win-probability-sota.md) · [P3 设计规格](./docs/superpowers/specs/2026-09-16-tennixai-p3-market-decision-support-design.md) · [P3 实施计划](./docs/superpowers/plans/2026-09-16-tennixai-p3-implementation.md) · [P3 v0 Prompt](./docs/v0/2026-09-16-p3-market-decision-pages-prompt.md)
 
 ## 5 分钟恢复入口
 
@@ -23,8 +23,10 @@
 - P2.6 首要回归已关闭：`Ben Shelton`/`B. Shelton`/`Shelton`/`本·谢尔顿`/`谢尔顿` 等别名矩阵解析到同一内部 ID；`ambiguous` / `not_found` 为正常可恢复结果（自然澄清 + SSE `done`）。
 - P2 仍严格排除 odds、预测、Polymarket、交易、认证和云部署；完成目标是本地完整运行与少量好友私人测试。
 - P3 当前已确认：同时覆盖赛前与赛中，但第一版只处理单场比赛胜者市场。持仓前分开显示模型观点和交易动作：`BUY` 只在保守净 edge 过门时触发，`WAIT` 只表示已有明确低估方向但当前可执行价尚未过线并显示动态最高买入价，市场一致或硬门失败则显示带原因的 `NO BET`。每场第一条合格 `BUY` 只生成一次固定 `$10` paper entry intent；P3 按 FOK 语义模拟入场和全仓退出，delay 后不能完整成交则不产生 partial position 或残余仓位。entry `NO_FILL` 记为终态 `MISSED`，继续保存 observation 但不追价或重试。成交后由确定性的 EV-exit 作为主 paper 轨道，主动作只有 `HOLD / SELL`；首次 `SELL` 只产生一次全仓 FOK exit intent，`NO_FILL` 后记 `EXIT_MISSED` 并持有至结算，不再退出。`LOCK PROFIT` 是单独标注的可选降风险对照，不改变主账本；HODL 与 convergence-lock 完整保存为反事实，同场不加仓、不换边、不重新入场。用户可见主状态固定为 `MARKET_ONLY → NO BET / WAIT / BUY → ENTRY_PENDING → FILLED → HOLD / SELL → EXIT_PENDING → EXITED / EXIT_MISSED → SETTLED`，其中 `MISSED` 是 entry 未成交终态，`STALE / GAP` 是可叠加于任一运行状态的可信度覆盖层。
-- P3 实时性是首要运行目标：后端同时拥有 API-Tennis 与 Polymarket WebSocket 状态，按事件更新模型或可执行 edge，再通过统一 SSE 向浏览器发布；浏览器生命周期不控制 paper tracking。进入追踪窗口且完成精确组合的模型覆盖比赛由后端持续跟踪，已有持仓跟踪至退出或结算；REST 只用于首次快照、重连和校准。任何断流、版本缺口或离线区间都必须显式降级并禁止新动作，不得补造信号或成交。
+- T55 已冻结 P3 规格、v0 状态矩阵与 T56–T71 实施路线（`d7cc25e`）；当前尚无 P3 产品代码。下一步先由 v0 生成并由用户确认原型，再严格按原型接真实 structured response。
+- P3 实时性是首要运行目标：后端同时拥有 API-Tennis 与 Polymarket WebSocket 状态，按事件更新模型或可执行 edge；既有 sports stream 与新增 decision stream 使用独立版本游标和 SSE，任一缺口只重取自身 snapshot。浏览器生命周期不控制 paper tracking。进入追踪窗口且完成精确组合的模型覆盖比赛由后端持续跟踪，已有持仓跟踪至退出或结算；REST 只用于首次快照、重连和校准。任何断流、版本缺口或离线区间都必须显式降级并禁止新动作，不得补造信号或成交。
 - P3 实时写入按事件价值和频率分流：WebSocket ingress 只入有界队列；低频 API-Tennis canonical reduction 首版保留 PostgreSQL DB-first；高频 Polymarket order book 走内存/Redis 热状态，只异步批量保存决策相关 observation；paper intent、成交/未成交、退出与结算必须以幂等键同步提交 PostgreSQL 后才对外确认。P3 本地阶段不新增 Kafka 或 Redis Streams。
+- P3 的模型 champion、校准器和 BUY/SELL 阈值只能由许可/覆盖审计、chronological walk-forward、untouched test 和 shadow evidence 晋升；证据不足时生产保持 `NO BET`。paper 结算只服从各 Polymarket market 自身规则与最终 resolution，退赛、walkover、取消、延期、争议和 50–50 不由 API-Tennis winner 代替判定。
 - P3 页面采用三层结构：Home 用最多三行的「市场脉搏」摘要少量高价值机会和未结持仓；独立 `/markets` 以“机会 / 全部市场 / Paper 账本”三视图负责跨比赛发现与跟踪；Match Page 是单场决策工作台，承载概率、市场、edge、动作、轨迹、依据与本场 position lifecycle。
 - P4 用于基于真实使用和 paper-trading 证据统一打磨 P1–P3，包括事实查询体验、实时质量、模型校准、决策阈值、仓位管理、性能与产品细节；先搭完整框架，再做细致优化。
 - 不要从本文件猜当前做到哪里；以 [ROADMAP.md](./ROADMAP.md) 和 [CURRENT.md](./CURRENT.md) 为准。

@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-16 11:49 CST
+**最后更新：** 2026-09-16 12:17 CST
 
 **总体状态：** `in_progress`
 
-**当前里程碑：** P3.0 — Market & Decision Support Design Freeze（T55 设计讨论进行中；尚未授权实现）
+**当前里程碑：** P3.1 — v0 Prototype Freeze（T56 `ready`，等待用户确认并推送 v0 输出）
 
-**当前阶段：** P3 — Market & Decision Support（`in_progress`，仅 design freeze）
+**当前阶段：** P3 — Market & Decision Support（`in_progress`；P3.0 已完成，产品实现尚未开始）
 
 ## 状态说明
 
@@ -30,7 +30,7 @@
 |---|---|---|---|
 | P1 — Match Information Assistant | `done` | 跑通真实结构化比赛查询、卡片、Match Page 与上下文 Chat | T17/T18/T19 均已完成（`69c8238`、`5572960`、`fdb0131`）；P1 已关闭 |
 | P2 — Live Match Intelligence | `done` | 技术统计、PBP、近期控制指数、持久化、多进程实时协调，以及球员目录、多语言身份与历史赛果入口 | T20–T53 已交付；T54（`8d1233f` 产品/真实验收提交，`86ea404` 关闭提交）补齐 Home 历史意图、last/recent 五赛季语义、多球员结构化结果与内容级真实验收，P2 重新关闭 |
-| P3 — Market & Decision Support | `in_progress` | 市场状态、预测、edge、confidence 和 paper trading | T55 仅开展设计冻结；映射、模型评估、风控、页面与实施路线须经用户批准后才能进入实现 |
+| P3 — Market & Decision Support | `in_progress` | 市场状态、预测、edge、confidence 和 paper trading | T55 设计已冻结；T56 先取得并冻结用户确认的 v0 原型，随后按 T57–T71 实施与验收 |
 | P4 — Product Hardening & Optimization | `planned` | 用真实使用、回放和 paper 结果统一打磨 P1–P3 的数据质量、模型、决策策略、体验与性能 | P3 框架和可复现实验链路完成后再设计；退出阈值优化和更复杂仓位管理可在证据支持下进入 P4，自动下单不因此获得授权 |
 | Optional — Automated Execution | `deferred` | 在满足法律、风控、安全和可审计条件后考虑自动下单 | 不属于 P3 默认范围，必须单独批准 |
 
@@ -109,13 +109,36 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 
 | 阶段 | 状态 | 核心交付 | Exit gate / 当前缺口 |
 |---|---|---|---|
-| P3.0 — Design freeze | `in_progress` | 官方能力边界、market mapping、预测评估、decision/risk、paper trading、实时架构、页面信息架构、v0 原型 brief 与分阶段实施路线 | T55 已获用户显式设计授权；设计尚未批准，P3 实现与原型修改均未开始 |
+| P3.0 — Design freeze | `done` | 官方能力边界、market mapping、预测评估、decision/risk、paper lifecycle、实时架构、三层页面、v0 brief 与实施路线 | T55 `d7cc25e`：设计规格、T56–T71 计划、v0 Prompt 和研究记录已冻结；不含产品实现 |
+| P3.1 — Prototype freeze | `ready` | v0 输出、Home/Markets/Match 完整状态、26 个代表视觉基线 | 等待用户用已冻结 Prompt 生成、确认并推送 v0 输出；之后领取 T56 |
+| P3.2 — Market foundation | `planned` | canonical contracts、可逆 schema、只读 Polymarket REST/WS、严格 mapping 与 replay | T56 完成后按 T57–T60 顺序实施 |
+| P3.3 — Prediction, decision and paper | `planned` | 审计 benchmark、live probability、可执行 quote、decision policy、one-shot paper 与后台双流协调 | T60 完成且真实历史数据来源达到 T61 audit 输入门后按 T61–T65 实施 |
+| P3.4 — API and product surfaces | `planned` | 独立 REST/SSE、Chat facts、typed frontend、Home Pulse、`/markets`、Match workbench | T65 完成后按 T66–T69 接入；严格服从 T56 视觉真源 |
+| P3.5 — Completion gates | `planned` | 双流 replay/recovery/latency、全回归、26 张视觉门与真实只读 shadow | T70–T71 完成且证据写回三份总控后关闭 P3 |
+
+详细产品语义见 [P3 设计规格](./docs/superpowers/specs/2026-09-16-tennixai-p3-market-decision-support-design.md)，逐任务步骤见 [P3 实施计划](./docs/superpowers/plans/2026-09-16-tennixai-p3-implementation.md)，原型输入见 [P3 v0 Prompt](./docs/v0/2026-09-16-p3-market-decision-pages-prompt.md)。
 
 ## P3 任务登记表
 
 | ID | 主要阶段 | 任务 | 状态 | 完成提交 | 验收证据 |
 |---|---|---|---|---|---|
-| T55 | P3.0 | Freeze P3 Market & Decision Support Design and Prototype Brief | `in_progress` | — | 2026-09-15 用户显式授权设计；从 `7409806` 开始，先核实最新 Polymarket 官方文档与现有 P2/原型，逐项批准后再落规格；不包含实现 |
+| T55 | P3.0 | Freeze P3 Market & Decision Support Design and Prototype Brief | `done` | `d7cc25e` | 421 行设计规格 + 847 行 T56–T71 实施计划 + 320 行 v0 Prompt；用户授权剩余项采用推荐方案；官方 Polymarket/API-Tennis 依据、精确映射、模型晋升、one-shot FOK、provider-final settlement、独立 sports/decision SSE、三层 UI 与 26 张视觉矩阵均已冻结；本地链接、占位符/64 位密钥值、`git diff --cached --check` 通过；未写产品代码 |
+| T56 | P3.1 | Generate, Import, and Freeze the P3 v0 Prototype | `ready` | — | 外部输入门：用户用已冻结 Prompt 生成、确认并推送 v0 输出；未满足时不得自行设计替代稿 |
+| T57 | P3.2 | Add Canonical P3 Domain, Protocols, and Safe Configuration | `planned` | — | 见 P3 实施计划 T57；不接网络、SQL、模型训练或 UI |
+| T58 | P3.2 | Add Reversible P3 Persistence and Idempotent Ledger Repositories | `planned` | — | migration upgrade→downgrade→upgrade、并发幂等、rollback 与 restart recovery |
+| T59 | P3.2 | Implement the Read-Only Polymarket Adapter and Exact Match Mapping | `planned` | — | public REST、两侧 book/rules/fee/delay、严格内部 Player ID 对；零交易认证 |
+| T60 | P3.2 | Build the Market WebSocket Reducer, Hot State, and Replay Feed | `planned` | — | reducer/hash/gap/reconnect、Redis 热状态、确定性 replay 与公开 WS smoke |
+| T61 | P3.3 | Add the Audited Walk-Forward Pre-Match Benchmark Pipeline | `planned` | — | 数据来源/许可/泄漏 audit、chronological walk-forward、校准与 versioned model card |
+| T62 | P3.3 | Implement Live Tennis Probability, Calibration Loading, and Safe Degradation | `planned` | — | 确定性计分、empirical-Bayes 收缩、主巡覆盖与 typed abstention |
+| T63 | P3.3 | Implement Executable Quotes and the Versioned Decision Engine | `planned` | — | `$10` 逐档 quote、动态 fee/depth、hard gates、BUY/WAIT/NO BET/HOLD/SELL |
+| T64 | P3.3 | Implement the One-Shot FOK Paper Lifecycle and Provider-Final Settlement | `planned` | — | 一次 entry/exit、零 partial/retry、三轨结果和 Polymarket final resolution 结算 |
+| T65 | P3.3 | Orchestrate Dual Live Inputs, Durable Tracking, and Pipeline Metrics | `planned` | — | 后台 tracking 不依赖 viewer、bounded queues、DB-first ledger 与 p50/p95/p99 |
+| T66 | P3.4 | Expose Read-Only P3 REST, Independent SSE, and Chat Tools | `planned` | — | markets + decision snapshot/独立 SSE；P2 match stream 契约不变；两个只读业务工具 |
+| T67 | P3.4 | Add Typed Frontend Transport, Thin Proxies, and Independent Stream Hooks | `planned` | — | Next Route Handler、runtime DTO、`useMarketStream`/`useDecisionStream` 与 gap resync |
+| T68 | P3.4 | Connect Home Market Pulse and the `/markets` Discovery Workspace | `planned` | — | Home ≤3 行；机会/全部/Paper 三视图、筛选、排序与局部降级 |
+| T69 | P3.4 | Connect the Match Decision Workbench and Ledger-Driven State Sequence | `planned` | — | 全宽摘要、双边对照、轨迹/依据/lifecycle、desktop/mobile 顺序与完整状态 |
+| T70 | P3.5 | Prove Dual-Stream Replay, Recovery, Full Regression, and Visual Fidelity | `planned` | — | PostgreSQL/Redis restart、local latency、全量回归和 26 张逐张审阅基线 |
+| T71 | P3.5 | Run the Real Read-Only Shadow Gate and Close P3 | `planned` | — | 真实 API-Tennis + public Polymarket + 浏览器；无晋升证据时诚实 NO BET 也为通过 |
 
 ## P2 完成门摘要
 
@@ -187,9 +210,10 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 - 数据保留：raw provider payload 14 天清理，canonical/derived observations 长期保留。
 - 赔率：即使 API-Tennis 可提供也不接入；P3 由独立 `MarketDataProvider` 对接 Polymarket。
 - P3 决策首轮：覆盖赛前与赛中，只做单场比赛胜者市场。持仓前分开显示模型观点与当前动作：保守净 edge 过门为 `BUY`；已有明确低估方向但当前价未过线为 `WAIT`，并显示动态最高买入价；市场一致或数据、映射、流动性等硬门失败为带原因的 `NO BET`。每场第一条合格 `BUY` 只生成一次固定 `$10` paper entry intent；入场与全仓退出均按 FOK 语义模拟，在实际 sports delay 后只有整笔满足价格、深度与费用门才成交，不创建 partial position 或残余仓位。entry `NO_FILL` 终结该场 paper 入场并记为 `MISSED`，后续 observation 仍保留但不重试。成交后由确定性 EV-exit 驱动主 paper ledger，主动作只有 `HOLD / SELL`；首次 `SELL` 只产生一次 FOK exit intent，若 `NO_FILL` 则记 `EXIT_MISSED` 并持有到结算，不再重试。`LOCK PROFIT` 只作为单独标注的可选降风险方案和 convergence-lock 反事实，不改变主轨道。HODL 与 convergence-lock 完整保留用于比较，固定止盈仅作诊断 benchmark；同场不加仓、不换边、不重新入场，实际阈值必须由 walk-forward/shadow 证据选择。完整用户状态序列固定为 `MARKET_ONLY`、持仓前 `NO BET / WAIT / BUY`、`ENTRY_PENDING`、`FILLED`、持仓中 `HOLD / SELL`、`EXIT_PENDING`、`EXITED / EXIT_MISSED` 与 `SETTLED`；entry `NO_FILL` 单独进入 `MISSED`。`STALE / GAP` 是正交覆盖层：保留最后可信视图但撤销新动作；pending intent 到期若无法核验订单簿，则以明确原因记录不可验证 `NO_FILL`，不得补造成交。
-- P3 实时首轮：后端拥有 API-Tennis 与 Polymarket 两条独立 WebSocket 流，比赛事件驱动概率与 decision 更新，订单簿有效变化只重算可执行价、edge 与动作，统一 `DecisionSnapshot` 通过 SSE 到 UI。后台持续跟踪进入窗口且成功组合的模型覆盖比赛和所有未结持仓，不依赖浏览器是否打开；Challenger/ITF 市场仅按需展示。REST 仅作初始、重连和校准；断流、版本缺口或本地离线区间必须显式 stale/gap，撤销新动作且不得回填虚构信号或成交。实时性优先于非关键持久化和界面装饰，但不能绕过交易审计与 stale 防错门。
+- P3 实时首轮：后端拥有 API-Tennis 与 Polymarket 两条独立 WebSocket 流，比赛事件驱动概率与 decision 更新，订单簿有效变化只重算可执行价、edge 与动作。既有 Match sports stream 不变，新增 Decision stream 使用独立 version cursor；任一 gap 只重取自身 snapshot。后台持续跟踪进入窗口且成功组合的模型覆盖比赛和所有未结持仓，不依赖浏览器是否打开；Challenger/ITF 市场仅按需展示。REST 仅作初始、重连和校准；断流、版本缺口或本地离线区间必须显式 stale/gap，撤销新动作且不得回填虚构信号或成交。实时性优先于非关键持久化和界面装饰，但不能绕过交易审计与 stale 防错门。
 - P3 实时持久化：两条供应商 WebSocket ingress 只做轻量校验并写入有界 per-match queue。低频 API-Tennis canonical reduction 首版延续 DB-first；高频 Polymarket book 由单写者内存 reducer 更新热状态，不逐 delta 同步写 SQL，只异步批量保存改变 `$10` 可执行价/动作/模型对照的 observation 与周期采样。paper intent、delay 后 fill/no-fill、exit 和 settlement 使用 PostgreSQL 同步事务与唯一幂等键，提交后才发布确认。普通 observation 缺口标记 `tracking_gap`；P3 不引入 Kafka/Redis Streams，只有真实 backlog 或恢复需求达到升级门后再评估。
 - P3 页面首轮：采用 Home → `/markets` → Match 三层信息架构。Home 的「市场脉搏」最多三行；存在开放持仓时保留一行并优先 `SELL`、`LOCK PROFIT` 或数据异常，其余位置按赛中 `BUY` → 赛前 `BUY` → 最强 `WAIT` 选择，不放交易按钮、轨迹或详细账本。`/markets` 固定为三个页面级视图：默认“机会”只收模型覆盖比赛的 `BUY / WAIT`（Live 优先、Upcoming 其次）；“全部市场”按 ATP/WTA → Challenger → ITF → other 展示并支持级别、性别、赛前/赛中筛选，覆盖比赛的 `NO BET` 显示原因而低级别赛事只呈现市场；“Paper 账本”先列开放持仓，再列近期退出与结算。Match Page 保留现有 Hero 和两栏事实结构，在 Hero 后加入跨两栏的全宽 `DecisionSummary`；入场前顶部给模型观点和唯一动作，主体双边对照模型概率、固定 `$10` 可执行平均买入价和保守净 edge。paper 成交确认后，同一摘要原地切换为 position 管理并移除入场动作；入场历史只在下方 lifecycle 保留，不叠加第二张首屏卡。详细轨迹、依据与 lifecycle 进入主栏，助手和关键事实继续位于粘性侧栏，旧市场占位移除。所有卡片用内部 `match_id` 进入 Match Page；`/markets` 不成为自动交易终端。
+- P3 模型与结算：champion、校准器和 policy threshold 只能由许可/覆盖 audit、chronological walk-forward、validation/shadow 与 untouched test 证据晋升；证据不过门则 production 仅 `NO BET`。paper ledger 只按每个 Polymarket market 冻结的 rules 与实际 final resolution 结算，退赛、walkover、取消、延期、争议和 50–50 不用 API-Tennis winner 或通用模板替代；condition replacement 不迁移旧 ledger。
 - P4：在 P1–P3 框架与证据链完整后集中优化；退出阈值、止盈止损、重复入场和仓位管理只有在 paper 证据支持后才可扩展，自动下单仍不因此获得授权。
 - 自动交易：不属于 P3 默认范围，必须经过独立法律、风控、安全和执行设计。
 

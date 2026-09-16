@@ -2,202 +2,41 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-16 11:49 CST
+**最后更新：** 2026-09-16 12:17 CST
 
-**当前任务：** T55 — Freeze P3 Market & Decision Support Design and Prototype Brief
+**当前任务：** T56 — Generate, Import, and Freeze the P3 v0 Prototype
 
-**任务状态：** `in_progress`
+**任务状态：** `ready`
 
-**执行者 / ADE：** Codex / Codex Desktop
+**执行者 / ADE：** —（尚未领取）
 
 **分支：** `main`
 
-**任务起始提交：** `7409806`
+**任务起始提交：** —（领取 T56 时填写）
 
-**领取提交：** `b6539e4`
+**领取提交：** —
 
-**设计提交：** —
-
-**产品提交：** —（T55 只授权设计，不授权实现）
+**产品提交：** —
 
 **关闭提交：** —
 
-**当前动作：** P3 SOTA 研究方向、覆盖与组合边界、独立估值、paper 生命周期、实时架构、三层页面结构、`/markets` 三视图、Home「市场脉搏」、Match Page 决策布局、one-shot FOK entry/exit、EV-exit 主 paper 轨道及完整 UI 状态序列均已获用户批准。下一步依次冻结 Match 详细模块、移动端顺序、`/markets` 卡片与降级态、结算例外、模型 benchmark/data gate，以及 v0 状态矩阵与实施验收路线；后续讨论按用户要求不再使用图示。
+**当前动作：** 使用 [P3 v0 Prompt](./docs/v0/2026-09-16-p3-market-decision-pages-prompt.md) 在 v0 生成 Home「市场脉搏」、`/markets` 三视图和 Match 决策工作台；由用户确认并推送 v0 输出后，ADE 才能领取 T56、导入并冻结视觉真源。
 
-**当前状态：** P2（含 T54）保持已关闭；P3.0 仅进入 design freeze。研究报告位于 `docs/research/2026-09-15-tennis-win-probability-sota.md`；其模型选择方法和 market-to-match 方向已批准，但仍不是完整 P3 规格。具体 champion、校准器和 decision 阈值必须在数据覆盖审计与统一 benchmark 后决定。P4 已确定为 P1–P3 框架完成后的统一打磨阶段；当前没有 P3 provider、schema、prediction、decision、paper ledger、页面或交易能力，自动下单仍属独立延期阶段。
+## 当前已验证状态
 
-## T55 研究节点（2026-09-15）
+- T55 已完成，设计基线为 `d7cc25e`：421 行 [P3 设计规格](./docs/superpowers/specs/2026-09-16-tennixai-p3-market-decision-support-design.md)、847 行 [T56–T71 实施计划](./docs/superpowers/plans/2026-09-16-tennixai-p3-implementation.md)、320 行 v0 Prompt，以及同步更新的 SOTA 研究记录。
+- 用户已授权剩余设计项全部采用推荐方案；P3 的 exact mapping、独立模型与晋升门、one-shot FOK paper lifecycle、provider-final settlement、独立 sports/decision SSE、三层页面和完整状态矩阵均已冻结。
+- T55 验证：本地 Markdown 链接全部存在；占位符与 64 位密钥值模式零命中，交易凭据词只出现在禁止性边界中；`git diff --cached --check` 通过。T55 是设计任务，没有运行或声称产品测试。
+- 当前仓库仍没有 P3 provider、schema、prediction、decision、paper ledger、页面或真实交易代码。P2（含 T54）保持 `done`；真实下单仍明确延期。
+- 模型未通过许可/覆盖审计、walk-forward、校准和 shadow 晋升门时，生产必须诚实输出 `NO BET`；不得为了演示制造 `BUY`。
 
-- 调研覆盖赛前/赛中胜率、结构化 Markov、动态 rating、Bayesian live update、hybrid ML、概率校准、risk–coverage、市场效率与数据许可。
-- 关键结论：公开研究不存在可直接照搬的统一 SOTA；P3 应冻结可复现 benchmark 和模型晋升门，而非凭单篇论文选择算法。
-- 市场门修正为可执行价格：Polymarket 页面展示价通常不是实际买入价；paper decision 必须使用 ask/订单簿深度、市场实际费率、滑点和不确定性边际。
-- 推荐边界：LLM 只解释结构化输出；当前市场价不进入独立网球模型；证据、数据、映射或流动性不足时输出明确 `NO BET`。
-- 退出研究结论：不存在脱离目标函数、风险偏好、交易成本和 alpha 持续性的通用最优卖点；“市场价追上模型点估计就自动卖”不能直接冻结为唯一规则。风险中性时应比较净可执行卖出所得与模型继续持有价值；锁定同等期望利润属于降低方差的选择，必须单独标识。
-- Polymarket 执行事实：卖出须使用实际订单簿 bid/depth，且要计入逐市场费率与 sports order delay；2026-09-15 只读样本显示当期 tennis moneyline 常见 `secondsDelay=1`，不同市场版本的 `feeSchedule.rate` 出现 `0.03` 与 `0.05`，进一步证明不能硬编码或按信号时盘口假装成交。
-- 热路径核验：交易所官方经验要求 WebSocket 回调避免 I/O 与慢消费；Redis Pub/Sub 是 at-most-once，当前本地 Redis 又是 `appendonly=no`，不能承担不可丢账本；PostgreSQL 当前 `synchronous_commit=on`、`fsync=on`。本机临时探针中 PostgreSQL 300 次同步小事务 median/p95 为 0.945/1.116ms，Redis 500 次 set+publish 为 0.571/0.696ms；现有完整 reduction 集成用例单次 call 0.08s。证据支持按事件类别分流，而不是全同步或全异步。
-- 已批准退出语义：`SELL` 是净可执行卖出价值高于稳健持有价值时的期望值动作；`LOCK PROFIT` 是市场回到模型合理区间时的可选风险降低动作，两者不得混用。具体数值阈值和候选规则仍须由 walk-forward/shadow 数据选择。
-- 尚未批准或实施：候选模型 champion、绝对阈值、训练数据许可方案、P3 数据/服务契约、页面改版和任何交易能力。
+## T56 输入门与边界
 
-## T55 已批准边界与 market-to-match spike（2026-09-15）
-
-- 模型覆盖：只为大满贯和 ATP/WTA 主巡赛单打显示正向 `模型覆盖` 标记，并在这些比赛上提供胜率、edge、模型观点与 `BUY / WAIT / NO BET`；Challenger/ITF 仍展示比赛和 Polymarket 市场，但不显示“未验证”等负向标记，也不提供模型建议。
-- 数据关系：Polymarket 市场与 API-Tennis 比赛各自保留 provider ID；不建立需要人工维护的永久绑定，不用 LLM 或模糊置信分做最终连接。
-- 组合规则：先把 Polymarket moneyline 的两个完整 outcome 名称解析为内部 Player ID，再与 API-Tennis 的无序 Player ID 对做运行时精确连接；只有唯一且上下文无冲突的结果才能组成 `DecisionContext`。失败时市场照常展示、不显示模型标记，后续同步自动重试。
-- 真实只读 spike：2026-09-15 至 09-16 共 125 个有效 Polymarket 网球 moneyline、477 条 API-Tennis 赛程/比赛记录；79 个唯一连接（63.2%）、0 个多候选，成功项开赛时间差中位数 0 分钟、最大 45 分钟。成功项含 WTA Singles 18、男子 Challenger 42、女子 Challenger 19；该窗口无 ATP 主巡赛样本。
-- 失败分布：25 个市场至少一名球员未进入当前目录，21 个已解析球员对没有 API 当期记录，样本主要集中在低级别赛事；这不阻塞低级别市场独立展示。ATP 主巡赛及更多大满贯/WTA 样本仍须在实施阶段 shadow 验证，不能用本次窗口宣称全面覆盖。
-
-## T55 已批准 paper opportunity（2026-09-15）
-
-- `DecisionObservation` 与 `PaperPosition` 必须分离：系统保存同一场比赛中每个有效决策时点的模型概率、市场可执行价、edge、数据版本与结论，用于赛后分析；这些观察记录不等于多笔下注。
-- 每个内部 `match_id` 最多建立一笔固定 `$10` 的模拟持仓。若赛前首次出现合格 `BUY`，即在该时点开仓；若赛前从未出现，则允许在赛中首次出现合格 `BUY` 时开仓。
-- 一旦开仓，同场不加仓、不反向换边、不重新入场；最多执行一次退出。期望值动作 `SELL` 与可选风险降低动作 `LOCK PROFIT` 使用不同语义和评估轨道，不把“市场追上模型”自动等同为更高期望值。这样一场比赛仍只贡献一个明确且可审计的 position lifecycle，不会把高度相关的连续信号虚增成多次机会。
-- 对提前退出的持仓，同时保存实际退出结果和“若继续持有到结算”的反事实结果，以检验退出时机是否真正改善收益；反事实不计作第二笔交易。
-- 若整场没有出现合格 `BUY`，结果为 `NO BET`，不生成模拟持仓；所有合格与不合格观察仍可进入评估轨迹。
-- 动态加仓、反向、重新入场、任意止盈止损和多次买卖统一留到 P4；P3 只建立最小的一次退出能力，并同时保存 HODL、EV-exit 与 convergence-lock 三条可比较轨道。固定止盈只作诊断 benchmark，具体阈值仍须用 observation 数据评估。
-
-## T55 已批准独立估值原则（2026-09-15）
-
-- P3 的目标不是利用比分源与市场之间的传输时差，而是在市场已吸收公开比赛状态后，由独立网球模型判断其是否高估或低估某位球员；数据新鲜度与对齐只属于防错门，不能计作模型 edge。
-- 独立模型不读取当前 Polymarket 价格；市场价格只在 Decision Engine 中作为比较基准。双方意见一致通常意味着当前没有交易价值，不能为了产生建议而强行输出 `BUY`。
-- 决策使用模型概率的保守估计与固定 `$10` 的真实可执行成本比较。只有扣除模型不确定性、订单簿价格、费用和滑点后仍超过待验证门槛，才构成可交易分歧。
-- “看好球员”和“值得按当前价格买入”是两个判断：即使模型认为某球员更可能获胜，市场报价更高时也应等待或弃权；赛前与赛中持续重算价值—价格关系，入场时机来自错价窗口，而非抢比分延迟。
-
-## T55 已批准持仓前动作语义（2026-09-15）
-
-- 页面分别展示“模型观点”和“当前动作”，避免把胜负倾向、相对估值和可交易性混成一个标签。
-- `BUY A/B`：模型适用域、数据质量、映射和流动性硬门均通过，固定 `$10` 按实际 ask/depth/费用/滑点计算后的保守净 edge 超过待验证阈值；只有该状态可创建 paper position。
-- `WAIT`：模型已有明确的低估方向，但当前可执行价尚未通过保守净 edge 门；页面显示由当前保守概率、实际成本和安全边际反算的动态最高买入价。`WAIT` 不创建 paper position。
-- `NO BET`：模型与市场处于合理一致区间，或任一数据、置信度、映射、流动性等硬门失败；必须展示具体原因。它表示“当前没有可论证的正 edge 入场”，不表示比赛、预测或最终盈利可能性没有意义。
-- 动态最高买入价不是固定折扣：Decision Engine 对固定 `$10` 的候选成交逐档计价，求出仍满足保守净 edge 门的最高可接受平均成交价；费用、深度、模型或比赛状态变化时该价格随之变化。
-
-## T55 已批准退出语义（2026-09-15）
-
-- `HODL_BASELINE` 始终持有至结算，作为原始预测与入场质量的基线。
-- `EV_EXIT` 对应产品动作 `SELL`：只有在市场实际 delay 后，按届时订单簿深度、部分/未成交和费用计算出的净卖出价值，高于模型不确定性调整后的继续持有价值时才建议卖出。
-- `CONVERGENCE_LOCK` 对应产品动作 `LOCK PROFIT`：当市场回到模型合理区间时允许用户降低方差、锁定利润，但不得宣称该动作提高期望值。
-- `FIXED_TAKE_PROFIT` 只作为诊断 benchmark，不进入默认产品建议。
-- 三条策略轨道不分别生成多笔组合交易；真实 paper position 最多采用一次退出，同时保存未采用轨道和持有到结算的反事实结果。
-- 模型概率必须先通过 proper scoring 与校准门；绝对阈值和具体规则不得凭直觉硬编码，只能依据独立 walk-forward/shadow 证据晋升。
-
-## T55 已批准实时数据流（2026-09-15）
-
-- 实时性是首要运行目标。后端分别维护 API-Tennis canonical match state 与 Polymarket canonical market/order-book state，浏览器不直连供应商，只接收后端统一的版本化 `DecisionSnapshot` SSE。
-- API-Tennis 比赛/PBP 事件触发模型概率及 decision 更新；Polymarket 订单簿有效变化复用最新有效模型概率，只重算固定 `$10` 的可执行价、edge 与动作，避免无意义地重复运行模型。
-- 两条流不等待时间戳完全相同才计算；各自保留 provider timestamp、received timestamp、sequence/version 和 freshness，使用最新且通过有效性门的状态。任一关键输入 stale、断流或出现版本缺口时保留最后画面但撤销新的 `BUY / SELL`，并显示降级原因。
-- 进入赛前追踪窗口且完成精确组合的模型覆盖比赛由后端后台跟踪；已有 paper position 无论浏览器是否打开都持续跟踪至退出或结算。Challenger/ITF 不运行模型与 paper observation，市场只在用户查看时按需加载。
-- REST 只负责首次 snapshot、WebSocket 重连重建和受限校准，不回到常态固定轮询。后端未运行或中间失联时记录 `tracking_gap`，恢复后重新校准，不补造错过的信号、订单簿或成交。
-
-## T55 已批准实时持久化分流（2026-09-16）
-
-- API-Tennis 与 Polymarket WebSocket ingress 只做轻量 envelope 校验、记录接收时间并进入有界 per-match queue；不得在读取循环中等待模型、SQL 或 SSE 客户端。
-- API-Tennis point/比赛事实频率较低且现有 transaction/recovery 已验证，P3 首版保留 canonical reduction 的 PostgreSQL DB-first 顺序，并增加分段 p50/p95/p99 与 backlog 指标；只有实际超门才改造。
-- Polymarket 高频 order book 由单写者内存 reducer 按 timestamp/hash/version 更新，Redis 只承载热快照和实时通知；不逐 delta 同步写 PostgreSQL。改变 `$10` 可执行价、动作或模型对照的 observation 及周期采样异步批量落库。
-- `order_intent`、sports delay 后的 `fill/no_fill`、`exit` 与 `settlement` 使用 PostgreSQL 同步事务和唯一幂等键；事务提交后才能向 Redis/SSE 确认状态，重启后以 PostgreSQL ledger 恢复。
-- 普通 observation 队列丢失或进程离线形成显式 `tracking_gap`，不得事后补造；不可丢的 paper 状态不得进入弱保证队列。
-- 当前本地私人测试规模不新增 Kafka 或 Redis Streams；只有实测 observation backlog、跨进程 replay 或多消费者恢复需求达到升级门后才重新评估，且 broker 不能替代 PostgreSQL paper ledger。
-
-## T55 已批准页面层级（2026-09-16）
-
-- 采用 Home → `/markets` → Match Page 三层结构；现有导航中的“市场 BETA”从 Home 锚点升级为独立 `/markets` 路由。
-- Home 保持全局比赛发现和查询主职责，只显示少量高价值机会与未结 paper position 摘要；不铺完整市场列表、价格轨迹或详细 ledger。
-- `/markets` 负责跨比赛 Market Discovery 与 Paper Tracking，首版仅包含当前机会、即将开始、开放 paper positions、近期已结算结果四类内容。
-- Match Page 是单场决策工作台，承载 calibrated probability、实际可执行市场价、edge/confidence、当前动作、概率轨迹、结构化解释和本场 paper lifecycle。
-- 所有机会、市场和持仓卡片通过内部 `match_id` 进入 Match Page；`/markets` 不负责单场深度分析，也不是自动下单终端。
-
-## T55 已批准 `/markets` 三视图（2026-09-16）
-
-- `机会` 为默认视图，只展示模型覆盖的大满贯及 ATP/WTA 主巡赛单打中的 `BUY / WAIT`；Live 在前、Upcoming 在后，`NO BET` 不进入机会流。
-- `全部市场` 展示所有可用的 Polymarket 网球单场胜者市场，按 ATP/WTA → Challenger → ITF → other 排序，并允许按赛事级别、性别和赛前/赛中筛选。模型覆盖比赛的 `NO BET` 显示原因；Challenger/ITF 只显示市场，不出现“未覆盖”等负向标签。
-- `Paper 账本` 先列开放持仓，再列近期退出和结算；页面只提供组合概览，点击后通过内部 `match_id` 进入 Match Page 查看完整 lifecycle。
-- 三个视图是同一路由内的页面级切换，不把 current/upcoming/open/settled 拆成四个并列首页区块，也不提供自动下单。
-
-## T55 已批准 Home「市场脉搏」（2026-09-16）
-
-- 将现有 Home 市场情报占位升级为单个紧凑模块，不在首页新增完整市场区；最多展示三行。
-- 若存在开放 paper position，固定保留一行，优先显示 `SELL`、`LOCK PROFIT` 或 stale/gap 等需要关注的持仓；无此类状态时显示最相关的开放持仓。
-- 剩余行按赛中 `BUY` → 赛前 `BUY` → 最强 `WAIT` 选择；没有开放持仓时，三行都可用于机会。
-- 每行只展示比赛、模型概率、固定 `$10` 的可执行市场概率、当前动作与 freshness。点击整行通过内部 `match_id` 进入 Match Page；模块入口进入 `/markets`。
-- Home 不提供 paper 动作按钮、价格/概率轨迹或详细账本；没有符合条件的持仓与机会时显示“暂无可执行机会”等诚实空态，但仍允许查看全部市场。
-
-## T55 已批准 Match Page 全宽决策条（2026-09-16）
-
-- 用户在三种布局中选择方案 B：保留现有比赛 Hero 作为页面首要事实区，在其正下方增加跨越主栏与侧栏的全宽 `DecisionSummary`。
-- `DecisionSummary` 先回答“模型怎么看、现在做什么”，呈现模型概率、固定 `$10` 的可执行市场概率、保守净 edge、动作与 freshness；不得替代或遮蔽比分。
-- 下方继续沿用现有两栏结构：主栏保留比分、统计、PBP 和近期控制，并承载详细概率—市场轨迹、结构化依据与本场 paper lifecycle；本场助手和关键事实继续位于粘性侧栏。
-- 现有侧栏 `MarketCard` P3 占位在真实实现时移除，不同时保留另一份决策摘要，避免两套入口和状态冲突。
-- 未在本节点冻结 `DecisionSummary` 的双边/单边信息组织、移动端精确顺序和各动作状态视觉；这些继续逐项批准。
-
-## T55 已批准 `DecisionSummary` 双边对照（2026-09-16）
-
-- 用户在“单边动作优先 / 双边对照 / 轨迹优先”中选择方案 B：顶部保留模型观点和唯一当前动作，主体同时展示两位球员。
-- 每位球员分别显示模型概率、固定 `$10` 逐档深度计算的可执行平均买入价和保守净 edge；推荐侧可高亮，但另一侧不得隐藏。
-- 两侧可执行价来自各自 ask/depth，可能因 spread、费用和流动性不互补；UI 不得为了凑成 100% 而改写市场数据。
-- 摘要底部显示硬门状态、动态最高可接受平均价（适用时）、freshness 和 decision version；详细概率—市场轨迹继续放在下方主栏，不在摘要重复绘图。
-- 此节点只冻结信息组织；`BUY / WAIT / NO BET`、开放持仓及 stale/gap 的具体视觉转换仍待下一项批准。
-
-## T55 已批准成交后原地切换（2026-09-16）
-
-- 用户在“原地切换 / 机会与持仓叠放 / 摘要内部标签”中选择方案 A：首屏始终只有一个 `DecisionSummary` 和一个当前动作真源。
-- 入场前摘要承载 `BUY / WAIT / NO BET` 与双边模型—市场对照；paper fill 经 PostgreSQL 确认后，同一组件原地切换为 position 管理，所有入场动作立即消失，避免重复买入暗示。
-- position 视图显示持仓球员、固定 `$10` 入场成本与平均价、份额、当前可执行退出价值、净 P&L、稳健持有价值，以及 EV 主动作 `HOLD / SELL`；`LOCK PROFIT` 只能作为单独标注的可选降风险方案。
-- 入场时的 prediction、order book、费用、fill 和 decision version 不会丢失；它们进入下方 position lifecycle 和审计记录，不在首屏叠加第二张历史卡。
-- 此节点尚未冻结 intent/pending/no-fill、stale/gap、退出后和结算后的完整状态序列。
-
-## T55 已批准 one-shot entry intent（2026-09-16）
-
-- 每个内部 `match_id` 的第一条合格 `BUY` 是 P3 唯一 paper entry attempt；系统冻结该 observation 和订单簿版本，建立幂等 `order_intent`，模拟市场实际 sports delay。
-- delay 后按届时 ask/depth、部分成交规则和费用判断结果；满足固定 `$10` 成交规则才进入 `FILLED` position。
-- 若结果为 `NO_FILL`，该场 paper 入场终态记为 `MISSED`，不追价、不返回可再次建仓的 `BUY`，也不以稍后的更优时点替换第一次信号。
-- `MISSED` 后仍持续保存后续 DecisionObservation，供赛后判断信号和执行损失，但这些 observation 不生成新的 intent。
-- retry/cooldown/max-attempt 等执行策略只有 paper 证据显示必要时才进入 P4，不在 P3 首版增加参数。
-
-## T55 已批准 FOK paper 执行（2026-09-16）
-
-- 依据 Polymarket 官方订单语义，P3 选择 FOK 而非 FAK：FOK 要求订单全部成交，否则立即取消；FAK 会保留部分成交并取消剩余部分。
-- entry 在 sports delay 后必须能于动态最高可接受价以内完整投入固定 `$10`，否则结果为 `NO_FILL → MISSED`；不创建小于 `$10` 的 partial position。
-- exit 对全部持仓份额使用同一全额成交原则；不能完整按门槛成交时不产生部分退出或残余 position。exit 未成交后的重试/终态规则仍由完整状态序列单独冻结。
-- 所有成交均保存实际逐档平均价、深度、费用、delay 和订单簿版本；FOK 只消除 partial 状态，不允许按触发时价格假装成交。
-- FAK、partial position 和 partial exit 推迟至 P4，只有真实 paper 数据证明它们能改善执行评估时才考虑。
-
-## T55 已批准 EV-exit 主 paper 轨道（2026-09-16）
-
-- `EV_EXIT` 是 Paper 账本、Home 持仓摘要与 Match Page position 主状态的默认轨道，由后台按预先冻结规则自动模拟，不依赖浏览器或用户响应时间。
-- 主轨道的 position 动作只有 `HOLD` 与 `SELL`：净可执行退出价值未高于稳健持有价值时为 `HOLD`，过门后创建一次 FOK exit intent。
-- `HODL_BASELINE` 和 `CONVERGENCE_LOCK` 使用同一 entry 作为完整反事实轨道；它们不生成额外 position，也不计入主组合 P&L。
-- `LOCK PROFIT` 可在 UI 作为明确的风险降低选项展示，但不替代 EV 主动作、不自动改写主账本，也不得宣称提高期望值。
-- 用户未来真实下注或主观退出选择与这套确定性 paper 绩效分开；P3 不新增必须在线点击的 paper 操作按钮。
-
-## T55 已批准 one-shot EV exit（2026-09-16）
-
-- EV 主轨道第一次产生 `SELL` 时创建该 position 唯一的全仓 FOK exit intent，并冻结触发 observation、持仓份额、bid/depth、费用门与 decision version。
-- sports delay 后若完整持仓按规则成交，则 position 转为 `EXITED`；若不能完整成交，则记录 `EXIT_MISSED`，position 转为 hold-to-settlement，不再创建新的 exit intent。
-- `EXIT_MISSED` 后继续保存模型、市场、edge 和后续 SELL observation，用于量化执行损失，但不能以后来的更优退出点替换第一次退出信号。
-- HODL baseline 不受影响；convergence-lock 仍是独立反事实，具体未成交语义可在统一状态矩阵中按同一可审计原则表达。
-- retry、冷却时间、最大尝试次数和拆单退出推迟至 P4，以真实 `EXIT_MISSED` 率决定是否值得增加复杂度。
-
-## T55 已批准完整 `DecisionSummary` 状态序列（2026-09-16）
-
-- `MARKET_ONLY`：只呈现可执行市场价格、深度和 freshness，不给模型概率、edge 或动作；用于 Challenger/ITF 等非模型覆盖比赛，以及不能精确组合的市场。
-- 持仓前：`NO BET` 明确显示硬门或无 edge 原因；`WAIT` 显示低估方向与动态最高可接受价格；`BUY` 仅作为首个合格 observation，随后立即建立唯一幂等 intent 并进入 `ENTRY_PENDING`，抑制其他入场动作。
-- entry FOK 在 sports delay 后完整成交才进入 `FILLED`，并由同一摘要原地切换为 position；`NO_FILL` 进入终态 `MISSED`，不重试，但继续记录后续 observation。
-- position 主状态为 `HOLD` 或 `SELL`；可适用时另列非主动作 `LOCK PROFIT`。首次 `SELL` 建立唯一全仓 FOK intent 并进入 `EXIT_PENDING`。
-- exit 完整成交进入 `EXITED` 并显示已实现 P&L；`NO_FILL` 进入 `EXIT_MISSED`，之后不再退出并持有至结算。两种情况下 HODL 与 convergence-lock 反事实仍继续记录至市场结算。
-- `SETTLED` 汇总 EV 主轨道、HODL 与 convergence-lock 三条结果，不把反事实收益混入主组合账本。
-- `STALE / GAP` 是可叠加于上述任一运行状态的正交覆盖层，不抹去最后可信状态：保留最后可信快照和时间，撤销新的 `BUY / SELL`。pending intent 到期若无法验证订单簿，只能记录 reason=`BOOK_UNVERIFIABLE` 的 `NO_FILL` 并进入相应终态，绝不伪造成交。
-- 所有状态转换由后端与 PostgreSQL ledger 驱动，提交成功后才通过 SSE 对外确认；paper tracking 不依赖用户打开页面或点击按钮。
-
-## 上一任务 T54 完成证据（2026-09-13）
-
-- 确定性后端：`543 passed / 51 deselected`；infrastructure `22 passed / 572 deselected`。
-- 前端：`pnpm test` 228 passed；`pnpm typecheck` 干净；`pnpm build` 编译成功。
-- 全量 Playwright（fake）：`62 passed / 34 skipped / 0 failed`（exit 0）；新增 `home-history-answer.png` 桌面/移动两张基线逐张审阅通过，既有基线零变化（git 仅新增）。
-- 确定性 home-history e2e：功能 4 + 视觉 2（双视口），连续复跑稳定。
-- 真实 API-Tennis：`api_tennis_live` 2 passed。
-- 真实 LLM（确定性 provider）：`llm_live` 19 passed，含 5 项 T54 内容断言（last/recent/season scope、多球员双 data event、与同次 service probe 逐 ID 相等）。
-- 真实 API+LLM 同运行后端：`player_directory_e2e_live` 4 passed（probe-vs-Chat 不变量：内部身份、scope、finished 倒序、赛季记录；一次 supplier 同步抖动的诚实 skip 复跑全过）。
-- 真实浏览器（api_tennis + 真实 LLM）：`player-directory-live.spec.ts` 20 passed，5 个历史场景内容级断言（section 数/双语标题/scope 徽章/内部链接/空态文案/SSE done/无 error 帧/无控制台错误/无 payload 泄漏）。
-- 边界：`git diff --check` 干净；diff 无供应商字段/凭据；产品代码无 P3 术语；工作区仅 5 项受保护未跟踪项。
-- 顺带修复 T50 遗留契约错位：Chat `player_resolution` SSE 为嵌套域形状，Home 候选链接曾以 undefined id 渲染（React key 警告 + `/players/undefined`）；现按内部 ID 渲染并有单测与 live 复验。
+- 必须先有用户确认并推送的 v0 输出；仓库中没有该输入时，T56 保持 `ready`，ADE 不得自行设计替代稿。
+- 导入时只整理已批准的 v0 前端资产、确定性 preview data、state switcher 和 26 个代表视觉基线；不接 P3 后端或真实 API。
+- 原型必须覆盖 Home 4、Markets 8、Match 14 个指定 desktop/mobile 视觉基线；每张 expected/actual/diff 都需逐张审阅，不能批量接受未知变化。
+- 现有 P1/P2 页面和视觉真源必须保持；不覆盖 package manifest、shadcn primitives 或任务外改动。
+- T56 的完整 files、TDD、命令和提交门只见 [P3 实施计划 T56](./docs/superpowers/plans/2026-09-16-tennixai-p3-implementation.md#t56-generate-import-and-freeze-the-p3-v0-prototype)。
 
 ## 未跟踪文件保护
 
@@ -207,12 +46,13 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
-| 2026-09-15 | `b6539e4` | T55 领取：P3.0 进入 design freeze，仅授权设计讨论与规格，不授权实现 |
-| 2026-09-13 | `86ea404` | T54 关闭：P2.6/P2 重新 done，P3 恢复 ready for design（未开始） |
-| 2026-09-13 | `8d1233f` | Task 6 真实内容门 + 修复 T50 候选链接契约错位 |
-| 2026-09-13 | `4b23f1b` | Task 5 Home 历史分组渲染与两张专用视觉基线 |
-| 2026-09-13 | `edb2b89` / `8818304` | Task 4 dataItems 聚合 / Task 3 typed player_history |
+| 2026-09-16 | `d7cc25e` | T55 完成：P3 规格、T56–T71 计划、v0 Prompt 与最终研究结论冻结；没有产品代码 |
+| 2026-09-16 | `0b140c4` | T55 中间节点：完整 `DecisionSummary` 与 one-shot paper 状态序列冻结 |
+| 2026-09-15 | `b6539e4` | T55 领取：从 `7409806` 开始 P3 design freeze |
+| 2026-09-13 | `86ea404` | T54 关闭：P2.6/P2 重新 `done`，P3 转为可设计 |
 
 ## 下一步
 
-继续 T55 的单问题文字讨论。预计还剩 6 个产品级批准项：Match 详细模块顺序、移动端顺序、`/markets` 卡片与降级态、结算/退赛等例外、模型 benchmark 与数据晋升门、v0 状态矩阵及实施验收路线。下一项先冻结 Match Page 详细模块顺序。全部设计经用户批准后写入 P3 设计规格；规格获批前不得编写实施计划、修改 v0 原型或实现 P3 功能。
+1. 用户把已落盘的 v0 Prompt 交给 v0，确认设计后将输出推送到 `origin/main`。
+2. 新 ADE 按根目录启动入口同步最新 `main`，核实该 v0 提交，领取唯一任务 T56 并推送领取记录。
+3. 若 v0 输出尚未确认或尚未推送，只报告输入门，不能跳到 T57 或开始真实 P3 接线。
