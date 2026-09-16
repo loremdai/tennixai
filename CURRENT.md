@@ -2,23 +2,21 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-16 20:25 CST
+**最后更新：** 2026-09-16 20:30 CST
 
-**当前任务：** T59 — Implement the Read-Only Polymarket Adapter and Exact Match Mapping（已完成；T60 待领取）
+**当前任务：** T60 — Build the Market WebSocket Reducer, Hot State, and Replay Feed
 
-**任务状态：** `done`
+**任务状态：** `in_progress`
 
 **执行者 / ADE：** Claude (Fable 5) / Claude Code（用户已明确授权按顺序连续执行 T57–T71，无需逐项再次确认）
 
 **分支：** `main`
 
-**任务起始提交：** `1dc7766`
+**任务起始提交：** `35b08d9`
 
-**领取提交：** `0681527`
+**领取提交：** 本次提交（T60 领取记录）
 
-**产品提交：** `0d6728c`（feat: add read-only Polymarket provider）
-
-**当前动作：** T59 已关闭。TDD 先红（`app.markets.mapping`/`polymarket` 模块缺失）后绿；只读 adapter、严格 mapping、9 个脱敏 fixture、契约测试与真实公开 REST smoke 全部实际通过。下一动作：领取 T60（market WebSocket reducer、Redis 热状态与 replay feed）。
+**当前动作：** T59 已以 `0d6728c`（代码）与 `35b08d9`（关闭）交付并推送。现按 [P3 实施计划 T60](./docs/superpowers/plans/2026-09-16-tennixai-p3-implementation.md#t60-build-the-market-websocket-reducer-hot-state-and-replay-feed) 以 TDD 实施公开 market WS feed、canonical book reducer、Redis 热状态 publisher、有界 worker、确定性 replay 与 infrastructure 恢复测试，外加 opt-in 公开 WS smoke。只订阅公开 market channel；不逐 delta 同步写 SQL。
 
 ## 当前已验证状态
 
@@ -44,6 +42,6 @@
 
 ## 下一步
 
-1. T60 待领取：按 [P3 实施计划 T60](./docs/superpowers/plans/2026-09-16-tennixai-p3-implementation.md#t60-build-the-market-websocket-reducer-hot-state-and-replay-feed) 实施公开 market WS feed、canonical book reducer（全量替换/精确档位增删/时间戳与 hash 回退拒绝/tick 变更/reconnect 先 REST reconcile）、Redis 热状态 publisher、有界订阅 worker、确定性 replay fixture 与 infrastructure 恢复测试，外加 opt-in 公开 WS smoke；开始前先写入并推送领取记录。
-2. T60 边界：只订阅公开 market channel，绝不订阅 user/authenticated channel；ping 按官方间隔；不逐 delta 同步写 SQL。
-3. 其后按顺序 T61–T71，不得并行领取。
+1. 完成 T60 的 TDD 实施与验收（reducer/worker 焦点测试、replay fixture、infrastructure 恢复、公开 WS smoke、确定性全量回归），更新三份总控，提交并推送 `origin/main`。
+2. T60 边界：只订阅公开 market channel，绝不订阅 user/authenticated channel；ping 按官方间隔；断线后先 REST reconcile 再接受 delta；高频 book 只更新内存/Redis 热状态，observation 异步批量落库。
+3. T60 关闭后 P3.2 完成，按同一流程领取 T61（审计 walk-forward benchmark），顺序执行至 T71。
