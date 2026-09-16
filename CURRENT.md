@@ -12,7 +12,7 @@
 
 **分支：** `main`
 
-**任务起始提交：** `be17eea`
+**任务起始提交：** `13ade66`
 
 **领取提交：** 本次提交（T66 关闭 + T67 领取记录）
 
@@ -33,6 +33,7 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
+| 2026-09-17 | `13ade66` | T66 追加：P3QueryService 对真实 PostgreSQL 的 integration 证明（2 passed；infrastructure 44 passed）与 lifecycle 累积历史修正 |
 | 2026-09-16 | `be17eea` | T66 完成：只读 P3 REST、双独立 SSE、Chat 工具与真实 P3QueryService；P2 stream 契约不变 |
 | 2026-09-16 | `aa2349d` | T65 关闭 + Claude 领取 T66 |
 | 2026-09-16 | `8cc3c26` | T65 完成：双流决策编排、durable tracking demand、P3 指标与本地延迟门；P3.3 关闭 |
