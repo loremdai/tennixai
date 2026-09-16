@@ -25,6 +25,24 @@ class DecisionAction(StrEnum):
     SELL = "sell"
 
 
+class DecisionReason(StrEnum):
+    """Stable user-visible reason codes for non-actionable observations."""
+
+    MARKET_UNMAPPED = "MARKET_UNMAPPED"
+    MODEL_UNPROMOTED = "MODEL_UNPROMOTED"
+    PROMOTION_NOT_GRANTED = "PROMOTION_NOT_GRANTED"
+    ARTIFACT_INVALID = "ARTIFACT_INVALID"
+    POLICY_DISABLED = "POLICY_DISABLED"
+    OUT_OF_DOMAIN = "OUT_OF_DOMAIN"
+    DATA_INCOMPLETE = "DATA_INCOMPLETE"
+    MODEL_DISAGREEMENT = "MODEL_DISAGREEMENT"
+    RULE_CHANGED = "RULE_CHANGED"
+    STALE = "STALE"
+    GAP = "GAP"
+    INSUFFICIENT_LIQUIDITY = "INSUFFICIENT_LIQUIDITY"
+    NO_NET_EDGE = "NO_NET_EDGE"
+
+
 class GateResult(FrozenModel):
     gate: str = Field(min_length=1)
     passed: bool
@@ -39,7 +57,9 @@ class GateResult(FrozenModel):
 
 class DecisionObservation(FrozenModel):
     match_id: str = Field(min_length=1)
-    market_id: str = Field(min_length=1)
+    # Empty for MARKET_ONLY observations of not-yet-mapped markets; an
+    # internal market id otherwise. Never a provider identifier.
+    market_id: str = ""
     action: DecisionAction
     observation_version: int = Field(ge=1)
     model_version: str = Field(min_length=1)
@@ -53,6 +73,8 @@ class DecisionObservation(FrozenModel):
     gates: tuple[GateResult, ...] = ()
     is_stale: bool = False
     has_gap: bool = False
+    lock_profit_available: bool = False
+    hold_value: Decimal | None = None
     as_of: AwareDatetime
 
     @model_validator(mode="after")

@@ -1,0 +1,28 @@
+{
+  "policy_version": "policy-v1",
+  "stake_usd": "10",
+  "buy": {
+    "min_conservative_net_edge": "0.03",
+    "min_model_probability_gap": "0.04"
+  },
+  "sell": {
+    "min_exit_net_edge": "0.02"
+  },
+  "threshold_selection": {
+    "dataset": "validation",
+    "shadow_order_book_replay": true
+  },
+  "evidence": {
+    "validation": {
+      "log_loss": 0.61,
+      "net_ev_lower_bound": "0.012",
+      "opportunities": 35
+    },
+    "shadow": {
+      "sessions": 3,
+      "simulated_orders": 41,
+      "fill_rate": 0.63
+    }
+  },
+  "net_ev_lower_bound": "0.012"
+}
