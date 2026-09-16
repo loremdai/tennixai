@@ -3,7 +3,7 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-16 11:47 CST
+**最后更新：** 2026-09-16 11:49 CST
 
 **总体状态：** `in_progress`
 
@@ -186,7 +186,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 - 历史结果：P2 使用 API-Tennis fixtures/H2H 按需提供昨天、近期和有限 H2H；未承诺的数据返回 unavailable/partial。
 - 数据保留：raw provider payload 14 天清理，canonical/derived observations 长期保留。
 - 赔率：即使 API-Tennis 可提供也不接入；P3 由独立 `MarketDataProvider` 对接 Polymarket。
-- P3 决策首轮：覆盖赛前与赛中，只做单场比赛胜者市场。持仓前分开显示模型观点与当前动作：保守净 edge 过门为 `BUY`；已有明确低估方向但当前价未过线为 `WAIT`，并显示动态最高买入价；市场一致或数据、映射、流动性等硬门失败为带原因的 `NO BET`。每场第一条合格 `BUY` 只生成一次固定 `$10` paper entry intent；入场与全仓退出均按 FOK 语义模拟，在实际 sports delay 后只有整笔满足价格、深度与费用门才成交，不创建 partial position 或残余仓位。entry `NO_FILL` 终结该场 paper 入场并记为 `MISSED`，后续 observation 仍保留但不重试。成交后由确定性 EV-exit 驱动主 paper ledger，主动作只有 `HOLD / SELL`；首次 `SELL` 只产生一次 FOK exit intent，若 `NO_FILL` 则记 `EXIT_MISSED` 并持有到结算，不再重试。`LOCK PROFIT` 只作为单独标注的可选降风险方案和 convergence-lock 反事实，不改变主轨道。HODL 与 convergence-lock 完整保留用于比较，固定止盈仅作诊断 benchmark；同场不加仓、不换边、不重新入场，实际阈值必须由 walk-forward/shadow 证据选择。
+- P3 决策首轮：覆盖赛前与赛中，只做单场比赛胜者市场。持仓前分开显示模型观点与当前动作：保守净 edge 过门为 `BUY`；已有明确低估方向但当前价未过线为 `WAIT`，并显示动态最高买入价；市场一致或数据、映射、流动性等硬门失败为带原因的 `NO BET`。每场第一条合格 `BUY` 只生成一次固定 `$10` paper entry intent；入场与全仓退出均按 FOK 语义模拟，在实际 sports delay 后只有整笔满足价格、深度与费用门才成交，不创建 partial position 或残余仓位。entry `NO_FILL` 终结该场 paper 入场并记为 `MISSED`，后续 observation 仍保留但不重试。成交后由确定性 EV-exit 驱动主 paper ledger，主动作只有 `HOLD / SELL`；首次 `SELL` 只产生一次 FOK exit intent，若 `NO_FILL` 则记 `EXIT_MISSED` 并持有到结算，不再重试。`LOCK PROFIT` 只作为单独标注的可选降风险方案和 convergence-lock 反事实，不改变主轨道。HODL 与 convergence-lock 完整保留用于比较，固定止盈仅作诊断 benchmark；同场不加仓、不换边、不重新入场，实际阈值必须由 walk-forward/shadow 证据选择。完整用户状态序列固定为 `MARKET_ONLY`、持仓前 `NO BET / WAIT / BUY`、`ENTRY_PENDING`、`FILLED`、持仓中 `HOLD / SELL`、`EXIT_PENDING`、`EXITED / EXIT_MISSED` 与 `SETTLED`；entry `NO_FILL` 单独进入 `MISSED`。`STALE / GAP` 是正交覆盖层：保留最后可信视图但撤销新动作；pending intent 到期若无法核验订单簿，则以明确原因记录不可验证 `NO_FILL`，不得补造成交。
 - P3 实时首轮：后端拥有 API-Tennis 与 Polymarket 两条独立 WebSocket 流，比赛事件驱动概率与 decision 更新，订单簿有效变化只重算可执行价、edge 与动作，统一 `DecisionSnapshot` 通过 SSE 到 UI。后台持续跟踪进入窗口且成功组合的模型覆盖比赛和所有未结持仓，不依赖浏览器是否打开；Challenger/ITF 市场仅按需展示。REST 仅作初始、重连和校准；断流、版本缺口或本地离线区间必须显式 stale/gap，撤销新动作且不得回填虚构信号或成交。实时性优先于非关键持久化和界面装饰，但不能绕过交易审计与 stale 防错门。
 - P3 实时持久化：两条供应商 WebSocket ingress 只做轻量校验并写入有界 per-match queue。低频 API-Tennis canonical reduction 首版延续 DB-first；高频 Polymarket book 由单写者内存 reducer 更新热状态，不逐 delta 同步写 SQL，只异步批量保存改变 `$10` 可执行价/动作/模型对照的 observation 与周期采样。paper intent、delay 后 fill/no-fill、exit 和 settlement 使用 PostgreSQL 同步事务与唯一幂等键，提交后才发布确认。普通 observation 缺口标记 `tracking_gap`；P3 不引入 Kafka/Redis Streams，只有真实 backlog 或恢复需求达到升级门后再评估。
 - P3 页面首轮：采用 Home → `/markets` → Match 三层信息架构。Home 的「市场脉搏」最多三行；存在开放持仓时保留一行并优先 `SELL`、`LOCK PROFIT` 或数据异常，其余位置按赛中 `BUY` → 赛前 `BUY` → 最强 `WAIT` 选择，不放交易按钮、轨迹或详细账本。`/markets` 固定为三个页面级视图：默认“机会”只收模型覆盖比赛的 `BUY / WAIT`（Live 优先、Upcoming 其次）；“全部市场”按 ATP/WTA → Challenger → ITF → other 展示并支持级别、性别、赛前/赛中筛选，覆盖比赛的 `NO BET` 显示原因而低级别赛事只呈现市场；“Paper 账本”先列开放持仓，再列近期退出与结算。Match Page 保留现有 Hero 和两栏事实结构，在 Hero 后加入跨两栏的全宽 `DecisionSummary`；入场前顶部给模型观点和唯一动作，主体双边对照模型概率、固定 `$10` 可执行平均买入价和保守净 edge。paper 成交确认后，同一摘要原地切换为 position 管理并移除入场动作；入场历史只在下方 lifecycle 保留，不叠加第二张首屏卡。详细轨迹、依据与 lifecycle 进入主栏，助手和关键事实继续位于粘性侧栏，旧市场占位移除。所有卡片用内部 `match_id` 进入 Match Page；`/markets` 不成为自动交易终端。

@@ -540,6 +540,21 @@ FOK 解决了 partial 状态，但尚未决定一次 exit intent 若 `NO_FILL` �
 
 HODL baseline 始终持有至结算。convergence-lock 是独立反事实，不计入主 ledger；其状态记录应遵循同样不事后挑选有利成交点的原则。
 
+## 26. T55 后续批准：完整 UI 状态序列
+
+**批准日期：** 2026-09-16
+
+用户批准以一个后端账本驱动的 `DecisionSummary` 承载从观察到结算的完整状态序列：
+
+1. `MARKET_ONLY` 只显示市场价格、深度与 freshness，不给模型动作。
+2. 持仓前由 `NO BET / WAIT / BUY` 表达当前判断；`WAIT` 附动态最高买入价，`BUY` 随后立即创建唯一 intent 并进入 `ENTRY_PENDING`。
+3. entry FOK 完整成交后进入 `FILLED` 并原地切换为 position；`NO_FILL` 进入终态 `MISSED`，后续不再尝试入场。
+4. position 主状态只有 `HOLD / SELL`；`LOCK PROFIT` 是单列的风险选项而非账本主动作。首次 `SELL` 创建唯一全仓 FOK intent 并进入 `EXIT_PENDING`。
+5. exit 完整成交进入 `EXITED` 并显示 realized P&L；`NO_FILL` 进入 `EXIT_MISSED`，此后持有至结算。HODL 与 convergence-lock 两条反事实在两种分支中都继续记录。
+6. `SETTLED` 汇总 EV 主轨道、HODL 与 convergence-lock 的可比结果，但反事实不计入主组合收益。
+
+`STALE / GAP` 不取代上述业务状态，而是正交可信度覆盖层：保留最后可信快照及其时间，撤销新的 `BUY / SELL`。若 pending intent 在 delay 到期时无法核验订单簿，只能以 `BOOK_UNVERIFIABLE` 原因记录 `NO_FILL` 并进入对应终态，不允许用触发时价格或之后恢复的价格伪造成交。全部转换以 PostgreSQL ledger 提交为确认点，再通过 SSE 发布；浏览器是否在线不影响 paper 生命周期。
+
 ---
 
 这份研究的核心判断是：**TennixAI 的 SOTA 不应是一篇论文的名字，而应是一套不会被数据泄漏、概率失准和不可成交价格欺骗的持续基准与晋升机制。**

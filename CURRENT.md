@@ -2,7 +2,7 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-16 11:47 CST
+**最后更新：** 2026-09-16 11:49 CST
 
 **当前任务：** T55 — Freeze P3 Market & Decision Support Design and Prototype Brief
 
@@ -22,7 +22,7 @@
 
 **关闭提交：** —
 
-**当前动作：** P3 SOTA 研究方向、覆盖与组合边界、独立估值、paper 生命周期、实时架构、三层页面结构、`/markets` 三视图、Home「市场脉搏」、Match Page 决策布局、one-shot FOK entry/exit 及 EV-exit 主 paper 轨道均已获用户批准。下一步汇总并冻结完整 UI 状态序列，再确定详细模块与 v0 原型状态矩阵；后续讨论按用户要求不再使用图示。
+**当前动作：** P3 SOTA 研究方向、覆盖与组合边界、独立估值、paper 生命周期、实时架构、三层页面结构、`/markets` 三视图、Home「市场脉搏」、Match Page 决策布局、one-shot FOK entry/exit、EV-exit 主 paper 轨道及完整 UI 状态序列均已获用户批准。下一步依次冻结 Match 详细模块、移动端顺序、`/markets` 卡片与降级态、结算例外、模型 benchmark/data gate，以及 v0 状态矩阵与实施验收路线；后续讨论按用户要求不再使用图示。
 
 **当前状态：** P2（含 T54）保持已关闭；P3.0 仅进入 design freeze。研究报告位于 `docs/research/2026-09-15-tennis-win-probability-sota.md`；其模型选择方法和 market-to-match 方向已批准，但仍不是完整 P3 规格。具体 champion、校准器和 decision 阈值必须在数据覆盖审计与统一 benchmark 后决定。P4 已确定为 P1–P3 框架完成后的统一打磨阶段；当前没有 P3 provider、schema、prediction、decision、paper ledger、页面或交易能力，自动下单仍属独立延期阶段。
 
@@ -175,6 +175,17 @@
 - HODL baseline 不受影响；convergence-lock 仍是独立反事实，具体未成交语义可在统一状态矩阵中按同一可审计原则表达。
 - retry、冷却时间、最大尝试次数和拆单退出推迟至 P4，以真实 `EXIT_MISSED` 率决定是否值得增加复杂度。
 
+## T55 已批准完整 `DecisionSummary` 状态序列（2026-09-16）
+
+- `MARKET_ONLY`：只呈现可执行市场价格、深度和 freshness，不给模型概率、edge 或动作；用于 Challenger/ITF 等非模型覆盖比赛，以及不能精确组合的市场。
+- 持仓前：`NO BET` 明确显示硬门或无 edge 原因；`WAIT` 显示低估方向与动态最高可接受价格；`BUY` 仅作为首个合格 observation，随后立即建立唯一幂等 intent 并进入 `ENTRY_PENDING`，抑制其他入场动作。
+- entry FOK 在 sports delay 后完整成交才进入 `FILLED`，并由同一摘要原地切换为 position；`NO_FILL` 进入终态 `MISSED`，不重试，但继续记录后续 observation。
+- position 主状态为 `HOLD` 或 `SELL`；可适用时另列非主动作 `LOCK PROFIT`。首次 `SELL` 建立唯一全仓 FOK intent 并进入 `EXIT_PENDING`。
+- exit 完整成交进入 `EXITED` 并显示已实现 P&L；`NO_FILL` 进入 `EXIT_MISSED`，之后不再退出并持有至结算。两种情况下 HODL 与 convergence-lock 反事实仍继续记录至市场结算。
+- `SETTLED` 汇总 EV 主轨道、HODL 与 convergence-lock 三条结果，不把反事实收益混入主组合账本。
+- `STALE / GAP` 是可叠加于上述任一运行状态的正交覆盖层，不抹去最后可信状态：保留最后可信快照和时间，撤销新的 `BUY / SELL`。pending intent 到期若无法验证订单簿，只能记录 reason=`BOOK_UNVERIFIABLE` 的 `NO_FILL` 并进入相应终态，绝不伪造成交。
+- 所有状态转换由后端与 PostgreSQL ledger 驱动，提交成功后才通过 SSE 对外确认；paper tracking 不依赖用户打开页面或点击按钮。
+
 ## 上一任务 T54 完成证据（2026-09-13）
 
 - 确定性后端：`543 passed / 51 deselected`；infrastructure `22 passed / 572 deselected`。
@@ -204,4 +215,4 @@
 
 ## 下一步
 
-继续 T55 的单问题文字讨论；下一项汇总并冻结 `DecisionSummary` 从入场观察、intent/fill、开放持仓到退出/结算及 stale/gap 的完整状态序列；随后确定详细模块、移动端顺序及 v0 原型状态矩阵。全部设计经用户批准后写入 P3 设计规格；规格获批前不得编写实施计划、修改 v0 原型或实现 P3 功能。
+继续 T55 的单问题文字讨论。预计还剩 6 个产品级批准项：Match 详细模块顺序、移动端顺序、`/markets` 卡片与降级态、结算/退赛等例外、模型 benchmark 与数据晋升门、v0 状态矩阵及实施验收路线。下一项先冻结 Match Page 详细模块顺序。全部设计经用户批准后写入 P3 设计规格；规格获批前不得编写实施计划、修改 v0 原型或实现 P3 功能。
