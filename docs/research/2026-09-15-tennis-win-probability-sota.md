@@ -527,6 +527,19 @@ FOK 解决了 partial 状态，但尚未决定一次 exit intent 若 `NO_FILL` �
 
 这个选择让 P3 能分别评价模型、首次入场、EV-exit 和风险锁利策略。仍待决定的是主 EV-exit FOK intent 若 `NO_FILL` 后是否允许再次尝试。
 
+## 25. T55 后续批准：one-shot EV exit
+
+**批准日期：** 2026-09-16
+
+用户选择把 EV 主轨道的退出也限定为一次尝试：
+
+- position 第一次满足 `SELL` 时冻结该 DecisionObservation、全部持仓份额、届时退出门槛和 decision version，创建唯一幂等 FOK exit intent。
+- sports delay 后，若全部份额能按届时 bid/depth 与费用完整成交，则主 position 为 `EXITED`；若不能，则为 `EXIT_MISSED`，主 position 此后持有到结算。
+- `EXIT_MISSED` 后仍记录所有后续 observation 和 SELL 状态，但它们只用于分析“稍后是否恢复流动性/价值”，不能触发第二次 intent 或替换首次退出时点。
+- 该规则与 one-shot entry 对称，可直接评估第一条 EV-exit 信号的价值与可执行性；retry、拆单和冷却策略留给 P4 根据真实失败率研究。
+
+HODL baseline 始终持有至结算。convergence-lock 是独立反事实，不计入主 ledger；其状态记录应遵循同样不事后挑选有利成交点的原则。
+
 ---
 
 这份研究的核心判断是：**TennixAI 的 SOTA 不应是一篇论文的名字，而应是一套不会被数据泄漏、概率失准和不可成交价格欺骗的持续基准与晋升机制。**

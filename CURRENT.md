@@ -2,7 +2,7 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-16 11:43 CST
+**最后更新：** 2026-09-16 11:47 CST
 
 **当前任务：** T55 — Freeze P3 Market & Decision Support Design and Prototype Brief
 
@@ -22,7 +22,7 @@
 
 **关闭提交：** —
 
-**当前动作：** P3 SOTA 研究方向、覆盖与组合边界、独立估值、paper 生命周期、实时架构、三层页面结构、`/markets` 三视图、Home「市场脉搏」、Match Page 决策布局、one-shot FOK 执行及 EV-exit 主 paper 轨道均已获用户批准。下一步冻结 exit `NO_FILL` 和完整 UI 状态序列，再确定详细模块与 v0 原型状态矩阵。
+**当前动作：** P3 SOTA 研究方向、覆盖与组合边界、独立估值、paper 生命周期、实时架构、三层页面结构、`/markets` 三视图、Home「市场脉搏」、Match Page 决策布局、one-shot FOK entry/exit 及 EV-exit 主 paper 轨道均已获用户批准。下一步汇总并冻结完整 UI 状态序列，再确定详细模块与 v0 原型状态矩阵；后续讨论按用户要求不再使用图示。
 
 **当前状态：** P2（含 T54）保持已关闭；P3.0 仅进入 design freeze。研究报告位于 `docs/research/2026-09-15-tennis-win-probability-sota.md`；其模型选择方法和 market-to-match 方向已批准，但仍不是完整 P3 规格。具体 champion、校准器和 decision 阈值必须在数据覆盖审计与统一 benchmark 后决定。P4 已确定为 P1–P3 框架完成后的统一打磨阶段；当前没有 P3 provider、schema、prediction、decision、paper ledger、页面或交易能力，自动下单仍属独立延期阶段。
 
@@ -167,6 +167,14 @@
 - `LOCK PROFIT` 可在 UI 作为明确的风险降低选项展示，但不替代 EV 主动作、不自动改写主账本，也不得宣称提高期望值。
 - 用户未来真实下注或主观退出选择与这套确定性 paper 绩效分开；P3 不新增必须在线点击的 paper 操作按钮。
 
+## T55 已批准 one-shot EV exit（2026-09-16）
+
+- EV 主轨道第一次产生 `SELL` 时创建该 position 唯一的全仓 FOK exit intent，并冻结触发 observation、持仓份额、bid/depth、费用门与 decision version。
+- sports delay 后若完整持仓按规则成交，则 position 转为 `EXITED`；若不能完整成交，则记录 `EXIT_MISSED`，position 转为 hold-to-settlement，不再创建新的 exit intent。
+- `EXIT_MISSED` 后继续保存模型、市场、edge 和后续 SELL observation，用于量化执行损失，但不能以后来的更优退出点替换第一次退出信号。
+- HODL baseline 不受影响；convergence-lock 仍是独立反事实，具体未成交语义可在统一状态矩阵中按同一可审计原则表达。
+- retry、冷却时间、最大尝试次数和拆单退出推迟至 P4，以真实 `EXIT_MISSED` 率决定是否值得增加复杂度。
+
 ## 上一任务 T54 完成证据（2026-09-13）
 
 - 确定性后端：`543 passed / 51 deselected`；infrastructure `22 passed / 572 deselected`。
@@ -196,4 +204,4 @@
 
 ## 下一步
 
-继续 T55 的单问题设计讨论；下一项冻结主 EV-exit intent 若 `NO_FILL` 后的终态，再汇总 `DecisionSummary` 从入场观察到退出/结算及数据降级的完整状态序列；随后确定详细模块、移动端顺序及 v0 原型状态矩阵。全部设计经用户批准后写入 P3 设计规格；规格获批前不得编写实施计划、修改 v0 原型或实现 P3 功能。
+继续 T55 的单问题文字讨论；下一项汇总并冻结 `DecisionSummary` 从入场观察、intent/fill、开放持仓到退出/结算及 stale/gap 的完整状态序列；随后确定详细模块、移动端顺序及 v0 原型状态矩阵。全部设计经用户批准后写入 P3 设计规格；规格获批前不得编写实施计划、修改 v0 原型或实现 P3 功能。
