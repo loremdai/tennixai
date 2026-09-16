@@ -2,23 +2,21 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-16 19:55 CST
+**最后更新：** 2026-09-16 19:58 CST
 
-**当前任务：** T58 — Add Reversible P3 Persistence and Idempotent Ledger Repositories（已完成；T59 `ready`，尚未领取）
+**当前任务：** T59 — Implement the Read-Only Polymarket Adapter and Exact Match Mapping
 
-**任务状态：** `done`
+**任务状态：** `in_progress`
 
 **执行者 / ADE：** Claude (Fable 5) / Claude Code（用户已明确授权按顺序连续执行 T57–T71，无需逐项再次确认）
 
 **分支：** `main`
 
-**任务起始提交：** `507b0ac`
+**任务起始提交：** `1dc7766`
 
-**领取提交：** `982bfef`
+**领取提交：** 本次提交（T59 领取记录）
 
-**产品提交：** `02516c6`（feat: persist P3 market and paper ledger）
-
-**当前动作：** T58 已关闭。TDD 先红（ORM 行与 repository 模块缺失、DB 停在 `0003`）后绿；migration `0004` 十二表可逆、幂等 ledger repositories、link 冻结与重启恢复全部通过实际 PostgreSQL 验证。下一步由同一执行者领取 T59（只读 Polymarket adapter 与精确 mapping）。
+**当前动作：** T58 已以 `02516c6`（代码）与 `1dc7766`（关闭）交付并推送。现按 [P3 实施计划 T59](./docs/superpowers/plans/2026-09-16-tennixai-p3-implementation.md#t59-implement-the-read-only-polymarket-adapter-and-exact-match-mapping) 以 TDD 实施只读 Polymarket adapter（permissive vendor DTO、public Gamma/CLOB REST、脱敏 fixture、`httpx.MockTransport`）与 PlayerResolver 精确组合 mapping，外加 opt-in `polymarket_live` smoke。
 
 ## 当前已验证状态
 
@@ -44,6 +42,6 @@
 
 ## 下一步
 
-1. T59 已 `ready`：按 [P3 实施计划 T59](./docs/superpowers/plans/2026-09-16-tennixai-p3-implementation.md#t59-implement-the-read-only-polymarket-adapter-and-exact-match-mapping) 实施只读 Polymarket adapter（public Gamma/CLOB REST、`httpx.MockTransport` 测试、脱敏 fixture）与 PlayerResolver 精确组合 mapping；开始前先写入并推送领取记录。
+1. 完成 T59 的 TDD 实施与验收（fixture 契约测试、mapping 测试、确定性回归、opt-in `polymarket_live` smoke），更新三份总控，提交并推送 `origin/main`。
 2. T59 边界：绝不导入 trading SDK、绝不请求 wallet/private key；错误消息零 URL/key/provider-ID 泄漏；opt-in `polymarket_live` smoke 无活跃市场时诚实 skip。
-3. 其后按顺序 T60–T71，不得并行领取。
+3. T59 关闭后按同一流程领取 T60（market WS reducer/热状态/replay），顺序执行至 T71，不得并行领取。
