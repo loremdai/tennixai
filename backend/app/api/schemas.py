@@ -165,12 +165,32 @@ class PulseRowDto(BaseModel):
     as_of: datetime | None = None
 
 
+class GateDto(BaseModel):
+    gate: str
+    passed: bool
+    reason_code: str | None = None
+
+
+class PaperEventDto(BaseModel):
+    """Ledger-derived lifecycle fact. Copy/labels are presentation-side;
+    the server only reports kind, time and typed reason."""
+
+    id: str
+    kind: str  # entry_intent | entry_fill | entry_no_fill | exit_intent | exit_fill | exit_no_fill | settled
+    at: datetime | None = None
+    reason_code: str | None = None
+
+
 class PositionSummaryDto(BaseModel):
     position_id: str
     outcome_player_id: str
     status: str
     entry_cost: str
     shares: str
+    average_entry_price: str | None = None
+    current_exit_value: str | None = None
+    net_pnl: str | None = None
+    events: tuple[PaperEventDto, ...] = ()
 
 
 class DecisionSnapshotDto(BaseModel):
@@ -184,6 +204,13 @@ class DecisionSnapshotDto(BaseModel):
     quote_average_price: str | None = None
     quote_side: str | None = None
     conservative_net_edge: str | None = None
+    max_acceptable_price: str | None = None
+    hold_value: str | None = None
+    model_version: str | None = None
+    calibration_version: str | None = None
+    policy_version: str | None = None
+    data_version: str | None = None
+    gates: tuple[GateDto, ...] = ()
     position: PositionSummaryDto | None = None
     lifecycle: tuple[str, ...] = ()
     is_stale: bool = False

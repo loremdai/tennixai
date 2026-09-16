@@ -158,6 +158,24 @@ async def test_query_service_reads_durable_ledger(database: Database) -> None:
     assert Decimal(decision.position.entry_cost) == Decimal("10.00")
     assert decision.lifecycle == ("entry_pending", "filled")
     assert decision.is_stale is False and decision.has_gap is False
+    # T69 workbench enrichment: versions, gates, quote bounds and a
+    # ledger-derived position detail with events.
+    assert decision.model_version == "prematch-elo-v1"
+    assert decision.calibration_version == "platt-v1"
+    assert decision.policy_version == "policy-v1"
+    assert decision.data_version == "apidata-v1"
+    assert decision.max_acceptable_price is None  # BUY carries a quote, no cap
+    assert decision.hold_value is None
+    assert [(gate.gate, gate.passed) for gate in decision.gates] == [
+        ("liquidity", True)
+    ]
+    assert decision.position is not None
+    assert Decimal(decision.position.average_entry_price) == Decimal("0.525")
+    assert decision.position.current_exit_value is None  # no hot book
+    assert decision.position.net_pnl is None
+    kinds = [event.kind for event in decision.position.events]
+    assert kinds == ["entry_intent", "entry_fill"]
+    assert all(event.at is not None for event in decision.position.events)
 
     assert await queries.match_decision("mat_missing") is None
 

@@ -1212,7 +1212,12 @@ class P3QueryService:
         )
 
     async def match_decision(self, match_id: str):
-        from app.api.schemas import DecisionSnapshotDto, PositionSummaryDto
+        from app.api.schemas import (
+            DecisionSnapshotDto,
+            GateDto,
+            PaperEventDto,
+            PositionSummaryDto,
+        )
 
         observation = await self._markets.latest_decision_observation(match_id)
         if observation is None:
@@ -1237,6 +1242,73 @@ class P3QueryService:
                     lifecycle.append("exit_missed")
         if position is not None and position.status.value == "settled":
             lifecycle.append("settled")
+
+        # Ledger-derived position detail and event timeline. Facts only:
+        # kinds, timestamps and typed reasons; labels are presentation-side.
+        position_dto = None
+        if position is not None:
+            events: list[PaperEventDto] = []
+            average_entry_price = None
+            for intent in intents:
+                fill = await self._paper.get_fill_for_intent(intent.id)
+                prefix = "entry" if intent.side.value == "entry" else "exit"
+                events.append(
+                    PaperEventDto(
+                        id=f"{intent.id}:intent",
+                        kind=f"{prefix}_intent",
+                        at=intent.created_at,
+                    )
+                )
+                if fill is not None:
+                    events.append(
+                        PaperEventDto(
+                            id=f"{intent.id}:fill",
+                            kind=(
+                                f"{prefix}_fill"
+                                if fill.filled
+                                else f"{prefix}_no_fill"
+                            ),
+                            at=fill.executed_at,
+                            reason_code=None if fill.filled else fill.reason,
+                        )
+                    )
+                    if fill.filled and prefix == "entry":
+                        average_entry_price = (
+                            str(fill.average_price)
+                            if fill.average_price is not None
+                            else None
+                        )
+            current_exit_value = None
+            net_pnl = None
+            settled_at = None
+            book = await self._hot_book(position.market_id)
+            best_bid, _ = self._best_levels(book, position.outcome_player_id)
+            if best_bid is not None:
+                current_exit_value = str(position.shares * Decimal(best_bid[1]))
+            for track in await self._paper.load_track_results(position.id):
+                if track.track.value == "ev_exit":
+                    net_pnl = str(track.net_pnl)
+                    settled_at = track.settled_at
+                    break
+            if position.status.value == "settled":
+                events.append(
+                    PaperEventDto(
+                        id=f"{position.id}:settled",
+                        kind="settled",
+                        at=settled_at or position.updated_at,
+                    )
+                )
+            position_dto = PositionSummaryDto(
+                position_id=position.id,
+                outcome_player_id=position.outcome_player_id,
+                status=position.status.value,
+                entry_cost=str(position.entry_cost),
+                shares=str(position.shares),
+                average_entry_price=average_entry_price,
+                current_exit_value=current_exit_value,
+                net_pnl=net_pnl,
+                events=tuple(events),
+            )
         return DecisionSnapshotDto(
             match_id=match_id,
             market_id=observation.market_id or None,
@@ -1263,17 +1335,23 @@ class P3QueryService:
                 observation.quote.side.value if observation.quote is not None else None
             ),
             conservative_net_edge=_p3_decimal_text(observation.conservative_net_edge),
-            position=(
-                PositionSummaryDto(
-                    position_id=position.id,
-                    outcome_player_id=position.outcome_player_id,
-                    status=position.status.value,
-                    entry_cost=str(position.entry_cost),
-                    shares=str(position.shares),
-                )
-                if position is not None
-                else None
+            max_acceptable_price=_p3_decimal_text(observation.max_acceptable_price),
+            hold_value=_p3_decimal_text(observation.hold_value),
+            model_version=observation.model_version,
+            calibration_version=observation.calibration_version,
+            policy_version=observation.policy_version,
+            data_version=(
+                prediction.data_version if prediction is not None else None
             ),
+            gates=tuple(
+                GateDto(
+                    gate=gate.gate,
+                    passed=gate.passed,
+                    reason_code=gate.reason_code,
+                )
+                for gate in observation.gates
+            ),
+            position=position_dto,
             lifecycle=tuple(lifecycle),
             is_stale=observation.is_stale,
             has_gap=observation.has_gap,
