@@ -2,9 +2,9 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-17 04:20 CST
+**最后更新：** 2026-09-17 05:15 CST
 
-**当前任务：** T70 — Prove Dual-Stream Replay, Recovery, Full Regression, and Visual Fidelity
+**当前任务：** T71 — Run the Real Read-Only Shadow Gate and Close P3
 
 **任务状态：** `in_progress`
 
@@ -12,19 +12,18 @@
 
 **分支：** `main`
 
-**任务起始提交：** `64bb505`
+**任务起始提交：** `01e6ba0`
 
-**领取提交：** 本次提交（T69 关闭 + T70 领取记录）
+**领取提交：** 本次提交（T70 关闭 + T71 领取记录）
 
-**当前动作：** T69 已以 `64bb505` 交付（后端补强 `32ab3bd`/`99c980e`/`e96e1a7`/`1f36773`）：生产 Match Page 以服务端决策快照为单一当前动作来源——全宽 DecisionSummary（12 个 canonical 状态 + 正交 STALE/GAP overlay、intent 出现后 entry 控件消失、零"真实下注"文案）、双边独立可执行 ask 与 $10 算术逐字展示（不强制互补）、ledger 派生永久 Paper lifecycle 时间线（intent-only 场合成 entry_pending/missed 明细不伪造 fill）、evidence/gates 与模型—市场轨迹图（缺失样本留缺口、无订单簿不伪造价格、sr-only 数据表）；`useDecisionStream` 生产接线 gap/malformed 只降级 decision 流并只重取 decision。冻结 `?preview=p3` 原型保持视觉真源（52 张基线原样通过）；生产移除旧侧栏市场占位（P3 规格"旧侧栏市场占位不再保留"）后，4 张 P1 match 基线经逐张 diff 审阅（仅卡片区域与其布局位移，无其他像素变化）后重生成。现按 [P3 实施计划 T70](./docs/superpowers/plans/2026-09-16-tennixai-p3-implementation.md#t70-prove-dual-stream-replay-recovery-full-regression-and-visual-fidelity) 执行：`p3_dual_stream.jsonl` replay、PostgreSQL/Redis restart recovery、本地延迟门、全量回归与 26 场景 × desktop/mobile 逐张审阅。
+**当前动作：** T70 已以 `01e6ba0` 交付：`p3_dual_stream.jsonl`（含 50-50/无入场第二 fixture）对真实 PostgreSQL+Redis 证明 sports+books+decisions+one-shot ledger+settlement 全链（upcoming→live→finished、双边订单簿、correction、disconnect/reconcile 显式 `tracking_gap`、BUY→FILLED、HOLD→SELL→EXIT_MISSED、provider-final settlement 与三条评估轨；双跑 digest 相同、restart 仅从 PostgreSQL 恢复 cursor 与 demand、intent/fill 零重复、公共输出零 provider ID/密钥、队列零溢出）；延迟门 integration 变体在真实 observation 写入 + Redis hot book 下 book→decision p95<500ms、sports→decision p95<1s 实测通过。门暴露并修复真实缺陷：exit intent 在 BOOK_UNVERIFIABLE/EXPIRED 短路下位置永久 exit_pending 导致结算非法转移，现统一记 EXIT_MISSED（`app/paper/service.py` + 回归测试）。现按 [P3 实施计划 T71](./docs/superpowers/plans/2026-09-16-tennixai-p3-implementation.md#t71-run-the-real-read-only-shadow-gate-and-close-p3) 执行真实只读 shadow gate：审计/benchmark 复跑、public REST/WS smoke、shadow backend、真实浏览器只读流、证据表，然后关闭 P3。
 
 ## 当前已验证状态
 
-- T69 验收（全部实际运行）：前端单测 392 passed（32 文件；新增 decision-summary 12 + chart 7 + paper-lifecycle 6 + match-page workbench 块）；`pnpm typecheck`/`pnpm build` 干净；完整 Playwright 110 passed/34 skipped：新增 e2e/p3-match.spec.ts 26 项（六状态家族直接刷新、buy 研究摘要且零交易 CTA、entry_pending/settled 账本时间线、decision gap 只降级 decision 流、键盘焦点、零 console/page 错误、390×844 零横向溢出 + Ask≥36px），52 张 P3 基线与 prototype/home/p2 基线原样通过，4 张 P1 match 基线逐张审阅后重生成。
-- T69 后端验收：workbench 快照扩展（versions/gates/outcome_levels/position 明细+events、intent-only 合成时间线、target_player_id）对真实 PostgreSQL integration 3 passed；确定性 backend 854 passed/77 deselected；infrastructure 保持通过。
-- T67/T68 不变量保持：双独立 stream cursor、gap 只重取自身、malformed 显式事件、重连携带自身 Last-Event-ID；Home Pulse 服务端探测与 `/markets` 降级矩阵不变。
-- T57–T68 保持关闭；T56 视觉真源保持（52 张基线零改动）；P2 保持 `done`；真实下单明确延期。诚实缺口不变：T61 真实历史数据未接入、artifact 键对齐与 `match_info` 真实来源留待 T70/T71。
-- 模型未晋升时生产必须 `NO BET`；不得伪造 `BUY`。前端只渲染服务端提供的 action/reason/lifecycle，绝不在 React 中计算 probability/edge/成交/结算。
+- T70 验收（全部实际运行）：integration 3 passed（end-to-end replay：双跑 digest 相同、restart 恢复、tracking gap、one-shot、三轨结算、公共面扫描）+ 1 passed（latency gate with durable persistence）；backend 855 确定性 passed/81 deselected、infrastructure 50 passed；新文件 ruff check+format 干净；前端 392 单测（32 文件）、typecheck/build 干净、完整 Playwright 110 passed/34 skipped（单次干净运行）。
+- T70 视觉门：52 张 P3 基线（Home 4 + Markets 8 + Match 14 场景 × desktop/mobile）自冻结提交 `f29a789` 起字节不变（`git diff f29a789 HEAD -- frontend/e2e/__screenshots__` 仅列出 4 张 P1 match 图）；26 场景 × 双视口全部 actual==expected（suite 绿即逐像素相等）。本会话唯一像素变化 = 4 张 P1 match 基线（`64bb505`），因生产 Match Page 按 P3 规格移除旧侧栏市场占位；四张 expected/actual/diff 逐张审阅：差异仅卡片区域与其引起的移动端布局位移，无其他像素变化，审阅后重生成。检查项：无横向溢出、层级与状态标签、$10 算术、stale 动作抑制、图表缺口、mobile DOM 顺序、≥36px 目标。
+- T57–T69 保持关闭；T56 视觉真源保持；P2 保持 `done`；真实下单明确延期。诚实缺口：T61 真实历史数据未接入（模型保持 `not_promoted`，生产 `NO BET`）；artifact 键对齐与 `match_info` 真实来源留待 P4。
+- 模型未晋升时生产必须 `NO BET`；不得伪造 `BUY`。前端只渲染服务端提供的 action/reason/lifecycle。
 
 ## 未跟踪文件保护
 
@@ -34,13 +33,16 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
-| 2026-09-17 | `64bb505` | T69 完成：生产 Match Decision Workbench（全宽摘要/双边对照/轨迹/依据/lifecycle、gap 独立性、键盘与移动端门）；4 张 P1 match 基线逐张审阅后重生成；Playwright 110 passed |
-| 2026-09-17 | `1f36773`/`e96e1a7`/`99c980e`/`32ab3bd` | T69 后端补强：workbench 快照 versions/gates/outcome_levels/position 明细、intent-only 时间线、target_player_id；integration 对真实 PostgreSQL 证明 |
+| 2026-09-17 | `01e6ba0` | T70 完成：dual-stream replay/recovery/latency integration 门（真实 PostgreSQL+Redis）、exit-missed 缺陷修复与回归、全量回归与视觉门证据 |
+| 2026-09-17 | `2f6fb89` | T69 关闭 + Claude 领取 T70 |
+| 2026-09-17 | `64bb505` | T69 完成：生产 Match Decision Workbench；4 张 P1 match 基线逐张审阅后重生成 |
+| 2026-09-17 | `1f36773`/`e96e1a7`/`99c980e`/`32ab3bd` | T69 后端补强：workbench 快照扩展与 intent-only 时间线 |
 | 2026-09-17 | `5ac7b1e` | T68 关闭 + Claude 领取 T69 |
-| 2026-09-17 | `39756f7` | T68 完成：生产 Home Pulse + `/markets` 三视图与降级矩阵 |
-| 2026-09-17 | `808b87e` | T67 完成：typed P3 transport、runtime 解码、七个薄代理、双独立 stream hooks |
 
 ## 下一步
 
-1. T70 实施与验收（按计划顺序）：`p3_dual_stream.jsonl` 确定性 replay（sports 与 market 双 cursor、gap 注入后只恢复自身、不补造事件/成交）；PostgreSQL 与 Redis restart 后 paper 权威恢复（Redis/浏览器丢失不能创建或抹除持仓）；本地延迟门复测（book→decision p95<500ms、sports→decision p95<1s）；全量回归（backend 确定性+infrastructure、前端单测/typecheck/build、完整 Playwright）；26 场景 × desktop/mobile 视觉基线逐张审阅（不得批量接受 diff，P1/P2 基线保持不变，除非规格要求的生产变化经逐张证明）。
-2. T70 关闭后领取 T71：真实只读 shadow gate（重跑 audit/benchmark 于真实本地数据、REST/WS smoke、shadow backend、真实浏览器、证据表），诚实 skip 带日期与 discovery counts，随后关闭 P3 并写回三份总控。
+1. T71 Step 1：在真实本地源（若存在）复跑数据审计与冻结 benchmark；无真实历史数据则记录诚实 `not_promoted` 与原因，运行时保持 `NO BET`。
+2. Step 2：`TENNIX_RUN_API_TENNIS_LIVE=1 TENNIX_RUN_POLYMARKET_LIVE=1 uv run pytest -m "api_tennis_live or polymarket_live" tests/live -v`；无活跃网球市场 = 带日期的诚实 skip + discovery counts。
+3. Step 3：新建 `backend/tests/live/test_p3_shadow_live.py`（`end_to_end_live`），shadow backend 观察已映射市场、freshness 对照、hard gates 与持久化、禁私有端点/钱包凭据；未晋升模型只允许 MARKET_ONLY/NO BET。
+4. Step 4：新建 `frontend/e2e/p3-live.spec.ts`，真实浏览器只读流（Home Pulse、/markets 三 tab、Match 双 SSE、refresh/reconnect、双语链接、terminal/empty/degraded 文案、零 console 错误、DOM/URL 零外部/provider ID）。
+5. Step 5：任何 live 修复后重跑 T70 确定性门；Step 6 以证据表关闭 P3（提交、命令/计数、promotion 结论、带日期覆盖/skip、延迟百分位、审阅截图、P4 延期项），更新三份总控并推送 origin/main。
