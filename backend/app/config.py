@@ -53,6 +53,18 @@ class Settings(BaseSettings):
     p3_market_book_freshness_seconds: int = Field(default=5, ge=1, le=60)
     p3_decision_freshness_seconds: int = Field(default=15, ge=1, le=120)
     p3_tracking_window_minutes: int = Field(default=120, ge=5, le=2880)
+    # P4 local real runtime. Live-local runs are isolated on the dedicated
+    # loopback database tennix_live_local and Redis DB 11; the guards live in
+    # app/runtime/config.py and never accept shared or production hosts.
+    local_runtime_role: Literal["off", "api", "runtime", "verify"] = "off"
+    local_runtime_database_url: str = (
+        "postgresql+asyncpg://tennix:tennix@127.0.0.1:5432/tennix_live_local"
+    )
+    local_runtime_redis_url: str = "redis://127.0.0.1:6379/11"
+    local_runtime_live_catalog_seconds: int = Field(default=60, ge=30, le=3600)
+    local_runtime_upcoming_catalog_seconds: int = Field(default=600, ge=300, le=86400)
+    local_runtime_ranking_seconds: int = Field(default=86400, ge=3600, le=604800)
+    local_runtime_market_discovery_seconds: int = Field(default=120, ge=60, le=3600)
 
     @model_validator(mode="after")
     def validate_required_credentials(self) -> "Settings":

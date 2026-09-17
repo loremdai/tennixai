@@ -91,6 +91,19 @@ def test_settings_never_expose_wallet_or_trading_credential_fields():
             )
 
 
+def test_env_example_declares_local_runtime_defaults_without_secrets():
+    text = (REPOSITORY_ROOT / ".env.example").read_text(encoding="utf-8")
+    for key in (
+        "TENNIX_LOCAL_RUNTIME_DATABASE_URL=postgresql+asyncpg://tennix:tennix@127.0.0.1:5432/tennix_live_local",
+        "TENNIX_LOCAL_RUNTIME_REDIS_URL=redis://127.0.0.1:6379/11",
+        "TENNIX_LOCAL_RUNTIME_LIVE_CATALOG_SECONDS=60",
+        "TENNIX_LOCAL_RUNTIME_UPCOMING_CATALOG_SECONDS=600",
+        "TENNIX_LOCAL_RUNTIME_RANKING_SECONDS=86400",
+        "TENNIX_LOCAL_RUNTIME_MARKET_DISCOVERY_SECONDS=120",
+    ):
+        assert key in text
+
+
 def test_env_example_declares_public_p3_settings_without_credentials():
     text = (REPOSITORY_ROOT / ".env.example").read_text(encoding="utf-8")
     for key in (
@@ -117,3 +130,59 @@ def test_env_example_declares_public_p3_settings_without_credentials():
         upper = line.upper()
         for forbidden in ("PRIVATE_KEY", "WALLET", "SEED_PHRASE", "TRADING_KEY"):
             assert forbidden not in upper, f"forbidden credential key line: {line}"
+
+
+# ---------------------------------------------------------------------------
+# P4 local real runtime configuration (T73)
+# ---------------------------------------------------------------------------
+
+
+def test_local_runtime_defaults_are_off_loopback_and_bounded():
+    settings = Settings(_env_file=None)
+    assert settings.local_runtime_role == "off"
+    assert settings.local_runtime_database_url == (
+        "postgresql+asyncpg://tennix:tennix@127.0.0.1:5432/tennix_live_local"
+    )
+    assert settings.local_runtime_redis_url == "redis://127.0.0.1:6379/11"
+    assert settings.local_runtime_live_catalog_seconds == 60
+    assert settings.local_runtime_upcoming_catalog_seconds == 600
+    assert settings.local_runtime_ranking_seconds == 86400
+    assert settings.local_runtime_market_discovery_seconds == 120
+    # Existing modes and defaults stay unchanged.
+    assert settings.provider_mode == "fake"
+    assert settings.p3_mode == "disabled"
+    assert (
+        settings.database_url
+        == "postgresql+asyncpg://tennix:tennix@127.0.0.1:5432/tennix"
+    )
+    assert settings.redis_url == "redis://127.0.0.1:6379/0"
+
+
+def test_local_runtime_role_rejects_unknown_values():
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, local_runtime_role="launcher")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, local_runtime_role="RUNTIME")
+    for role in ("off", "api", "runtime", "verify"):
+        assert (
+            Settings(_env_file=None, local_runtime_role=role).local_runtime_role == role
+        )
+
+
+def test_local_runtime_interval_bounds_are_enforced():
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, local_runtime_live_catalog_seconds=29)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, local_runtime_live_catalog_seconds=3601)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, local_runtime_upcoming_catalog_seconds=299)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, local_runtime_upcoming_catalog_seconds=86401)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, local_runtime_ranking_seconds=3599)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, local_runtime_ranking_seconds=604801)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, local_runtime_market_discovery_seconds=59)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, local_runtime_market_discovery_seconds=3601)
