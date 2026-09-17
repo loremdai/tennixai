@@ -57,6 +57,26 @@ export default defineConfig({
           configuredEnvironment.TENNIX_E2E_REAL_LLM === '1' &&
           Boolean(configuredEnvironment.TENNIX_LLM_API_KEY) &&
           Boolean(configuredEnvironment.TENNIX_LLM_BASE_URL)
+        // P4.1 spec §11: Playwright keeps its own explicit isolated config; the
+        // launcher never rewrites it, and the default deterministic suite never
+        // inherits the developer's local runtime mode choices from the root
+        // `.env` (which may now legitimately carry TENNIX_P3_MODE=paper /
+        // TENNIX_PROVIDER_MODE=api_tennis / TENNIX_LOCAL_RUNTIME_* for
+        // ./scripts/tennix-live). TENNIX_PROVIDER_MODE/TENNIX_LLM_MODE below are
+        // already computed purely from the explicit TENNIX_E2E_* opt-in flags,
+        // never read back from the root `.env`; P3 mode and the local-runtime
+        // role follow the same rule here. Only an explicit per-invocation
+        // override (set directly in this command's own environment, e.g.
+        // e2e/p3-live.spec.ts's documented `TENNIX_P3_MODE=shadow` gate) may
+        // select a non-default value; anything inherited solely from the root
+        // `.env` is pinned back to the deterministic default the suite's
+        // assertions (e.g. the honest p3_disabled panel in
+        // e2e/p3-markets.spec.ts, whose server-side probe cannot be
+        // intercepted) were written against. Credentials are untouched and
+        // still flow through `...configuredEnvironment` for opt-in live specs;
+        // only MODE variables are pinned here.
+        const p3Mode = process.env.TENNIX_P3_MODE ?? 'disabled'
+        const localRuntimeRole = process.env.TENNIX_LOCAL_RUNTIME_ROLE ?? 'off'
         return {
           ...configuredEnvironment,
           TENNIX_PROVIDER_MODE: replayEnabled
@@ -67,6 +87,8 @@ export default defineConfig({
                 ? 'live'
                 : 'fake',
           TENNIX_LLM_MODE: realLlm ? 'openai_compatible' : 'fake',
+          TENNIX_P3_MODE: p3Mode,
+          TENNIX_LOCAL_RUNTIME_ROLE: localRuntimeRole,
           ...(replayEnabled
             ? {
                 TENNIX_REPLAY_SPEED: configuredEnvironment.TENNIX_REPLAY_SPEED ?? '1',
