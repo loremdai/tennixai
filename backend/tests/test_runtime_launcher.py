@@ -833,13 +833,14 @@ def test_logs_rejects_unknown_role(launcher):
 # ---------------------------------------------------------------------------
 
 
-def test_cli_verify_is_a_placeholder_that_exits_nonzero(capsys):
-    from app.runtime.cli import main
+def test_cli_verify_command_accepts_with_llm_flag():
+    """T80: `verify` is a real bounded check, no longer a placeholder."""
+    from app.runtime.cli import build_parser
 
-    code = main(["verify"])
-    assert code != 0
-    out = capsys.readouterr().out
-    assert "T80" in out
+    args = build_parser().parse_args(["verify"])
+    assert args.command == "verify"
+    assert args.with_llm is False
+    assert build_parser().parse_args(["verify", "--with-llm"]).with_llm is True
 
 
 def test_cli_logs_rejects_unknown_role_argument():

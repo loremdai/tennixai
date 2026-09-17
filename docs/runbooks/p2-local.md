@@ -1,6 +1,8 @@
 # TennixAI P2 本地运行手册
 
 > P2（实时比赛智能）的回放验收、真实集成门与故障排查。产品边界见 `PROJECT.md`，阶段证据见 `ROADMAP.md`。
+>
+> **本地真实数据运行（P4.1 起）请改用 [`local-real-runtime.md`](./local-real-runtime.md)**：`./scripts/tennix-live init/up/status/down/verify` 是唯一的日常入口。本文件第 1 节的手工启动步骤仅保留给确定性 Replay 验收与专用 live 测试门使用，不再是真实运行的推荐路径。
 
 ## 1. 启动确定性 Replay
 
