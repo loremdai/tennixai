@@ -151,3 +151,29 @@ def test_players_carry_directory_columns() -> None:
         "last_seen_at",
     ):
         assert name in columns
+
+
+def test_runtime_state_is_keyed_canonical_payloads() -> None:
+    from sqlalchemy import DateTime, String
+    from sqlalchemy.dialects.postgresql import JSONB
+
+    from app.persistence.models import RuntimeStateRow
+
+    table = RuntimeStateRow.__table__
+    assert table.name == "runtime_state"
+    assert {column.name for column in table.primary_key.columns} == {"key"}
+    assert {column.name for column in table.columns} == {
+        "key",
+        "payload",
+        "updated_at",
+    }
+    key = table.columns["key"]
+    assert isinstance(key.type, String)
+    assert key.type.length == 64
+    payload = table.columns["payload"]
+    assert isinstance(payload.type, JSONB)
+    assert payload.nullable is False
+    updated_at = table.columns["updated_at"]
+    assert isinstance(updated_at.type, DateTime)
+    assert updated_at.type.timezone is True
+    assert updated_at.nullable is False

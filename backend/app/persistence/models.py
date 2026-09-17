@@ -638,3 +638,23 @@ class MarketResolutionRow(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+# ---------------------------------------------------------------------------
+# P4.1 local runtime state (T74). Keyed canonical payloads for the init
+# marker and health summary only; never provider identifiers, raw provider
+# JSON or secrets.
+# ---------------------------------------------------------------------------
+
+
+class RuntimeStateRow(Base):
+    """Single-row-per-key local runtime state (`local_runtime_init`,
+    `local_runtime_health`)."""
+
+    __tablename__ = "runtime_state"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
