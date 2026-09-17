@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-17 06:40 CST
+**最后更新：** 2026-09-17 08:45 CST
 
 **总体状态：** `in_progress`
 
 **当前里程碑：** P3 已关闭（T57–T71 全部 `done`，Completion Gate 逐条有证据）；下一里程碑 P4 `planned` 未领取
 
-**当前阶段：** P3 — Market & Decision Support（`in_progress`；P3.0–P3.3 已完成，T61–T65 已交付）
+**当前阶段：** P4 — Product Hardening & Optimization（`planned`；尚未领取）
 
 ## 状态说明
 
