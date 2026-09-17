@@ -239,10 +239,12 @@ class RuntimeLauncher:
         database_probe: Callable[[], Awaitable[DatabaseStatus]],
         health_probe: Callable[[], Awaitable[RuntimeHealth | None]],
         http_probe: Callable[[str], Awaitable[bool]],
+        wall_clock: Callable[[], datetime] | None = None,
         health_timeout: float = 180.0,
         api_timeout: float = 60.0,
         poll_interval: float = 1.0,
         stop_grace_seconds: float = 10.0,
+        frontend_startup_seconds: float = 3.0,
         python_executable: str | None = None,
         pnpm_executable: str = "pnpm",
     ) -> None:
@@ -265,10 +267,12 @@ class RuntimeLauncher:
         self.database_probe = database_probe
         self.health_probe = health_probe
         self.http_probe = http_probe
+        self._wall_clock = wall_clock or (lambda: datetime.now(UTC))
         self.health_timeout = health_timeout
         self.api_timeout = api_timeout
         self.poll_interval = poll_interval
         self.stop_grace_seconds = stop_grace_seconds
+        self.frontend_startup_seconds = frontend_startup_seconds
         self.python_executable = python_executable or sys.executable
         self.pnpm_executable = pnpm_executable
         self.state = LauncherState.load(self.state_dir / "state.json")
@@ -370,7 +374,16 @@ class RuntimeLauncher:
         spawned.append(runtime_process)
         self.state.processes = spawned
         self._persist()
-        if not asyncio.run(self._wait_for_healthy_runtime()):
+        runtime_outcome = asyncio.run(self._wait_for_healthy_runtime(runtime_process))
+        if runtime_outcome == "child_exited":
+            self._say(
+                "up failed: LOCAL_RUNTIME_CHILD_EXITED "
+                "(the runtime child process exited before persisting a healthy "
+                f"first discovery; see {runtime_process.log_path})"
+            )
+            self._stop_processes(spawned)
+            return EXIT_PRECONDITION
+        if runtime_outcome != "healthy":
             self._say(
                 "up failed: LOCAL_RUNTIME_UNHEALTHY "
                 "(the runtime child did not persist a healthy first discovery in time; "
@@ -423,6 +436,14 @@ class RuntimeLauncher:
         spawned.append(frontend_process)
         self.state.processes = spawned
         self._persist()
+        if not asyncio.run(self._frontend_survives_startup(frontend_process)):
+            self._say(
+                "up failed: LOCAL_FRONTEND_EXITED "
+                "(the frontend child exited immediately after spawn; "
+                f"see {frontend_process.log_path})"
+            )
+            self._stop_processes(spawned)
+            return EXIT_FAILURE
 
         self._say(
             "up complete: runtime, api and frontend children are owned by this launcher"
@@ -525,10 +546,38 @@ class RuntimeLauncher:
         else:
             stack = "stopped"
 
+        # Truthful record age: a persisted health payload may be hours old
+        # (especially while every process is down), so status always shows
+        # when it was generated and how old it is right now.
+        health_generated_at: str | None = None
+        health_age_seconds: int | None = None
+        if health is not None:
+            health_generated_at = health.generated_at.isoformat()
+            health_age_seconds = max(
+                0, int((self._wall_clock() - health.generated_at).total_seconds())
+            )
+
         if as_json:
-            self._say(json.dumps({"stack": stack, "components": components}, indent=2))
+            self._say(
+                json.dumps(
+                    {
+                        "stack": stack,
+                        "health_generated_at": health_generated_at,
+                        "health_age_seconds": health_age_seconds,
+                        "components": components,
+                    },
+                    indent=2,
+                )
+            )
         else:
             self._say(f"stack: {stack}")
+            if health_generated_at is None:
+                self._say("health record: none persisted")
+            else:
+                self._say(
+                    f"health record: generated {health_generated_at} "
+                    f"({health_age_seconds}s ago)"
+                )
             width = max(len(name) for name in components)
             for name, component in components.items():
                 detail = component["detail"] or ""
@@ -764,15 +813,46 @@ class RuntimeLauncher:
                 return False
             await self._sleep(self.poll_interval)
 
-    async def _wait_for_healthy_runtime(self) -> bool:
-        async def healthy() -> bool:
+    async def _wait_for_healthy_runtime(self, process: ManagedProcess) -> str:
+        """Wait for the persisted healthy first discovery.
+
+        Returns ``"healthy"``, ``"child_exited"`` (fail fast — a dead child
+        can never persist health, so the full timeout is never burned) or
+        ``"timeout"`` (child alive but unhealthy).
+        """
+        outcome = "timeout"
+
+        async def settled() -> bool:
+            nonlocal outcome
             try:
                 health = await self.health_probe()
             except Exception:  # noqa: BLE001 - transient probe failure keeps waiting
-                return False
-            return _is_healthy_first_discovery(health)
+                health = None
+            if _is_healthy_first_discovery(health):
+                outcome = "healthy"
+                return True
+            if not self.inspector.is_alive(process.pid):
+                outcome = "child_exited"
+                return True
+            return False
 
-        return await self._wait_for(healthy, self.health_timeout)
+        await self._wait_for(settled, self.health_timeout)
+        return outcome
+
+    async def _frontend_survives_startup(self, process: ManagedProcess) -> bool:
+        """Bounded post-spawn liveness window for the frontend child.
+
+        Process-liveness only — never binds a port and never requires HTTP
+        (full browser readiness is the T80 gate's concern). A child that
+        dies inside the window is reported instead of a fake "up complete".
+        """
+        deadline = self._clock() + self.frontend_startup_seconds
+        while True:
+            if not self.inspector.is_alive(process.pid):
+                return False
+            if self._clock() >= deadline:
+                return True
+            await self._sleep(self.poll_interval)
 
     async def _wait_for_api_health(self) -> bool:
         async def answered() -> bool:

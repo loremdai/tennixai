@@ -12,7 +12,7 @@ import signal
 import stat
 import tempfile
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -1091,3 +1091,115 @@ def test_real_signal_group_uses_killpg(monkeypatch: pytest.MonkeyPatch):
     )
     assert SubprocessCommandRunner().signal_group(424242, signal.SIGTERM) is True
     assert calls == [(424242, signal.SIGTERM)]
+
+
+# ---------------------------------------------------------------------------
+# Hardening fixes (pre-T80): dead-child fast fail, frontend liveness,
+# truthful status age
+# ---------------------------------------------------------------------------
+
+
+def _mark_dead(inspector: FakeProcessInspector, pid: int) -> None:
+    inspector.alive.discard(pid)
+    inspector.command_for_pid.pop(pid, None)
+
+
+def test_up_fails_fast_when_runtime_child_dies_during_health_wait(launcher):
+    # Fix 2a: a dead runtime child can never persist health — fail fast with
+    # a stable code and exit 2 instead of burning the full health timeout.
+    async def probe() -> None:
+        for process in launcher.state.processes:
+            if process.role == "runtime":
+                _mark_dead(launcher.inspector, process.pid)
+        return None
+
+    launcher.health_probe = probe
+    assert launcher.up() == 2
+    text = joined_output(launcher)
+    assert "LOCAL_RUNTIME_CHILD_EXITED" in text
+    assert "LOCAL_RUNTIME_UNHEALTHY" not in text
+    # The fake clock barely advanced: no timeout burn, no poll sleeps.
+    assert launcher.time.now < launcher.poll_interval
+    # The spawned record is persisted so down/status can reconcile it.
+    payload = json.loads((launcher.state_dir / "state.json").read_text())
+    assert [p["role"] for p in payload["processes"]] == ["runtime"]
+    # Nothing was signalled: the child was already dead.
+    assert launcher.runner.signalled_pids == []
+
+
+def test_up_still_times_out_for_live_but_unhealthy_runtime_child(launcher):
+    # Fix 2a must not change the existing timeout path for a live child.
+    launcher.health_probe = FakeHealthProbe(final=None)
+    assert launcher.up() == 1
+    assert "LOCAL_RUNTIME_UNHEALTHY" in joined_output(launcher)
+    assert launcher.time.now >= launcher.health_timeout
+
+
+def test_up_reports_frontend_child_exiting_immediately(launcher):
+    # Fix 2b: a frontend child that dies right after spawn must be reported
+    # with a stable code — never a fake "up complete".
+    original_spawn = launcher.runner.spawn
+
+    def spawn(argv: list[str], **kwargs: Any) -> int:
+        pid = original_spawn(argv, **kwargs)
+        role = argv[argv.index("--role") + 1]
+        if role == "frontend":
+            _mark_dead(launcher.inspector, pid)
+        return pid
+
+    launcher.runner.spawn = spawn
+    assert launcher.up() == 1
+    text = joined_output(launcher)
+    assert "LOCAL_FRONTEND_EXITED" in text
+    assert "up complete" not in text
+    assert spawned_roles(launcher.runner) == ["runtime", "api", "frontend"]
+
+
+def test_up_happy_path_survives_frontend_liveness_window(launcher):
+    # Fix 2b bounded window: an alive frontend child proceeds as before.
+    assert launcher.up() == 0
+    assert "up complete" in joined_output(launcher)
+    assert launcher.time.now <= launcher.frontend_startup_seconds + 0.001
+
+
+def test_status_text_includes_health_generated_at_and_age(launcher):
+    # Fix 3: persisted health must never look fresher than it is.
+    launcher.health_probe = FakeHealthProbe(final=runtime_gap_health())
+    launcher._wall_clock = lambda: NOW + timedelta(seconds=37)
+    assert launcher.status() == 0
+    text = joined_output(launcher)
+    assert "generated 2026-09-18T12:00:00+00:00" in text
+    assert "(37s ago)" in text
+
+
+def test_status_json_includes_health_generated_at_and_age(launcher):
+    launcher.health_probe = FakeHealthProbe(final=runtime_gap_health())
+    launcher._wall_clock = lambda: NOW + timedelta(seconds=7200)
+    assert launcher.status(as_json=True) == 0
+    data = json.loads(joined_output(launcher))
+    assert data["health_generated_at"] == NOW.isoformat()
+    assert data["health_age_seconds"] == 7200
+
+
+def test_status_age_distinguishes_old_record_from_fresh(launcher):
+    launcher.health_probe = FakeHealthProbe(final=runtime_gap_health())
+    launcher._wall_clock = lambda: NOW + timedelta(seconds=5)
+    assert launcher.status(as_json=True) == 0
+    fresh = json.loads(joined_output(launcher))
+    launcher.output.clear()
+    launcher._wall_clock = lambda: NOW + timedelta(days=1)
+    assert launcher.status(as_json=True) == 0
+    old = json.loads(joined_output(launcher))
+    assert fresh["health_age_seconds"] == 5
+    assert old["health_age_seconds"] == 86400
+
+
+def test_status_without_health_reports_no_persisted_record(launcher):
+    launcher.health_probe = FakeHealthProbe(final=None)
+    assert launcher.status() == 0
+    assert "health record: none persisted" in joined_output(launcher)
+    launcher.output.clear()
+    assert launcher.status(as_json=True) == 0
+    data = json.loads(joined_output(launcher))
+    assert data["health_generated_at"] is None
+    assert data["health_age_seconds"] is None
