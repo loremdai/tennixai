@@ -17,6 +17,7 @@ import json
 from dataclasses import dataclass
 from datetime import timedelta
 
+import pytest
 from p3_fakes import make_book, make_resolution, make_rules
 from tests_support import FakeClock, build_service_inputs
 
@@ -389,8 +390,11 @@ class FakeStateRepo:
     def __init__(self, log: list[str]) -> None:
         self.log = log
         self.saved: list[object] = []
+        self.raise_error: Exception | None = None
 
     async def save_health(self, health) -> None:
+        if self.raise_error is not None:
+            raise self.raise_error
         self.log.append("persist")
         self.saved.append(health)
 
@@ -772,6 +776,69 @@ async def test_recently_closed_markets_leave_the_recheck_window():
     assert provider.resolution_calls == []
 
 
+async def test_unsettled_positions_outrank_active_links_under_the_cap():
+    daemon, parts = make_daemon()
+    provider: FakeMarketProvider = parts["market_provider"]
+    repo: FakeMarketsRepo = parts["markets"]
+    ledger: FakeLedger = parts["ledger"]
+    repo.active_links_rows = [
+        LinkRow(f"mkt_a{i:03d}", f"mat_{i}") for i in range(39)
+    ] + [LinkRow("mkt_u1", "mat_u1")]
+    ledger.unsettled = {"mkt_u1", "mkt_u2"}
+
+    await daemon.tick_once()
+
+    calls = set(provider.resolution_calls)
+    # Unsettled positions are always polled even though active links alone
+    # overflow the cap of 32.
+    assert {"mkt_u1", "mkt_u2"} <= calls
+    assert len(provider.resolution_calls) == 32
+    # mkt_u1 is deduplicated into the unsettled class, so only 30 of the 39
+    # remaining active links fit beside the two unsettled markets.
+    assert len(calls & {f"mkt_a{i:03d}" for i in range(39)}) == 30
+
+
+async def test_overflowing_resolution_targets_rotate_to_full_coverage():
+    unsettled = {f"mkt_{i:03d}" for i in range(40)}
+    cycles_a: list[tuple[str, ...]] = []
+    cycles_b: list[tuple[str, ...]] = []
+    for record in (cycles_a, cycles_b):
+        daemon, parts = make_daemon()
+        clock: FakeClock = parts["clock"]
+        provider: FakeMarketProvider = parts["market_provider"]
+        parts["ledger"].unsettled = set(unsettled)
+        for cycle in range(5):
+            if cycle:
+                clock.advance(seconds=120)
+            provider.resolution_calls.clear()
+            await daemon.tick_once()
+            assert len(provider.resolution_calls) == 32
+            record.append(tuple(provider.resolution_calls))
+
+    # Deterministic: identical input sets and call counts give identical
+    # per-cycle polling order.
+    assert cycles_a == cycles_b
+    # Rotation reaches every overflowed target within a bounded cycle count.
+    polled: set[str] = set().union(*cycles_a)
+    assert polled == unsettled
+
+
+async def test_skipped_resolution_targets_counter_reports_the_overflow():
+    daemon, parts = make_daemon()
+    state: FakeStateRepo = parts["state"]
+    parts["ledger"].unsettled = {f"mkt_{i:03d}" for i in range(40)}
+
+    await daemon.tick_once()
+
+    assert state.saved[-1].counters["resolution_targets_skipped"] == 8
+
+    # Below the cap nothing is skipped.
+    small, small_parts = make_daemon()
+    small_parts["ledger"].unsettled = {"mkt_x", "mkt_y"}
+    await small.tick_once()
+    assert small_parts["state"].saved[-1].counters["resolution_targets_skipped"] == 0
+
+
 # ---------------------------------------------------------------------------
 # Paper maintenance: canonical hot book + metadata, fail-closed to None
 # ---------------------------------------------------------------------------
@@ -995,6 +1062,48 @@ async def test_recover_once_keeps_gap_and_retries_when_reconciliation_fails():
     assert (await health.freshness_for("mat_1", None)).has_gap is False
 
 
+async def test_recover_once_survives_persist_failure_and_repersists_later():
+    daemon, parts = make_daemon()
+    state: FakeStateRepo = parts["state"]
+    health: RuntimeHealthRegistry = parts["health"]
+    state.raise_error = RuntimeError("db_down")
+
+    # A failing state persist never aborts recovery nor escapes to run().
+    await daemon.recover_once()
+
+    assert daemon.recovered is True
+    assert state.saved == []
+
+    # Once the database returns, persisting writes the same truthful state.
+    state.raise_error = None
+    await health.persist()
+
+    final = state.saved[-1]
+    assert final.sources[SPORTS_SOURCE].status is RuntimeSourceStatus.OK
+    assert final.sources[MARKET_SOURCE].status is RuntimeSourceStatus.OK
+
+
+async def test_recover_once_degraded_path_survives_persist_failure():
+    daemon, parts = make_daemon()
+    state: FakeStateRepo = parts["state"]
+    state.raise_error = RuntimeError("db_down")
+    parts["realtime"].reconcile_raises = RuntimeError("db_down")
+
+    # Both reconciliation and the degraded-path persist fail: recovery must
+    # return quietly and stay retryable.
+    await daemon.recover_once()
+
+    assert daemon.recovered is False
+    assert state.saved == []
+
+    state.raise_error = None
+    parts["realtime"].reconcile_raises = None
+    await daemon.recover_once()
+
+    assert daemon.recovered is True
+    assert len(state.saved) >= 1
+
+
 # ---------------------------------------------------------------------------
 # Run loop and graceful shutdown
 # ---------------------------------------------------------------------------
@@ -1030,3 +1139,57 @@ async def test_run_loop_survives_repeated_tick_failures():
     degraded = parts["state"].saved[-1].sources["daemon_tick"]
     assert degraded.status is RuntimeSourceStatus.DEGRADED
     assert degraded.reason_code == "RUNTIME_ERROR"
+
+
+async def test_run_loop_survives_state_persist_failures():
+    clock = FakeClock()
+    daemon, parts = make_daemon(clock, tick_seconds=0.01)
+    state: FakeStateRepo = parts["state"]
+    state.raise_error = RuntimeError("db_down")
+
+    task = asyncio.create_task(daemon.run())
+    await asyncio.sleep(0.05)
+    # Recovery and repeated ticks keep running even though every persist —
+    # including the degraded handler's own — fails against the state store.
+    assert daemon.recovered is True
+    assert parts["realtime"].reconcile_calls >= 2
+    assert state.saved == []
+
+    # Once the database returns, the loop re-persists truthful health.
+    state.raise_error = None
+    await asyncio.sleep(0.05)
+    await daemon.stop()
+    await asyncio.wait_for(task, timeout=2)
+
+    assert len(state.saved) >= 1
+    final = state.saved[-1]
+    assert final.sources[SPORTS_SOURCE].status is RuntimeSourceStatus.OK
+    assert parts["log"][-1] == "persist"
+
+
+async def test_stop_survives_state_persist_failure():
+    clock = FakeClock()
+    daemon, parts = make_daemon(clock, tick_seconds=0.01)
+    parts["state"].raise_error = RuntimeError("db_down")
+
+    task = asyncio.create_task(daemon.run())
+    await asyncio.sleep(0.05)
+    # Shutdown completes (sockets closed, loop exits) even when the final
+    # health persist cannot reach the state store.
+    await daemon.stop()
+    await asyncio.wait_for(task, timeout=2)
+
+    assert parts["realtime"].stopped is True
+    assert parts["market_worker"].stopped is True
+
+
+async def test_run_loop_cancellation_still_propagates():
+    clock = FakeClock()
+    daemon, parts = make_daemon(clock, tick_seconds=30)
+
+    task = asyncio.create_task(daemon.run())
+    await asyncio.sleep(0.05)
+    task.cancel()
+    # Persist/recovery suppression never swallows CancelledError.
+    with pytest.raises(asyncio.CancelledError):
+        await task

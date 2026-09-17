@@ -275,6 +275,10 @@ class LocalRuntimeDaemon:
         self._recently_closed: dict[str, datetime] = {}
         self._metadata_cache: dict[str, tuple[datetime, Any]] = {}
         self._alias_synced: set[str] = set()
+        # Per-class rotation cursors for the bounded resolution recheck plus
+        # the number of unique targets skipped in the most recent cycle.
+        self._resolution_offsets: dict[str, int] = {}
+        self._resolution_skipped = 0
         self._recovered = False
         self._stopping = False
 
@@ -321,13 +325,17 @@ class LocalRuntimeDaemon:
     async def run(self) -> None:
         self._stopping = False
         while not self._stopping:
-            if not self._recovered:
-                await self.recover_once()
             try:
+                if not self._recovered:
+                    await self.recover_once()
                 await self.tick_once()
             except Exception as exc:  # noqa: BLE001 - the loop must survive
                 await self._health.mark_degraded(TICK_SOURCE, stable_reason_code(exc))
-                await self._health.persist()
+                # A failing state persist must never kill the loop: health
+                # stays truthful in memory and the next tick re-persists it
+                # once the database returns. Cancellation still propagates.
+                with contextlib.suppress(Exception):
+                    await self._health.persist()
             await asyncio.sleep(self._tick_seconds)
 
     async def stop(self) -> None:
@@ -339,7 +347,11 @@ class LocalRuntimeDaemon:
             await self._realtime.stop()
         with contextlib.suppress(Exception):
             await self._market_worker.stop()
-        await self._health.persist()
+        # Shutdown must complete even when the final persist cannot reach
+        # the state store; workers are stopped either way and nothing is
+        # deleted.
+        with contextlib.suppress(Exception):
+            await self._health.persist()
 
     async def tick_once(self) -> None:
         await self._realtime.reconcile_demand_once()
@@ -355,7 +367,11 @@ class LocalRuntimeDaemon:
         then cursors, subscriptions and hot books via REST reconciliation."""
         await self._health.mark_gap(SPORTS_SOURCE, RECOVERY_REASON)
         await self._health.mark_gap(MARKET_SOURCE, RECOVERY_REASON)
-        await self._health.persist()
+        # The gap is recorded in memory first; a persist failure must never
+        # abort recovery or escape into the run loop — the next successful
+        # persist writes the same truthful state.
+        with contextlib.suppress(Exception):
+            await self._health.persist()
         try:
             rows = await self._markets.list_active_links()
             await self._decision_worker.recover_cursors({row.match_id for row in rows})
@@ -365,13 +381,15 @@ class LocalRuntimeDaemon:
             # The gap stays: new BUY/SELL remain revoked until reconciliation
             # actually succeeds. Health is persisted so `status` is truthful.
             await self._health.mark_degraded(RECOVERY_SOURCE, stable_reason_code(exc))
-            await self._health.persist()
+            with contextlib.suppress(Exception):
+                await self._health.persist()
             return
         await self._health.mark_recovered(SPORTS_SOURCE)
         await self._health.mark_recovered(
             MARKET_SOURCE, tracked=len(self._market_worker.active_market_ids())
         )
-        await self._health.persist()
+        with contextlib.suppress(Exception):
+            await self._health.persist()
         self._recovered = True
 
     # ------------------------------------------------------------------
@@ -516,9 +534,11 @@ class LocalRuntimeDaemon:
         }
         active = {row.market_id for row in await self._markets.list_active_links()}
         unsettled = set(await self._ledger.unsettled_position_market_ids())
-        targets = sorted(active | unsettled | set(self._recently_closed))[
-            : self._max_resolution_targets
-        ]
+        targets = self._select_resolution_targets(
+            unsettled=unsettled,
+            closed=set(self._recently_closed),
+            active=active,
+        )
         failures: list[str] = []
         for market_id in targets:
             try:
@@ -536,6 +556,44 @@ class LocalRuntimeDaemon:
                 await self._capture_rules(market_id)
         if failures:
             raise RuntimeJobError(failures[0])
+
+    def _select_resolution_targets(
+        self, *, unsettled: set[str], closed: set[str], active: set[str]
+    ) -> list[str]:
+        """Priority-ordered, bounded and rotating resolution targets.
+
+        Unsettled positions outrank recently closed markets, which outrank
+        active links; each class is deduplicated against the higher-priority
+        classes and internally stable-ordered (sorted). While the union fits
+        under the cap the selection is unchanged; once a class overflows the
+        remaining budget it rotates through a per-class cursor so every
+        target is eventually rechecked — deterministic for the same input
+        sets and call count. Only the aggregate skipped count is exposed;
+        market identifiers never enter health payloads.
+        """
+        budget = self._max_resolution_targets
+        selected: list[str] = []
+        seen: set[str] = set()
+        for key, members in (
+            ("unsettled", unsettled),
+            ("closed", closed),
+            ("active", active),
+        ):
+            ordered = sorted(members - seen)
+            if not ordered:
+                continue
+            seen.update(ordered)
+            if len(ordered) > budget:
+                offset = self._resolution_offsets.get(key, 0) % len(ordered)
+                rolled = ordered[offset:] + ordered[:offset]
+                picked = rolled[:budget]
+                self._resolution_offsets[key] = (offset + budget) % len(ordered)
+            else:
+                picked = ordered
+            selected.extend(picked)
+            budget -= len(picked)
+        self._resolution_skipped = len(seen) - len(selected)
+        return selected
 
     # ------------------------------------------------------------------
     # Health surface unification
@@ -562,4 +620,7 @@ class LocalRuntimeDaemon:
         counters["decision_queue_overflow"] = (
             int(overflow()) if callable(overflow) else 0
         )
+        # Truthful overflow visibility for the bounded resolution recheck:
+        # how many unique targets the cap skipped in the most recent cycle.
+        counters["resolution_targets_skipped"] = self._resolution_skipped
         return counters
