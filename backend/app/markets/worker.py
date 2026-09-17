@@ -101,6 +101,11 @@ class MarketWorker:
         sub = self._subs.get(market_id)
         return sub.dropped if sub is not None else 0
 
+    def active_market_ids(self) -> tuple[str, ...]:
+        """Sorted copy of the currently subscribed market IDs; safe to call
+        from any owner at any time without touching worker internals."""
+        return tuple(sorted(self._subs))
+
     async def reconcile_demand_once(self) -> None:
         # Let reader tasks surface queued frames/disconnects before pumping.
         await asyncio.sleep(0)
@@ -189,6 +194,7 @@ class MarketWorker:
         )
         reducer.baseline_from_rest(rest_state, player_tokens)
         await self._deps.publisher.publish_book(market_id, rest_state)
+        await self._notify_state(market_id, rest_state)
         sub = _MarketSubscription(
             market_id=market_id,
             tokens=tokens,
@@ -243,6 +249,7 @@ class MarketWorker:
         }
         sub.reducer.baseline_from_rest(rest_state, player_tokens)
         await self._deps.publisher.publish_book(sub.market_id, rest_state)
+        await self._notify_state(sub.market_id, rest_state)
         if self._metrics is not None:
             self._metrics.increment("reconnects")
         if record_gap:
@@ -280,6 +287,17 @@ class MarketWorker:
                 return
             await self._apply(sub, event)
 
+    async def _notify_state(self, market_id: str, state: Any) -> None:
+        """Downstream decision orchestration (P3); a failure there must never
+        corrupt market hot state or suppress the just-published book."""
+        if self._on_state is None:
+            return
+        try:
+            await self._on_state(market_id, state)
+        except Exception:
+            if self._metrics is not None:
+                self._metrics.increment("decision_suppressed")
+
     async def _apply(self, sub: _MarketSubscription, event: RawMarketEvent) -> None:
         reduction = sub.reducer.apply_event(event)
         if reduction.needs_snapshot:
@@ -289,14 +307,7 @@ class MarketWorker:
             state = sub.reducer.current_state()
             if state is not None:
                 await self._deps.publisher.publish_book(sub.market_id, state)
-                if self._on_state is not None:
-                    # Downstream decision orchestration; a failure there must
-                    # never corrupt market hot state.
-                    try:
-                        await self._on_state(sub.market_id, state)
-                    except Exception:
-                        if self._metrics is not None:
-                            self._metrics.increment("decision_suppressed")
+                await self._notify_state(sub.market_id, state)
                 self._observation_buffer.append(
                     {
                         "market_id": sub.market_id,

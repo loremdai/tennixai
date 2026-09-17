@@ -7,7 +7,7 @@ are persisted before publication, and raw payloads are purged on schedule.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
 
 from app.domain import MatchSnapshot, MatchStatus, Player
@@ -80,6 +80,9 @@ class RealtimeWorker:
         now: Callable[[], datetime],
         max_live_subscriptions: int,
         provider_name: str = PROVIDER_NAME,
+        demand_source: Callable[[], Awaitable[dict[str, str]]] | None = None,
+        on_snapshot: Callable[[str, MatchSnapshot], Awaitable[None]] | None = None,
+        on_connection: Callable[[str, str], Awaitable[None]] | None = None,
     ) -> None:
         self._identity = identity
         self._snapshots = snapshots
@@ -91,9 +94,17 @@ class RealtimeWorker:
         self._now = now
         self._max = max_live_subscriptions
         self._provider_name = provider_name
+        self._demand_source = demand_source
+        self._on_snapshot = on_snapshot
+        self._on_connection = on_connection
         self._subs: dict[str, Subscription] = {}
         self._capacity_blocked: set[str] = set()
         self._current: dict[str, MatchSnapshot] = {}
+        # Isolated downstream-callback failures, readable by runtime health.
+        self.callback_failures: dict[str, int] = {
+            "on_snapshot": 0,
+            "on_connection": 0,
+        }
 
     def subscription_state(self, match_id: str) -> str:
         sub = self._subs.get(match_id)
@@ -109,6 +120,13 @@ class RealtimeWorker:
         demanded = {
             item.match_id: item.state for item in await self._leases.demanded_matches()
         }
+        if self._demand_source is not None:
+            for match_id, state in (await self._demand_source()).items():
+                # Composed demand never downgrades a live viewer lease; an
+                # active durable demand keeps the match subscribed with zero
+                # viewers.
+                if state == "active" or match_id not in demanded:
+                    demanded[match_id] = state
 
         for match_id in list(self._subs):
             if match_id not in demanded:
@@ -147,12 +165,14 @@ class RealtimeWorker:
                 await self._publisher.publish_connection(
                     match_id, "reconnecting", self._now()
                 )
+                await self._notify_connection(match_id, "reconnecting")
                 while not sub.queue.empty():
                     sub.queue.get_nowait()
                 await self._rest_reconcile(match_id, recovery=True)
                 await sub.restart_reader()
                 sub.state = "live"
                 await self._publisher.publish_connection(match_id, "live", self._now())
+                await self._notify_connection(match_id, "live")
                 continue
             while not sub.queue.empty():
                 envelope = sub.queue.get_nowait()
@@ -177,7 +197,28 @@ class RealtimeWorker:
         await self._snapshots.save_reduction(reduction)
         self._current[match_id] = reduction.snapshot
         await self._publisher.publish_delta(reduction)
+        await self._notify_snapshot(match_id, reduction.snapshot)
         return reduction
+
+    async def _notify_snapshot(self, match_id: str, snapshot: MatchSnapshot) -> None:
+        """Hand a committed snapshot downstream (P3); failures are isolated so
+        a decision failure can never corrupt or suppress P2 publication."""
+        if self._on_snapshot is None:
+            return
+        try:
+            await self._on_snapshot(match_id, snapshot)
+        except Exception:
+            self.callback_failures["on_snapshot"] += 1
+
+    async def _notify_connection(self, match_id: str, state: str) -> None:
+        """Report stable connection transitions downstream; only the match ID
+        and the canonical state string ever leave the worker."""
+        if self._on_connection is None:
+            return
+        try:
+            await self._on_connection(match_id, state)
+        except Exception:
+            self.callback_failures["on_connection"] += 1
 
     async def _hydrate_player_profiles(self, snapshot: MatchSnapshot) -> MatchSnapshot:
         """Enrich initial/recovery rows before abbreviated WS rows can overwrite them."""
