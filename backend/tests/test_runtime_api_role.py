@@ -375,3 +375,30 @@ async def test_default_role_keeps_p1_health_contract_and_no_runtime_state(client
     runtime = await client.get("/api/v1/runtime/health")
     assert runtime.status_code == 200
     assert runtime.json()["state"] == "runtime_not_started"
+
+
+async def test_build_local_runtime_assembly_constructs_offline_without_worker():
+    """T76 review smoke: the real factory builds lazily (no I/O) and never
+    constructs a realtime worker; every field is present and aclose works."""
+    from app.runtime.assembly import build_local_runtime_assembly
+    from app.runtime.config import require_live_local
+
+    settings = local_api_settings()
+    live = require_live_local(settings)
+    assembly = build_local_runtime_assembly(settings, live, now=lambda: NOW)
+    try:
+        assert assembly.database is not None
+        assert assembly.redis is not None
+        assert assembly.provider is not None
+        assert assembly.directory is not None
+        assert assembly.resolver is not None
+        assert assembly.catalog is not None
+        assert assembly.state is not None
+        assert assembly.p3_queries is not None
+        # The API role never owns an upstream connection.
+        assert assembly.realtime.worker is None
+        assert assembly.realtime.leases is not None
+        assert assembly.realtime.publisher is not None
+        assert assembly.realtime.store is not None
+    finally:
+        await assembly.aclose()
