@@ -33,6 +33,8 @@ from app.providers.fake import FakeTennisProvider
 from app.providers.livetennis import LiveTennisProvider
 from app.providers.replay import ReplayTennisProvider
 from app.realtime.worker import RealtimeWorker
+from app.runtime.assembly import LocalRuntimeAssembly, build_local_runtime_assembly
+from app.runtime.config import require_live_local
 from app.service import TennisService
 
 
@@ -53,6 +55,7 @@ def create_app(
     provider: TennisDataProvider | None = None,
     chat_orchestrator: Any = None,
     realtime: Any = None,
+    local_runtime: LocalRuntimeAssembly | None = None,
 ) -> FastAPI:
     settings = settings or Settings()
     clock = _build_clock(settings)
@@ -67,6 +70,29 @@ def create_app(
     redis_client = None
     owns_realtime = realtime is None
     provider_identity = identities
+
+    # P4.1 local `api` role (T76): fail fast with the stable typed
+    # configuration code before any client exists, then serve reads through
+    # the assembled canonical graph. This role never constructs a realtime
+    # worker, an upstream WebSocket feed or a background discovery task;
+    # upstream ownership belongs to the `runtime` process (T77/T78).
+    local_assembly: LocalRuntimeAssembly | None = None
+    if settings.local_runtime_role == "api":
+        live_local = require_live_local(settings)
+        local_assembly = (
+            local_runtime
+            if local_runtime is not None
+            else build_local_runtime_assembly(settings, live_local, now=clock)
+        )
+        provider = local_assembly.provider
+        database = local_assembly.database
+        directory = local_assembly.directory
+        resolver = local_assembly.resolver
+        redis_client = local_assembly.redis
+        owns_realtime = False  # the assembly owns and closes its resources
+        if realtime is None:
+            realtime = local_assembly.realtime
+
     if provider is None:
         if settings.provider_mode == "api_tennis":
             api_key = settings.api_tennis_api_key
@@ -114,7 +140,7 @@ def create_app(
             directory = MemoryPlayerDirectoryRepository()
             provider = FakeTennisProvider(identities=identities, now=clock)
 
-    if directory is not None:
+    if directory is not None and resolver is None:
         if settings.provider_mode == "fake":
             # Deterministic in-memory directory so fake-mode pages and Chat
             # resolve names without touching any vendor or the database. The
@@ -203,13 +229,19 @@ def create_app(
         resolver=resolver,
         directory=directory,
         seeder=seeder.ensure if seeder is not None else None,
+        catalog=local_assembly.catalog if local_assembly is not None else None,
     )
 
     # P3 read-only market provider. Assembled only when explicitly enabled;
     # public Polymarket endpoints plus the durable identity mapping. No
     # wallet, key, signing or trading channel exists anywhere in this path.
     market_provider = None
-    if settings.p3_mode != "disabled" and resolver is not None and database is not None:
+    if (
+        settings.p3_mode != "disabled"
+        and resolver is not None
+        and database is not None
+        and local_assembly is None
+    ):
         from app.markets.polymarket import PolymarketProvider
         from app.persistence.market_repositories import MarketRepository
 
@@ -247,7 +279,7 @@ def create_app(
     tracking_demand = None
     paper_service = None
     p3_queries = None
-    if settings.p3_mode != "disabled":
+    if settings.p3_mode != "disabled" and local_assembly is None:
         from pathlib import Path
 
         from app.markets.live import PolymarketMarketFeed
@@ -375,6 +407,12 @@ def create_app(
                 hot_books=market_publisher,
             )
 
+    if local_assembly is not None:
+        # Read-side P3 query facade comes from the assembly; every worker-side
+        # P3 object (market feed, decision worker, tracking demand) stays out
+        # of the API role and belongs to the runtime process.
+        p3_queries = local_assembly.p3_queries
+
     if chat_orchestrator is None:
         if settings.llm_mode == "openai_compatible":
             api_key = settings.llm_api_key
@@ -420,6 +458,8 @@ def create_app(
             await redis_client.aclose()
         if owns_realtime and database is not None:
             await database.dispose()
+        if local_assembly is not None:
+            await local_assembly.aclose()
 
     app = FastAPI(title="Tennix API", lifespan=lifespan)
     app.state.settings = settings
@@ -436,6 +476,9 @@ def create_app(
     app.state.p3_paper_service = paper_service
     app.state.p3_queries = p3_queries
     app.state.p3_redis = redis_client if p3_queries is not None else None
+    app.state.runtime_state = (
+        local_assembly.state if local_assembly is not None else None
+    )
 
     @app.middleware("http")
     async def request_id(request: Request, call_next):

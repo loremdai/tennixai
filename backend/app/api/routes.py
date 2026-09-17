@@ -24,6 +24,8 @@ from app.api.schemas import (
     PaperPositionsResponse,
     PulseResponse,
     RankingPageResponse,
+    RuntimeHealthDto,
+    RuntimeHealthResponse,
 )
 from app.chat.models import ChatEvent, ChatEventType, ChatRequest
 from app.chat.orchestrator import ChatOrchestrator
@@ -49,6 +51,23 @@ def get_orchestrator(request: Request) -> ChatOrchestrator:
 @router.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok", "service": "tennix-api"}
+
+
+@router.get("/runtime/health", response_model=RuntimeHealthResponse)
+async def runtime_health(request: Request) -> RuntimeHealthResponse:
+    """Internal P4.1 runtime health: the persisted aggregate written by the
+    local runtime daemon, or the typed `runtime_not_started` state when no
+    daemon has written one. Never exposes provider identifiers or secrets;
+    the P1 `/health` contract above is untouched."""
+    state = getattr(request.app.state, "runtime_state", None)
+    if state is None:
+        return RuntimeHealthResponse(state="runtime_not_started")
+    health = await state.load_health()
+    if health is None:
+        return RuntimeHealthResponse(state="runtime_not_started")
+    return RuntimeHealthResponse(
+        state="ok", data=RuntimeHealthDto.model_validate(health.model_dump())
+    )
 
 
 @router.get("/players/rankings", response_model=RankingPageResponse)

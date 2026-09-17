@@ -141,6 +141,14 @@ def _is_composite_player_name(name: str) -> bool:
     return "/" in normalized or "&" in normalized or " vs " in normalized
 
 
+# Canonical catalog status mapping for local-`api`-role list reads.
+_CATALOG_STATUS = {"live": MatchStatus.LIVE, "upcoming": MatchStatus.SCHEDULED}
+
+
+def _status_for(status: str) -> MatchStatus:
+    return _CATALOG_STATUS[status]
+
+
 def _player_preference_key(player: Player) -> tuple[bool, int]:
     return (player.ranking is None, player.ranking if player.ranking is not None else 1_000_000)
 
@@ -168,6 +176,7 @@ class TennisService:
         resolver=None,
         directory=None,
         seeder=None,
+        catalog=None,
     ) -> None:
         self._provider = provider
         self._cache = cache
@@ -179,6 +188,10 @@ class TennisService:
         self._directory = directory
         self._seeder = seeder
         self._seeded = seeder is None
+        # Canonical match catalog (local `api` role only). When supplied,
+        # ordinary list reads come from the persisted catalog first; when
+        # None every path below is unchanged.
+        self._catalog = catalog
 
     async def _ensure_seeded(self) -> None:
         if not self._seeded:
@@ -503,6 +516,14 @@ class TennisService:
     async def _list_by_player_id(self, status: str, player_id: str | None) -> list[Match]:
         if status not in {"live", "upcoming"}:
             raise AppError("invalid_request", "Status must be live or upcoming", 422)
+        if self._catalog is not None:
+            # Canonical-first ordinary list read (local `api` role). The
+            # bounded user-driven provider fallback in
+            # `resolve_match_snapshot` is deliberately not routed through
+            # this branch.
+            return await self._catalog.list_matches(
+                _status_for(status), player_id=player_id
+            )
 
         async def load() -> object:
             if status == "live":
