@@ -9,6 +9,7 @@ network.
 import json
 import os
 import signal
+import stat
 import tempfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -27,6 +28,7 @@ from app.runtime.launcher import (
     LauncherState,
     ManagedProcess,
     RuntimeLauncher,
+    SubprocessCommandRunner,
     default_state_dir,
 )
 from app.runtime.models import (
@@ -932,3 +934,160 @@ def test_daemon_main_module_exists_with_entrypoint():
     import app.runtime.daemon_main as daemon_main
 
     assert callable(daemon_main.main)
+
+
+# ---------------------------------------------------------------------------
+# Review-finding regressions (T79 code review)
+# ---------------------------------------------------------------------------
+
+
+def test_second_up_with_live_owned_child_refuses_and_keeps_state(launcher):
+    # Finding 1: a live, correctly-tokenized recorded child must never be
+    # orphaned by a second up spawning a duplicate upstream owner.
+    assert launcher.up() == 0
+    recorded_before = [p.to_dict() for p in launcher.state.processes]
+    spawns_before = len(launcher.runner.spawned)
+    launcher.output.clear()
+
+    assert launcher.up() == 2
+
+    text = joined_output(launcher)
+    assert "LOCAL_ALREADY_RUNNING" in text
+    assert f"role=runtime pid={recorded_before[0]['pid']}" in text
+    # Zero new spawns, nothing signalled.
+    assert len(launcher.runner.spawned) == spawns_before
+    assert launcher.runner.signalled_pids == []
+    # The state file still records the first children, not a replacement.
+    payload = json.loads((launcher.state_dir / "state.json").read_text())
+    assert payload["processes"] == recorded_before
+
+
+def test_second_up_proceeds_after_all_recorded_children_died(launcher):
+    assert launcher.up() == 0
+    for process in launcher.state.processes:
+        launcher.inspector.alive.discard(process.pid)
+        launcher.inspector.command_for_pid.pop(process.pid, None)
+
+    assert launcher.up() == 0
+    assert len(launcher.runner.spawned) == 6
+    assert spawned_roles(launcher.runner) == [
+        "runtime",
+        "api",
+        "frontend",
+        "runtime",
+        "api",
+        "frontend",
+    ]
+
+
+def test_up_refuses_to_overwrite_record_of_alive_unowned_pid(launcher):
+    # Finding 1: alive-but-not-ours means state integrity is broken — refuse,
+    # never overwrite the record, never signal anything.
+    launcher.state.processes = [ManagedProcess(role="api", pid=123, token="ours")]
+    launcher.inspector.command_for_pid[123] = "python unrelated.py"
+    assert launcher.up() == 2
+    assert "LOCAL_PROCESS_UNOWNED" in joined_output(launcher)
+    assert launcher.runner.spawned == []
+    assert launcher.runner.signalled_pids == []
+    assert [p.pid for p in launcher.state.processes] == [123]
+
+
+def test_init_failure_persists_cleared_marker(launcher):
+    # Finding 2: a failing init must leave the on-disk state without the
+    # initialized marker, not just the in-memory copy.
+    launcher.state.save(launcher.state_dir / "state.json")
+    payload_before = json.loads((launcher.state_dir / "state.json").read_text())
+    assert payload_before["initialized"] is True
+
+    launcher.bootstrap.error = RuntimeError("ranking sync failed")
+    assert launcher.init() == 1
+
+    payload = json.loads((launcher.state_dir / "state.json").read_text())
+    assert payload["initialized"] is False
+    assert payload["schema_head"] is None
+
+
+def test_state_save_creates_file_with_mode_0600(tmp_path: Path):
+    # Finding 3: the state file (carrying tokens) is 0600 from creation and
+    # its directory 0700 — never world/group-readable at any point.
+    path = tmp_path / "nested" / "state.json"
+    LauncherState().save(path)
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
+
+
+def test_sigkill_escalation_rechecks_ownership_after_grace(launcher):
+    # Finding 4: a PID that dies during the grace period and is "reused" by a
+    # foreign command must NOT receive SIGKILL.
+    launcher.state.processes = [ManagedProcess(role="runtime", pid=900, token="tok-r")]
+    launcher.inspector.register(
+        900, "python -m app.runtime.child --token tok-r --role runtime -- x"
+    )
+    launcher.inspector.stubborn.add(900)
+    original_signal_group = launcher.runner.signal_group
+
+    def signal_group(pid: int, signum: int) -> bool:
+        result = original_signal_group(pid, signum)
+        if signum == signal.SIGTERM:
+            # The child exits and the PID is reused by a foreign command
+            # between the grace period and the escalation.
+            launcher.inspector.command_for_pid[900] = "totally foreign command"
+        return result
+
+    launcher.runner.signal_group = signal_group
+    assert launcher.down() == 0
+    assert launcher.runner.signals == [(900, signal.SIGTERM)]
+    assert (900, signal.SIGKILL) not in launcher.runner.signals
+    assert "LOCAL_PROCESS_UNOWNED" in joined_output(launcher)
+    # The unstopped record is kept for the next reconciliation (Finding 5).
+    assert [p.pid for p in launcher.state.processes] == [900]
+
+
+def test_down_keeps_records_it_refused_or_failed_to_stop(launcher):
+    # Finding 5: down clears only what actually stopped or was already dead.
+    launcher.state.processes = [
+        ManagedProcess(role="runtime", pid=31, token="tok-a"),  # already dead
+        ManagedProcess(role="api", pid=32, token="tok-b"),  # alive, not ours
+    ]
+    launcher.inspector.command_for_pid[32] = "python unrelated.py"
+    assert launcher.down() == 0
+    assert launcher.runner.signalled_pids == []
+    assert [p.pid for p in launcher.state.processes] == [32]
+    payload = json.loads((launcher.state_dir / "state.json").read_text())
+    assert [p["pid"] for p in payload["processes"]] == [32]
+
+
+def test_real_spawn_pins_start_new_session(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    # Finding 6: without start_new_session the child shares the launcher's
+    # process group and killpg would target the launcher itself.
+    captured: dict[str, Any] = {}
+
+    class FakePopen:
+        def __init__(self, argv: Any, **kwargs: Any) -> None:
+            captured["argv"] = argv
+            captured.update(kwargs)
+            self.pid = 424242
+
+    monkeypatch.setattr("app.runtime.launcher.subprocess.Popen", FakePopen)
+    pid = SubprocessCommandRunner().spawn(
+        ["python", "-m", "app.runtime.child"],
+        cwd=str(tmp_path),
+        env={},
+        log_path=str(tmp_path / "runtime.log"),
+    )
+    assert pid == 424242
+    assert captured["start_new_session"] is True
+
+
+def test_real_signal_group_uses_killpg(monkeypatch: pytest.MonkeyPatch):
+    # Finding 6: the real signal path must kill the child's process group
+    # (os.killpg), never the launcher's own group. Nothing real is killed.
+    calls: list[tuple[int, int]] = []
+    monkeypatch.setattr(
+        "app.runtime.launcher.os.killpg",
+        lambda pid, signum: calls.append((pid, signum)),
+    )
+    assert SubprocessCommandRunner().signal_group(424242, signal.SIGTERM) is True
+    assert calls == [(424242, signal.SIGTERM)]

@@ -127,7 +127,14 @@ class LauncherState:
 
     def save(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(self.to_payload(), indent=2) + "\n")
+        os.chmod(path.parent, 0o700)
+        payload = json.dumps(self.to_payload(), indent=2) + "\n"
+        # Create with mode 0600 from the start (never write-then-chmod): the
+        # state file carries ownership tokens.
+        fd = os.open(path, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(payload)
+        # Normalize files created before this guard existed.
         os.chmod(path, 0o600)
 
     @classmethod
@@ -272,10 +279,11 @@ class RuntimeLauncher:
 
     def init(self) -> int:
         # init is the only authority for the initialized marker: clear any
-        # stale marker up front so a failed init never leaves fake-looking
-        # partial success behind.
+        # stale marker up front — on disk too — so a failed init never leaves
+        # fake-looking partial success behind.
         self.state.initialized = False
         self.state.schema_head = None
+        self._persist()
         try:
             settings, live = self._validated_settings()
         except LiveLocalConfigurationError as exc:
@@ -345,6 +353,9 @@ class RuntimeLauncher:
                 "run ./scripts/tennix-live init first)"
             )
             return EXIT_PRECONDITION
+        recorded_failure = self._check_recorded_processes()
+        if recorded_failure is not None:
+            return recorded_failure
         port_failure = self._check_ports()
         if port_failure is not None:
             return port_failure
@@ -534,23 +545,38 @@ class RuntimeLauncher:
             "down: stopping the runtime first (graceful flush), then api/frontend, "
             "then exactly-owned compose containers"
         )
+        # Keep records that were NOT successfully stopped (refused or failed)
+        # so the next run can reconcile them; clear only what actually
+        # stopped or was already dead.
+        remaining: list[ManagedProcess] = []
         for role in MANAGED_ROLES:
             for process in list(self.state.processes):
-                if process.role == role:
-                    self._stop_process(process)
+                if process.role == role and not self._stop_process(process):
+                    remaining.append(process)
+        kept_containers: dict[str, str] = {}
         for service, container_id in list(self.state.containers.items()):
             current = self._compose_container_id(service)
             if current and current == container_id:
-                self.runner.run(
+                result = self.runner.run(
                     ["docker", "stop", container_id], cwd=str(self.root_dir)
                 )
-                self._say(f"down: stopped owned {service} container")
+                if result.returncode == 0:
+                    self._say(f"down: stopped owned {service} container")
+                else:
+                    kept_containers[service] = container_id
+                    self._say(
+                        f"down: LOCAL_CONTAINER_STOP_FAILED service={service} "
+                        "(docker stop did not succeed; the record is kept)"
+                    )
             else:
+                # The recorded ID is not the current container (or none is
+                # reported): the record is stale, the container is left
+                # untouched.
                 self._say(
                     f"down: {service} container is not an exact owned match; left untouched"
                 )
-        self.state.processes = []
-        self.state.containers = {}
+        self.state.processes = remaining
+        self.state.containers = kept_containers
         self._persist()
         self._say(
             "down complete: all data preserved (no volumes touched, no destructive commands)"
@@ -627,6 +653,31 @@ class RuntimeLauncher:
                 self.state.containers[service] = after
         self._persist()
         return dict(self.state.containers)
+
+    def _check_recorded_processes(self) -> int | None:
+        """Never spawn a second upstream owner and never overwrite records of
+        live processes: refuse ``up`` while any recorded managed process is
+        still alive, owned or not. Nothing is signalled here."""
+        for process in self.state.processes:
+            if not self.inspector.is_alive(process.pid):
+                continue
+            if self._owned(process):
+                self._say(
+                    f"up refused: LOCAL_ALREADY_RUNNING "
+                    f"role={process.role} pid={process.pid} "
+                    "(a managed child of this launcher is still alive; "
+                    "use ./scripts/tennix-live status or down first)"
+                )
+            else:
+                self._say(
+                    f"up refused: LOCAL_PROCESS_UNOWNED "
+                    f"role={process.role} pid={process.pid} "
+                    "(the recorded pid is alive but its command line is not our "
+                    "wrapper; refusing to overwrite its record; "
+                    "no process was signalled)"
+                )
+            return EXIT_PRECONDITION
+        return None
 
     def _check_ports(self) -> int | None:
         owned_pids = {str(process.pid) for process in self.state.processes}
@@ -738,21 +789,40 @@ class RuntimeLauncher:
         except Exception:  # noqa: BLE001 - status must never crash on a probe error
             return None
 
-    def _stop_process(self, process: ManagedProcess) -> None:
+    def _stop_process(self, process: ManagedProcess) -> bool:
+        """Stop one managed child. Returns True when its record may be
+        cleared (already dead or successfully stopped) and False when it was
+        NOT stopped (unowned, or signalling failed) — callers must keep such
+        records for the next reconciliation."""
         if not self.inspector.is_alive(process.pid):
-            return
+            return True
         if not self._owned(process):
             self._say(
                 f"stop: LOCAL_PROCESS_UNOWNED role={process.role} pid={process.pid} "
                 "was NOT signalled (its command line does not carry our wrapper token)"
             )
-            return
+            return False
         self.runner.signal_group(process.pid, signal.SIGTERM)
         deadline = self._clock() + self.stop_grace_seconds
         while self.inspector.is_alive(process.pid) and self._clock() < deadline:
             self._sleep_sync(STOP_POLL_SECONDS)
-        if self.inspector.is_alive(process.pid):
-            self.runner.signal_group(process.pid, signal.SIGKILL)
+        if not self.inspector.is_alive(process.pid):
+            return True
+        # PID-reuse guard: re-prove ownership immediately before SIGKILL.
+        if not self._owned(process):
+            self._say(
+                f"stop: LOCAL_PROCESS_UNOWNED role={process.role} pid={process.pid} "
+                "no longer carries our wrapper token after the grace period; "
+                "SIGKILL was NOT sent and the record is kept"
+            )
+            return False
+        if not self.runner.signal_group(process.pid, signal.SIGKILL):
+            self._say(
+                f"stop: LOCAL_SIGNAL_FAILED role={process.role} pid={process.pid} "
+                "(SIGKILL could not be delivered; the record is kept)"
+            )
+            return False
+        return True
 
     def _stop_processes(self, processes: list[ManagedProcess]) -> None:
         for role in MANAGED_ROLES:
