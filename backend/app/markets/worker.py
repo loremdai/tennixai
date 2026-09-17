@@ -66,6 +66,7 @@ class MarketWorker:
         retention_days: int = RAW_RETENTION_DAYS,
         cleanup_interval_cycles: int = 50,
         on_state: Callable[[str, Any], Awaitable[None]] | None = None,
+        on_connection: Callable[[str, str], Awaitable[None]] | None = None,
         metrics: Any = None,
     ) -> None:
         self._deps = _WorkerDeps(feed, rest, publisher, observations, raw)
@@ -78,8 +79,16 @@ class MarketWorker:
         self._retention_days = retention_days
         self._cleanup_interval = cleanup_interval_cycles
         self._on_state = on_state
+        self._on_connection = on_connection
         self._metrics = metrics
+        # Public so the runtime daemon can aggregate hook failures into one
+        # health surface; only counts, never identifiers.
+        self.callback_failures: dict[str, int] = {
+            "on_state": 0,
+            "on_connection": 0,
+        }
         self._subs: dict[str, _MarketSubscription] = {}
+        self._starting: set[str] = set()
         self._capacity_blocked: set[str] = set()
         self._observation_buffer: list[dict] = []
         self._cycles = 0
@@ -158,6 +167,9 @@ class MarketWorker:
         self._stopping = True
         for market_id in list(self._subs):
             await self._close(market_id)
+        # Graceful shutdown preserves buffered observations through the same
+        # bounded batch path a reconcile cycle uses; nothing is deleted.
+        await self._flush_observations()
 
     async def run_replay_once(self, feed) -> None:
         """Consume a deterministic replay feed to completion (replay gates)."""
@@ -181,30 +193,41 @@ class MarketWorker:
     # ------------------------------------------------------------------
 
     async def _start(self, market_id: str) -> None:
-        tokens = await self._token_lookup(market_id)
-        rest_state = await self._deps.rest.get_order_book(market_id)
-        player_tokens = {
-            book.outcome_player_id: token
-            for book, token in zip(rest_state.books, tokens, strict=True)
-        }
-        reducer = MarketBookReducer(
-            market_id=market_id,
-            token_players={token: player for player, token in player_tokens.items()},
-            now_fn=self._now,
-        )
-        reducer.baseline_from_rest(rest_state, player_tokens)
-        await self._deps.publisher.publish_book(market_id, rest_state)
-        await self._notify_state(market_id, rest_state)
-        sub = _MarketSubscription(
-            market_id=market_id,
-            tokens=tokens,
-            reducer=reducer,
-            queue=asyncio.Queue(maxsize=self._queue_size),
-            stream=self._deps.feed.stream_market(market_id, tokens),
-            started_at=self._now(),
-        )
-        self._subs[market_id] = sub
-        sub.reader = asyncio.create_task(self._read(sub))
+        # Re-entrancy guard: the runtime daemon is the single sequential
+        # caller, but a duplicated concurrent start must never double
+        # subscribe or double publish a baseline.
+        if market_id in self._starting or market_id in self._subs:
+            return
+        self._starting.add(market_id)
+        try:
+            tokens = await self._token_lookup(market_id)
+            rest_state = await self._deps.rest.get_order_book(market_id)
+            player_tokens = {
+                book.outcome_player_id: token
+                for book, token in zip(rest_state.books, tokens, strict=True)
+            }
+            reducer = MarketBookReducer(
+                market_id=market_id,
+                token_players={
+                    token: player for player, token in player_tokens.items()
+                },
+                now_fn=self._now,
+            )
+            reducer.baseline_from_rest(rest_state, player_tokens)
+            await self._deps.publisher.publish_book(market_id, rest_state)
+            await self._notify_state(market_id, rest_state)
+            sub = _MarketSubscription(
+                market_id=market_id,
+                tokens=tokens,
+                reducer=reducer,
+                queue=asyncio.Queue(maxsize=self._queue_size),
+                stream=self._deps.feed.stream_market(market_id, tokens),
+                started_at=self._now(),
+            )
+            self._subs[market_id] = sub
+            sub.reader = asyncio.create_task(self._read(sub))
+        finally:
+            self._starting.discard(market_id)
 
     async def _read(self, sub: _MarketSubscription) -> None:
         """Receive callback does no I/O: validate-and-enqueue only. A full
@@ -242,6 +265,12 @@ class MarketWorker:
     async def _rest_reconcile(
         self, sub: _MarketSubscription, *, reason: str, record_gap: bool
     ) -> None:
+        # A recorded gap is a real upstream interruption: report the stable
+        # "reconnecting" transition before rebuilding from REST, and "live"
+        # once the reconcile succeeded. Silent hot-state recovery is not a
+        # connection transition and reports nothing.
+        if record_gap:
+            await self._notify_connection(sub.market_id, "reconnecting")
         rest_state = await self._deps.rest.get_order_book(sub.market_id)
         player_tokens = {
             book.outcome_player_id: token
@@ -278,6 +307,8 @@ class MarketWorker:
                     await sub.reader
             sub.reader = asyncio.create_task(self._read(sub))
             sub.state = "live"
+            if record_gap:
+                await self._notify_connection(sub.market_id, "live")
 
     async def _pump(self, sub: _MarketSubscription) -> None:
         while True:
@@ -295,8 +326,19 @@ class MarketWorker:
         try:
             await self._on_state(market_id, state)
         except Exception:
+            self.callback_failures["on_state"] += 1
             if self._metrics is not None:
                 self._metrics.increment("decision_suppressed")
+
+    async def _notify_connection(self, market_id: str, state: str) -> None:
+        """Report stable connection transitions downstream; only the market
+        ID and the canonical state string ever leave the worker."""
+        if self._on_connection is None:
+            return
+        try:
+            await self._on_connection(market_id, state)
+        except Exception:
+            self.callback_failures["on_connection"] += 1
 
     async def _apply(self, sub: _MarketSubscription, event: RawMarketEvent) -> None:
         reduction = sub.reducer.apply_event(event)

@@ -238,6 +238,70 @@ async def test_reupsert_reports_no_new_players(
     assert await catalog.get_match(upcoming_match.id) is not None
 
 
+async def test_partial_reupsert_preserves_populated_catalog_fields(
+    database: Database,
+) -> None:
+    catalog = MatchCatalogRepository(database)
+    full = _make_match(
+        status=MatchStatus.SCHEDULED, scheduled_at=NOW + timedelta(hours=3)
+    )
+    await catalog.upsert_matches([full], observed_at=NOW)
+
+    # A later partial fixture (provider omitted optional fields) must never
+    # clobber already-populated canonical facts with None.
+    partial = full.model_copy(
+        update={
+            "scheduled_at": None,
+            "round": None,
+            "surface": None,
+            "indoor": None,
+            "format": None,
+            "winner_player_id": None,
+        }
+    )
+    await catalog.upsert_matches([partial], observed_at=NOW + timedelta(minutes=5))
+
+    stored = await catalog.get_match(full.id)
+    assert stored is not None
+    assert stored.scheduled_at == full.scheduled_at
+    assert stored.round == "R16"
+    assert stored.surface == "hard"
+    assert stored.indoor is False
+    assert stored.format == "best_of_3"
+
+
+async def test_none_fields_still_update_when_values_arrive(
+    database: Database,
+) -> None:
+    catalog = MatchCatalogRepository(database)
+    skeleton = _make_match(status=MatchStatus.SCHEDULED, scheduled_at=None)
+    skeleton = skeleton.model_copy(
+        update={"round": None, "surface": None, "indoor": None, "format": None}
+    )
+    await catalog.upsert_matches([skeleton], observed_at=NOW)
+    stored = await catalog.get_match(skeleton.id)
+    assert stored is not None and stored.round is None
+
+    enriched = skeleton.model_copy(
+        update={
+            "scheduled_at": NOW + timedelta(hours=4),
+            "round": "QF",
+            "surface": "clay",
+            "indoor": True,
+            "format": "best_of_5",
+        }
+    )
+    await catalog.upsert_matches([enriched], observed_at=NOW + timedelta(minutes=10))
+
+    stored = await catalog.get_match(skeleton.id)
+    assert stored is not None
+    assert stored.scheduled_at == enriched.scheduled_at
+    assert stored.round == "QF"
+    assert stored.surface == "clay"
+    assert stored.indoor is True
+    assert stored.format == "best_of_5"
+
+
 async def test_upsert_never_regresses_finished_match_to_scheduled(
     database: Database,
 ) -> None:

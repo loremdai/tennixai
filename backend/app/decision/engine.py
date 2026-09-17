@@ -206,7 +206,11 @@ class DecisionEngine:
             return observation(
                 DecisionAction.NO_BET, reason=DecisionReason.DATA_INCOMPLETE.value
             )
-        if not gate("freshness", not data.book.is_stale and not data.is_stale, "STALE"):
+        if not gate(
+            "freshness",
+            not data.book.is_stale and not data.is_stale and not data.has_gap,
+            "STALE",
+        ):
             return observation(DecisionAction.NO_BET, reason=overlay_reason or "STALE")
         gate("book", True)
 

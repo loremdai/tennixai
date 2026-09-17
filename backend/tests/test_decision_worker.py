@@ -138,6 +138,10 @@ def available_prediction():
 
 @pytest.fixture()
 def env():
+    return make_env()
+
+
+def make_env(freshness_for=None):
     from app.decision.engine import DecisionEngine
     from app.decision.policy import PolicyArtifact
 
@@ -157,6 +161,7 @@ def env():
         publisher=FakeDecisionPublisher(log),
         metrics=P3Metrics(),
         clock=clock.now,
+        freshness_for=freshness_for,
     )
     return {
         "worker": worker,
@@ -169,6 +174,23 @@ def env():
         "paper": worker._paper,  # noqa: SLF001
         "metrics": worker._metrics,  # noqa: SLF001
     }
+
+
+class StubOverlay:
+    def __init__(self, *, is_stale: bool = False, has_gap: bool = False) -> None:
+        self.is_stale = is_stale
+        self.has_gap = has_gap
+        self.reason_code = "STALE" if is_stale else "GAP" if has_gap else None
+
+
+class StubFreshness:
+    def __init__(self, overlay: StubOverlay) -> None:
+        self._overlay = overlay
+        self.calls: list[tuple[str, str | None]] = []
+
+    async def __call__(self, match_id: str, market_id: str | None) -> StubOverlay:
+        self.calls.append((match_id, market_id))
+        return self._overlay
 
 
 async def test_sports_update_runs_prediction_then_decision(env):
@@ -268,3 +290,41 @@ async def test_metrics_record_stage_latencies_without_ids(env):
     assert "mat_1" not in serialized
     assert "mkt_1" not in serialized
     assert "ply_" not in serialized
+
+
+async def test_stale_overlay_revokes_new_buy_without_touching_the_ledger():
+    freshness = StubFreshness(StubOverlay(is_stale=True))
+    env = make_env(freshness_for=freshness)
+
+    await env["worker"].handle_sports("mat_1", snapshot=None)
+
+    assert freshness.calls == [("mat_1", "mkt_1")]
+    saved = env["observations"].saved
+    assert saved[-1].action is DecisionAction.NO_BET
+    assert saved[-1].reason_code == "STALE"
+    assert saved[-1].is_stale is True
+    assert env["paper"].decisions == []
+
+
+async def test_gap_overlay_revokes_new_buy_and_flags_the_observation():
+    freshness = StubFreshness(StubOverlay(has_gap=True))
+    env = make_env(freshness_for=freshness)
+
+    await env["worker"].handle_sports("mat_1", snapshot=None)
+
+    saved = env["observations"].saved
+    assert saved[-1].action is DecisionAction.NO_BET
+    assert saved[-1].reason_code == "GAP"
+    assert saved[-1].has_gap is True
+    assert env["paper"].decisions == []
+
+
+async def test_default_worker_never_consults_a_freshness_callback(env):
+    # Byte-compatible default: with freshness_for=None the decision cycle
+    # behaves exactly as before the overlay existed.
+    await env["worker"].handle_sports("mat_1", snapshot=None)
+
+    saved = env["observations"].saved
+    assert saved[-1].action is DecisionAction.BUY
+    assert saved[-1].is_stale is False
+    assert saved[-1].has_gap is False

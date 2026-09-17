@@ -7,6 +7,7 @@ deterministic replay feed.
 """
 
 import asyncio
+import json
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -21,6 +22,7 @@ from app.markets.models import (
 from app.markets.reducer import RawMarketEvent
 from app.markets.replay import ReplayMarketFeed
 from app.markets.worker import MarketWorker
+from app.realtime.p3_metrics import P3Metrics
 
 NOW = datetime(2026, 9, 16, 12, 0, tzinfo=UTC)
 TOKEN_A = "990001112223334445551"
@@ -194,6 +196,9 @@ def make_worker(
     batch_size: int = 8,
     max_subscriptions: int = 8,
     cleanup_interval_cycles: int = 50,
+    on_state=None,
+    on_connection=None,
+    metrics=None,
 ) -> tuple[MarketWorker, dict]:
     parts = {
         "feed": feed or FakeMarketFeed(),
@@ -217,6 +222,9 @@ def make_worker(
         queue_size=queue_size,
         batch_size=batch_size,
         cleanup_interval_cycles=cleanup_interval_cycles,
+        on_state=on_state,
+        on_connection=on_connection,
+        metrics=metrics,
     )
     return worker, parts
 
@@ -436,3 +444,110 @@ async def test_replay_feed_is_deterministic_and_covers_contract_shapes():
     assert first == second
     assert len(first) >= 3
     assert all(entry["market_id"] == "mkt_replay_1" for entry in first)
+
+
+# ---------------------------------------------------------------------------
+# T78 runtime hooks: connection transitions, callback isolation, shutdown
+# ---------------------------------------------------------------------------
+
+
+async def test_connection_transitions_report_stable_states_only():
+    clock = FakeClock()
+    events: list[tuple[str, str]] = []
+
+    async def on_connection(market_id: str, state: str) -> None:
+        events.append((market_id, state))
+
+    worker, parts = make_worker(clock, on_connection=on_connection)
+
+    # Initial subscribe fires no connection event, mirroring RealtimeWorker.
+    await worker.reconcile_demand_once()
+    assert events == []
+
+    # A disconnect reports "reconnecting", the successful REST reconcile
+    # reports "live" — stable values only.
+    await parts["feed"].disconnect(MKT_1)
+    await asyncio.sleep(0.01)
+    await worker.reconcile_demand_once()
+    assert events == [(MKT_1, "reconnecting"), (MKT_1, "live")]
+
+    # Redis hot-state loss is not a connection gap: no transition events.
+    parts["publisher"].clear_hot()
+    await worker.reconcile_demand_once()
+    assert events == [(MKT_1, "reconnecting"), (MKT_1, "live")]
+
+
+async def test_callback_failures_are_counted_and_isolated():
+    clock = FakeClock()
+    metrics = P3Metrics()
+
+    async def boom_state(market_id: str, state) -> None:
+        raise RuntimeError("downstream_state_failure")
+
+    async def boom_connection(market_id: str, state: str) -> None:
+        raise RuntimeError("downstream_connection_failure")
+
+    worker, parts = make_worker(
+        clock,
+        on_state=boom_state,
+        on_connection=boom_connection,
+        metrics=metrics,
+    )
+
+    await worker.reconcile_demand_once()
+    # The published hot book survives a failing on_state callback.
+    assert MKT_1 in parts["publisher"].hot
+    assert worker.callback_failures["on_state"] == 1
+    assert worker.callback_failures["on_connection"] == 0
+    exported = json.loads(metrics.export())
+    assert exported["counters"].get("decision_suppressed", 0) >= 1
+
+    await parts["feed"].disconnect(MKT_1)
+    await asyncio.sleep(0.01)
+    await worker.reconcile_demand_once()
+
+    # A failing on_connection never blocks the reconcile itself.
+    assert worker.callback_failures["on_connection"] == 2
+    assert worker.subscription_state(MKT_1) == "live"
+    assert parts["sink"].gaps
+
+
+async def test_stop_closes_subscriptions_and_flushes_pending_observations():
+    clock = FakeClock()
+    worker, parts = make_worker(clock, batch_size=8)
+    await worker.reconcile_demand_once()
+    await asyncio.sleep(0.01)  # let the reader task actually start
+    assert parts["sink"].batches == []
+
+    # Simulate rows buffered by an interrupted cycle (flush is the last step
+    # of a reconcile; a mid-cycle failure can leave the buffer non-empty).
+    worker._observation_buffer.append(  # noqa: SLF001 - test seeding
+        {
+            "market_id": MKT_1,
+            "match_id": None,
+            "kind": "book_change",
+            "payload": {"sequence": 1, "book_hash": "hash_x"},
+            "observed_at": NOW.isoformat(),
+        }
+    )
+
+    await worker.stop()
+
+    assert MKT_1 in parts["feed"].closed
+    assert worker.subscription_state(MKT_1) == "closed"
+    assert len(parts["sink"].batches) == 1
+    assert parts["sink"].batches[0][0]["market_id"] == MKT_1
+    assert worker._observation_buffer == []  # noqa: SLF001
+
+
+async def test_start_is_guarded_against_reentrant_callers():
+    clock = FakeClock()
+    worker, parts = make_worker(clock)
+
+    # The daemon is the single sequential caller; the guard is cheap
+    # insurance so a duplicated concurrent start cannot double-subscribe.
+    await asyncio.gather(worker._start(MKT_1), worker._start(MKT_1))  # noqa: SLF001
+
+    assert parts["rest"].calls.count(MKT_1) == 1
+    assert worker.subscription_state(MKT_1) == "live"
+    await worker.stop()

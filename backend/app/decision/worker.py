@@ -115,6 +115,7 @@ class DecisionWorker:
         metrics,
         clock: Callable[[], datetime],
         queue_size: int = 64,
+        freshness_for: Callable[[str, str | None], Awaitable[object]] | None = None,
     ) -> None:
         self._predictor = predictor
         self._engine = engine
@@ -127,6 +128,9 @@ class DecisionWorker:
         self._metrics = metrics
         self._clock = clock
         self._queue_size = queue_size
+        # Optional runtime freshness overlay (T78). Default None keeps the
+        # existing byte-compatible behavior: no overlay lookup, no overhead.
+        self._freshness_for = freshness_for
         self._queues: dict[str, asyncio.Queue] = {}
         self._overflow: dict[str, int] = {}
         self._latest_prediction: dict[str, PredictionSnapshot] = {}
@@ -236,6 +240,15 @@ class DecisionWorker:
         rules_frozen = await self._books.get_frozen_rules_hash(match_id)
         position = await self._positions.get_position(match_id)
 
+        # Runtime freshness overlay (T78): stale/gap flow into the existing
+        # hard gate below, which revokes new BUY/SELL fail-closed.
+        overlay_stale = False
+        overlay_gap = False
+        if self._freshness_for is not None:
+            overlay = await self._freshness_for(match_id, market_id)
+            overlay_stale = bool(getattr(overlay, "is_stale", False))
+            overlay_gap = bool(getattr(overlay, "has_gap", False))
+
         version = await self._next_version(match_id)
         data = DecisionInput(
             match_id=match_id,
@@ -249,7 +262,8 @@ class DecisionWorker:
             rules_current_hash=rules_current,
             rules_frozen_hash=rules_frozen,
             position=position,
-            is_stale=bool(book is not None and book.is_stale),
+            is_stale=overlay_stale or bool(book is not None and book.is_stale),
+            has_gap=overlay_gap,
         )
         observation: DecisionObservation = self._engine.evaluate(data)
 

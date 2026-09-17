@@ -263,6 +263,8 @@ class RuntimeSourceHealthDto(BaseModel):
     status: str
     reason_code: str | None = None
     last_success_at: datetime | None = None
+    last_event_at: datetime | None = None
+    last_tracked: int = 0
     success_count: int = 0
     failure_count: int = 0
 
@@ -270,6 +272,9 @@ class RuntimeSourceHealthDto(BaseModel):
 class RuntimeHealthDto(BaseModel):
     generated_at: datetime
     sources: dict[str, RuntimeSourceHealthDto] = Field(default_factory=dict)
+    counters: dict[str, int] = Field(default_factory=dict)
+    paper_status: str | None = None
+    model_status: str | None = None
 
 
 class RuntimeHealthResponse(BaseModel):

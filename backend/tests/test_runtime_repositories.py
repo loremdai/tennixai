@@ -158,3 +158,58 @@ def test_health_rejects_naive_timestamps() -> None:
         RuntimeHealth(generated_at=NAIVE_NOW)
     with pytest.raises(ValidationError):
         RuntimeSourceHealth(status=RuntimeSourceStatus.OK, last_success_at=NAIVE_NOW)
+
+
+def test_health_gap_status_and_t78_fields_round_trip() -> None:
+    health = RuntimeHealth(
+        generated_at=FIXED_NOW,
+        sources={
+            "polymarket": RuntimeSourceHealth(
+                status=RuntimeSourceStatus.GAP,
+                reason_code="CONNECTION_LOST",
+                last_event_at=FIXED_NOW,
+                failure_count=1,
+            ),
+            "tennis_live": RuntimeSourceHealth(
+                status=RuntimeSourceStatus.OK,
+                last_success_at=FIXED_NOW,
+                last_tracked=4,
+                success_count=2,
+            ),
+        },
+        counters={"decision_suppressed": 1, "realtime_callback_failures": 0},
+        paper_status="paper_only",
+        model_status="not_promoted",
+    )
+    payload = health.model_dump(mode="json")
+    assert payload["sources"]["polymarket"]["status"] == "gap"
+    assert payload["sources"]["tennis_live"]["last_tracked"] == 4
+    assert payload["counters"]["decision_suppressed"] == 1
+    assert RuntimeHealth.model_validate(payload) == health
+
+
+def test_health_extended_fields_keep_legacy_payloads_valid() -> None:
+    legacy = {
+        "generated_at": FIXED_NOW.isoformat(),
+        "sources": {
+            "catalog": {
+                "status": "ok",
+                "reason_code": None,
+                "last_success_at": FIXED_NOW.isoformat(),
+                "success_count": 1,
+                "failure_count": 0,
+            }
+        },
+    }
+    health = RuntimeHealth.model_validate(legacy)
+    assert health.counters == {}
+    assert health.paper_status is None
+    assert health.model_status is None
+    source = health.sources["catalog"]
+    assert source.last_event_at is None
+    assert source.last_tracked == 0
+
+
+def test_health_rejects_naive_last_event_timestamps() -> None:
+    with pytest.raises(ValidationError):
+        RuntimeSourceHealth(status=RuntimeSourceStatus.OK, last_event_at=NAIVE_NOW)

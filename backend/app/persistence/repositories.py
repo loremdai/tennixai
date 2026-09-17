@@ -825,6 +825,11 @@ class MatchCatalogRepository:
             winner_player_id=match.winner_player_id,
             updated_at=observed_at,
         )
+        # Single-writer assumption: only the runtime daemon upserts catalog
+        # rows. A partial incoming fixture (provider omitted optional fields)
+        # must never clobber already-populated canonical facts, so nullable
+        # fields keep the stored value when the incoming one is NULL; status
+        # is separately protected by the regression guard above.
         await session.execute(
             match_statement.on_conflict_do_update(
                 index_elements=["id"],
@@ -833,12 +838,25 @@ class MatchCatalogRepository:
                     "player1_id": match_statement.excluded.player1_id,
                     "player2_id": match_statement.excluded.player2_id,
                     "tournament_id": match_statement.excluded.tournament_id,
-                    "scheduled_at": match_statement.excluded.scheduled_at,
-                    "round": match_statement.excluded.round,
-                    "surface": match_statement.excluded.surface,
-                    "indoor": match_statement.excluded.indoor,
-                    "format": match_statement.excluded.format,
-                    "winner_player_id": match_statement.excluded.winner_player_id,
+                    "scheduled_at": func.coalesce(
+                        match_statement.excluded.scheduled_at, MatchRow.scheduled_at
+                    ),
+                    "round": func.coalesce(
+                        match_statement.excluded.round, MatchRow.round
+                    ),
+                    "surface": func.coalesce(
+                        match_statement.excluded.surface, MatchRow.surface
+                    ),
+                    "indoor": func.coalesce(
+                        match_statement.excluded.indoor, MatchRow.indoor
+                    ),
+                    "format": func.coalesce(
+                        match_statement.excluded.format, MatchRow.format
+                    ),
+                    "winner_player_id": func.coalesce(
+                        match_statement.excluded.winner_player_id,
+                        MatchRow.winner_player_id,
+                    ),
                     "updated_at": match_statement.excluded.updated_at,
                 },
             )

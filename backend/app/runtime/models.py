@@ -60,6 +60,7 @@ class RuntimeSourceStatus(StrEnum):
     OK = "ok"
     DEGRADED = "degraded"
     UNAVAILABLE = "unavailable"
+    GAP = "gap"
 
 
 class RuntimeSourceHealth(FrozenModel):
@@ -68,23 +69,31 @@ class RuntimeSourceHealth(FrozenModel):
     status: RuntimeSourceStatus
     reason_code: str | None = None
     last_success_at: datetime | None = None
+    last_event_at: datetime | None = None
+    last_tracked: int = Field(default=0, ge=0)
     success_count: int = Field(default=0, ge=0)
     failure_count: int = Field(default=0, ge=0)
 
-    @field_validator("last_success_at")
+    @field_validator("last_success_at", "last_event_at")
     @classmethod
     def require_success_timezone(cls, value: datetime | None) -> datetime | None:
         return _require_timezone(value)
 
 
 class RuntimeHealth(FrozenModel):
-    """Minimal aggregate runtime health summary (extended by T78).
+    """Aggregate runtime health summary written by the local runtime daemon.
 
-    Stored as the `local_runtime_health` payload in `runtime_state`.
+    Stored as the `local_runtime_health` payload in `runtime_state`. Carries
+    only aggregate facts — per-source status, stable reason codes, timestamps,
+    counts, pipeline counters and paper/model status. Provider identifiers,
+    URLs, raw payloads and secrets never appear here.
     """
 
     generated_at: datetime
     sources: dict[str, RuntimeSourceHealth] = Field(default_factory=dict)
+    counters: dict[str, int] = Field(default_factory=dict)
+    paper_status: str | None = None
+    model_status: str | None = None
 
     @field_validator("generated_at")
     @classmethod

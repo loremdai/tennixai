@@ -308,6 +308,48 @@ async def test_runtime_health_serves_persisted_aggregate():
     assert sources["market_discovery"]["failure_count"] == 2
 
 
+async def test_runtime_health_dto_exposes_t78_aggregate_fields():
+    health = RuntimeHealth(
+        generated_at=NOW,
+        sources={
+            "polymarket": RuntimeSourceHealth(
+                status=RuntimeSourceStatus.GAP,
+                reason_code="CONNECTION_LOST",
+                last_event_at=NOW,
+                failure_count=1,
+            ),
+            "tennis_live": RuntimeSourceHealth(
+                status=RuntimeSourceStatus.OK,
+                last_success_at=NOW,
+                last_tracked=3,
+                success_count=5,
+            ),
+        },
+        counters={"decision_suppressed": 2, "decision_queue_overflow": 0},
+        paper_status="paper_only",
+        model_status="not_promoted",
+    )
+    assembly = make_assembly(
+        catalog=FakeCatalog([]),
+        state=FakeState(health=health),
+        provider=RecordingProvider(),
+    )
+    app = create_app(local_api_settings(), local_runtime=assembly)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get("/api/v1/runtime/health")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["sources"]["polymarket"]["status"] == "gap"
+    assert data["sources"]["polymarket"]["last_event_at"] is not None
+    assert data["sources"]["tennis_live"]["last_tracked"] == 3
+    assert data["counters"] == {"decision_suppressed": 2, "decision_queue_overflow": 0}
+    assert data["paper_status"] == "paper_only"
+    assert data["model_status"] == "not_promoted"
+
+
 async def test_runtime_health_response_contains_no_external_identifier_or_secret(
     env,
 ):
