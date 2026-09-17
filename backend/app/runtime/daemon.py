@@ -336,6 +336,12 @@ class LocalRuntimeDaemon:
                 # once the database returns. Cancellation still propagates.
                 with contextlib.suppress(Exception):
                     await self._health.persist()
+            else:
+                # A clean tick ends the degradation: a transient persist or DB
+                # blip must never leave `status` reporting a stale
+                # RUNTIME_ERROR while the daemon actually ticks fine. The next
+                # persist (the following tick or shutdown) carries the OK.
+                await self._health.mark_success(TICK_SOURCE)
             await asyncio.sleep(self._tick_seconds)
 
     async def stop(self) -> None:

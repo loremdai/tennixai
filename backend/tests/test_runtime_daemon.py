@@ -1141,6 +1141,37 @@ async def test_run_loop_survives_repeated_tick_failures():
     assert degraded.reason_code == "RUNTIME_ERROR"
 
 
+async def test_run_loop_restores_tick_health_after_a_transient_failure():
+    clock = FakeClock()
+    daemon, parts = make_daemon(clock, tick_seconds=0.01)
+    state: FakeStateRepo = parts["state"]
+    parts["realtime"].reconcile_raises = RuntimeError("db_blip")
+
+    task = asyncio.create_task(daemon.run())
+    await asyncio.sleep(0.05)
+
+    degraded = state.saved[-1].sources["daemon_tick"]
+    assert degraded.status is RuntimeSourceStatus.DEGRADED
+    assert degraded.reason_code == "RUNTIME_ERROR"
+
+    # The blip passes: clean ticks clear the degradation, so neither the
+    # registry nor the persisted payload `status` reads keeps reporting a
+    # stale RUNTIME_ERROR while the daemon ticks fine.
+    parts["realtime"].reconcile_raises = None
+    await asyncio.sleep(0.05)
+    await daemon.stop()
+    await asyncio.wait_for(task, timeout=2)
+
+    restored = state.saved[-1].sources["daemon_tick"]
+    assert restored.status is RuntimeSourceStatus.OK
+    assert restored.reason_code is None
+
+    # A fresh persist proves the in-memory registry state itself recovered.
+    current = await parts["health"].persist()
+    assert current.sources["daemon_tick"].status is RuntimeSourceStatus.OK
+    assert current.sources["daemon_tick"].reason_code is None
+
+
 async def test_run_loop_survives_state_persist_failures():
     clock = FakeClock()
     daemon, parts = make_daemon(clock, tick_seconds=0.01)
