@@ -2,9 +2,9 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-17 17:52 CST
+**最后更新：** 2026-09-18 03:07 CST
 
-**当前任务：** T78: Run Bounded Discovery, Freshness, and Paper Maintenance（P4.1）
+**当前任务：** T79: Add a Safe Repository-Root Launcher（P4.1）
 
 **任务状态：** `in_progress`
 
@@ -12,9 +12,9 @@
 
 **分支：** `main`
 
-**起始提交：** `9758288`（T77 完成提交；main 与 origin/main 一致）
+**起始提交：** `4fdc4f6`（T78 最终修复提交；main 领先 origin 三个待推送提交，随本领取记录一并推送）
 
-**当前动作：** T77 已完成并通过 opus 评审（spec ✅ / Approved）：`RuntimeDemand`（viewer lease ∪ P3 durable tracking 按 match 去重、零 viewer 保活）、`RealtimeWorker` 三个 None-默认零漂移 hook（`on_snapshot` 严格提交+发布后触发且异常隔离、`on_connection` 仅稳定值）、`MarketWorker.active_market_ids()` 与 REST baseline 后 `on_state`（与 `publish_book` 1:1）、`catalog_match_info` 工厂；同场双源仅一条上游订阅经 feed 记录证明。焦点 21 + 回归门 55 passed、全量确定性 1038 passed/5 skipped/30 deselected、infrastructure 59 passed。本提交关闭 T77 并领取 T78 为唯一 `in_progress`；随后按实施计划 Task 6 以 TDD 实现 `RuntimeHealthRegistry`（fresh/degraded/stale/gap，连接/心跳健康的体育流不因比分安静判 stale）、`DecisionWorker` 可选 freshness overlay（stale/gap 撤销新 BUY/SELL）、`LocalRuntimeDaemon`（唯一上游 WebSocket 所有者：精确间隔 live 60s/upcoming 600s/ranking 86400s/discovery 120s 的有界调度、严格映射市场发现、paper intent 到期以真实热 book 执行或 `BOOK_UNVERIFIABLE`/`NO_FILL`、resolution 只经 `DecisionWorker.on_resolution`、优雅停机 flush 有界缓冲）与重启恢复 integration 证明（durable demand/catalog/ledger 重建订阅、REST 恢复 cursor 与热 book、恢复前显式 gap、零重复 intent/fill）。同时处置遗留 Minor：catalog upsert 单写者假设注释、partial fixture 字段防 None 覆盖、`reason_code` 只写消毒稳定码、T77 评审的 demand 源隔离/幂等消费/健康面统一。
+**当前动作：** T78 已完成并经 opus 评审两轮（首轮 Needs fixes：run 循环可被 persist 失败杀死、resolution 目标无优先级/轮转；`6cf844e` 修复后复审 Approved；`4fdc4f6` 补 daemon_tick 恢复回 OK）：`RuntimeHealthRegistry`（安静比分不判 stale、gap 仅对账成功后解除、degraded 保留数据、消毒 reason code、聚合计数入 `RuntimeHealthDto`）、`DecisionWorker` freshness overlay 复用 T63 硬门、`LocalRuntimeDaemon`（精确 60/600/86400/120 调度、严格映射发现零 LLM、paper 只以可验证 hot book 执行否则 BOOK_UNVERIFIABLE/NO_FILL、幂等 book 消费、单顺序 demand 调用者+源隔离、优雅停机 flush）、catalog COALESCE 防 partial 覆盖；恢复 integration 证明仅凭 PostgreSQL 重建、恢复前显式 gap、零重复 intent/fill。daemon+health 52 + workers 24 + 回归 68 passed、全量确定性 1104 passed/5 skipped/30 deselected、infrastructure 62 passed（控制者复跑）。本提交关闭 T78 并领取 T79 为唯一 `in_progress`；随后按实施计划 Task 7 以 TDD 实现安全 launcher：`app/runtime/child.py`（token 化子进程包装、独立进程组）、`app/runtime/launcher.py`（Compose/端口/进程 ownership：未 init 拒绝 up、外部端口只报不杀、down 只停可证明拥有的容器/进程、绝不 `docker compose down`/删 volume）、`app/runtime/cli.py`（六命令与清晰非零退出码）、`scripts/tennix-live` 可执行包装；全部测试使用 fake command runner/process inspector，不触真实 Docker、不绑端口、不读 `.env` 值、不杀进程。
 
 ## P3 关闭证据摘要（详见 ROADMAP T57–T71 行）
 
@@ -34,14 +34,14 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
-| 2026-09-17 | （本提交） | T77 关闭 + Claude Code 领取 T78：daemon、低频 discovery、freshness/stale/gap 与 paper maintenance；起始 `9758288` |
-| 2026-09-17 | `9758288` | T77 完成：统一 P2/P3 demand 与 worker 扩展点（焦点 21 + 门 55 passed；确定性 1038 passed；infra 59 passed） |
-| 2026-09-17 | `8ce33e0` | T76 关闭 + Claude Code 领取 T77 |
-| 2026-09-17 | `8860136` | T76 完成：FastAPI 只读角色与 runtime ownership 分离（焦点 8 + 门 35 passed；确定性 1017 passed） |
-| 2026-09-17 | `e8f6bb0` | T75 关闭 + Claude Code 领取 T76 |
+| 2026-09-18 | （本提交） | T78 关闭 + Claude Code 领取 T79：安全的根目录 launcher；起始 `4fdc4f6` |
+| 2026-09-18 | `4fdc4f6` | T78 修复 2：daemon_tick 恢复后回 OK（先红后绿；确定性 1104 passed） |
+| 2026-09-18 | `6cf844e` | T78 修复 1：run 循环 persist 失败不再致命；resolution 目标优先级+确定性轮转+skipped 计数（opus 复审 Approved） |
+| 2026-09-17 | `bab5380` | T78 主体完成：health registry、freshness overlay、LocalRuntimeDaemon、恢复 integration（确定性 1095→1103；infra 62 passed） |
+| 2026-09-17 | `2494df4` | T77 关闭 + Claude Code 领取 T78 |
 
 ## 下一步
 
-1. T78 只执行 [实施计划](./docs/superpowers/plans/2026-09-17-tennixai-p4-local-real-runtime-implementation.md) 的 Task 6：先写失败的 health/scheduler fake-clock 测试，再实现 `RuntimeHealthRegistry`、decision freshness overlay 与 `LocalRuntimeDaemon`；跑恢复 integration 与 worker/decision/延迟回归门；完成后记录实际测试证据、提交、推送，并将 T79 从 `planned` 转为 `ready` 后领取。
-2. 后续严格一次一个任务推进 T79–T80；任何 P4 工作不得回溯放宽 P3 边界：只读 provider、one-shot FOK、PostgreSQL 权威、独立 cursor、未晋升即 NO BET。
-3. T78 必办遗留项：MarketWorker `_start` 重入防护或注册先于通知、P3 消费幂等（按 book_hash 去重重复 baseline）、RealtimeWorker `callback_failures` 与 P3Metrics 统一进健康面、RuntimeDemand 双源 per-source 隔离/避免 lease 双读、catalog upsert 单写者注释与 partial-fixture 防 None 覆盖、`reason_code` 只写消毒稳定码、`RuntimeHealthDto` 随 `RuntimeHealth` 扩展同步。其余 Minor 留最终整枝评审。
+1. T79 只执行 [实施计划](./docs/superpowers/plans/2026-09-17-tennixai-p4-local-real-runtime-implementation.md) 的 Task 7：先写失败的 launcher 安全测试（fake runner/inspector），再实现 `child.py`/`launcher.py`/`cli.py`/`scripts/tennix-live` 与 compose 兼容性；证明测试零真实 Docker/零端口绑定/零 `.env` 值读取/零进程杀；完成后记录实际测试证据、提交、推送，并将 T80 从 `planned` 转为 `ready` 后领取。
+2. T80 是最后任务：显式真实核验（`local_runtime_live` marker + `TENNIX_RUN_LOCAL_RUNTIME_VERIFY=1`）、浏览器验收（`TENNIX_E2E_LOCAL_RUNTIME=1`）、人类 runbook、全量回归与手工 `init → up → status → 浏览器刷新 → down → up → status` 门；外部安静窗口必须诚实 PASS/FAIL/SKIP。
+3. 任何 P4 工作不得回溯放宽 P3 边界：只读 provider、one-shot FOK、PostgreSQL 权威、独立 cursor、未晋升即 NO BET。T74–T78 遗留 Minor（RuntimeDemand 与 TrackingDemandSource 重复、daemon 依赖 Any 类型、source-global gap、无界缓存、recently-closed 类实际不可达等）已记录在案，留最终整枝评审分诊。
