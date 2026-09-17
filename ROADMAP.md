@@ -3,7 +3,7 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-17 14:13 CST
+**最后更新：** 2026-09-17 14:50 CST
 
 **总体状态：** `in_progress`
 
@@ -152,8 +152,8 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | ID | 主要阶段 | 任务 | 状态 | 完成提交 | 验收证据 |
 |---|---|---|---|---|---|
 | T72 | P4.0 | Freeze the Local Real Runtime Design | `done` | `32ea89c` | 用户已批准 [设计规格](./docs/superpowers/specs/2026-09-17-tennixai-p4-local-real-runtime-design.md)，并完成 [T73–T80 实施计划](./docs/superpowers/plans/2026-09-17-tennixai-p4-local-real-runtime-implementation.md)；计划格式/占位/边界检查通过，未修改运行代码 |
-| T73 | P4.1 | Add Live-Local Configuration and Isolation Guards | `in_progress` | — | 依 T72 计划 Task 1：根 `.env`、专用本地 DB/Redis 守卫、子进程角色与确定性测试；Claude Code 于 2026-09-17 领取（起始 `eb793e7`） |
-| T74 | P4.1 | Persist a Canonical Catalog and Runtime State | `planned` | — | 依 T72 计划 Task 2：最小可逆 schema、canonical catalog 与 runtime state；T73 完成后再转 `ready` |
+| T73 | P4.1 | Add Live-Local Configuration and Isolation Guards | `done` | `4c0c955` | 领取 `38df793`（起始 `eb793e7`）。TDD 先红（`ModuleNotFoundError: app.runtime`）后绿：新增 `app/runtime/models.py`（`LocalRuntimeSettings`，Redis DB 11、live≥30s/upcoming≥300s/ranking≥3600s/discovery≥60s Pydantic 边界）与 `app/runtime/config.py`（`require_live_local` 拒绝非 `tennix_live_local`、非 loopback、非 `api_tennis`/`paper`、缺失凭据；`LiveLocalConfigurationError` 只含稳定 reason code 不回显 URL/secret；`child_environment` 返回五个子进程覆盖键、零 `NEXT_PUBLIC_*`、不改 `os.environ`）；`Settings` 新增 `local_runtime_role`（默认 `off`）与有界 `local_runtime_*` 字段，既有默认全部不变；`.env.example` 增加安全模板块。焦点 `tests/test_runtime_config.py tests/test_config.py` 64 passed；全量确定性 backend 962 passed/5 skipped/30 deselected 无告警；新文件 ruff check/format 干净 |
+| T74 | P4.1 | Persist a Canonical Catalog and Runtime State | `in_progress` | — | 依 T72 计划 Task 2：最小可逆 schema、canonical catalog 与 runtime state；Claude Code 于 2026-09-17 领取（起始 `4c0c955`） |
 | T75 | P4.1 | Implement Idempotent `init` Data Preparation | `planned` | — | 依 T72 计划 Task 3：排名、catalog、别名和一次性离线中文补齐；T74 完成后再转 `ready` |
 | T76 | P4.1 | Split FastAPI Read Role From Runtime Ownership | `planned` | — | 依 T72 计划 Task 4：API 只读角色，不持有上游 WebSocket；T75 完成后再转 `ready` |
 | T77 | P4.1 | Compose P2/P3 Demand Under One Runtime Owner | `planned` | — | 依 T72 计划 Task 5：viewer 与 durable demand 的安全合并；T76 完成后再转 `ready` |
