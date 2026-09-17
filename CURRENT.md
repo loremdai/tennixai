@@ -2,9 +2,9 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-17 17:05 CST
+**最后更新：** 2026-09-17 17:52 CST
 
-**当前任务：** T77: Compose P2 and P3 Demand Under One Runtime Owner（P4.1）
+**当前任务：** T78: Run Bounded Discovery, Freshness, and Paper Maintenance（P4.1）
 
 **任务状态：** `in_progress`
 
@@ -12,9 +12,9 @@
 
 **分支：** `main`
 
-**起始提交：** `8860136`（T76 完成提交；main 与 origin/main 一致）
+**起始提交：** `9758288`（T77 完成提交；main 与 origin/main 一致）
 
-**当前动作：** T76 已完成并通过独立评审（spec ✅ / Approved）：`LocalRuntimeAssembly` 与 `create_app()` 的 `local_runtime_role=api` 分支交付只读 FastAPI 角色——fail-fast 配置校验、`realtime.worker=None`、lifespan 零上游 worker/零后台任务、P3 feed/worker 构建被门控；`TennisService` catalog 注入仅限列表读取，快照/历史/H2H fallback 不变；`/api/v1/runtime/health` 只含 canonical 聚合或 typed `runtime_not_started`。焦点 8 passed、API/P2/P3 门 35 passed、全量确定性 1017 passed/5 skipped/30 deselected、infrastructure 59 passed。本提交关闭 T76 并领取 T77 为唯一 `in_progress`；随后按实施计划 Task 5 以 TDD 实现 `RuntimeDemand`（viewer lease ∪ P3 durable tracking，去重、零 viewer 时 paper 跟踪仍保活）、`RealtimeWorker` 向后兼容扩展点（可选 `demand_source`/`on_snapshot`/`on_connection`，默认 lease-only 行为不变、回调错误隔离不污染 P2 发布）、`MarketWorker.active_market_ids()` 与 REST baseline 后的 `on_state` 下游通知，并把真实 `match_info`（来自 canonical catalog）接入 `TrackingDemand`（live-local runtime 不再 `match_info=None`）。
+**当前动作：** T77 已完成并通过 opus 评审（spec ✅ / Approved）：`RuntimeDemand`（viewer lease ∪ P3 durable tracking 按 match 去重、零 viewer 保活）、`RealtimeWorker` 三个 None-默认零漂移 hook（`on_snapshot` 严格提交+发布后触发且异常隔离、`on_connection` 仅稳定值）、`MarketWorker.active_market_ids()` 与 REST baseline 后 `on_state`（与 `publish_book` 1:1）、`catalog_match_info` 工厂；同场双源仅一条上游订阅经 feed 记录证明。焦点 21 + 回归门 55 passed、全量确定性 1038 passed/5 skipped/30 deselected、infrastructure 59 passed。本提交关闭 T77 并领取 T78 为唯一 `in_progress`；随后按实施计划 Task 6 以 TDD 实现 `RuntimeHealthRegistry`（fresh/degraded/stale/gap，连接/心跳健康的体育流不因比分安静判 stale）、`DecisionWorker` 可选 freshness overlay（stale/gap 撤销新 BUY/SELL）、`LocalRuntimeDaemon`（唯一上游 WebSocket 所有者：精确间隔 live 60s/upcoming 600s/ranking 86400s/discovery 120s 的有界调度、严格映射市场发现、paper intent 到期以真实热 book 执行或 `BOOK_UNVERIFIABLE`/`NO_FILL`、resolution 只经 `DecisionWorker.on_resolution`、优雅停机 flush 有界缓冲）与重启恢复 integration 证明（durable demand/catalog/ledger 重建订阅、REST 恢复 cursor 与热 book、恢复前显式 gap、零重复 intent/fill）。同时处置遗留 Minor：catalog upsert 单写者假设注释、partial fixture 字段防 None 覆盖、`reason_code` 只写消毒稳定码、T77 评审的 demand 源隔离/幂等消费/健康面统一。
 
 ## P3 关闭证据摘要（详见 ROADMAP T57–T71 行）
 
@@ -34,14 +34,14 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
-| 2026-09-17 | （本提交） | T76 关闭 + Claude Code 领取 T77：统一 P2/P3 tracking demand；起始 `8860136` |
-| 2026-09-17 | `8860136` | T76 完成：FastAPI 只读角色与 runtime ownership 分离（焦点 8 + 门 35 passed；确定性 1017 passed；infra 59 passed） |
+| 2026-09-17 | （本提交） | T77 关闭 + Claude Code 领取 T78：daemon、低频 discovery、freshness/stale/gap 与 paper maintenance；起始 `9758288` |
+| 2026-09-17 | `9758288` | T77 完成：统一 P2/P3 demand 与 worker 扩展点（焦点 21 + 门 55 passed；确定性 1038 passed；infra 59 passed） |
+| 2026-09-17 | `8ce33e0` | T76 关闭 + Claude Code 领取 T77 |
+| 2026-09-17 | `8860136` | T76 完成：FastAPI 只读角色与 runtime ownership 分离（焦点 8 + 门 35 passed；确定性 1017 passed） |
 | 2026-09-17 | `e8f6bb0` | T75 关闭 + Claude Code 领取 T76 |
-| 2026-09-17 | `134c9f9` | T75 完成：幂等 `init` 数据准备（焦点 21 passed；确定性 1009 passed/5 skipped/30 deselected） |
-| 2026-09-17 | `222baf4` | T74 关闭 + Claude Code 领取 T75 |
 
 ## 下一步
 
-1. T77 只执行 [实施计划](./docs/superpowers/plans/2026-09-17-tennixai-p4-local-real-runtime-implementation.md) 的 Task 5：先写失败的 composed-demand/worker-hook 测试，再加向后兼容扩展点与真实 `match_info` 接线；跑 P2/P3 worker 回归门；完成后记录实际测试证据、提交、推送，并将 T78 从 `planned` 转为 `ready` 后领取。
-2. 后续严格一次一个任务推进 T78–T80；任何 P4 工作不得回溯放宽 P3 边界：只读 provider、one-shot FOK、PostgreSQL 权威、独立 cursor、未晋升即 NO BET。
-3. 评审遗留 Minor 处置：T78 扩展 `RuntimeHealth` 时必须同步扩展 `RuntimeHealthDto`（当前 `model_validate` 静默丢 extras）并只写消毒后的稳定 `reason_code`；catalog upsert 单写者假设与 partial-fixture 字段覆盖防护在 T77/T78 处置；其余（skipped 语义、Literal state、builder smoke 测试等）留最终整枝评审复核。
+1. T78 只执行 [实施计划](./docs/superpowers/plans/2026-09-17-tennixai-p4-local-real-runtime-implementation.md) 的 Task 6：先写失败的 health/scheduler fake-clock 测试，再实现 `RuntimeHealthRegistry`、decision freshness overlay 与 `LocalRuntimeDaemon`；跑恢复 integration 与 worker/decision/延迟回归门；完成后记录实际测试证据、提交、推送，并将 T79 从 `planned` 转为 `ready` 后领取。
+2. 后续严格一次一个任务推进 T79–T80；任何 P4 工作不得回溯放宽 P3 边界：只读 provider、one-shot FOK、PostgreSQL 权威、独立 cursor、未晋升即 NO BET。
+3. T78 必办遗留项：MarketWorker `_start` 重入防护或注册先于通知、P3 消费幂等（按 book_hash 去重重复 baseline）、RealtimeWorker `callback_failures` 与 P3Metrics 统一进健康面、RuntimeDemand 双源 per-source 隔离/避免 lease 双读、catalog upsert 单写者注释与 partial-fixture 防 None 覆盖、`reason_code` 只写消毒稳定码、`RuntimeHealthDto` 随 `RuntimeHealth` 扩展同步。其余 Minor 留最终整枝评审。
