@@ -2,19 +2,27 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-18 05:40 CST
+**最后更新：** 2026-09-18 07:39 CST
 
 **当前任务：** T80: Add Explicit Real Verification, Browser Acceptance, and the Human Runbook（P4.1）
 
-**任务状态：** `in_progress`
+**任务状态：** `blocked`（阻塞条件：根 `.env` 的 LLM token-plan 配额耗尽，`init` 的必需中文补齐步骤无法完成；只有用户可恢复配额或更换 key）
 
 **执行者 / ADE：** Claude Code（Fable 5）
 
 **分支：** `main`
 
-**起始提交：** `da6dcdd`（T79 最终提交；main 领先 origin 三个待推送提交，随本领取记录一并推送）
+**起始提交：** `da6dcdd`（T80 交付物已提交为 `1ba5e5c`+`559b4c2` 并推送）
 
-**当前动作：** T79 已完成并经 opus 评审两轮 + 两次加固（首轮 Important——二次 `up` 可孤儿化既有 runtime 子进程、产生第二上游所有者——已由 `81ace2e` 修复并复审 Approved；`fb49cdc` 闭合 SIGTERM 竞态/死亡子进程快速失败/status 健康年龄；`da6dcdd` 以 `waitpid WNOHANG` 收割僵尸使存活探测真实）：安全 launcher 全生命周期（状态仅在系统临时目录 0700/0600、token+命令双重验证才 signal、只停本次新建容器、绝不 `compose down`/删 volume/按端口杀进程、up 绝不自动 init/绝不调用 LLM）、runtime 进程入口 `daemon_main` + `build_local_runtime_daemon` 真实图装配（评审逐 kwarg 核对）、真实 Alembic 适配器与幂等 `tennix_live_local` 建库、`scripts/tennix-live` 可执行包装。launcher 58 + daemon_main 3 passed、全量确定性 1163 passed/5 skipped/30 deselected。本提交关闭 T79 并领取 T80 为唯一 `in_progress`。T80 前置已核对：根 `.env` 已有 `TENNIX_PROVIDER_MODE=api_tennis` 与真实 API-Tennis/LLM 凭据；缺 `TENNIX_P3_MODE=paper` 与 `TENNIX_LOCAL_RUNTIME_*` 块，将按 runbook 流程补入根 `.env`（Git 忽略、仅本地，不打印值）。随后按实施计划 Task 8 以 TDD 实现 `verify.py`（受限只读真实 smoke：至多各一次 ranking/fixture/discovery/book 调用、仅存在合格 live 比赛/活跃 book 时才试 WebSocket、45s 有界等待、`--with-llm` 是唯一 LLM 路径、安静窗口诚实 SKIP 绝不冒充 PASS）、`local_runtime_live` marker、opt-in 浏览器验收 `frontend/e2e/local-real-runtime.spec.ts`（`TENNIX_E2E_LOCAL_RUNTIME=1`）、人类 runbook，并执行全量回归与手工 `init → up → status → 浏览器刷新 → down → up → status` 真实门，如实记录 PASS/FAIL/SKIP 与重启后 ID/数据/ledger 保留证据。
+**当前动作与阻塞诊断（systematic-debugging 已完成根因定位）：**
+
+- T80 交付物阶段已完成并经 opus 评审 Approved：`verify.py`（有界只读、诚实 pass/fail/skip）、`local_runtime_live` marker、opt-in 浏览器验收 spec、runbook、`.env.example` 注释、CLI verify 接线；e2e 配置隔离修复（默认 Playwright 后端钉死 `TENNIX_P3_MODE=disabled` 等模式变量，凭据仍从根 `.env` 流入 opt-in live spec）。交付物阶段门：verify 25 passed、vitest 392 + typecheck + build、确定性 backend 1188/5/32、infra 62、默认 Playwright 110 passed/44 skipped/0 failed。
+- 阶段 2 真实门（已如实完成的部分，2026-09-18）：
+  - `./scripts/tennix-live init`：**FAIL（诚实失败，非缺陷）** — Compose healthy、`tennix_live_local` 创建成功、alembic 0001→0005 全部升级成功后，bootstrap 在中文补齐步骤按设计 fail-closed：`LOCAL_BOOTSTRAP_FAILED`、退出非零、marker 未写、已成功数据保留。逐步诊断证明 rankings（ATP 2342/WTA 1602，updated=3944）、known aliases（15913）、catalog（live=6/upcoming=290）、new aliases 全部 OK；单批 enrichment 诊断 `failed=1`，底层错误为 `openai.RateLimitError 429 insufficient_quota`（LLM token-plan 配额耗尽）。系统各层行为完全符合设计（`llm_unavailable`→typed AppError→非零退出→数据保留）。
+  - `TENNIX_RUN_LOCAL_RUNTIME_VERIFY=1 ./scripts/tennix-live verify`（无 --with-llm）：**exit 0** — atp_rankings/tennis_catalog/tennis_websocket/market_discovery/market_book 5 项真实 passed（含真实 live 比赛 WS 订阅收帧）；market_websocket 诚实 skipped（RECEIVE_TIMEOUT 安静窗口）；llm_chat 诚实 skipped（NOT_REQUESTED）。
+  - `TENNIX_RUN_LOCAL_RUNTIME_VERIFY=1 pytest -m local_runtime_live tests/live/test_local_runtime_verify.py`：**1 passed, 1 skipped**（skip 为 with-LLM 变体门控）。
+- 被阻塞的剩余项：重跑 `init` 至完成（含一次性 LLM 中文补齐）→ `verify --with-llm` → `up` → `status` → 浏览器验收（`TENNIX_E2E_LOCAL_RUNTIME=1`）→ `down` → `up` → `status` → 重启持久性人工核对 → Completion Gate 逐条核验与最终整枝评审。
+- 恢复方式：用户在根 `.env` 恢复/更换 LLM 凭据配额后告知，即可从 `init` 重跑继续（幂等，只补缺失项；既有 rankings/aliases/catalog 数据保留）。
 
 ## P3 关闭证据摘要（详见 ROADMAP T57–T71 行）
 
@@ -34,14 +42,15 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
-| 2026-09-18 | （本提交） | T79 关闭 + Claude Code 领取 T80：显式真实核验、浏览器验收与 runbook；起始 `da6dcdd` |
-| 2026-09-18 | `da6dcdd` | T79 修复 3：`waitpid WNOHANG` 收割僵尸，存活探测/快速失败真实生效（launcher 58 passed；确定性 1163 passed） |
+| 2026-09-18 | （本提交） | T80 转 `blocked`：真实 init 诚实失败，根因=LLM 配额耗尽（429 insufficient_quota）；真实 verify 门 5 passed/2 honest skipped、live pytest 门 1 passed/1 skipped 已如实记录 |
+| 2026-09-18 | `559b4c2` | T80 修复：默认 Playwright e2e 后端模式与根 `.env` 隔离（P4.0 规格 §11）；全套 e2e 110 passed/44 skipped/0 failed |
+| 2026-09-18 | `1ba5e5c` | T80 交付物完成：verify.py/CLI 接线/local_runtime_live marker/浏览器验收 spec/runbook/.env.example（verify 25 passed；确定性 1188/5/32；infra 62） |
+| 2026-09-18 | `da6dcdd` | T79 修复 3：`waitpid WNOHANG` 收割僵尸，存活探测/快速失败真实生效 |
 | 2026-09-18 | `fb49cdc` | T79 加固：SIGTERM 竞态闭合、runtime 死亡快速失败、frontend 存活窗、status 健康年龄（opus 复审 Approved） |
-| 2026-09-18 | `81ace2e` | T79 修复 1：`up` 拒绝在既有存活 owned/unowned 子进程时重复 spawn（防第二上游所有者）；init 失败持久化清 marker；状态文件 0600；SIGKILL 前 ownership 复核（opus 复审 Approved） |
-| 2026-09-17 | `18efdc3` | T79 主体完成：安全 launcher、child 包装、CLI、runtime 进程入口与真实图装配、Alembic 适配器、幂等建库（gate 90 passed） |
 
 ## 下一步
 
-1. T80 只执行 [实施计划](./docs/superpowers/plans/2026-09-17-tennixai-p4-local-real-runtime-implementation.md) 的 Task 8：先写失败的 verifier 结果测试（诚实 SKIP 语义、零 LLM 无 flag），再实现 `verify.py`/marker/浏览器验收/runbook；补全根 `.env` 的 `TENNIX_P3_MODE=paper` 与 `TENNIX_LOCAL_RUNTIME_*` 块；跑确定性验证 + 前端质量门 + 两个 opt-in 真实门；执行手工 `init → up → status → 浏览器刷新 → down → up → status` 并如实记录每一步结果、精确测试计数、真实源 PASS/FAIL/SKIP、重启后 ID/数据/ledger 保留的人工核对。
-2. T80 完成后逐条核验 P4.1 / Local Real Runtime Completion Gate 与计划 Completion Gate for T73–T80，对齐 PROJECT/ROADMAP/CURRENT/runbook/Git HEAD 与 origin/main，最终整枝评审后关闭 P4.1。
-3. 任何 P4 工作不得回溯放宽 P3 边界：只读 provider、one-shot FOK、PostgreSQL 权威、独立 cursor、未晋升即 NO BET；外部安静窗口必须诚实 SKIP，不得写成通过。T74–T79 遗留 Minor 已记录，留最终整枝评审分诊。
+1. **等待用户恢复 LLM 配额**（根 `.env` 的 token-plan 充值或更换 key；只有用户可执行）。恢复后从 `./scripts/tennix-live init` 重跑继续：幂等只补缺失中文名，既有 rankings/aliases/catalog 数据保留。
+2. init 成功后依序执行剩余真实门：`verify --with-llm` → `up` → `status` → 浏览器验收（`TENNIX_E2E_LOCAL_RUNTIME=1`，先经 `status` 确认 runtime 真实在跑）→ `down` → `up` → `status` → 重启持久性人工核对（内部 ID/canonical 数据/paper ledger/cursor）。
+3. 全部通过后：T80 转 `done` 附完整证据表；逐条核验 P4.1 Completion Gate 与计划 Completion Gate for T73–T80；最终整枝评审（分诊各任务遗留 Minor）；对齐 PROJECT/ROADMAP/CURRENT/runbook/Git HEAD 与 origin/main；确认工作区除受保护未跟踪项外干净。
+4. 任何 P4 工作不得回溯放宽 P3 边界；外部安静窗口必须诚实 SKIP，不得写成通过。
