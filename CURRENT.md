@@ -2,19 +2,19 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-17 06:50 CST
+**最后更新：** 2026-09-17 11:44 CST
 
-**当前任务：** 无（P3 已于 2026-09-17 关闭；P4 `planned` 未领取）
+**当前任务：** T72 — Freeze the Local Real Runtime Design（P4.0）
 
-**任务状态：** 无 `in_progress`
+**任务状态：** `in_progress`
 
-**执行者 / ADE：** Claude (Fable 5) / Claude Code（T57–T71 顺序执行授权已完成使命）
+**执行者 / ADE：** Codex / Codex Desktop
 
 **分支：** `main`
 
-**最后提交：** `3fde00a`（T71 shadow gate 测试）+ 本次关闭文档提交
+**起始提交：** `c537f4f`（P3 关闭与 P4 计划状态对齐）
 
-**当前动作：** P3 关闭交接。T71 以真实只读 shadow gate 收尾：根 `.env` 无 `TENNIX_MODEL_DATA_PATH`、audit/verify-artifact fail-closed（exit 2/4）→ 模型保持 `not_promoted`；真实 API-Tennis + 公共 Polymarket smoke 3 passed/1 带日期诚实 skip（UTC 2026-09-16 公共 WS 网球通道 45s 静默，tokens=4、control=1）；shadow backend 4 passed（零交易凭据、UNPROMOTED 只输出 NO BET/MARKET_ONLY、映射市场只读观察、rules 缺失 fail-closed、公共面零 wallet 材料）；真实浏览器 4 passed（desktop+mobile 只读流、零交易 CTA、DOM/URL 零 provider ID、404 逐路径诚实核验）。T70 门复跑全绿。下一步若启动 P4，须先由用户在 ROADMAP 领取并定义范围；自动下单仍为 `deferred`，不因 P3 完成而获得授权。
+**当前动作：** 已获用户确认，正在把 P4.0「完整本地真实运行」写成可审阅设计：单一 `init/up/status/down` 入口、隔离 `tennix_live_local` 数据库、后台独占真实 API-Tennis/Polymarket WebSocket、赛程/排名低频同步、显式 stale/gap 安全门、显式真实核验与永远 paper-only。此任务只写规格和总控，不开始实现；规格经用户审阅批准后才创建实施计划。
 
 ## P3 关闭证据摘要（详见 ROADMAP T57–T71 行）
 
@@ -34,14 +34,13 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
+| 2026-09-17 | 待提交 | Codex 领取 T72：P4.0 Local Real Runtime 设计冻结；仅规格与总控 |
 | 2026-09-17 | `3fde00a` | T71 完成：真实只读 shadow gate（backend live 4 passed + 浏览器 4 passed）与证据表；P3 关闭 |
 | 2026-09-17 | `90dedf3` | T70 关闭 + Claude 领取 T71 |
 | 2026-09-17 | `01e6ba0` | T70 完成：dual-stream replay/recovery/latency integration 门、exit-missed 缺陷修复、全量回归与视觉门 |
-| 2026-09-17 | `2f6fb89` | T69 关闭 + Claude 领取 T70 |
-| 2026-09-17 | `64bb505` | T69 完成：生产 Match Decision Workbench |
 
 ## 下一步
 
-1. 无已领取任务。P4 启动前需要用户明确领取与范围定义（ROADMAP 里程碑表）。
-2. 若复跑 P3 门：命令见 ROADMAP T70/T71 行（infrastructure、live smoke、shadow、Playwright 全量与 `p3.visual`）。
+1. 完成 T72 设计规格、自检并提交；请用户审阅后才可编写实施计划。
+2. 不得借 T72 修改运行代码、`.env`、数据库或视觉原型；实现任务将在规格批准后另行领取。
 3. 任何 P4 工作不得回溯放宽 P3 边界：只读 provider、one-shot FOK、PostgreSQL 权威、独立 cursor、未晋升即 NO BET。
