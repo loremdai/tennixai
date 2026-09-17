@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-17 11:55 CST
+**最后更新：** 2026-09-17 12:25 CST
 
 **总体状态：** `in_progress`
 
-**当前里程碑：** P3 已关闭（T57–T71 全部 `done`，Completion Gate 逐条有证据）；P4.0 Local Real Runtime 设计冻结（T72）`in_progress`
+**当前里程碑：** P3 已关闭（T57–T71 全部 `done`，Completion Gate 逐条有证据）；P4.0 Local Real Runtime 设计与实施计划（T72）已 `done`；P4.1 从 T73 开始，已 `ready`
 
-**当前阶段：** P4.0 — Local Real Runtime Design Freeze（`in_progress`；仅设计，尚未授权实现）
+**当前阶段：** P4.1 — Local Real Runtime Implementation（`ready`；尚未领取实现任务）
 
 ## 状态说明
 
@@ -31,7 +31,7 @@
 | P1 — Match Information Assistant | `done` | 跑通真实结构化比赛查询、卡片、Match Page 与上下文 Chat | T17/T18/T19 均已完成（`69c8238`、`5572960`、`fdb0131`）；P1 已关闭 |
 | P2 — Live Match Intelligence | `done` | 技术统计、PBP、近期控制指数、持久化、多进程实时协调，以及球员目录、多语言身份与历史赛果入口 | T20–T53 已交付；T54（`8d1233f` 产品/真实验收提交，`86ea404` 关闭提交）补齐 Home 历史意图、last/recent 五赛季语义、多球员结构化结果与内容级真实验收，P2 重新关闭 |
 | P3 — Market & Decision Support | `done` | 市场状态、预测、edge、confidence 和 paper trading | T55 设计冻结、T56 v0 原型与 52 张基线冻结；T57–T71 全部完成（2026-09-17 由 T71 证据表关闭）；自动下单仍 `deferred` |
-| P4 — Product Hardening & Optimization | `in_progress` | 用真实使用、回放和 paper 结果统一打磨 P1–P3 的数据质量、模型、决策策略、体验与性能 | P4.0 先冻结“完整本地真实运行”设计；该设计不授权自动下单、模型晋升或其他 P4 优化 |
+| P4 — Product Hardening & Optimization | `in_progress` | 用真实使用、回放和 paper 结果统一打磨 P1–P3 的数据质量、模型、决策策略、体验与性能 | P4.0 已冻结“完整本地真实运行”的设计与实施计划；P4.1 从 T73 逐项实现，仍不授权自动下单、模型晋升或其他 P4 优化 |
 | Optional — Automated Execution | `deferred` | 在满足法律、风控、安全和可审计条件后考虑自动下单 | 不属于 P3 默认范围，必须单独批准 |
 
 ## P1 阶段状态
@@ -144,13 +144,22 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 
 | 阶段 | 状态 | 核心交付 | Exit gate / 当前缺口 |
 |---|---|---|---|
-| P4.0 — Local Real Runtime Design Freeze | `in_progress` | 将既有 P1–P3 的真实数据能力收为一个本地可启动、可观察、隔离且安全的日常运行入口 | [T72 设计规格](./docs/superpowers/specs/2026-09-17-tennixai-p4-local-real-runtime-design.md)；只产出规格与后续实施路线，不修改运行代码、不改变 P3 paper-only 边界 |
+| P4.0 — Local Real Runtime Design Freeze | `done` | 将既有 P1–P3 的真实数据能力收为一个本地可启动、可观察、隔离且安全的日常运行入口 | [T72 设计规格](./docs/superpowers/specs/2026-09-17-tennixai-p4-local-real-runtime-design.md) 与 [T72 实施计划](./docs/superpowers/plans/2026-09-17-tennixai-p4-local-real-runtime-implementation.md) 已完成；未修改运行代码，P3 paper-only 边界不变 |
+| P4.1 — Local Real Runtime Implementation | `ready` | 逐项交付统一本地真实运行入口及其真实核验 | 依 [T72 实施计划](./docs/superpowers/plans/2026-09-17-tennixai-p4-local-real-runtime-implementation.md) 执行 T73–T80；同一时间只领取一个任务 |
 
 ## P4 任务登记表
 
 | ID | 主要阶段 | 任务 | 状态 | 完成提交 | 验收证据 |
 |---|---|---|---|---|---|
-| T72 | P4.0 | Freeze the Local Real Runtime Design | `in_progress` | `e2173fd` | 规格已写入并推送：[P4.0 本地真实运行设计](./docs/superpowers/specs/2026-09-17-tennixai-p4-local-real-runtime-design.md)（单一 `init/up/status/down`、隔离 `tennix_live_local`、两条 WebSocket ownership、低频同步、stale/gap、显式真实核验、paper-only）。已完成格式/占位/边界自检，未改运行代码；等待用户审阅规格后才可创建实施计划 |
+| T72 | P4.0 | Freeze the Local Real Runtime Design | `done` | `32ea89c` | 用户已批准 [设计规格](./docs/superpowers/specs/2026-09-17-tennixai-p4-local-real-runtime-design.md)，并完成 [T73–T80 实施计划](./docs/superpowers/plans/2026-09-17-tennixai-p4-local-real-runtime-implementation.md)；计划格式/占位/边界检查通过，未修改运行代码 |
+| T73 | P4.1 | Add Live-Local Configuration and Isolation Guards | `ready` | — | 依 T72 计划 Task 1：根 `.env`、专用本地 DB/Redis 守卫、子进程角色与确定性测试 |
+| T74 | P4.1 | Persist a Canonical Catalog and Runtime State | `planned` | — | 依 T72 计划 Task 2：最小可逆 schema、canonical catalog 与 runtime state；T73 完成后再转 `ready` |
+| T75 | P4.1 | Implement Idempotent `init` Data Preparation | `planned` | — | 依 T72 计划 Task 3：排名、catalog、别名和一次性离线中文补齐；T74 完成后再转 `ready` |
+| T76 | P4.1 | Split FastAPI Read Role From Runtime Ownership | `planned` | — | 依 T72 计划 Task 4：API 只读角色，不持有上游 WebSocket；T75 完成后再转 `ready` |
+| T77 | P4.1 | Compose P2/P3 Demand Under One Runtime Owner | `planned` | — | 依 T72 计划 Task 5：viewer 与 durable demand 的安全合并；T76 完成后再转 `ready` |
+| T78 | P4.1 | Run Bounded Discovery, Freshness, and Paper Maintenance | `planned` | — | 依 T72 计划 Task 6：唯一 daemon、健康与 stale/gap 守卫；T77 完成后再转 `ready` |
+| T79 | P4.1 | Add a Safe Repository-Root Launcher | `planned` | — | 依 T72 计划 Task 7：`init/up/status/down/logs` 的安全生命周期；T78 完成后再转 `ready` |
+| T80 | P4.1 | Add Explicit Real Verification, Browser Acceptance, and Runbook | `planned` | — | 依 T72 计划 Task 8：显式真实核验、浏览器验收和人类 runbook；T79 完成后再转 `ready` |
 
 ## P2 完成门摘要
 
