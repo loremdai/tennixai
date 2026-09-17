@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-17 14:50 CST
+**最后更新：** 2026-09-17 15:38 CST
 
 **总体状态：** `in_progress`
 
-**当前里程碑：** P3 已关闭（T57–T71 全部 `done`，Completion Gate 逐条有证据）；P4.0 Local Real Runtime 设计与实施计划（T72）已 `done`；P4.1 进行中，T73 已领取
+**当前里程碑：** P3 已关闭（T57–T71 全部 `done`，Completion Gate 逐条有证据）；P4.0 Local Real Runtime 设计与实施计划（T72）已 `done`；P4.1 进行中：T73/T74 已 `done`，T75 已领取
 
-**当前阶段：** P4.1 — Local Real Runtime Implementation（`in_progress`；T73 由 Claude Code 领取，起始 `eb793e7`）
+**当前阶段：** P4.1 — Local Real Runtime Implementation（`in_progress`；T75 由 Claude Code 领取，起始 `ccfdb66`）
 
 ## 状态说明
 
@@ -145,7 +145,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | 阶段 | 状态 | 核心交付 | Exit gate / 当前缺口 |
 |---|---|---|---|
 | P4.0 — Local Real Runtime Design Freeze | `done` | 将既有 P1–P3 的真实数据能力收为一个本地可启动、可观察、隔离且安全的日常运行入口 | [T72 设计规格](./docs/superpowers/specs/2026-09-17-tennixai-p4-local-real-runtime-design.md) 与 [T72 实施计划](./docs/superpowers/plans/2026-09-17-tennixai-p4-local-real-runtime-implementation.md) 已完成；未修改运行代码，P3 paper-only 边界不变 |
-| P4.1 — Local Real Runtime Implementation | `in_progress` | 逐项交付统一本地真实运行入口及其真实核验 | 依 [T72 实施计划](./docs/superpowers/plans/2026-09-17-tennixai-p4-local-real-runtime-implementation.md) 执行 T73–T80；同一时间只领取一个任务；T73 已领取 |
+| P4.1 — Local Real Runtime Implementation | `in_progress` | 逐项交付统一本地真实运行入口及其真实核验 | 依 [T72 实施计划](./docs/superpowers/plans/2026-09-17-tennixai-p4-local-real-runtime-implementation.md) 执行 T73–T80；同一时间只领取一个任务；T73/T74 已完成，T75 已领取 |
 
 ## P4 任务登记表
 
@@ -153,8 +153,8 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 |---|---|---|---|---|---|
 | T72 | P4.0 | Freeze the Local Real Runtime Design | `done` | `32ea89c` | 用户已批准 [设计规格](./docs/superpowers/specs/2026-09-17-tennixai-p4-local-real-runtime-design.md)，并完成 [T73–T80 实施计划](./docs/superpowers/plans/2026-09-17-tennixai-p4-local-real-runtime-implementation.md)；计划格式/占位/边界检查通过，未修改运行代码 |
 | T73 | P4.1 | Add Live-Local Configuration and Isolation Guards | `done` | `4c0c955` | 领取 `38df793`（起始 `eb793e7`）。TDD 先红（`ModuleNotFoundError: app.runtime`）后绿：新增 `app/runtime/models.py`（`LocalRuntimeSettings`，Redis DB 11、live≥30s/upcoming≥300s/ranking≥3600s/discovery≥60s Pydantic 边界）与 `app/runtime/config.py`（`require_live_local` 拒绝非 `tennix_live_local`、非 loopback、非 `api_tennis`/`paper`、缺失凭据；`LiveLocalConfigurationError` 只含稳定 reason code 不回显 URL/secret；`child_environment` 返回五个子进程覆盖键、零 `NEXT_PUBLIC_*`、不改 `os.environ`）；`Settings` 新增 `local_runtime_role`（默认 `off`）与有界 `local_runtime_*` 字段，既有默认全部不变；`.env.example` 增加安全模板块。焦点 `tests/test_runtime_config.py tests/test_config.py` 64 passed；全量确定性 backend 962 passed/5 skipped/30 deselected 无告警；新文件 ruff check/format 干净 |
-| T74 | P4.1 | Persist a Canonical Catalog and Runtime State | `in_progress` | — | 依 T72 计划 Task 2：最小可逆 schema、canonical catalog 与 runtime state；Claude Code 于 2026-09-17 领取（起始 `4c0c955`） |
-| T75 | P4.1 | Implement Idempotent `init` Data Preparation | `planned` | — | 依 T72 计划 Task 3：排名、catalog、别名和一次性离线中文补齐；T74 完成后再转 `ready` |
+| T74 | P4.1 | Persist a Canonical Catalog and Runtime State | `done` | `ccfdb66` | 领取 `10ae083`（起始 `4c0c955`）。TDD 先红后绿：migration `0005` 仅新增 `runtime_state`（key String(64) PK/payload JSONB/updated_at timestamptz，downgrade 只删该表，源码级扫描测试证明）；`MatchCatalogRepository`（复用既有 players/tournaments/matches upsert 形态、批量 IN 装载零 N+1、显式 `observed_at`、终态状态只进不退的 rank 守卫含 10 例纯函数矩阵 + 2 例真实行 integration、返回本次新插入球员内部 ID 集合）与 `RuntimeStateRepository`（仅 `local_runtime_init`/`local_runtime_health` 两键、未知键 typed 拒绝、marker/health 幂等 upsert、health 写不删 catalog、payload 关键字扫描零 provider ID）；`app/runtime/models.py` 追加最小 `RuntimeInitRecord`/`RuntimeHealth`/`RuntimeSourceHealth`（extra=forbid，JSONB round-trip 测试）。integration 证明不删任何既有 P2/P3 行（markets/raw_events 计数不变）；alembic 0005→0004→0005 往返 exit 0（独立 scratch DB，legacy `tennix` 未触碰）；焦点 trio 48 passed、infrastructure 全套 59 passed、全量确定性 992 passed/5 skipped/30 deselected；新代码 ruff 干净。评审 Minor 已记录（单写者假设、partial fixture 字段覆盖防护等）留待 T77/T78 与最终评审处置 |
+| T75 | P4.1 | Implement Idempotent `init` Data Preparation | `in_progress` | — | 依 T72 计划 Task 3：排名、catalog、别名和一次性离线中文补齐；Claude Code 于 2026-09-17 领取（起始 `ccfdb66`） |
 | T76 | P4.1 | Split FastAPI Read Role From Runtime Ownership | `planned` | — | 依 T72 计划 Task 4：API 只读角色，不持有上游 WebSocket；T75 完成后再转 `ready` |
 | T77 | P4.1 | Compose P2/P3 Demand Under One Runtime Owner | `planned` | — | 依 T72 计划 Task 5：viewer 与 durable demand 的安全合并；T76 完成后再转 `ready` |
 | T78 | P4.1 | Run Bounded Discovery, Freshness, and Paper Maintenance | `planned` | — | 依 T72 计划 Task 6：唯一 daemon、健康与 stale/gap 守卫；T77 完成后再转 `ready` |
