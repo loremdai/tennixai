@@ -2,9 +2,9 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-17 16:24 CST
+**最后更新：** 2026-09-17 17:05 CST
 
-**当前任务：** T76: Split FastAPI Read Role From Runtime Ownership（P4.1）
+**当前任务：** T77: Compose P2 and P3 Demand Under One Runtime Owner（P4.1）
 
 **任务状态：** `in_progress`
 
@@ -12,9 +12,9 @@
 
 **分支：** `main`
 
-**起始提交：** `134c9f9`（T75 完成提交；main 与 origin/main 一致）
+**起始提交：** `8860136`（T76 完成提交；main 与 origin/main 一致）
 
-**当前动作：** T75 已完成并通过独立评审（spec ✅ / Approved）：`CatalogSynchronizer`（live+fixtures 各恰一次、去重 live 优先、失败零删除）、`sync_player_aliases`（仅新见 ID、零 LLM 零全目录扫描、幂等）与 `RuntimeBootstrapper.initialize()`（固定顺序、marker 最后写、失败不擦除既有数据、二次 init 零翻译调用、record 只含聚合计数）；焦点 21 passed、全量确定性 1009 passed/5 skipped/30 deselected。本提交关闭 T75 并领取 T76 为唯一 `in_progress`；随后按实施计划 Task 4 以 TDD 实现 `local_runtime_role=api` 的 `LocalRuntimeAssembly`（FastAPI 只读角色：挂 canonical catalog/P3 查询依赖、`realtime.worker=None`、lifespan 零上游 worker）、`TennisService` 注入 catalog 优先读取（无 catalog 时保持既有 provider 路径逐字节兼容）、内部 ID-only 的 `/runtime/health` 端点（无健康记录时 typed `runtime_not_started`，不改 P1 `/health` 契约），并跑 API/P2/P3 兼容回归。
+**当前动作：** T76 已完成并通过独立评审（spec ✅ / Approved）：`LocalRuntimeAssembly` 与 `create_app()` 的 `local_runtime_role=api` 分支交付只读 FastAPI 角色——fail-fast 配置校验、`realtime.worker=None`、lifespan 零上游 worker/零后台任务、P3 feed/worker 构建被门控；`TennisService` catalog 注入仅限列表读取，快照/历史/H2H fallback 不变；`/api/v1/runtime/health` 只含 canonical 聚合或 typed `runtime_not_started`。焦点 8 passed、API/P2/P3 门 35 passed、全量确定性 1017 passed/5 skipped/30 deselected、infrastructure 59 passed。本提交关闭 T76 并领取 T77 为唯一 `in_progress`；随后按实施计划 Task 5 以 TDD 实现 `RuntimeDemand`（viewer lease ∪ P3 durable tracking，去重、零 viewer 时 paper 跟踪仍保活）、`RealtimeWorker` 向后兼容扩展点（可选 `demand_source`/`on_snapshot`/`on_connection`，默认 lease-only 行为不变、回调错误隔离不污染 P2 发布）、`MarketWorker.active_market_ids()` 与 REST baseline 后的 `on_state` 下游通知，并把真实 `match_info`（来自 canonical catalog）接入 `TrackingDemand`（live-local runtime 不再 `match_info=None`）。
 
 ## P3 关闭证据摘要（详见 ROADMAP T57–T71 行）
 
@@ -34,14 +34,14 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
-| 2026-09-17 | （本提交） | T75 关闭 + Claude Code 领取 T76：FastAPI 只读角色与 runtime ownership 分离；起始 `134c9f9` |
+| 2026-09-17 | （本提交） | T76 关闭 + Claude Code 领取 T77：统一 P2/P3 tracking demand；起始 `8860136` |
+| 2026-09-17 | `8860136` | T76 完成：FastAPI 只读角色与 runtime ownership 分离（焦点 8 + 门 35 passed；确定性 1017 passed；infra 59 passed） |
+| 2026-09-17 | `e8f6bb0` | T75 关闭 + Claude Code 领取 T76 |
 | 2026-09-17 | `134c9f9` | T75 完成：幂等 `init` 数据准备（焦点 21 passed；确定性 1009 passed/5 skipped/30 deselected） |
 | 2026-09-17 | `222baf4` | T74 关闭 + Claude Code 领取 T75 |
-| 2026-09-17 | `ccfdb66` | T74 完成：migration `0005` + canonical catalog/runtime state repositories（infra 59 passed；确定性 992 passed） |
-| 2026-09-17 | `10ae083` | T73 关闭 + Claude Code 领取 T74 |
 
 ## 下一步
 
-1. T76 只执行 [实施计划](./docs/superpowers/plans/2026-09-17-tennixai-p4-local-real-runtime-implementation.md) 的 Task 4：先写失败的 ownership/read-path 测试，再实现 local-role assembly、catalog-first service 读取与 `/runtime/health`；跑 API/P2/P3 兼容回归；完成后记录实际测试证据、提交、推送，并将 T77 从 `planned` 转为 `ready` 后领取。
-2. 后续严格一次一个任务推进 T77–T80；任何 P4 工作不得回溯放宽 P3 边界：只读 provider、one-shot FOK、PostgreSQL 权威、独立 cursor、未晋升即 NO BET。
-3. T74/T75 评审遗留 Minor（catalog upsert 单写者假设、partial fixture 字段覆盖防护、`reason_code` 消毒约定、`sync_player_aliases` skipped 语义、协议结构契合在装配时确认）由 T77/T78 处置并在最终整枝评审复核。
+1. T77 只执行 [实施计划](./docs/superpowers/plans/2026-09-17-tennixai-p4-local-real-runtime-implementation.md) 的 Task 5：先写失败的 composed-demand/worker-hook 测试，再加向后兼容扩展点与真实 `match_info` 接线；跑 P2/P3 worker 回归门；完成后记录实际测试证据、提交、推送，并将 T78 从 `planned` 转为 `ready` 后领取。
+2. 后续严格一次一个任务推进 T78–T80；任何 P4 工作不得回溯放宽 P3 边界：只读 provider、one-shot FOK、PostgreSQL 权威、独立 cursor、未晋升即 NO BET。
+3. 评审遗留 Minor 处置：T78 扩展 `RuntimeHealth` 时必须同步扩展 `RuntimeHealthDto`（当前 `model_validate` 静默丢 extras）并只写消毒后的稳定 `reason_code`；catalog upsert 单写者假设与 partial-fixture 字段覆盖防护在 T77/T78 处置；其余（skipped 语义、Literal state、builder smoke 测试等）留最终整枝评审复核。

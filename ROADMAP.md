@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-17 16:24 CST
+**最后更新：** 2026-09-17 17:05 CST
 
 **总体状态：** `in_progress`
 
-**当前里程碑：** P3 已关闭（T57–T71 全部 `done`，Completion Gate 逐条有证据）；P4.0 Local Real Runtime 设计与实施计划（T72）已 `done`；P4.1 进行中：T73–T75 已 `done`，T76 已领取
+**当前里程碑：** P3 已关闭（T57–T71 全部 `done`，Completion Gate 逐条有证据）；P4.0 Local Real Runtime 设计与实施计划（T72）已 `done`；P4.1 进行中：T73–T76 已 `done`，T77 已领取
 
-**当前阶段：** P4.1 — Local Real Runtime Implementation（`in_progress`；T76 由 Claude Code 领取，起始 `134c9f9`）
+**当前阶段：** P4.1 — Local Real Runtime Implementation（`in_progress`；T77 由 Claude Code 领取，起始 `8860136`）
 
 ## 状态说明
 
@@ -145,7 +145,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | 阶段 | 状态 | 核心交付 | Exit gate / 当前缺口 |
 |---|---|---|---|
 | P4.0 — Local Real Runtime Design Freeze | `done` | 将既有 P1–P3 的真实数据能力收为一个本地可启动、可观察、隔离且安全的日常运行入口 | [T72 设计规格](./docs/superpowers/specs/2026-09-17-tennixai-p4-local-real-runtime-design.md) 与 [T72 实施计划](./docs/superpowers/plans/2026-09-17-tennixai-p4-local-real-runtime-implementation.md) 已完成；未修改运行代码，P3 paper-only 边界不变 |
-| P4.1 — Local Real Runtime Implementation | `in_progress` | 逐项交付统一本地真实运行入口及其真实核验 | 依 [T72 实施计划](./docs/superpowers/plans/2026-09-17-tennixai-p4-local-real-runtime-implementation.md) 执行 T73–T80；同一时间只领取一个任务；T73–T75 已完成，T76 已领取 |
+| P4.1 — Local Real Runtime Implementation | `in_progress` | 逐项交付统一本地真实运行入口及其真实核验 | 依 [T72 实施计划](./docs/superpowers/plans/2026-09-17-tennixai-p4-local-real-runtime-implementation.md) 执行 T73–T80；同一时间只领取一个任务；T73–T76 已完成，T77 已领取 |
 
 ## P4 任务登记表
 
@@ -155,7 +155,8 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | T73 | P4.1 | Add Live-Local Configuration and Isolation Guards | `done` | `4c0c955` | 领取 `38df793`（起始 `eb793e7`）。TDD 先红（`ModuleNotFoundError: app.runtime`）后绿：新增 `app/runtime/models.py`（`LocalRuntimeSettings`，Redis DB 11、live≥30s/upcoming≥300s/ranking≥3600s/discovery≥60s Pydantic 边界）与 `app/runtime/config.py`（`require_live_local` 拒绝非 `tennix_live_local`、非 loopback、非 `api_tennis`/`paper`、缺失凭据；`LiveLocalConfigurationError` 只含稳定 reason code 不回显 URL/secret；`child_environment` 返回五个子进程覆盖键、零 `NEXT_PUBLIC_*`、不改 `os.environ`）；`Settings` 新增 `local_runtime_role`（默认 `off`）与有界 `local_runtime_*` 字段，既有默认全部不变；`.env.example` 增加安全模板块。焦点 `tests/test_runtime_config.py tests/test_config.py` 64 passed；全量确定性 backend 962 passed/5 skipped/30 deselected 无告警；新文件 ruff check/format 干净 |
 | T74 | P4.1 | Persist a Canonical Catalog and Runtime State | `done` | `ccfdb66` | 领取 `10ae083`（起始 `4c0c955`）。TDD 先红后绿：migration `0005` 仅新增 `runtime_state`（key String(64) PK/payload JSONB/updated_at timestamptz，downgrade 只删该表，源码级扫描测试证明）；`MatchCatalogRepository`（复用既有 players/tournaments/matches upsert 形态、批量 IN 装载零 N+1、显式 `observed_at`、终态状态只进不退的 rank 守卫含 10 例纯函数矩阵 + 2 例真实行 integration、返回本次新插入球员内部 ID 集合）与 `RuntimeStateRepository`（仅 `local_runtime_init`/`local_runtime_health` 两键、未知键 typed 拒绝、marker/health 幂等 upsert、health 写不删 catalog、payload 关键字扫描零 provider ID）；`app/runtime/models.py` 追加最小 `RuntimeInitRecord`/`RuntimeHealth`/`RuntimeSourceHealth`（extra=forbid，JSONB round-trip 测试）。integration 证明不删任何既有 P2/P3 行（markets/raw_events 计数不变）；alembic 0005→0004→0005 往返 exit 0（独立 scratch DB，legacy `tennix` 未触碰）；焦点 trio 48 passed、infrastructure 全套 59 passed、全量确定性 992 passed/5 skipped/30 deselected；新代码 ruff 干净。评审 Minor 已记录（单写者假设、partial fixture 字段覆盖防护等）留待 T77/T78 与最终评审处置 |
 | T75 | P4.1 | Implement Idempotent `init` Data Preparation | `done` | `134c9f9` | 领取 `222baf4`（起始 `ccfdb66`）。TDD 先红后绿：`app/runtime/catalog.py`（`CatalogSynchronizer.sync()` live+fixtures 各恰一次调用（计数证明）、按内部 ID 去重且 live 行优先、provider 失败 typed 抛出且零删除既有目录、`newly_seen_player_ids` sorted 确定性；`tracking_info` 复用 P3 既有 `MatchTrackingInfo`）；`PlayerDirectorySync.sync_player_aliases`（只查给定 ID、`derive_english_aliases` 确定性、spy 证明零目录扫描零 LLM、二次运行零插入）；`app/runtime/bootstrap.py`（`RuntimeBootstrapper.initialize()` 固定顺序 migrations→rankings（失败→`provider_unavailable` 503 且无 marker）→known aliases→catalog→new aliases→`enrich_missing(batch_size=25)`（失败→无 marker）→聚合计数 record→最后 `mark_initialized`；零 try/except 吞错；失败重跑保留既有 marker/数据；record dump 键集合钉死为聚合计数四项；二次成功 init spy 证明零翻译调用；`MigrationRunner.upgrade_head()->str` 注入协议）。焦点 21 passed；全量确定性 1009 passed/5 skipped/30 deselected；新文件 ruff 干净；评审确认 AppError code 断言符合仓库约定、生产路径 catalog 与 directory 共享 `players` 表故新球员必获英文别名 |
-| T76 | P4.1 | Split FastAPI Read Role From Runtime Ownership | `in_progress` | — | 依 T72 计划 Task 4：API 只读角色，不持有上游 WebSocket；Claude Code 于 2026-09-17 领取（起始 `134c9f9`） |
+| T76 | P4.1 | Split FastAPI Read Role From Runtime Ownership | `done` | `8860136` | 领取 `e8f6bb0`（起始 `134c9f9`）。TDD 先红后绿：`app/runtime/assembly.py`（`LocalRuntimeAssembly` dataclass + 仅 API 角色的懒构建工厂，`realtime.worker=None`，`aclose()` 单所有者关闭 db/redis/http client）；`create_app()` 新增 `local_runtime_role=="api"` 分支（`require_live_local` fail-fast、稳定 code typed 启动错误、`owns_realtime=False`、P3 worker/feed/tracking 代码块以 `local_assembly is None` 门控，零上游 socket/零后台任务——lifespan 仅在 `realtime.worker is not None` 时建 task）；`TennisService(catalog=None)` 注入后仅 `_list_by_player_id` catalog 优先，`resolve_match_snapshot` 保留有界用户触发 provider fallback，`catalog=None` 路径逐字节不变（默认分支唯一改动 `and resolver is None` 经证明为 no-op）；`GET /api/v1/runtime/health`（持久化聚合健康或 typed `runtime_not_started`，P1 `/health` 契约不变）。焦点 8 passed（RecordingProvider 任何上游调用即抛错、泄漏扫描含 dummy key/域名/wss）、API/P2/P3 门 35 passed、全量确定性 1017 passed/5 skipped/30 deselected、infrastructure 59 passed、新代码 ruff 干净 |
+| T77 | P4.1 | Compose P2/P3 Demand Under One Runtime Owner | `in_progress` | — | 依 T72 计划 Task 5：viewer 与 durable demand 的安全合并；Claude Code 于 2026-09-17 领取（起始 `8860136`） |
 | T77 | P4.1 | Compose P2/P3 Demand Under One Runtime Owner | `planned` | — | 依 T72 计划 Task 5：viewer 与 durable demand 的安全合并；T76 完成后再转 `ready` |
 | T78 | P4.1 | Run Bounded Discovery, Freshness, and Paper Maintenance | `planned` | — | 依 T72 计划 Task 6：唯一 daemon、健康与 stale/gap 守卫；T77 完成后再转 `ready` |
 | T79 | P4.1 | Add a Safe Repository-Root Launcher | `planned` | — | 依 T72 计划 Task 7：`init/up/status/down/logs` 的安全生命周期；T78 完成后再转 `ready` |
