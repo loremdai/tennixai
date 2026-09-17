@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-17 12:25 CST
+**最后更新：** 2026-09-17 14:13 CST
 
 **总体状态：** `in_progress`
 
-**当前里程碑：** P3 已关闭（T57–T71 全部 `done`，Completion Gate 逐条有证据）；P4.0 Local Real Runtime 设计与实施计划（T72）已 `done`；P4.1 从 T73 开始，已 `ready`
+**当前里程碑：** P3 已关闭（T57–T71 全部 `done`，Completion Gate 逐条有证据）；P4.0 Local Real Runtime 设计与实施计划（T72）已 `done`；P4.1 进行中，T73 已领取
 
-**当前阶段：** P4.1 — Local Real Runtime Implementation（`ready`；尚未领取实现任务）
+**当前阶段：** P4.1 — Local Real Runtime Implementation（`in_progress`；T73 由 Claude Code 领取，起始 `eb793e7`）
 
 ## 状态说明
 
@@ -145,14 +145,14 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | 阶段 | 状态 | 核心交付 | Exit gate / 当前缺口 |
 |---|---|---|---|
 | P4.0 — Local Real Runtime Design Freeze | `done` | 将既有 P1–P3 的真实数据能力收为一个本地可启动、可观察、隔离且安全的日常运行入口 | [T72 设计规格](./docs/superpowers/specs/2026-09-17-tennixai-p4-local-real-runtime-design.md) 与 [T72 实施计划](./docs/superpowers/plans/2026-09-17-tennixai-p4-local-real-runtime-implementation.md) 已完成；未修改运行代码，P3 paper-only 边界不变 |
-| P4.1 — Local Real Runtime Implementation | `ready` | 逐项交付统一本地真实运行入口及其真实核验 | 依 [T72 实施计划](./docs/superpowers/plans/2026-09-17-tennixai-p4-local-real-runtime-implementation.md) 执行 T73–T80；同一时间只领取一个任务 |
+| P4.1 — Local Real Runtime Implementation | `in_progress` | 逐项交付统一本地真实运行入口及其真实核验 | 依 [T72 实施计划](./docs/superpowers/plans/2026-09-17-tennixai-p4-local-real-runtime-implementation.md) 执行 T73–T80；同一时间只领取一个任务；T73 已领取 |
 
 ## P4 任务登记表
 
 | ID | 主要阶段 | 任务 | 状态 | 完成提交 | 验收证据 |
 |---|---|---|---|---|---|
 | T72 | P4.0 | Freeze the Local Real Runtime Design | `done` | `32ea89c` | 用户已批准 [设计规格](./docs/superpowers/specs/2026-09-17-tennixai-p4-local-real-runtime-design.md)，并完成 [T73–T80 实施计划](./docs/superpowers/plans/2026-09-17-tennixai-p4-local-real-runtime-implementation.md)；计划格式/占位/边界检查通过，未修改运行代码 |
-| T73 | P4.1 | Add Live-Local Configuration and Isolation Guards | `ready` | — | 依 T72 计划 Task 1：根 `.env`、专用本地 DB/Redis 守卫、子进程角色与确定性测试 |
+| T73 | P4.1 | Add Live-Local Configuration and Isolation Guards | `in_progress` | — | 依 T72 计划 Task 1：根 `.env`、专用本地 DB/Redis 守卫、子进程角色与确定性测试；Claude Code 于 2026-09-17 领取（起始 `eb793e7`） |
 | T74 | P4.1 | Persist a Canonical Catalog and Runtime State | `planned` | — | 依 T72 计划 Task 2：最小可逆 schema、canonical catalog 与 runtime state；T73 完成后再转 `ready` |
 | T75 | P4.1 | Implement Idempotent `init` Data Preparation | `planned` | — | 依 T72 计划 Task 3：排名、catalog、别名和一次性离线中文补齐；T74 完成后再转 `ready` |
 | T76 | P4.1 | Split FastAPI Read Role From Runtime Ownership | `planned` | — | 依 T72 计划 Task 4：API 只读角色，不持有上游 WebSocket；T75 完成后再转 `ready` |

@@ -2,19 +2,19 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-17 12:25 CST
+**最后更新：** 2026-09-17 14:13 CST
 
-**当前任务：** 未领取 — T73: Add Live-Local Configuration and Isolation Guards（P4.1）
+**当前任务：** T73: Add Live-Local Configuration and Isolation Guards（P4.1）
 
-**任务状态：** `ready`
+**任务状态：** `in_progress`
 
-**执行者 / ADE：** 待领取
+**执行者 / ADE：** Claude Code（Fable 5）
 
 **分支：** `main`
 
-**起始提交：** `32ea89c`（T72 实施计划已提交）
+**起始提交：** `eb793e7`（T72 关闭、总控已同步；main 与 origin/main 一致）
 
-**当前动作：** T72 已关闭：用户批准 [P4.0 本地真实运行设计](./docs/superpowers/specs/2026-09-17-tennixai-p4-local-real-runtime-design.md)，实施计划已提交为 `32ea89c`：[P4.0 本地真实运行实施计划](./docs/superpowers/plans/2026-09-17-tennixai-p4-local-real-runtime-implementation.md)。计划把实现拆为 T73–T80；尚未修改运行代码。下一位执行者必须先领取 T73，再开始实现。
+**当前动作：** 已完整阅读 AGENTS.md、PROJECT.md、ROADMAP.md、CURRENT.md、[P4.0 设计规格](./docs/superpowers/specs/2026-09-17-tennixai-p4-local-real-runtime-design.md) 与 [T73–T80 实施计划](./docs/superpowers/plans/2026-09-17-tennixai-p4-local-real-runtime-implementation.md)，并核对 Git 状态。本提交领取 T73 为唯一 `in_progress` 任务；推送后按实施计划 Task 1 以 TDD 实现本地真实运行配置与隔离守卫（根 `.env`、`tennix_live_local`/Redis DB 11 守卫、`local_runtime_role` 与有界周期字段、确定性测试），完成后运行焦点与既有配置回归、更新 ROADMAP/CURRENT、按 commit gate 提交推送，再将 T74 转为 `ready` 并领取。受保护未跟踪项（`.codex/`、`.superpowers/`、`REALTIME_LATENCY_INVESTIGATION.md`、`frontend/next-env.d.ts`）保持不动。
 
 ## P3 关闭证据摘要（详见 ROADMAP T57–T71 行）
 
@@ -34,14 +34,13 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
+| 2026-09-17 | （本提交） | Claude Code 领取 T73：P4.1 本地真实运行配置与隔离守卫；起始 `eb793e7`，尚未修改运行代码 |
 | 2026-09-17 | `32ea89c` | T72 关闭：用户批准设计，T73–T80 实施计划已提交；尚未开始运行时代码 |
 | 2026-09-17 | `e2173fd` | T72 规格已推送：P4.0 本地真实运行设计；等待用户审阅，未开始实现 |
 | 2026-09-17 | `6deac21` | Codex 领取 T72：P4.0 Local Real Runtime 设计冻结；仅规格与总控 |
 | 2026-09-17 | `3fde00a` | T71 完成：真实只读 shadow gate（backend live 4 passed + 浏览器 4 passed）与证据表；P3 关闭 |
-| 2026-09-17 | `90dedf3` | T70 关闭 + Claude 领取 T71 |
 
 ## 下一步
 
-1. 下一位执行者先按 `AGENTS.md` 完整检查仓库，再在本文件领取并推送 T73；领取前不得修改代码或配置。
-2. T73 只能执行 [实施计划](./docs/superpowers/plans/2026-09-17-tennixai-p4-local-real-runtime-implementation.md) 的 Task 1；完成后记录实际测试证据、提交、推送，并将 T74 从 `planned` 转为 `ready`。
-3. 后续严格一次一个任务推进 T74–T80；任何 P4 工作不得回溯放宽 P3 边界：只读 provider、one-shot FOK、PostgreSQL 权威、独立 cursor、未晋升即 NO BET。
+1. T73 只执行 [实施计划](./docs/superpowers/plans/2026-09-17-tennixai-p4-local-real-runtime-implementation.md) 的 Task 1：先写失败测试，再实现配置守卫；完成后记录实际测试证据、提交、推送，并将 T74 从 `planned` 转为 `ready` 后领取。
+2. 后续严格一次一个任务推进 T74–T80；任何 P4 工作不得回溯放宽 P3 边界：只读 provider、one-shot FOK、PostgreSQL 权威、独立 cursor、未晋升即 NO BET。
