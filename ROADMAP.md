@@ -3,7 +3,7 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-17 11:44 CST
+**最后更新：** 2026-09-17 11:52 CST
 
 **总体状态：** `in_progress`
 
@@ -144,7 +144,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 
 | 阶段 | 状态 | 核心交付 | Exit gate / 当前缺口 |
 |---|---|---|---|
-| P4.0 — Local Real Runtime Design Freeze | `in_progress` | 将既有 P1–P3 的真实数据能力收为一个本地可启动、可观察、隔离且安全的日常运行入口 | T72 只产出设计规格与后续实施路线；不修改运行代码、不改变 P3 paper-only 边界 |
+| P4.0 — Local Real Runtime Design Freeze | `in_progress` | 将既有 P1–P3 的真实数据能力收为一个本地可启动、可观察、隔离且安全的日常运行入口 | [T72 设计规格](./docs/superpowers/specs/2026-09-17-tennixai-p4-local-real-runtime-design.md)；只产出规格与后续实施路线，不修改运行代码、不改变 P3 paper-only 边界 |
 
 ## P4 任务登记表
 
