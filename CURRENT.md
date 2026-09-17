@@ -2,7 +2,7 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-17 11:44 CST
+**最后更新：** 2026-09-17 11:55 CST
 
 **当前任务：** T72 — Freeze the Local Real Runtime Design（P4.0）
 
@@ -14,7 +14,7 @@
 
 **起始提交：** `c537f4f`（P3 关闭与 P4 计划状态对齐）
 
-**当前动作：** 已获用户确认，正在把 P4.0「完整本地真实运行」写成可审阅设计：单一 `init/up/status/down` 入口、隔离 `tennix_live_local` 数据库、后台独占真实 API-Tennis/Polymarket WebSocket、赛程/排名低频同步、显式 stale/gap 安全门、显式真实核验与永远 paper-only。此任务只写规格和总控，不开始实现；规格经用户审阅批准后才创建实施计划。
+**当前动作：** 规格已完成并推送：`e2173fd` [P4.0 本地真实运行设计](./docs/superpowers/specs/2026-09-17-tennixai-p4-local-real-runtime-design.md)。它冻结单一 `init/up/status/down` 入口、隔离 `tennix_live_local`、后台独占 API-Tennis/Polymarket WebSocket、赛程/排名低频同步、显式 stale/gap、真实核验和永远 paper-only。已完成格式/占位/边界自检，未改运行代码；等待用户审阅批准后才可创建实施计划。
 
 ## P3 关闭证据摘要（详见 ROADMAP T57–T71 行）
 
@@ -34,13 +34,13 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
-| 2026-09-17 | 待提交 | Codex 领取 T72：P4.0 Local Real Runtime 设计冻结；仅规格与总控 |
+| 2026-09-17 | `e2173fd` | T72 规格已推送：P4.0 本地真实运行设计；等待用户审阅，未开始实现 |
+| 2026-09-17 | `6deac21` | Codex 领取 T72：P4.0 Local Real Runtime 设计冻结；仅规格与总控 |
 | 2026-09-17 | `3fde00a` | T71 完成：真实只读 shadow gate（backend live 4 passed + 浏览器 4 passed）与证据表；P3 关闭 |
 | 2026-09-17 | `90dedf3` | T70 关闭 + Claude 领取 T71 |
-| 2026-09-17 | `01e6ba0` | T70 完成：dual-stream replay/recovery/latency integration 门、exit-missed 缺陷修复、全量回归与视觉门 |
 
 ## 下一步
 
-1. 完成 T72 设计规格、自检并提交；请用户审阅后才可编写实施计划。
+1. 等待用户审阅并批准 T72 规格；批准后才可编写实施计划。
 2. 不得借 T72 修改运行代码、`.env`、数据库或视觉原型；实现任务将在规格批准后另行领取。
 3. 任何 P4 工作不得回溯放宽 P3 边界：只读 provider、one-shot FOK、PostgreSQL 权威、独立 cursor、未晋升即 NO BET。

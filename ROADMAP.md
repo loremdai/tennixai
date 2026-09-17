@@ -3,7 +3,7 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-17 11:52 CST
+**最后更新：** 2026-09-17 11:55 CST
 
 **总体状态：** `in_progress`
 
@@ -150,7 +150,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 
 | ID | 主要阶段 | 任务 | 状态 | 完成提交 | 验收证据 |
 |---|---|---|---|---|---|
-| T72 | P4.0 | Freeze the Local Real Runtime Design | `in_progress` | — | 用户已确认：单一 `init/up/status/down` 日常入口；独立 `tennix_live_local` 数据库；网球比分与 Polymarket book 使用 WebSocket，赛程/排名低频真实同步；断流/过期显式 stale 并暂停新动作；真实核验显式执行且保持 paper-only。当前只写设计规格与总控，不做实现 |
+| T72 | P4.0 | Freeze the Local Real Runtime Design | `in_progress` | `e2173fd` | 规格已写入并推送：[P4.0 本地真实运行设计](./docs/superpowers/specs/2026-09-17-tennixai-p4-local-real-runtime-design.md)（单一 `init/up/status/down`、隔离 `tennix_live_local`、两条 WebSocket ownership、低频同步、stale/gap、显式真实核验、paper-only）。已完成格式/占位/边界自检，未改运行代码；等待用户审阅规格后才可创建实施计划 |
 
 ## P2 完成门摘要
 
