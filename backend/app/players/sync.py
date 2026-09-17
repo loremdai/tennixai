@@ -3,9 +3,12 @@
 `sync_rankings` persists one atomic snapshot per tour; a failing tour keeps the
 previous snapshot and is counted in `failed`. `sync_known_player_aliases`
 pages through known singles players and derives deterministic English aliases.
+`sync_player_aliases` is the narrow path used by `init` and periodic catalog
+refreshes: it derives deterministic English aliases for exactly the given
+player IDs, with no directory-wide scan and no translator/LLM call.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from datetime import datetime
 
 from app.errors import AppError
@@ -101,4 +104,27 @@ class PlayerDirectorySync:
             after_id = batch[-1].player.id
             if len(batch) < batch_size:
                 break
+        return DirectorySyncReport(aliases_inserted=aliases_inserted, skipped=skipped)
+
+    async def sync_player_aliases(
+        self, player_ids: Collection[str]
+    ) -> DirectorySyncReport:
+        """Derive deterministic English aliases for exactly `player_ids`.
+
+        Narrow complement to `sync_known_player_aliases`: it looks up only the
+        given internal IDs, never scans the whole directory, and never calls a
+        translator or LLM. Idempotent — a second run with the same IDs inserts
+        nothing new. Unknown IDs are skipped, never created.
+        """
+        aliases_inserted = 0
+        skipped = 0
+        for player_id in player_ids:
+            directory_player = await self._repository.get_player(player_id)
+            if directory_player is None:
+                skipped += 1
+                continue
+            aliases = derive_english_aliases(directory_player)
+            inserted = await self._repository.upsert_aliases(aliases)
+            aliases_inserted += inserted
+            skipped += len(aliases) - inserted
         return DirectorySyncReport(aliases_inserted=aliases_inserted, skipped=skipped)

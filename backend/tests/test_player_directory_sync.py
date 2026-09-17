@@ -6,7 +6,7 @@ import pytest
 
 from app.domain import Player
 from app.errors import AppError
-from app.players.models import RankingEntry, RankingMovement, Tour
+from app.players.models import PlayerAliasSource, RankingEntry, RankingMovement, Tour
 from app.players.repository import MemoryPlayerDirectoryRepository
 from app.players.sync import DirectorySyncReport, PlayerDirectorySync
 
@@ -54,6 +54,23 @@ class SpyRepository(MemoryPlayerDirectoryRepository):
     async def prune_ranking_snapshots(self, *, keep_per_tour: int = 8) -> int:
         self.prune_calls += 1
         return await super().prune_ranking_snapshots(keep_per_tour=keep_per_tour)
+
+
+class AliasSpyRepository(MemoryPlayerDirectoryRepository):
+    """Records which player IDs are queried and any full-directory scans."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.requested_player_ids: list[str] = []
+        self.directory_scan_calls = 0
+
+    async def get_player(self, player_id: str):
+        self.requested_player_ids.append(player_id)
+        return await super().get_player(player_id)
+
+    async def list_players_for_alias_sync(self, *, limit: int, after_id: str | None = None):
+        self.directory_scan_calls += 1
+        return await super().list_players_for_alias_sync(limit=limit, after_id=after_id)
 
 
 ATP = (
@@ -134,3 +151,65 @@ async def test_sync_pages_through_known_players_in_batches() -> None:
 
         matches = await repository.find_aliases(normalize_player_name(player.player.name), limit=5)
         assert any(match.player.player.id == player_id for match in matches)
+
+
+@pytest.mark.asyncio
+async def test_sync_player_aliases_queries_only_given_ids_without_llm() -> None:
+    repository = AliasSpyRepository()
+    sync = PlayerDirectorySync(StubCatalog(atp=ATP, wta=WTA), repository, now=lambda: NOW)
+    await sync.sync_rankings()
+    # Isolate the narrow path from ranking-sync's own directory reads.
+    repository.requested_player_ids.clear()
+
+    report = await sync.sync_player_aliases(["ply_ben", "ply_zheng"])
+
+    assert report.aliases_inserted > 0
+    assert report.failed == 0
+    # Only the given IDs are queried; no full-directory alias scan runs.
+    assert repository.requested_player_ids == ["ply_ben", "ply_zheng"]
+    assert repository.directory_scan_calls == 0
+    counts = await repository.directory_counts()
+    assert counts["aliases"] == report.aliases_inserted
+
+
+@pytest.mark.asyncio
+async def test_sync_player_aliases_is_idempotent() -> None:
+    repository = MemoryPlayerDirectoryRepository()
+    sync = PlayerDirectorySync(StubCatalog(atp=ATP, wta=WTA), repository, now=lambda: NOW)
+    await sync.sync_rankings()
+
+    first = await sync.sync_player_aliases(["ply_ben", "ply_bryan", "ply_zheng"])
+    assert first.aliases_inserted > 0
+
+    second = await sync.sync_player_aliases(["ply_ben", "ply_bryan", "ply_zheng"])
+    assert second.aliases_inserted == 0
+
+
+@pytest.mark.asyncio
+async def test_sync_player_aliases_uses_derived_english_aliases_only() -> None:
+    repository = MemoryPlayerDirectoryRepository()
+    sync = PlayerDirectorySync(StubCatalog(atp=ATP, wta=WTA), repository, now=lambda: NOW)
+    await sync.sync_rankings()
+
+    await sync.sync_player_aliases(["ply_ben"])
+
+    matches = await repository.find_aliases("shelton", limit=10)
+    ben = [match for match in matches if match.player.player.id == "ply_ben"]
+    assert ben
+    assert all(match.alias.source is PlayerAliasSource.DERIVED for match in ben)
+    # A narrow ID sync never touches the sibling player it was not given.
+    assert all(match.player.player.id != "ply_bryan" for match in matches)
+
+
+@pytest.mark.asyncio
+async def test_sync_player_aliases_empty_ids_is_a_noop() -> None:
+    repository = AliasSpyRepository()
+    sync = PlayerDirectorySync(StubCatalog(atp=ATP, wta=WTA), repository, now=lambda: NOW)
+    await sync.sync_rankings()
+    repository.requested_player_ids.clear()
+
+    report = await sync.sync_player_aliases([])
+
+    assert report.aliases_inserted == 0
+    assert repository.requested_player_ids == []
+    assert repository.directory_scan_calls == 0
