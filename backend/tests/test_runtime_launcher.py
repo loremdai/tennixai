@@ -27,6 +27,7 @@ from app.runtime.launcher import (
     DatabaseStatus,
     LauncherState,
     ManagedProcess,
+    PsProcessInspector,
     RuntimeLauncher,
     SubprocessCommandRunner,
     default_state_dir,
@@ -1091,6 +1092,57 @@ def test_real_signal_group_uses_killpg(monkeypatch: pytest.MonkeyPatch):
     )
     assert SubprocessCommandRunner().signal_group(424242, signal.SIGTERM) is True
     assert calls == [(424242, signal.SIGTERM)]
+
+
+def test_real_is_alive_reaps_zombie_children(monkeypatch: pytest.MonkeyPatch):
+    # Review finding: children are spawned but never reaped, so an exited
+    # child stays a zombie and os.kill(pid, 0) keeps reporting it alive —
+    # the fail-fast exit codes would never fire and SIGKILL would be wasted.
+    # Nothing is spawned or killed: os.waitpid / os.kill are both mocked.
+    waitpid_results: list[tuple[int, int]] = []
+    waitpid_errors: list[Exception | None] = []
+    kill_errors: list[Exception | None] = []
+
+    def fake_waitpid(pid: int, flags: int) -> tuple[int, int]:
+        assert flags == os.WNOHANG
+        error = waitpid_errors.pop(0)
+        if error is not None:
+            raise error
+        return waitpid_results.pop(0)
+
+    monkeypatch.setattr("app.runtime.launcher.os.waitpid", fake_waitpid)
+
+    def fake_kill(pid: int, signum: int) -> None:
+        assert signum == 0
+        error = kill_errors.pop(0)
+        if error is not None:
+            raise error
+
+    monkeypatch.setattr("app.runtime.launcher.os.kill", fake_kill)
+    inspector = PsProcessInspector()
+
+    # Reaped (zombie collected): reported dead without consulting kill(0).
+    waitpid_errors.append(None)
+    waitpid_results.append((424242, 0))
+    assert inspector.is_alive(424242) is False
+
+    # Still running: waitpid reports no exit, kill(pid, 0) succeeds.
+    waitpid_errors.append(None)
+    waitpid_results.append((0, 0))
+    kill_errors.append(None)
+    assert inspector.is_alive(424242) is True
+
+    # Not our child (or already reaped elsewhere): fall back to kill(0),
+    # which finds no such process.
+    waitpid_errors.append(ChildProcessError())
+    kill_errors.append(ProcessLookupError())
+    assert inspector.is_alive(424242) is False
+
+    # Non-positive pids must never reach waitpid (it would target a group).
+    waitpid_errors.append(AssertionError("waitpid must not be called"))
+    kill_errors.append(ProcessLookupError())
+    assert inspector.is_alive(0) is False
+    assert len(waitpid_errors) == 1  # sentinel unconsumed: waitpid never ran
 
 
 # ---------------------------------------------------------------------------

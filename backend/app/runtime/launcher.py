@@ -981,6 +981,19 @@ class PsProcessInspector:
         return line or None
 
     def is_alive(self, pid: int) -> bool:
+        if pid > 0:
+            # Spawned children are never reaped, so an exited child stays a
+            # zombie and ``os.kill(pid, 0)`` keeps succeeding. A non-blocking
+            # reap first keeps liveness — and the fail-fast exit codes —
+            # truthful, and stops SIGKILL being wasted on a zombie.
+            try:
+                reaped_pid, _status = os.waitpid(pid, os.WNOHANG)
+            except ChildProcessError:
+                reaped_pid = 0  # not our child / already reaped: use kill(0)
+            except OSError:
+                reaped_pid = 0
+            if reaped_pid == pid:
+                return False
         try:
             os.kill(pid, 0)
         except ProcessLookupError:
