@@ -37,11 +37,13 @@ from app.persistence.market_repositories import LinkFrozenError
 from app.players.models import PlayerResolution, PlayerResolutionStatus
 from app.players.sync import DirectorySyncReport
 from app.realtime.p3_metrics import P3Metrics
+from app.runtime.assembly import _PublisherBookSource
 from app.runtime.daemon import (
     LocalRuntimeDaemon,
     MarketBridge,
     SportsBridge,
     TrackingDemandSource,
+    TtlCache,
     stable_reason_code,
 )
 from app.runtime.health import (
@@ -429,6 +431,7 @@ def make_daemon(
             }
         ),
         "metrics": P3Metrics(),
+        "metadata_cache": None,
     }
     parts.update(overrides)
     daemon = LocalRuntimeDaemon(
@@ -447,6 +450,7 @@ def make_daemon(
         directory=parts["directory"],
         resolver=parts["resolver"],
         metrics=parts["metrics"],
+        metadata_cache=parts["metadata_cache"],
         tick_seconds=tick_seconds,
     )
     return daemon, parts
@@ -905,6 +909,168 @@ async def test_hot_book_failure_degrades_paper_health_and_passes_none():
 
     assert paper.calls == [("mkt_1", False, False)]
     assert state.saved[-1].sources["paper_execution"].reason_code == "REDIS_UNAVAILABLE"
+
+
+# ---------------------------------------------------------------------------
+# Decision-path caching: metadata + rules fetched once per TTL window
+# ---------------------------------------------------------------------------
+
+
+def make_book_source(
+    clock: FakeClock, provider: FakeMarketProvider
+) -> _PublisherBookSource:
+    """Book source wired exactly like the assembly: shared metadata cache
+    shape plus the decision-only rules cache, both at the 120s cadence."""
+    ttl = timedelta(seconds=120)
+    return _PublisherBookSource(
+        None,
+        None,
+        metadata_cache=TtlCache(provider.get_execution_metadata, clock.now, ttl=ttl),
+        rules_cache=TtlCache(provider.get_rules, clock.now, ttl=ttl),
+    )
+
+
+async def test_decision_metadata_and_rules_fetch_once_per_ttl_window():
+    clock = FakeClock()
+    provider = FakeMarketProvider([])
+    provider.metadata["mkt_1"] = INPUTS["metadata"]
+    provider.rules["mkt_1"] = make_rules("mkt_1")
+    books = make_book_source(clock, provider)
+    rules_hash = provider.rules["mkt_1"].rules_hash
+
+    # Three decision cycles inside the TTL window hit the provider once each.
+    for _ in range(3):
+        assert await books.get_metadata("mkt_1") is INPUTS["metadata"]
+        assert await books.get_rules_hash("mkt_1") == rules_hash
+        clock.advance(seconds=1)
+    assert provider.metadata_calls == ["mkt_1"]
+    assert provider.rules_calls == ["mkt_1"]
+
+    # Past the TTL window both are refetched exactly once.
+    clock.advance(seconds=120)
+    await books.get_metadata("mkt_1")
+    await books.get_rules_hash("mkt_1")
+    assert len(provider.metadata_calls) == 2
+    assert len(provider.rules_calls) == 2
+
+
+async def test_decision_cache_failures_raise_and_never_poison():
+    clock = FakeClock()
+    provider = FakeMarketProvider([])
+    provider.metadata_raises = AppError("rate_limited", "slow down", 429)
+    provider.rules_missing = {"mkt_1"}
+    books = make_book_source(clock, provider)
+
+    # A failed fetch raises unchanged (typed failure semantics apply).
+    with pytest.raises(AppError):
+        await books.get_metadata("mkt_1")
+    with pytest.raises(AppError):
+        await books.get_rules_hash("mkt_1")
+
+    # The error was not cached: once the provider recovers the very next
+    # cycle succeeds, and that success is what the TTL window serves.
+    provider.metadata_raises = None
+    provider.metadata["mkt_1"] = INPUTS["metadata"]
+    provider.rules_missing = set()
+    provider.rules["mkt_1"] = make_rules("mkt_1")
+    assert await books.get_metadata("mkt_1") is INPUTS["metadata"]
+    assert await books.get_rules_hash("mkt_1") == provider.rules["mkt_1"].rules_hash
+    calls_after_recovery = (len(provider.metadata_calls), len(provider.rules_calls))
+
+    clock.advance(seconds=60)
+    await books.get_metadata("mkt_1")
+    await books.get_rules_hash("mkt_1")
+    assert (len(provider.metadata_calls), len(provider.rules_calls)) == (
+        calls_after_recovery
+    )
+
+
+async def test_paper_and_decision_paths_share_one_metadata_cache():
+    clock = FakeClock()
+    provider = FakeMarketProvider([])
+    provider.metadata["mkt_1"] = INPUTS["metadata"]
+    # The assembly injects ONE cache into the daemon and the book source.
+    shared = TtlCache(
+        provider.get_execution_metadata, clock.now, ttl=timedelta(seconds=120)
+    )
+    daemon, parts = make_daemon(clock, market_provider=provider, metadata_cache=shared)
+    parts["hot_books"].books["mkt_1"] = make_book("mkt_1")
+    books = _PublisherBookSource(
+        None,
+        None,
+        metadata_cache=shared,
+        rules_cache=TtlCache(provider.get_rules, clock.now, ttl=timedelta(seconds=120)),
+    )
+
+    await daemon.tick_once()  # paper path fetches once
+    assert provider.metadata_calls == ["mkt_1"]
+
+    # The decision path reuses the very same entry: no second fetch.
+    assert await books.get_metadata("mkt_1") is INPUTS["metadata"]
+    assert provider.metadata_calls == ["mkt_1"]
+
+
+# ---------------------------------------------------------------------------
+# Per-market isolation: one market's failure never aborts the tick
+# ---------------------------------------------------------------------------
+
+
+class FailingPumpDecisionWorker(RecordingDecisionWorker):
+    def __init__(self, log: list[str], failures_for: set[str]) -> None:
+        super().__init__(log)
+        self.failures_for = failures_for
+
+    async def pump_once(self, market_id: str) -> None:
+        if market_id in self.failures_for:
+            raise AppError("provider_unavailable", "upstream down", 502)
+        await super().pump_once(market_id)
+
+
+async def test_one_market_failure_never_aborts_the_rest_of_the_tick():
+    log: list[str] = []
+    worker = FailingPumpDecisionWorker(log, {"mkt_bad"})
+    daemon, parts = make_daemon(
+        market_worker=FakeMarketRuntime(log, markets=("mkt_bad", "mkt_good")),
+        decision_worker=worker,
+    )
+
+    await daemon.tick_once()
+
+    # The healthy market still pumped and executed its due intents, and the
+    # bounded jobs plus the final persist still ran in the same tick.
+    assert worker.pump_calls == ["mkt_good"]
+    paper: RecordingPaper = parts["paper"]
+    assert paper.calls == [("mkt_good", False, False)]
+    assert parts["catalog_provider"].live_calls == 1
+    assert parts["log"][-1] == "persist"
+
+    # The failure degrades only the decision health source, carrying the
+    # stable reason code of the failing market.
+    source = parts["state"].saved[-1].sources["decision"]
+    assert source.status is RuntimeSourceStatus.DEGRADED
+    assert source.reason_code == "PROVIDER_UNAVAILABLE"
+
+    # Once the transient failure passes, the next clean tick recovers.
+    worker.failures_for = set()
+    await daemon.tick_once()
+    recovered = parts["state"].saved[-1].sources["decision"]
+    assert recovered.status is RuntimeSourceStatus.OK
+    assert recovered.reason_code is None
+    assert worker.pump_calls == ["mkt_good", "mkt_bad", "mkt_good"]
+
+
+async def test_market_pump_cancellation_still_propagates():
+    class CancellingWorker(RecordingDecisionWorker):
+        async def pump_once(self, market_id: str) -> None:
+            raise asyncio.CancelledError
+
+    log: list[str] = []
+    daemon, parts = make_daemon(decision_worker=CancellingWorker(log))
+
+    # CancelledError is a BaseException: per-market isolation must never
+    # swallow it, so it escapes tick_once exactly as before.
+    with pytest.raises(asyncio.CancelledError):
+        await daemon.tick_once()
 
 
 # ---------------------------------------------------------------------------

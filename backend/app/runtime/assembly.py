@@ -61,6 +61,7 @@ from app.runtime.daemon import (
     MarketBridge,
     SportsBridge,
     TrackingDemandSource,
+    TtlCache,
 )
 from app.runtime.demand import catalog_match_info
 from app.runtime.health import RuntimeHealthRegistry
@@ -188,12 +189,25 @@ class _SnapshotPredictor:
 
 
 class _PublisherBookSource:
-    """DecisionWorker book source: canonical hot book plus provider rules."""
+    """DecisionWorker book source: canonical hot book plus provider rules.
 
-    def __init__(self, provider: Any, publisher: Any, ledger: Any) -> None:
-        self._provider = provider
+    Metadata and rules reads go through TTL caches (the metadata cache is the
+    very instance the daemon's paper path uses) so the per-decision cycle
+    never re-issues the underlying provider REST calls inside a TTL window.
+    """
+
+    def __init__(
+        self,
+        publisher: Any,
+        ledger: Any,
+        *,
+        metadata_cache: TtlCache,
+        rules_cache: TtlCache,
+    ) -> None:
         self._publisher = publisher
         self._ledger = ledger
+        self._metadata_cache = metadata_cache
+        self._rules_cache = rules_cache
 
     async def get_book(self, market_id: str) -> Any:
         if self._publisher is None:
@@ -201,10 +215,10 @@ class _PublisherBookSource:
         return await self._publisher.get_hot_book(market_id)
 
     async def get_metadata(self, market_id: str) -> Any:
-        return await self._provider.get_execution_metadata(market_id)
+        return await self._metadata_cache.get(market_id)
 
     async def get_rules_hash(self, market_id: str) -> str:
-        rules = await self._provider.get_rules(market_id)
+        rules = await self._rules_cache.get(market_id)
         return rules.rules_hash
 
     async def get_frozen_rules_hash(self, match_id: str) -> str | None:
@@ -288,6 +302,40 @@ def build_local_runtime_daemon(
     markets = MarketRepository(database)
     ledger = PaperLedgerRepository(database)
 
+    # The Polymarket provider owns the execution-metadata and rules reads the
+    # decision path needs; it is constructed before the decision worker so the
+    # book source and the daemon's paper path can share ONE metadata cache.
+    async def register_market(
+        provider_event_id: str, condition_id: str, token_ids: tuple[str, str]
+    ) -> str:
+        return await markets.get_or_create_market_id(
+            provider="polymarket",
+            provider_event_id=provider_event_id,
+            condition_id=condition_id,
+            token_ids=token_ids,
+        )
+
+    async def lookup_market_external(market_id: str) -> Any:
+        return await markets.get_external_id(market_id)
+
+    market_provider = PolymarketProvider(
+        gamma_base_url=settings.polymarket_gamma_base_url,
+        clob_base_url=settings.polymarket_clob_base_url,
+        resolver=resolver,
+        registrar=register_market,
+        external_lookup=lookup_market_external,
+    )
+
+    # One shared execution-metadata cache feeds both the paper path (daemon)
+    # and the decision path (book source); the rules-hash cache is decision
+    # only. Both use the discovery cadence as their TTL, matching the paper
+    # path's existing 120s window, so the two never diverge.
+    metadata_ttl = timedelta(seconds=live.market_discovery_seconds)
+    metadata_cache = TtlCache(
+        market_provider.get_execution_metadata, clock, ttl=metadata_ttl
+    )
+    rules_cache = TtlCache(market_provider.get_rules, clock, ttl=metadata_ttl)
+
     registry = RuntimeHealthRegistry(state=state, clock=clock)
 
     links = MarketRepositoryLinks(markets)
@@ -337,7 +385,12 @@ def build_local_runtime_daemon(
         ),
         engine=DecisionEngine(policy=policy, stake=settings.p3_fixed_stake_usd),
         paper=paper,
-        books=_PublisherBookSource(provider, market_publisher, ledger),
+        books=_PublisherBookSource(
+            market_publisher,
+            ledger,
+            metadata_cache=metadata_cache,
+            rules_cache=rules_cache,
+        ),
         links=links,
         observations=markets,
         positions=ledger,
@@ -366,27 +419,6 @@ def build_local_runtime_daemon(
     )
 
     market_feed = PolymarketMarketFeed(ws_url=settings.polymarket_ws_url)
-
-    async def register_market(
-        provider_event_id: str, condition_id: str, token_ids: tuple[str, str]
-    ) -> str:
-        return await markets.get_or_create_market_id(
-            provider="polymarket",
-            provider_event_id=provider_event_id,
-            condition_id=condition_id,
-            token_ids=token_ids,
-        )
-
-    async def lookup_market_external(market_id: str) -> Any:
-        return await markets.get_external_id(market_id)
-
-    market_provider = PolymarketProvider(
-        gamma_base_url=settings.polymarket_gamma_base_url,
-        clob_base_url=settings.polymarket_clob_base_url,
-        resolver=resolver,
-        registrar=register_market,
-        external_lookup=lookup_market_external,
-    )
 
     async def token_lookup(market_id: str) -> tuple[str, str]:
         external = await markets.get_external_id(market_id)
@@ -425,6 +457,7 @@ def build_local_runtime_daemon(
         directory=PlayerDirectorySync(provider, directory_repo, now=clock),
         resolver=resolver,
         metrics=metrics,
+        metadata_cache=metadata_cache,
         live_catalog_seconds=live.live_catalog_seconds,
         upcoming_catalog_seconds=live.upcoming_catalog_seconds,
         ranking_seconds=live.ranking_seconds,

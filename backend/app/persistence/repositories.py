@@ -1,8 +1,10 @@
-"""Focused P2 repositories (T22 scope).
+"""Canonical PostgreSQL repositories across P2, P3 and P4.1.
 
-The cross-table `save_reduction` transaction arrives with the reducer in T26.
-Every method here is explicit about the rows it touches; retention deletion
-targets only `raw_provider_events.observed_at < before`.
+Holds the P2 identity/snapshot/raw-event stores (including the cross-table
+`save_reduction` transaction added with the reducer in T26), the P3 canonical
+match catalog, and the P4.1 runtime-state repository. Every method here is
+explicit about the rows it touches; retention deletion targets only
+`raw_provider_events.observed_at < before`.
 """
 
 from collections.abc import Awaitable, Callable, Sequence

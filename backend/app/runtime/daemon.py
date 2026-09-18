@@ -51,9 +51,11 @@ __all__ = [
     "RuntimeJob",
     "SportsBridge",
     "TrackingDemandSource",
+    "TtlCache",
     "stable_reason_code",
 ]
 
+DECISION_SOURCE = "decision"
 PAPER_SOURCE = "paper_execution"
 RECOVERY_SOURCE = "recovery"
 TICK_SOURCE = "daemon_tick"
@@ -65,6 +67,40 @@ class RuntimeJobError(Exception):
     def __init__(self, code: str) -> None:
         super().__init__(code)
         self.code = code
+
+
+class TtlCache:
+    """TTL cache over a single-argument async loader.
+
+    Used for the per-decision provider reads (execution metadata, rules) that
+    would otherwise fire several fresh REST calls on every ~1s tick. One
+    instance can be shared across call sites — the daemon's paper path and the
+    decision book source share a single metadata cache — so the runtime issues
+    at most one refresh per key per TTL window. A failed load raises unchanged
+    (the callers' typed failure semantics apply) and never poisons the cache:
+    errors are not cached and an entry is never served once its TTL has passed.
+    """
+
+    def __init__(
+        self,
+        loader: Callable[[str], Awaitable[Any]],
+        clock: Callable[[], datetime],
+        *,
+        ttl: timedelta,
+    ) -> None:
+        self._loader = loader
+        self._clock = clock
+        self._ttl = ttl
+        self._entries: dict[str, tuple[datetime, Any]] = {}
+
+    async def get(self, key: str) -> Any:
+        now = self._clock()
+        cached = self._entries.get(key)
+        if cached is not None and now - cached[0] < self._ttl:
+            return cached[1]
+        value = await self._loader(key)
+        self._entries[key] = (now, value)
+        return value
 
 
 # ---------------------------------------------------------------------------
@@ -244,6 +280,7 @@ class LocalRuntimeDaemon:
         directory: Any,
         resolver: Any,
         metrics: Any = None,
+        metadata_cache: TtlCache | None = None,
         tick_seconds: float = 1.0,
         live_catalog_seconds: int = 60,
         upcoming_catalog_seconds: int = 600,
@@ -268,12 +305,17 @@ class LocalRuntimeDaemon:
         self._resolver = resolver
         self._metrics = metrics
         self._tick_seconds = tick_seconds
-        self._market_discovery_seconds = market_discovery_seconds
         self._max_resolution_targets = max_resolution_targets
         self._closed_window = closed_market_window
 
         self._recently_closed: dict[str, datetime] = {}
-        self._metadata_cache: dict[str, tuple[datetime, Any]] = {}
+        # Shared with the decision book source when the assembly injects one
+        # cache for both paths; the TTL matches the discovery cadence.
+        self._metadata_cache = metadata_cache or TtlCache(
+            market_provider.get_execution_metadata,
+            clock,
+            ttl=timedelta(seconds=market_discovery_seconds),
+        )
         self._alias_synced: set[str] = set()
         # Per-class rotation cursors for the bounded resolution recheck plus
         # the number of unique targets skipped in the most recent cycle.
@@ -362,11 +404,36 @@ class LocalRuntimeDaemon:
     async def tick_once(self) -> None:
         await self._realtime.reconcile_demand_once()
         await self._market_worker.reconcile_demand_once()
-        for market_id in self._market_worker.active_market_ids():
-            await self._decision_worker.pump_once(market_id)
-            await self._execute_due_intents(market_id)
+        await self._pump_markets()
         await self._jobs.run_due(self._clock())
         await self._health.persist()
+
+    async def _pump_markets(self) -> None:
+        """Pump every active market with strict per-market isolation.
+
+        One market's transient failure (a provider 5xx, a book-source error)
+        degrades only that market's contribution to the `decision` health
+        source; the remaining markets, the paper path and the bounded jobs
+        still run in the same tick. `asyncio.CancelledError` is a
+        `BaseException`, so `except Exception` never swallows cancellation —
+        it propagates to `run()` and stops the loop as before. Degradation is
+        reported once per tick with the first stable reason code, mirroring
+        the bounded-job scheduler's aggregate semantics: a clean market later
+        in the loop must not overwrite an earlier market's failure.
+        """
+        failures: list[str] = []
+        pumped = False
+        for market_id in self._market_worker.active_market_ids():
+            pumped = True
+            try:
+                await self._decision_worker.pump_once(market_id)
+                await self._execute_due_intents(market_id)
+            except Exception as exc:  # noqa: BLE001 - per-market isolation
+                failures.append(stable_reason_code(exc))
+        if failures:
+            await self._health.mark_degraded(DECISION_SOURCE, failures[0])
+        elif pumped:
+            await self._health.mark_success(DECISION_SOURCE)
 
     async def recover_once(self) -> None:
         """Rebuild from durable state only (PostgreSQL): explicit gap first,
@@ -428,15 +495,9 @@ class LocalRuntimeDaemon:
             await self._health.mark_success(PAPER_SOURCE)
 
     async def _execution_metadata(self, market_id: str) -> Any:
-        now = self._clock()
-        ttl = timedelta(seconds=self._market_discovery_seconds)
-        cached = self._metadata_cache.get(market_id)
-        if cached is not None and now - cached[0] < ttl:
-            return cached[1]
-        metadata = await self._market_provider.get_execution_metadata(market_id)
-        # A failed fetch raises and is never served from a stale cache.
-        self._metadata_cache[market_id] = (now, metadata)
-        return metadata
+        # Delegates to the shared TTL cache. A failed load raises and is never
+        # served from a stale cache nor cached as an error.
+        return await self._metadata_cache.get(market_id)
 
     # ------------------------------------------------------------------
     # Bounded discovery jobs
