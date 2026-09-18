@@ -99,6 +99,31 @@ async function resolveRowsOrEmpty(page: Page, emptyPattern: RegExp) {
 test.describe('T80 local real runtime browser acceptance', () => {
   test.skip(!ENABLED, 'TENNIX_E2E_LOCAL_RUNTIME not set')
 
+  // Guard against a false pass: these assertions can only be trusted when the
+  // launcher-run REAL backend is serving. A fake-mode frontend would render
+  // plausible pages too, so before any UI check we require the backend's own
+  // runtime health to report state "ok", fetched through the same origin the
+  // spec already uses (the frontend proxies /api/runtime/health to the
+  // backend's /api/v1/runtime/health). If this fails, the stack was not
+  // started via the live launcher.
+  test.beforeAll(async () => {
+    if (!ENABLED) return
+    const hint =
+      'real runtime not healthy at ' +
+      `${BASE_URL}/api/runtime/health — start the launcher stack with ` +
+      '`./scripts/tennix-live up` before running this opt-in gate'
+    let body: { state?: string } | null = null
+    try {
+      const response = await fetch(`${BASE_URL}/api/runtime/health`)
+      if (response.ok) {
+        body = (await response.json()) as { state?: string }
+      }
+    } catch {
+      body = null
+    }
+    expect(body?.state, hint).toBe('ok')
+  })
+
   test('home renders real catalog data or the honest empty state', async ({ page }) => {
     const network = watchNetwork(page)
     await page.goto(`${BASE_URL}/`)

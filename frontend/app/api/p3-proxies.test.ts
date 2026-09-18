@@ -46,6 +46,12 @@ const REST_ROUTES: {
     expectedTarget: `${BASE_URL}/api/v1/matches/mat_9/decision`,
     context: () => ({ params: Promise.resolve({ matchId: 'mat_9' }) }),
   },
+  {
+    name: 'runtime health',
+    modulePath: './runtime/health/route',
+    requestUrl: 'http://local/api/runtime/health',
+    expectedTarget: `${BASE_URL}/api/v1/runtime/health`,
+  },
 ]
 
 const STREAM_ROUTES: {
