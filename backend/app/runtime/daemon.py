@@ -413,7 +413,9 @@ class LocalRuntimeDaemon:
 
         One market's transient failure (a provider 5xx, a book-source error)
         degrades only that market's contribution to the `decision` health
-        source; the remaining markets, the paper path and the bounded jobs
+        source: the failing market's own decision pump and paper intake
+        (`_execute_due_intents`) are skipped for that tick, while every
+        remaining market's pump and paper execution plus the bounded jobs
         still run in the same tick. `asyncio.CancelledError` is a
         `BaseException`, so `except Exception` never swallows cancellation —
         it propagates to `run()` and stops the loop as before. Degradation is

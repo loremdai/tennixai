@@ -928,6 +928,14 @@ async def test_build_local_runtime_daemon_constructs_offline():
         assert graph.decision_worker is not None
         assert graph.health is not None
         assert graph.paper is not None
+        # Wiring pin (review nit on c61947b): the decision book source must
+        # share the daemon's single metadata cache instance, and both cache
+        # loaders must be bound methods of the graph's PolymarketProvider —
+        # a wrong provider passed to the book source is the bug class fixed.
+        books = graph.decision_worker._books
+        assert books._metadata_cache is graph.daemon._metadata_cache
+        assert books._metadata_cache._loader.__self__ is graph._market_provider
+        assert books._rules_cache._loader.__self__ is graph._market_provider
     finally:
         await graph.aclose()
 

@@ -330,6 +330,9 @@ def build_local_runtime_daemon(
     # and the decision path (book source); the rules-hash cache is decision
     # only. Both use the discovery cadence as their TTL, matching the paper
     # path's existing 120s window, so the two never diverge.
+    # Caching `get_rules` bounds RULE_CHANGED detection latency to the cache
+    # TTL (<= market_discovery_seconds, default 120s), matching the
+    # discovery/rules-capture cadence.
     metadata_ttl = timedelta(seconds=live.market_discovery_seconds)
     metadata_cache = TtlCache(
         market_provider.get_execution_metadata, clock, ttl=metadata_ttl
