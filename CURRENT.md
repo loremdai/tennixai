@@ -2,19 +2,19 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-18 15:56 CST
+**最后更新：** 2026-09-18 16:30 CST
 
-**当前任务：** T81 — Stabilize the Parallel Playwright Visual Gate（`ready`，等待领取）
+**当前任务：** T81 — Stabilize the Parallel Playwright Visual Gate（`in_progress`）
 
-**任务状态：** `ready` — 计划已冻结；尚无执行者，不能与其他主任务并行领取
+**任务状态：** `in_progress` — 已由唯一执行者领取，不与其他主任务并行
 
-**执行者 / ADE：** 待领取（上一执行者：Claude Code（Fable 5））
+**执行者 / ADE：** Claude Code（Fable 5）
 
 **分支：** `main`
 
-**起始提交：** `2270049`（T80 最终实现 `002da61`；T81 计划提交见本次交接）
+**起始提交：** `7bd453a`（T81 计划提交；T80 最终实现 `002da61`）
 
-**当前动作：** 执行者先按 `AGENTS.md` 领取 T81 并推送领取记录，再严格执行 [T81 计划](./docs/superpowers/plans/2026-09-18-tennixai-t81-playwright-visual-gate-stabilization.md)。已验证基线：当前 `2270049` 的完整 Playwright 连续两次均为 `109 passed / 44 skipped / 1 failed`；唯一失败为 mobile `prototype.visual` 的 `home-answer`（265 像素）。同一测试以 `--workers=1 --repeat-each=10` 为 10/10 通过，且 P4.1 关闭后 Header/visual spec/config 没有产品代码变更。T81 只能把快照用原生 `@visual` tag 分流到第二条串行 CLI lane；不得重录 PNG、改 UI、调阈值、加 mask/skip/retry 或运行真实配额门。P4.1 的真实 runtime 闭环仍为历史已关闭事实；本机栈保持 `down`，外部容器与 `tennix_live_local` 数据保留。
+**当前动作：** 执行者已领取 T81，正严格执行 [T81 计划](./docs/superpowers/plans/2026-09-18-tennixai-t81-playwright-visual-gate-stabilization.md)：为全部 `toHaveScreenshot` 测试加原生 `@visual` 组级 tag（`home-history.spec.ts` 只标记 `Home history visual` describe），并把 `frontend/package.json` 默认 E2E 拆为功能并行 lane（`--grep-invert @visual`）+ 视觉串行 lane（`--grep @visual --workers=1`）两条顺序命令。已验证基线：当前 `2270049` 的完整 Playwright 连续两次均为 `109 passed / 44 skipped / 1 failed`；唯一失败为 mobile `prototype.visual` 的 `home-answer`（265 像素）。同一测试以 `--workers=1 --repeat-each=10` 为 10/10 通过，且 P4.1 关闭后 Header/visual spec/config 没有产品代码变更。T81 只能把快照用原生 `@visual` tag 分流到第二条串行 CLI lane；不得重录 PNG、改 UI、调阈值、加 mask/skip/retry 或运行真实配额门。P4.1 的真实 runtime 闭环仍为历史已关闭事实；本机栈保持 `down`，外部容器与 `tennix_live_local` 数据保留。
 
 ## P4.1 关闭证据摘要（详见 ROADMAP T73–T80 行与 Completion Gate 核验摘要）
 
@@ -34,11 +34,11 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
-| 2026-09-18 | （本提交） | T81 计划与总控交接：后验定位为跨文件 worker 并发下的移动端视觉门不稳定；冻结 `@visual` + 功能/串行视觉两 lane 方案，PNG/UI/阈值均不可改 |
-| 2026-09-18 | （本提交） | P4.1 关闭：T80 `done`（真实 init/verify 7/7/浏览器 6/6/手工全流程/重启持久性）+ Completion Gate 九条核验摘要入 ROADMAP；PROJECT/CURRENT 同步 |
+| 2026-09-18 | （本提交） | T81 领取：执行者 Claude Code（Fable 5），`main`，起始提交 `7bd453a`，状态 `in_progress` |
+| 2026-09-18 | `7bd453a` | T81 计划与总控交接：后验定位为跨文件 worker 并发下的移动端视觉门不稳定；冻结 `@visual` + 功能/串行视觉两 lane 方案，PNG/UI/阈值均不可改 |
+| 2026-09-18 | `2270049` | P4.1 关闭：T80 `done`（真实 init/verify 7/7/浏览器 6/6/手工全流程/重启持久性）+ Completion Gate 九条核验摘要入 ROADMAP；PROJECT/CURRENT 同步 |
 | 2026-09-18 | `002da61` | 实机修复 2：`LOCAL_PNPM_MISSING` 前置快速失败（launcher 61 passed；确定性 1199/5/32） |
 | 2026-09-18 | `402c527` | 实机修复 1：子进程 wrapper PYTHONPATH 注入，任意 cwd 可导入（真实 up 门发现） |
-| 2026-09-18 | `92524cb` | 装配接线回归钉死（变异红证）；最终评审修复波收口 |
 
 ## 下一步
 
