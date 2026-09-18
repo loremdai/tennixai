@@ -2,29 +2,27 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-18 16:30 CST
+**最后更新：** 2026-09-18 17:10 CST
 
-**当前任务：** T81 — Stabilize the Parallel Playwright Visual Gate（`in_progress`）
+**当前任务：** 无 — T81 已 `done`，等待用户排期下一个主任务
 
-**任务状态：** `in_progress` — 已由唯一执行者领取，不与其他主任务并行
+**任务状态：** 无 active 任务；任何新主任务必须先在本文件领取并推送后才能开始
 
-**执行者 / ADE：** Claude Code（Fable 5）
+**执行者 / ADE：** 无（上一执行者：Claude Code（Fable 5），T81）
 
 **分支：** `main`
 
-**起始提交：** `7bd453a`（T81 计划提交；T80 最终实现 `002da61`）
+**起始提交：** 无 active 任务（T81 起始 `7bd453a`，完成于本次交接提交）
 
-**当前动作：** 执行者已领取 T81，正严格执行 [T81 计划](./docs/superpowers/plans/2026-09-18-tennixai-t81-playwright-visual-gate-stabilization.md)：为全部 `toHaveScreenshot` 测试加原生 `@visual` 组级 tag（`home-history.spec.ts` 只标记 `Home history visual` describe），并把 `frontend/package.json` 默认 E2E 拆为功能并行 lane（`--grep-invert @visual`）+ 视觉串行 lane（`--grep @visual --workers=1`）两条顺序命令。已验证基线：当前 `2270049` 的完整 Playwright 连续两次均为 `109 passed / 44 skipped / 1 failed`；唯一失败为 mobile `prototype.visual` 的 `home-answer`（265 像素）。同一测试以 `--workers=1 --repeat-each=10` 为 10/10 通过，且 P4.1 关闭后 Header/visual spec/config 没有产品代码变更。T81 只能把快照用原生 `@visual` tag 分流到第二条串行 CLI lane；不得重录 PNG、改 UI、调阈值、加 mask/skip/retry 或运行真实配额门。P4.1 的真实 runtime 闭环仍为历史已关闭事实；本机栈保持 `down`，外部容器与 `tennix_live_local` 数据保留。
+**当前动作：** 无。T81 已按 [T81 计划](./docs/superpowers/plans/2026-09-18-tennixai-t81-playwright-visual-gate-stabilization.md) 完成并关闭。
 
-## P4.1 关闭证据摘要（详见 ROADMAP T73–T80 行与 Completion Gate 核验摘要）
+## T81 关闭证据（2026-09-18，全部实际运行；详见 ROADMAP T81 行）
 
-- 配置与隔离：T73 `4c0c955`（`tennix_live_local`/Redis DB 11/loopback 守卫、稳定 reason code、子进程 env 注入）；T74 `ccfdb66`（migration 0005 可逆、canonical catalog/runtime state repositories）。
-- 数据准备：T75 `134c9f9`（幂等 init 固定顺序、marker 最后写、二次 init 零翻译调用）；真实 init 2026-09-18 exit 0（3944 球员/292 比赛/中文覆盖有名成员 100%）。
-- 进程边界：T76 `8860136`（FastAPI 只读角色零上游）；T77 `9758288`（demand 合并、单订阅证明）；T78 `bab5380`+修复（daemon 唯一所有者、精确调度、freshness/gap 硬门、恢复 integration）。
-- 生命周期：T79 `18efdc3`+3 修复+2 实机修复（token/ownership 安全、fail-fast、僵尸收割、PYTHONPATH、pnpm 前置检查）。
-- 真实核验：T80 `1ba5e5c` 等（verify 7/7 真实 passed、浏览器验收 6/6、手工全流程两轮 up/down 诚实通过、重启持久性核对）；最终整枝评审 fable+opus 双轮 Approved。
-- 回归基线：backend 确定性 1199/5/32 + infrastructure 62；frontend vitest 395 + typecheck/build；完整 Playwright 110 passed/44 skipped/0 failed。
-- 追踪项转入 P4 后续：per-match freshness overlay（任何模型晋升前必须落实）、RuntimeDemand 死代码清理、真实历史数据与模型晋升证据、退出阈值/仓位优化；自动下单永久 `deferred`。
+- 领取 `f14babb`（起始 `7bd453a`）；实现 `2c1186c`（6 个 spec 的 19 个快照测试声明加原生组级 `@visual` tag；`home-history.spec.ts` 只标记 `Home history visual` describe，功能测试未标记）+ `9f5a459`（`frontend/package.json`：`test:e2e:functional`=`--grep-invert @visual`、`test:e2e:visual`=`--grep @visual --workers=1`、`test:e2e`=两条顺序 lane、`test:e2e:update` 只走串行视觉 lane）。
+- lane 选择证明：`pnpm exec playwright test --list --grep @visual` 38 项（19×desktop/mobile，恰为 6 个快照面）；`--list --grep-invert @visual` 116 项且保留 home-history 两个功能测试。
+- 验证（fnm Node 22.22.0 + pnpm 10.30.1，未动 node_modules）：`pnpm test` 395 passed；`pnpm typecheck` 干净；`pnpm build` exit 0；`pnpm run test:e2e:functional` 76 passed/40 skipped；`pnpm run test:e2e:visual` 34 passed/4 skipped（4 项为 replay-off 按设计跳过）；默认 `pnpm test:e2e` 连续两次均 `110 passed/44 skipped/0 failed`（76+34/40+4 精确对账）。
+- 视觉真相零改动：`git diff --exit-code -- frontend/e2e/__screenshots__` 零 PNG diff；`git diff --check` 通过；未改 UI/CSS/Next/FastAPI/`playwright.config.ts`/阈值/viewport/截图参数，无 mask/skip/fixme/retry，未运行 live/LLM/API 配额门。
+- P4.1 仍为历史已关闭事实（证据见 ROADMAP T73–T80 与 Completion Gate 摘要）；本机栈保持 `down`，外部容器与 `tennix_live_local` 数据保留；T81 未重开真实 runtime 设计。
 
 ## 未跟踪文件保护
 
@@ -34,14 +32,14 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
-| 2026-09-18 | （本提交） | T81 领取：执行者 Claude Code（Fable 5），`main`，起始提交 `7bd453a`，状态 `in_progress` |
-| 2026-09-18 | `7bd453a` | T81 计划与总控交接：后验定位为跨文件 worker 并发下的移动端视觉门不稳定；冻结 `@visual` + 功能/串行视觉两 lane 方案，PNG/UI/阈值均不可改 |
-| 2026-09-18 | `2270049` | P4.1 关闭：T80 `done`（真实 init/verify 7/7/浏览器 6/6/手工全流程/重启持久性）+ Completion Gate 九条核验摘要入 ROADMAP；PROJECT/CURRENT 同步 |
+| 2026-09-18 | （本提交） | T81 关闭：`@visual` tag（`2c1186c`）+ 功能/串行视觉两条顺序 lane（`9f5a459`）；`pnpm test:e2e` 连续两次 110/44/0，PNG 零 diff；三份总控同步 |
+| 2026-09-18 | `f14babb` | T81 领取：执行者 Claude Code（Fable 5），`main`，起始提交 `7bd453a` |
+| 2026-09-18 | `7bd453a` | T81 计划与总控交接：后验定位为跨文件 worker 并发下的移动端视觉门不稳定；冻结 `@visual` + 功能/串行视觉两 lane 方案 |
+| 2026-09-18 | `2270049` | P4.1 关闭：T80 `done`（真实 init/verify 7/7/浏览器 6/6/手工全流程/重启持久性）+ Completion Gate 九条核验摘要入 ROADMAP |
 | 2026-09-18 | `002da61` | 实机修复 2：`LOCAL_PNPM_MISSING` 前置快速失败（launcher 61 passed；确定性 1199/5/32） |
-| 2026-09-18 | `402c527` | 实机修复 1：子进程 wrapper PYTHONPATH 注入，任意 cwd 可导入（真实 up 门发现） |
 
 ## 下一步
 
-1. 下一个执行者先领取并推送 T81，再完成 [T81 计划](./docs/superpowers/plans/2026-09-18-tennixai-t81-playwright-visual-gate-stabilization.md)。关闭要求：视觉 PNG 零 diff，`pnpm test:e2e` 连续两次 `110 passed/44 skipped/0 failed`；不运行 live/LLM gate。
-2. T81 完成后，P4 后续候选（待用户排期与批准，均未领取）：真实历史数据与模型晋升证据链、退出阈值/仓位优化（需 paper 证据）、per-match freshness overlay（模型晋升前置条件）、性能打磨、RuntimeDemand 死代码清理等延期 Minor。日常本地使用仍是 `./scripts/tennix-live up`（不调用 LLM）→ `status`/`logs` → `down`；详见 `docs/runbooks/local-real-runtime.md`。
-3. 边界不变：自动下单永久 `deferred` 直至单独批准；任何后续工作不得回溯放宽 P3 边界（只读 provider、one-shot FOK、PostgreSQL 权威、独立 cursor、未晋升即 NO BET）；外部安静窗口必须诚实 SKIP。
+1. 无 active 任务。下一个主任务须由用户排期批准，并由执行者先在本文件领取推送后再开始。
+2. P4 后续候选（待用户排期与批准，均未领取）：真实历史数据与模型晋升证据链、退出阈值/仓位优化（需 paper 证据）、per-match freshness overlay（模型晋升前置条件）、性能打磨、RuntimeDemand 死代码清理等延期 Minor。日常本地使用仍是 `./scripts/tennix-live up`（不调用 LLM）→ `status`/`logs` → `down`；详见 `docs/runbooks/local-real-runtime.md`。
+3. 边界不变：自动下单永久 `deferred` 直至单独批准；任何后续工作不得回溯放宽 P3 边界（只读 provider、one-shot FOK、PostgreSQL 权威、独立 cursor、未晋升即 NO BET）；外部安静窗口必须诚实 SKIP。T81 建立的两条 E2E lane 不得以调阈值、mask、skip/retry 或重录 PNG 的方式“修复”视觉失败；快照更新仅在用户单独批准的受审视觉变更下进行。
