@@ -8,7 +8,6 @@ network.
 
 import json
 import os
-import shutil
 import signal
 import stat
 import tempfile
@@ -298,6 +297,10 @@ def launcher(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> RuntimeLauncher
     root = tmp_path / "repo"
     (root / "backend").mkdir(parents=True)
     (root / "frontend").mkdir(parents=True)
+    next_executable = root / "frontend" / "node_modules" / ".bin" / "next"
+    next_executable.parent.mkdir(parents=True)
+    next_executable.write_text("#!/bin/sh\n")
+    next_executable.chmod(0o755)
     state_dir = tmp_path / "state"
 
     inspector = FakeProcessInspector()
@@ -345,10 +348,6 @@ def launcher(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> RuntimeLauncher
         api_timeout=5.0,
         poll_interval=1.0,
         stop_grace_seconds=2.0,
-        # Machine-independent pnpm resolution: this suite must not depend on
-        # pnpm being installed on the test machine (the production default is
-        # shutil.which; the pnpm precondition tests exercise it explicitly).
-        which=lambda name: f"/fake/bin/{name}",
     )
     instance.state.initialized = True
     instance.state.schema_head = "rev_test"
@@ -529,7 +528,10 @@ def test_up_spawns_tokenized_children_in_order_and_writes_state(
 
     _, role_front, inner_front = parse_child_args(frontend_call.argv[3:])
     assert role_front == "frontend"
-    assert inner_front[0] == "pnpm"
+    assert inner_front[0] == str(
+        launcher.frontend_dir / "node_modules" / ".bin" / "next"
+    )
+    assert "pnpm" not in inner_front
     assert "3100" in inner_front
     assert frontend_call.env["TENNIX_BACKEND_URL"] == "http://127.0.0.1:8000"
     assert frontend_call.cwd == str(launcher.root_dir / "frontend")
@@ -674,57 +676,53 @@ def test_up_reports_occupied_frontend_port_without_killing(launcher):
     assert launcher.runner.spawned == []
 
 
-def test_up_refuses_with_stable_code_when_pnpm_cannot_be_resolved(launcher):
-    # Real-run gate finding 2: when pnpm is not resolvable the frontend child
-    # would die instantly (LOCAL_FRONTEND_EXITED) — but only after runtime and
-    # API were already spawned and had to be cleaned up. up() must refuse in
-    # the precondition phase instead: exit 2, stable code, zero spawns.
-    launcher.which = lambda name: None
+def test_up_refuses_with_stable_code_when_next_cannot_be_started(
+    launcher, tmp_path: Path
+):
+    # A missing installed Next launcher must be rejected before runtime and API
+    # children are spawned, rather than surfacing later as a frontend exit.
+    launcher.frontend_executable = tmp_path / "no-such-next"
     assert launcher.up() == 2
     text = joined_output(launcher)
-    assert "LOCAL_PNPM_MISSING" in text
-    assert "pnpm" in text and "PATH" in text
+    assert "LOCAL_FRONTEND_MISSING" in text
+    assert "no-such-next" in text
     assert launcher.runner.spawned == []
     assert launcher.runner.signalled_pids == []
     for secret in SECRET_MATERIAL:
         assert secret not in text
 
 
-def test_up_pnpm_precondition_runs_after_port_and_recorded_checks(launcher):
+def test_up_frontend_precondition_runs_after_port_and_recorded_checks(
+    launcher, tmp_path: Path
+):
     # Ordering stays consistent with the existing precondition style:
     # recorded-process and port checks report first.
-    launcher.which = lambda name: None
+    launcher.frontend_executable = tmp_path / "no-such-next"
     launcher.ports.in_use[8000] = "foreign"
     assert launcher.up() == 2
     text = joined_output(launcher)
     assert "LOCAL_PORT_OCCUPIED" in text
-    assert "LOCAL_PNPM_MISSING" not in text
+    assert "LOCAL_FRONTEND_MISSING" not in text
     assert launcher.runner.spawned == []
 
 
-def test_up_resolves_absolute_pnpm_executable_with_default_resolver(
-    launcher, tmp_path: Path
-):
-    # An absolute pnpm_executable must pass the default shutil.which resolver
-    # (shutil.which checks the file directly for absolute paths).
-    pnpm = tmp_path / "pnpm"
-    pnpm.write_text("#!/bin/sh\n")
-    pnpm.chmod(0o755)
-    launcher.which = shutil.which  # the production default
-    launcher.pnpm_executable = str(pnpm)
+def test_up_uses_configured_absolute_next_executable(launcher, tmp_path: Path):
+    next_executable = tmp_path / "next"
+    next_executable.write_text("#!/bin/sh\n")
+    next_executable.chmod(0o755)
+    launcher.frontend_executable = next_executable
     assert launcher.up() == 0
     assert spawned_roles(launcher.runner) == ["runtime", "api", "frontend"]
     _, _, inner_front = parse_child_args(launcher.runner.spawned[-1].argv[3:])
-    assert inner_front[0] == str(pnpm)
-    assert "LOCAL_PNPM_MISSING" not in joined_output(launcher)
+    assert inner_front[0] == str(next_executable)
+    assert "LOCAL_FRONTEND_MISSING" not in joined_output(launcher)
 
 
-def test_up_reports_missing_absolute_pnpm_executable(launcher, tmp_path: Path):
+def test_up_reports_missing_absolute_next_executable(launcher, tmp_path: Path):
     # A configured absolute path that does not exist is also refused up front.
-    launcher.which = shutil.which
-    launcher.pnpm_executable = str(tmp_path / "no-such-pnpm")
+    launcher.frontend_executable = tmp_path / "no-such-next"
     assert launcher.up() == 2
-    assert "LOCAL_PNPM_MISSING" in joined_output(launcher)
+    assert "LOCAL_FRONTEND_MISSING" in joined_output(launcher)
     assert launcher.runner.spawned == []
 
 

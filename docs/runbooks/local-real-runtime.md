@@ -16,6 +16,7 @@
 - **只使用仓库根目录 `.env`**：不得创建或读取 `backend/.env`、`frontend/.env`、`frontend/.env.local`；凭据绝不提交、绝不写入日志。
 - `init` 是一次性准备：校验配置、创建并迁移专用回环库 `tennix_live_local`（Redis DB 11）、同步目录；缺失的中文名会在这一步**一次性**调用 LLM 补全（可能消耗 LLM 配额）。
 - `up` 是日常启动：拉起 runtime/api/frontend 三个受管子进程，**绝不调用 LLM、绝不自动执行 init**。
+- `up` 直接运行仓库已安装的 `frontend/node_modules/.bin/next`；启动过程不调用 pnpm，也不会尝试重装或清理 `node_modules`。如果该文件不存在或不可执行，启动器会在拉起其他子进程前明确拒绝并提示先安装前端依赖。
 - `down` 优雅停止自有子进程与本次启动的容器，**保留全部真实数据与 paper ledger**；再次 `up` 后 ID、数据与账本原样存在。
 
 ## 2. 健康语义（一句话版）

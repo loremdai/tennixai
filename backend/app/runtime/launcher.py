@@ -24,7 +24,6 @@ import asyncio
 import json
 import os
 import secrets
-import shutil
 import signal
 import socket
 import subprocess
@@ -247,8 +246,7 @@ class RuntimeLauncher:
         stop_grace_seconds: float = 10.0,
         frontend_startup_seconds: float = 3.0,
         python_executable: str | None = None,
-        pnpm_executable: str = "pnpm",
-        which: Callable[[str], str | None] = shutil.which,
+        frontend_executable: str | Path | None = None,
     ) -> None:
         self.root_dir = Path(root_dir)
         self.backend_dir = self.root_dir / "backend"
@@ -276,8 +274,9 @@ class RuntimeLauncher:
         self.stop_grace_seconds = stop_grace_seconds
         self.frontend_startup_seconds = frontend_startup_seconds
         self.python_executable = python_executable or sys.executable
-        self.pnpm_executable = pnpm_executable
-        self.which = which
+        self.frontend_executable = Path(
+            frontend_executable or self.frontend_dir / "node_modules" / ".bin" / "next"
+        )
         self.state = LauncherState.load(self.state_dir / "state.json")
 
     # ------------------------------------------------------------------
@@ -366,9 +365,9 @@ class RuntimeLauncher:
         port_failure = self._check_ports()
         if port_failure is not None:
             return port_failure
-        pnpm_failure = self._check_pnpm()
-        if pnpm_failure is not None:
-            return pnpm_failure
+        frontend_failure = self._check_frontend()
+        if frontend_failure is not None:
+            return frontend_failure
 
         spawned: list[ManagedProcess] = []
         runtime_process = self._spawn_child(
@@ -428,7 +427,7 @@ class RuntimeLauncher:
             settings,
             role="frontend",
             inner=[
-                self.pnpm_executable,
+                str(self.frontend_executable),
                 "dev",
                 "--hostname",
                 "127.0.0.1",
@@ -754,22 +753,23 @@ class RuntimeLauncher:
             return EXIT_PRECONDITION
         return None
 
-    def _check_pnpm(self) -> int | None:
-        """Resolve the frontend package manager before any spawn.
+    def _check_frontend(self) -> int | None:
+        """Validate the installed Next executable before any spawn.
 
-        A missing pnpm would otherwise surface only as LOCAL_FRONTEND_EXITED
-        after the runtime and API children were already spawned and had to be
-        cleaned up. ``shutil.which`` (the default resolver) also validates an
-        absolute ``pnpm_executable`` path, checking that it exists and is
-        executable.
+        ``up`` starts the already-installed application; it must not invoke a
+        package manager that may mutate ``node_modules`` during startup. A
+        missing or non-executable Next launcher is reported before runtime or
+        API children are spawned, so the failure is deterministic and leaves
+        no partial stack to clean up.
         """
-        if self.which(self.pnpm_executable) is not None:
+        if self.frontend_executable.is_file() and os.access(
+            self.frontend_executable, os.X_OK
+        ):
             return None
         self._say(
-            "up refused: LOCAL_PNPM_MISSING "
-            f"(the frontend package manager {self.pnpm_executable!r} could not be "
-            "resolved on PATH; install pnpm or make it available on PATH, "
-            "e.g. via corepack enable pnpm)"
+            "up refused: LOCAL_FRONTEND_MISSING "
+            f"(the installed Next executable {str(self.frontend_executable)!r} "
+            "is missing or not executable; install frontend dependencies first)"
         )
         return EXIT_PRECONDITION
 
