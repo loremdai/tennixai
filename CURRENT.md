@@ -2,19 +2,28 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-18 17:17 CST
+**最后更新：** 2026-09-18 17:30 CST
 
-**当前任务：** T82 — 修复一键启动器对前端包管理器的错误依赖
+**当前任务：** 无 — T82 已 `done`，等待用户排期下一个主任务
 
-**任务状态：** `in_progress`
+**任务状态：** 无 active 任务；任何新主任务必须先在本文件领取并推送后才能开始
 
-**执行者 / ADE：** Codex
+**执行者 / ADE：** 无（上一执行者：Codex，T82）
 
 **分支：** `main`
 
-**起始提交：** `7b0bf13`
+**起始提交：** 无 active 任务（T82 起始 `7b0bf13`，完成于 `2cea490`）
 
-**当前动作：** 先关闭现有本地栈；为 `up` 增加前端启动器回归测试，将前端直接交给仓库已安装的 Next，不再调用 PATH 上不确定版本的 pnpm。
+**当前动作：** 无。T82 已关闭，当前本机栈保持 `down`；专用数据库、外部容器与 paper 数据保留。
+
+## T82 关闭证据（2026-09-18，全部实际运行；详见 ROADMAP T82 行）
+
+- 领取提交 `b5d6f53`（起始 `7b0bf13`）；实现提交 `2cea490`。
+- 根因：Codex shell 的 fallback pnpm 在非 TTY 下尝试移除/重建 `node_modules`，导致 `LOCAL_FRONTEND_EXITED`；不是数据服务或 API 故障。
+- 修复：`up` 只检查并直接执行 `frontend/node_modules/.bin/next dev --hostname 127.0.0.1 --port 3100`；缺失时在 runtime/API 启动前报 `LOCAL_FRONTEND_MISSING`。未改安装方式、数据模型、上游订阅或 paper 边界。
+- TDD 红证：先改 spawn 断言，旧实现实际以 `pnpm` 失败；绿证：`uv run --directory backend pytest tests/test_runtime_launcher.py -q` 为 `61 passed`。
+- 其他验证：launcher 文件 ruff check/format 通过；backend 确定性 `1199 passed, 12 skipped, 25 deselected`。
+- 真实门：无 PATH 环境覆盖执行 `./scripts/tennix-live up` 成功；API `/api/v1/health` 返回 200，前端 HTTP 200，进程树确认 `.bin/next → next/dist/bin/next`；随后 `./scripts/tennix-live down` 成功，数据与外部容器保留。
 
 ## T82 领取说明（2026-09-18）
 
@@ -38,15 +47,14 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
-| 2026-09-18 | （T82 领取） | 已关闭本地栈；T82 开始修复 `up` 对 PATH 上 pnpm 的错误依赖，起始提交 `7b0bf13` |
+| 2026-09-18 | `2cea490` | T82 关闭：启动器直接运行已安装 Next；焦点 61 passed、后端确定性 1199 passed/12 skipped/25 deselected；普通 up/API/frontend/down 真实门通过；三份总控同步 |
+| 2026-09-18 | `b5d6f53` | T82 领取：Codex，`main`，起始提交 `7b0bf13`；先关闭现有本地栈再修复 |
 | 2026-09-18 | `7b0bf13` | T81 关闭：`@visual` tag（`2c1186c`）+ 功能/串行视觉两条顺序 lane（`9f5a459`）；`pnpm test:e2e` 连续两次 110/44/0，PNG 零 diff；三份总控同步 |
 | 2026-09-18 | `f14babb` | T81 领取：执行者 Claude Code（Fable 5），`main`，起始提交 `7bd453a` |
-| 2026-09-18 | `7bd453a` | T81 计划与总控交接：后验定位为跨文件 worker 并发下的移动端视觉门不稳定；冻结 `@visual` + 功能/串行视觉两 lane 方案 |
 | 2026-09-18 | `2270049` | P4.1 关闭：T80 `done`（真实 init/verify 7/7/浏览器 6/6/手工全流程/重启持久性）+ Completion Gate 九条核验摘要入 ROADMAP |
-| 2026-09-18 | `002da61` | 实机修复 2：`LOCAL_PNPM_MISSING` 前置快速失败（launcher 61 passed；确定性 1199/5/32） |
 
 ## 下一步
 
-1. 完成 T82：通过焦点回归测试，并用无环境覆盖的 `./scripts/tennix-live up` 做一次真实启动验证；验证后按用户要求保持栈关闭。
+1. 无 active 任务。下一个主任务须由用户排期批准，并由执行者先在本文件领取并推送后再开始。
 2. P4 后续候选（待用户排期与批准，均未领取）：真实历史数据与模型晋升证据链、退出阈值/仓位优化（需 paper 证据）、per-match freshness overlay（模型晋升前置条件）、性能打磨、RuntimeDemand 死代码清理等延期 Minor。日常本地使用仍是 `./scripts/tennix-live up`（不调用 LLM）→ `status`/`logs` → `down`；详见 `docs/runbooks/local-real-runtime.md`。
 3. 边界不变：自动下单永久 `deferred` 直至单独批准；任何后续工作不得回溯放宽 P3 边界（只读 provider、one-shot FOK、PostgreSQL 权威、独立 cursor、未晋升即 NO BET）；外部安静窗口必须诚实 SKIP。T81 建立的两条 E2E lane 不得以调阈值、mask、skip/retry 或重录 PNG 的方式“修复”视觉失败；快照更新仅在用户单独批准的受审视觉变更下进行。
