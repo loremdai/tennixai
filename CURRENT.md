@@ -2,19 +2,25 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-18 17:10 CST
+**最后更新：** 2026-09-18 17:17 CST
 
-**当前任务：** 无 — T81 已 `done`，等待用户排期下一个主任务
+**当前任务：** T82 — 修复一键启动器对前端包管理器的错误依赖
 
-**任务状态：** 无 active 任务；任何新主任务必须先在本文件领取并推送后才能开始
+**任务状态：** `in_progress`
 
-**执行者 / ADE：** 无（上一执行者：Claude Code（Fable 5），T81）
+**执行者 / ADE：** Codex
 
 **分支：** `main`
 
-**起始提交：** 无 active 任务（T81 起始 `7bd453a`，完成于本次交接提交）
+**起始提交：** `7b0bf13`
 
-**当前动作：** 无。T81 已按 [T81 计划](./docs/superpowers/plans/2026-09-18-tennixai-t81-playwright-visual-gate-stabilization.md) 完成并关闭。
+**当前动作：** 先关闭现有本地栈；为 `up` 增加前端启动器回归测试，将前端直接交给仓库已安装的 Next，不再调用 PATH 上不确定版本的 pnpm。
+
+## T82 领取说明（2026-09-18）
+
+- 用户已明确要求先关闭当前服务，再修复一键启动。
+- 已执行 `./scripts/tennix-live down`，服务进程已停止，数据与外部容器保留。
+- 起始提交：`7b0bf13`；工作区既有未跟踪保护项保持不变。
 
 ## T81 关闭证据（2026-09-18，全部实际运行；详见 ROADMAP T81 行）
 
@@ -32,7 +38,8 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
-| 2026-09-18 | （本提交） | T81 关闭：`@visual` tag（`2c1186c`）+ 功能/串行视觉两条顺序 lane（`9f5a459`）；`pnpm test:e2e` 连续两次 110/44/0，PNG 零 diff；三份总控同步 |
+| 2026-09-18 | （T82 领取） | 已关闭本地栈；T82 开始修复 `up` 对 PATH 上 pnpm 的错误依赖，起始提交 `7b0bf13` |
+| 2026-09-18 | `7b0bf13` | T81 关闭：`@visual` tag（`2c1186c`）+ 功能/串行视觉两条顺序 lane（`9f5a459`）；`pnpm test:e2e` 连续两次 110/44/0，PNG 零 diff；三份总控同步 |
 | 2026-09-18 | `f14babb` | T81 领取：执行者 Claude Code（Fable 5），`main`，起始提交 `7bd453a` |
 | 2026-09-18 | `7bd453a` | T81 计划与总控交接：后验定位为跨文件 worker 并发下的移动端视觉门不稳定；冻结 `@visual` + 功能/串行视觉两 lane 方案 |
 | 2026-09-18 | `2270049` | P4.1 关闭：T80 `done`（真实 init/verify 7/7/浏览器 6/6/手工全流程/重启持久性）+ Completion Gate 九条核验摘要入 ROADMAP |
@@ -40,6 +47,6 @@
 
 ## 下一步
 
-1. 无 active 任务。下一个主任务须由用户排期批准，并由执行者先在本文件领取推送后再开始。
+1. 完成 T82：通过焦点回归测试，并用无环境覆盖的 `./scripts/tennix-live up` 做一次真实启动验证；验证后按用户要求保持栈关闭。
 2. P4 后续候选（待用户排期与批准，均未领取）：真实历史数据与模型晋升证据链、退出阈值/仓位优化（需 paper 证据）、per-match freshness overlay（模型晋升前置条件）、性能打磨、RuntimeDemand 死代码清理等延期 Minor。日常本地使用仍是 `./scripts/tennix-live up`（不调用 LLM）→ `status`/`logs` → `down`；详见 `docs/runbooks/local-real-runtime.md`。
 3. 边界不变：自动下单永久 `deferred` 直至单独批准；任何后续工作不得回溯放宽 P3 边界（只读 provider、one-shot FOK、PostgreSQL 权威、独立 cursor、未晋升即 NO BET）；外部安静窗口必须诚实 SKIP。T81 建立的两条 E2E lane 不得以调阈值、mask、skip/retry 或重录 PNG 的方式“修复”视觉失败；快照更新仅在用户单独批准的受审视觉变更下进行。
