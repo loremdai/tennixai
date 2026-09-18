@@ -51,7 +51,7 @@ async function capture(page: Page, url: string, name: string) {
   })
 }
 
-test.describe('P3 visual preview baselines', () => {
+test.describe('P3 visual preview baselines', { tag: '@visual' }, () => {
   test('Home 4 candidate baselines', async ({ page, baseURL }) => {
     for (const [query, name] of homeCases) {
       await capture(page, `${baseURL}/?preview=p3&pulse=${query}`, name)

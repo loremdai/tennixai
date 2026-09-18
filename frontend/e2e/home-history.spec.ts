@@ -230,7 +230,7 @@ test.describe('Home history answer', () => {
   })
 })
 
-test.describe('Home history visual', () => {
+test.describe('Home history visual', { tag: '@visual' }, () => {
   test('home-history-answer matches the approved T54 design', async ({ page }) => {
     await mockSlate(page)
     await mockChatStream(page, [

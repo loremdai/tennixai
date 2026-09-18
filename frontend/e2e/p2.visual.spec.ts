@@ -12,7 +12,7 @@ async function stabilize(page: Page) {
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }))
 }
 
-test.describe('P2 Replay visual acceptance', () => {
+test.describe('P2 Replay visual acceptance', { tag: '@visual' }, () => {
   test.skip(!replayEnabled, 'requires the deterministic Replay backend')
 
   test('home replay state matches the reviewed baseline', async ({ page }) => {

@@ -51,26 +51,28 @@ const states: Array<[string, (page: Page) => Promise<void>]> = [
   }],
 ]
 
-for (const [name, prepare] of states) {
-  test(`${name} matches approved P1 prototype`, async ({ page }) => {
-    await prepare(page)
-    await page.evaluate(() => {
-      window.scrollTo(0, 0)
-      return document.fonts.ready
+test.describe('P1 visual baselines', { tag: '@visual' }, () => {
+  for (const [name, prepare] of states) {
+    test(`${name} matches approved P1 prototype`, async ({ page }) => {
+      await prepare(page)
+      await page.evaluate(() => {
+        window.scrollTo(0, 0)
+        return document.fonts.ready
+      })
+      // Let any scheduled smooth scroll run to completion, then pin the viewport
+      // back to the top so sticky-header baselines stay repeatable.
+      await page.waitForTimeout(600)
+      await page.evaluate(
+        () =>
+          new Promise((resolve) => {
+            window.scrollTo({ top: 0, behavior: 'instant' })
+            requestAnimationFrame(() => resolve(null))
+          }),
+      )
+      await expect(page).toHaveScreenshot(`${name}.png`, {
+        animations: 'disabled',
+        fullPage: true,
+      })
     })
-    // Let any scheduled smooth scroll run to completion, then pin the viewport
-    // back to the top so sticky-header baselines stay repeatable.
-    await page.waitForTimeout(600)
-    await page.evaluate(
-      () =>
-        new Promise((resolve) => {
-          window.scrollTo({ top: 0, behavior: 'instant' })
-          requestAnimationFrame(() => resolve(null))
-        }),
-    )
-    await expect(page).toHaveScreenshot(`${name}.png`, {
-      animations: 'disabled',
-      fullPage: true,
-    })
-  })
-}
+  }
+})

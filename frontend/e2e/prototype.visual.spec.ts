@@ -8,33 +8,35 @@ const states = [
   ['match-finished', '/match?status=finished'],
 ] as const
 
-for (const [name, path] of states) {
-  test(`${name} matches approved prototype`, async ({ page }) => {
-    await page.goto(path)
-    // The Next.js dev overlay (route indicator / issue badge) renders outside
-    // the product UI and appears nondeterministically; exclude its host element
-    // (shadow DOM included) so baselines stay repeatable.
-    await page.addStyleTag({ content: 'nextjs-portal { display: none !important; }' })
-    if (path === '/' || path.startsWith('/?')) {
-      await page.getByRole('link', { name: '打开 Sinner 对阵 Ruud' }).first().waitFor()
-    }
-    await page.evaluate(() => {
-      window.scrollTo(0, 0)
-      return document.fonts.ready
+test.describe('Prototype visual baselines', { tag: '@visual' }, () => {
+  for (const [name, path] of states) {
+    test(`${name} matches approved prototype`, async ({ page }) => {
+      await page.goto(path)
+      // The Next.js dev overlay (route indicator / issue badge) renders outside
+      // the product UI and appears nondeterministically; exclude its host element
+      // (shadow DOM included) so baselines stay repeatable.
+      await page.addStyleTag({ content: 'nextjs-portal { display: none !important; }' })
+      if (path === '/' || path.startsWith('/?')) {
+        await page.getByRole('link', { name: '打开 Sinner 对阵 Ruud' }).first().waitFor()
+      }
+      await page.evaluate(() => {
+        window.scrollTo(0, 0)
+        return document.fonts.ready
+      })
+      // Let any scheduled smooth scroll run to completion, then pin the viewport
+      // back to the top so sticky-header baselines stay repeatable.
+      await page.waitForTimeout(600)
+      await page.evaluate(
+        () =>
+          new Promise((resolve) => {
+            window.scrollTo({ top: 0, behavior: 'instant' })
+            requestAnimationFrame(() => resolve(null))
+          }),
+      )
+      await expect(page).toHaveScreenshot(`${name}.png`, {
+        animations: 'disabled',
+        fullPage: true,
+      })
     })
-    // Let any scheduled smooth scroll run to completion, then pin the viewport
-    // back to the top so sticky-header baselines stay repeatable.
-    await page.waitForTimeout(600)
-    await page.evaluate(
-      () =>
-        new Promise((resolve) => {
-          window.scrollTo({ top: 0, behavior: 'instant' })
-          requestAnimationFrame(() => resolve(null))
-        }),
-    )
-    await expect(page).toHaveScreenshot(`${name}.png`, {
-      animations: 'disabled',
-      fullPage: true,
-    })
-  })
-}
+  }
+})

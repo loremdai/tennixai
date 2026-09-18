@@ -38,27 +38,29 @@ const states: Array<[name: string, path: string, ready: (page: Page) => Promise<
   ],
 ]
 
-for (const [name, path, ready] of states) {
-  test(`player directory visual - ${name}`, async ({ page }) => {
-    await preparePage(page, path)
-    await ready(page)
-    await page.evaluate(() => {
-      window.scrollTo(0, 0)
-      return document.fonts.ready
+test.describe('Player directory visual baselines', { tag: '@visual' }, () => {
+  for (const [name, path, ready] of states) {
+    test(`player directory visual - ${name}`, async ({ page }) => {
+      await preparePage(page, path)
+      await ready(page)
+      await page.evaluate(() => {
+        window.scrollTo(0, 0)
+        return document.fonts.ready
+      })
+      // Let any scheduled smooth scroll run to completion, then pin the viewport
+      // back to the top so sticky-header baselines stay repeatable.
+      await page.waitForTimeout(600)
+      await page.evaluate(
+        () =>
+          new Promise((resolve) => {
+            window.scrollTo({ top: 0, behavior: 'instant' })
+            requestAnimationFrame(() => resolve(null))
+          }),
+      )
+      await expect(page).toHaveScreenshot(`${name}.png`, {
+        animations: 'disabled',
+        fullPage: true,
+      })
     })
-    // Let any scheduled smooth scroll run to completion, then pin the viewport
-    // back to the top so sticky-header baselines stay repeatable.
-    await page.waitForTimeout(600)
-    await page.evaluate(
-      () =>
-        new Promise((resolve) => {
-          window.scrollTo({ top: 0, behavior: 'instant' })
-          requestAnimationFrame(() => resolve(null))
-        }),
-    )
-    await expect(page).toHaveScreenshot(`${name}.png`, {
-      animations: 'disabled',
-      fullPage: true,
-    })
-  })
-}
+  }
+})
