@@ -24,6 +24,7 @@ import asyncio
 import json
 import os
 import secrets
+import shutil
 import signal
 import socket
 import subprocess
@@ -247,6 +248,7 @@ class RuntimeLauncher:
         frontend_startup_seconds: float = 3.0,
         python_executable: str | None = None,
         pnpm_executable: str = "pnpm",
+        which: Callable[[str], str | None] = shutil.which,
     ) -> None:
         self.root_dir = Path(root_dir)
         self.backend_dir = self.root_dir / "backend"
@@ -275,6 +277,7 @@ class RuntimeLauncher:
         self.frontend_startup_seconds = frontend_startup_seconds
         self.python_executable = python_executable or sys.executable
         self.pnpm_executable = pnpm_executable
+        self.which = which
         self.state = LauncherState.load(self.state_dir / "state.json")
 
     # ------------------------------------------------------------------
@@ -363,6 +366,9 @@ class RuntimeLauncher:
         port_failure = self._check_ports()
         if port_failure is not None:
             return port_failure
+        pnpm_failure = self._check_pnpm()
+        if pnpm_failure is not None:
+            return pnpm_failure
 
         spawned: list[ManagedProcess] = []
         runtime_process = self._spawn_child(
@@ -747,6 +753,25 @@ class RuntimeLauncher:
             )
             return EXIT_PRECONDITION
         return None
+
+    def _check_pnpm(self) -> int | None:
+        """Resolve the frontend package manager before any spawn.
+
+        A missing pnpm would otherwise surface only as LOCAL_FRONTEND_EXITED
+        after the runtime and API children were already spawned and had to be
+        cleaned up. ``shutil.which`` (the default resolver) also validates an
+        absolute ``pnpm_executable`` path, checking that it exists and is
+        executable.
+        """
+        if self.which(self.pnpm_executable) is not None:
+            return None
+        self._say(
+            "up refused: LOCAL_PNPM_MISSING "
+            f"(the frontend package manager {self.pnpm_executable!r} could not be "
+            "resolved on PATH; install pnpm or make it available on PATH, "
+            "e.g. via corepack enable pnpm)"
+        )
+        return EXIT_PRECONDITION
 
     def _child_env(
         self,
