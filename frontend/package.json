@@ -9,8 +9,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "playwright test",
-    "test:e2e:update": "playwright test --update-snapshots"
+    "test:e2e:functional": "playwright test --grep-invert @visual",
+    "test:e2e:visual": "playwright test --grep @visual --workers=1",
+    "test:e2e": "pnpm run test:e2e:functional && pnpm run test:e2e:visual",
+    "test:e2e:update": "pnpm run test:e2e:visual -- --update-snapshots"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
