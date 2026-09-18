@@ -565,6 +565,49 @@ def test_up_spawns_tokenized_children_in_order_and_writes_state(
         assert process.token not in text
 
 
+def test_up_child_env_prepends_backend_dir_to_pythonpath(
+    launcher, monkeypatch: pytest.MonkeyPatch
+):
+    # Real-run gate finding: the frontend child is spawned with cwd set to the
+    # frontend dir, so the backend venv python could not resolve
+    # ``-m app.runtime.child`` (ModuleNotFoundError -> LOCAL_FRONTEND_EXITED).
+    # Every child env must therefore carry the backend directory on PYTHONPATH.
+    # Chosen semantics: prepend backend_dir so the wrapper import wins over any
+    # stale inherited PYTHONPATH entry, preserving the inherited remainder.
+    monkeypatch.setenv("PYTHONPATH", "/inherited/one" + os.pathsep + "/inherited/two")
+    expected = (
+        str(launcher.backend_dir)
+        + os.pathsep
+        + "/inherited/one"
+        + os.pathsep
+        + "/inherited/two"
+    )
+
+    assert launcher.up() == 0
+
+    assert spawned_roles(launcher.runner) == ["runtime", "api", "frontend"]
+    for call in launcher.runner.spawned:
+        assert call.env["PYTHONPATH"] == expected
+    # The broken case explicitly: the frontend spawn runs outside backend_dir.
+    frontend_call = launcher.runner.spawned[-1]
+    assert frontend_call.cwd == str(launcher.frontend_dir)
+    # Parent environment untouched.
+    assert os.environ["PYTHONPATH"] == "/inherited/one" + os.pathsep + "/inherited/two"
+
+
+def test_up_child_env_sets_pythonpath_when_parent_has_none(
+    launcher, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.delenv("PYTHONPATH", raising=False)
+
+    assert launcher.up() == 0
+
+    assert spawned_roles(launcher.runner) == ["runtime", "api", "frontend"]
+    for call in launcher.runner.spawned:
+        assert call.env["PYTHONPATH"] == str(launcher.backend_dir)
+    assert "PYTHONPATH" not in os.environ
+
+
 def test_up_rejects_schema_head_mismatch_without_spawning(launcher):
     launcher.database_probe.schema_head = "some_other_revision"
     assert launcher.up() == 2

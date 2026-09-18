@@ -764,6 +764,18 @@ class RuntimeLauncher:
             env.update(child_environment(settings, role=runtime_role))
         if extra_env:
             env.update(extra_env)
+        # Children run with role-specific cwd (the frontend child runs in the
+        # frontend dir) and the backend venv does not install the app package,
+        # so ``python -m app.runtime.child`` only resolves when the backend
+        # directory is on PYTHONPATH. Prepend backend_dir so the wrapper
+        # import wins over any stale inherited entry; the inherited remainder
+        # is preserved. Inner commands are unaffected: Node ignores PYTHONPATH
+        # and uvicorn/daemon_main run with cwd=backend_dir anyway.
+        backend_dir = str(self.backend_dir)
+        inherited = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = (
+            f"{backend_dir}{os.pathsep}{inherited}" if inherited else backend_dir
+        )
         return env
 
     def _spawn_child(
