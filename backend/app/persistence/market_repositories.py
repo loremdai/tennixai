@@ -23,6 +23,13 @@ from app.markets.models import (
     MarketOutcome,
     MarketRules,
     MarketStatus,
+    OutcomeBook,
+)
+from app.markets.quotes import (
+    QuoteSnapshotRecord,
+    QuoteSource,
+    QuoteState,
+    decide_quote_write,
 )
 from app.persistence.database import Database
 from app.persistence.models import (
@@ -30,6 +37,7 @@ from app.persistence.models import (
     MarketExternalIdRow,
     MarketMatchLinkRow,
     MarketObservationRow,
+    MarketQuoteSnapshotRow,
     MarketRow,
     MarketRuleRow,
     PaperOrderIntentRow,
@@ -618,8 +626,126 @@ class MarketRepository:
         }
 
 
+def _quote_record(market_id: str, row: MarketQuoteSnapshotRow) -> QuoteSnapshotRecord:
+    levels = None
+    payload = row.payload or {}
+    books = payload.get("books")
+    if isinstance(books, list) and len(books) == 2:
+        levels = (
+            OutcomeBook.model_validate(books[0]),
+            OutcomeBook.model_validate(books[1]),
+        )
+    best_bid = None
+    best_ask = None
+    if levels is not None:
+        first_player = levels[0].outcome_player_id
+        best_bid = (first_player, row.outcome_a_bid) if row.outcome_a_bid else None
+        best_ask = (first_player, row.outcome_a_ask) if row.outcome_a_ask else None
+    return QuoteSnapshotRecord(
+        market_id=market_id,
+        source=QuoteSource(row.source),
+        state=QuoteState(row.quote_state),
+        book_hash=row.book_hash,
+        as_of=row.as_of,
+        expires_at=row.expires_at,
+        levels=levels,
+        outcome_bids=(row.outcome_a_bid, row.outcome_b_bid),
+        outcome_asks=(row.outcome_a_ask, row.outcome_b_ask),
+        best_bid=best_bid,
+        best_ask=best_ask,
+        spread=row.spread,
+        depth_usd=row.depth_usd,
+    )
+
+
+def _quote_values(record: QuoteSnapshotRecord) -> dict[str, Any]:
+    return {
+        "source": record.source.value,
+        "quote_state": record.state.value,
+        "book_hash": record.book_hash,
+        "as_of": record.as_of,
+        "expires_at": record.expires_at,
+        "outcome_a_bid": record.outcome_bids[0],
+        "outcome_a_ask": record.outcome_asks[0],
+        "outcome_b_bid": record.outcome_bids[1],
+        "outcome_b_ask": record.outcome_asks[1],
+        "spread": record.spread,
+        "depth_usd": record.depth_usd,
+        "payload": (
+            {"books": [side.model_dump(mode="json") for side in record.levels]}
+            if record.levels is not None
+            else None
+        ),
+        "updated_at": datetime.now(UTC),
+    }
+
+
+class MarketQuoteSnapshotRepository:
+    """Durable latest-quote projection: at most one row per market (T85).
+
+    Single-writer by design (the runtime role): the coverage lane and the
+    realtime mirror both come through `upsert`, which enforces the shared
+    precedence rule inside one transaction. The API role only reads.
+    """
+
+    def __init__(self, database: Database) -> None:
+        self._database = database
+
+    async def upsert(self, record: QuoteSnapshotRecord) -> bool:
+        """True when a row was written or replaced; False when the incoming
+        quote is older, lower-precedence or byte-identical (idempotent)."""
+        async with self._database.session() as session:
+            async with session.begin():
+                current = await session.get(
+                    MarketQuoteSnapshotRow, record.market_id, with_for_update=True
+                )
+                existing = (
+                    _quote_record(record.market_id, current)
+                    if current is not None
+                    else None
+                )
+                if not decide_quote_write(existing, record):
+                    return False
+                values = _quote_values(record)
+                if current is None:
+                    session.add(
+                        MarketQuoteSnapshotRow(market_id=record.market_id, **values)
+                    )
+                else:
+                    for key, value in values.items():
+                        setattr(current, key, value)
+                return True
+
+    async def load(self, market_id: str) -> QuoteSnapshotRecord | None:
+        async with self._database.session() as session:
+            row = await session.get(MarketQuoteSnapshotRow, market_id)
+        return _quote_record(market_id, row) if row is not None else None
+
+    async def load_many(
+        self, market_ids: Sequence[str]
+    ) -> dict[str, QuoteSnapshotRecord]:
+        """Every requested market's stored quote in ONE query (no N+1)."""
+        ids = {market_id for market_id in market_ids if market_id}
+        if not ids:
+            return {}
+        async with self._database.session() as session:
+            rows = (
+                (
+                    await session.execute(
+                        select(MarketQuoteSnapshotRow).where(
+                            MarketQuoteSnapshotRow.market_id.in_(ids)
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+        return {row.market_id: _quote_record(row.market_id, row) for row in rows}
+
+
 __all__ = [
     "LinkFrozenError",
     "MarketOverviewRow",
+    "MarketQuoteSnapshotRepository",
     "MarketRepository",
 ]
