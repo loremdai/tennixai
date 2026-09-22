@@ -163,6 +163,12 @@ def build_local_runtime_assembly(
         quote_snapshots=MarketQuoteSnapshotRepository(database),
         snapshot_fresh_seconds=settings.local_runtime_market_quote_fresh_seconds,
         realtime_fresh_seconds=settings.p3_market_book_freshness_seconds,
+        # The read side needs the deployment's model truth (promoted artifact
+        # or not) to explain an empty opportunities tab honestly; it never
+        # predicts anything here.
+        model_status=PredictionService(
+            artifact_dir=Path(settings.p3_model_artifact_dir)
+        ).model_status,
     )
     return LocalRuntimeAssembly(
         database=database,

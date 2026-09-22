@@ -8,6 +8,7 @@ exit value must degrade to None — never to fabricated zeros. Requires
 compose PostgreSQL + `uv run alembic upgrade head`.
 """
 
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
@@ -613,8 +614,13 @@ async def test_markets_query_issues_a_constant_number_of_statements(
 # ---------------------------------------------------------------------------
 
 
-def _quote_service(database: Database) -> P3QueryService:
-    return P3QueryService(
+def _quote_service(
+    database: Database,
+    *,
+    model_status: Callable[[], str] | None = None,
+    cls: type[P3QueryService] = P3QueryService,
+) -> P3QueryService:
+    return cls(
         database=database,
         markets=MarketRepository(database),
         paper=PaperLedgerRepository(database),
@@ -623,7 +629,80 @@ def _quote_service(database: Database) -> P3QueryService:
         snapshot_fresh_seconds=300,
         realtime_fresh_seconds=5,
         clock=lambda: NOW,
+        model_status=model_status,
     )
+
+
+async def _seed_quiet_market(database: Database) -> dict[str, str]:
+    """A covered main-tour market with an active link and no evaluation yet.
+
+    This is the honest quiet-window shape: the market is in domain, but no
+    live event has produced a prediction or a decision observation.
+    """
+    markets = MarketRepository(database)
+    identity = PostgresIdentityRepository(database)
+    suffix = uuid4().hex[:10]
+    match_id = await identity.get_or_create("match", "itest-t89", suffix)
+    player_a = await identity.get_or_create("player", "itest-t89", f"a{suffix}")
+    player_b = await identity.get_or_create("player", "itest-t89", f"b{suffix}")
+    tournament_id = await identity.get_or_create(
+        "tournament", "itest-t89", f"t{suffix}"
+    )
+    async with database.session() as session:
+        async with session.begin():
+            await session.execute(
+                text(
+                    "UPDATE matches SET status = 'live', player1_id = :p1,"
+                    " player2_id = :p2, tournament_id = :t WHERE id = :m"
+                ),
+                {"p1": player_a, "p2": player_b, "t": tournament_id, "m": match_id},
+            )
+            await session.execute(
+                text(
+                    "UPDATE tournaments SET name = 'Quiet Open', circuit = 'atp',"
+                    " gender = 'men' WHERE id = :i"
+                ),
+                {"i": tournament_id},
+            )
+    market_id = await markets.get_or_create_market_id(
+        provider="polymarket",
+        provider_event_id=f"ev_quiet_{suffix}",
+        condition_id=f"cond_{uuid4().hex}",
+    )
+    await markets.save_market(
+        make_market(market_id, match_id=match_id, player_a=player_a, player_b=player_b)
+    )
+    await markets.link_match(
+        market_id=market_id, match_id=match_id, evidence={"pair": [player_a, player_b]}
+    )
+    return {"match_id": match_id, "market_id": market_id}
+
+
+class _QuietWindowQueries(P3QueryService):
+    """The aggregate reason is global, so the quiet-window shape is pinned
+    explicitly: no opportunity row at all. The rows themselves and their
+    action semantics are proven by the tests above."""
+
+    async def opportunities(self):
+        return []
+
+
+async def test_opportunity_view_explains_an_unpromoted_deployment(
+    database: Database,
+) -> None:
+    """With no evaluation yet AND no promoted artifact, the empty tab must
+    explain the deployment's model truth instead of claiming the model ran
+    and found nothing (spec §6.2)."""
+    await _seed_quiet_market(database)
+    queries = _quote_service(
+        database, model_status=lambda: "not_promoted", cls=_QuietWindowQueries
+    )
+
+    rows, availability = await queries.opportunity_view()
+
+    assert rows == []
+    assert availability.reason == "ELIGIBLE_UNPROMOTED"
+    assert availability.model_status == "not_promoted"
 
 
 async def test_market_rows_expose_explicit_quote_and_model_semantics(

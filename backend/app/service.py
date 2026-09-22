@@ -79,6 +79,34 @@ def p3_model_availability(*, tier, prediction, observation) -> str:
     return "not_evaluated"
 
 
+def opportunity_reason(
+    *,
+    has_rows: bool,
+    unpromoted_evidence: bool,
+    covered: bool,
+    unpromoted_deployment: bool,
+    all_gapped: bool,
+    promoted_evidence: bool,
+) -> tuple[str, str]:
+    """The aggregate reason for an empty opportunities tab (spec §6.2).
+
+    Precedence: a real action always wins; then the model itself, because a
+    deployment with no promoted artifact can never produce a BUY or WAIT and
+    that is the honest explanation whether or not something was evaluated
+    yet; then recovering decision data; then "nothing is in domain"; and
+    only last "the model ran and nothing passed the gate".
+    """
+    if has_rows:
+        return "HAS_OPPORTUNITIES", "unknown"
+    if unpromoted_evidence or (covered and unpromoted_deployment):
+        return "ELIGIBLE_UNPROMOTED", "not_promoted"
+    if all_gapped:
+        return "DECISION_GAP", "unknown"
+    if not covered:
+        return "NO_COVERED_MARKET", "unknown"
+    return "NO_ELIGIBLE_ACTION", ("promoted" if promoted_evidence else "unknown")
+
+
 class MatchTimeScope(StrEnum):
     TODAY = "today"
     TONIGHT = "tonight"
@@ -1126,6 +1154,7 @@ class P3QueryService:
         snapshot_fresh_seconds: int = 300,
         realtime_fresh_seconds: int = 5,
         clock=None,
+        model_status=None,
     ) -> None:
         self._database = database
         self._markets = markets
@@ -1135,6 +1164,10 @@ class P3QueryService:
         self._snapshot_fresh_seconds = snapshot_fresh_seconds
         self._realtime_fresh_seconds = realtime_fresh_seconds
         self._clock = clock or (lambda: datetime.now(timezone.utc))
+        # Optional deployment truth: `promoted` only when a verified model
+        # artifact is loaded. Without it the aggregate reason stays evidence
+        # based (observations and predictions), never an invented status.
+        self._model_status = model_status
 
     async def _match_facts(self, match_ids) -> dict:
         """One batched lookup: players, tournament tier/gender, phase."""
@@ -1533,6 +1566,20 @@ class P3QueryService:
         rows.sort(key=lambda item: item[:3])
         return [row[3] for row in rows]
 
+    def _deployment_is_unpromoted(self) -> bool:
+        """True only when the deployment reports no promoted model artifact.
+
+        A missing or failing status source stays `unknown`, never
+        `not_promoted`: the aggregate reason may not claim a model state that
+        nobody confirmed.
+        """
+        if self._model_status is None:
+            return False
+        try:
+            return self._model_status() == "not_promoted"
+        except Exception:  # noqa: BLE001 - the read path must not fail here
+            return False
+
     async def opportunity_view(self):
         """Rows plus the aggregate availability reason (spec §6.2).
 
@@ -1548,21 +1595,13 @@ class P3QueryService:
                 reason="HAS_OPPORTUNITIES", model_status="unknown"
             )
         observations = await self._markets.latest_decision_observations()
-        unpromoted = any(
+        unpromoted_evidence = any(
             (observation.reason_code or "") in UNPROMOTED_REASONS
             for observation in observations
         )
-        if unpromoted:
-            return rows, OpportunityAvailabilityDto(
-                reason="ELIGIBLE_UNPROMOTED", model_status="not_promoted"
-            )
-        if observations and all(
-            observation.is_stale or observation.has_gap
-            for observation in observations
-        ):
-            return rows, OpportunityAvailabilityDto(
-                reason="DECISION_GAP", model_status="unknown"
-            )
+        gapped = bool(observations) and all(
+            observation.is_stale or observation.has_gap for observation in observations
+        )
         overviews = await self._markets.list_market_overviews()
         linked = [row for row in overviews if row.active_match_id]
         facts = await self._match_facts([row.active_match_id for row in linked])
@@ -1571,21 +1610,24 @@ class P3QueryService:
             for row in linked
             if facts.get(row.active_match_id, {}).get("tier") in MAIN_TOUR_TIERS
         ]
-        if not covered:
-            return rows, OpportunityAvailabilityDto(
-                reason="NO_COVERED_MARKET", model_status="unknown"
+        promoted_evidence = False
+        if covered and not unpromoted_evidence:
+            predictions = await self._markets.latest_predictions_for_matches(
+                [row.active_match_id for row in covered]
             )
-        predictions = await self._markets.latest_predictions_for_matches(
-            [row.active_match_id for row in covered]
+            promoted_evidence = any(
+                snapshot.availability.value in ("available", "degraded")
+                for snapshot in predictions.values()
+            )
+        reason, model_status = opportunity_reason(
+            has_rows=False,
+            unpromoted_evidence=unpromoted_evidence,
+            covered=bool(covered),
+            unpromoted_deployment=self._deployment_is_unpromoted(),
+            all_gapped=gapped,
+            promoted_evidence=promoted_evidence,
         )
-        promoted = any(
-            snapshot.availability.value in ("available", "degraded")
-            for snapshot in predictions.values()
-        )
-        return rows, OpportunityAvailabilityDto(
-            reason="NO_ELIGIBLE_ACTION",
-            model_status="promoted" if promoted else "unknown",
-        )
+        return rows, OpportunityAvailabilityDto(reason=reason, model_status=model_status)
 
     async def markets(self, *, tier=None, gender=None, phase=None, page=1, page_size=20):
         from app.api.schemas import MarketPageDto, MarketQuoteDto, MarketSummaryDto

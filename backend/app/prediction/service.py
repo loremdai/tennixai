@@ -175,6 +175,20 @@ class PredictionService:
         self._estimator = LiveServeEstimator(prior_strength=prior_strength)
         self._now = now_fn or (lambda: datetime.now(UTC))
 
+    def model_status(self) -> str:
+        """The deployment's model truth, without making a prediction.
+
+        `not_promoted` means no promoted artifact is loaded, so every in-domain
+        match abstains: nothing can ever produce a BUY or WAIT, and an empty
+        opportunity list must say so instead of looking like a quiet market.
+        `promoted` means the audited artifact is present and verified; which
+        matches then produce probabilities stays per-match prediction evidence.
+        """
+        artifact = self._load_artifact()
+        if artifact is None or isinstance(artifact, ArtifactInvalid):
+            return "not_promoted"
+        return "promoted"
+
     # ------------------------------------------------------------------
 
     def predict(self, snapshot: MatchSnapshot) -> PredictionSnapshot:

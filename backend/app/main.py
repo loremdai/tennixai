@@ -413,6 +413,9 @@ def create_app(
                     settings.local_runtime_market_quote_fresh_seconds
                 ),
                 realtime_fresh_seconds=settings.p3_market_book_freshness_seconds,
+                # Explains an empty opportunities tab with the deployment's
+                # real model state; no prediction is made on the read path.
+                model_status=prediction_service.model_status,
             )
 
     if local_assembly is not None:

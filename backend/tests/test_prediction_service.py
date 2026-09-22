@@ -303,6 +303,22 @@ def test_tampered_artifact_fails_closed(tmp_path):
     assert prediction.outcomes == ()
 
 
+def test_model_status_reports_the_deployment_truth_without_predicting(tmp_path):
+    """The empty-state reason must not wait for a prediction to exist: the
+    deployment either holds a promoted artifact or it does not."""
+    assert PredictionService(artifact_dir=None).model_status() == "not_promoted"
+    assert (
+        PredictionService(artifact_dir=build_artifact(tmp_path / "p")).model_status()
+        == "promoted"
+    )
+    assert (
+        PredictionService(
+            artifact_dir=build_artifact(tmp_path / "u", promoted=False)
+        ).model_status()
+        == "not_promoted"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Live prediction and degradation
 # ---------------------------------------------------------------------------

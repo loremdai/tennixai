@@ -189,10 +189,29 @@ test.describe('T80 local real runtime browser acceptance', () => {
     await scanPage(page)
 
     const firstRow = page.locator('a[href^="/matches/"]').first()
-    if ((await firstRow.count()) === 0) {
-      // Honest quiet market: no mapped rows right now. Annotate and assert
-      // the honest empty copy instead of fabricating a match flow.
-      await expect(page.getByText(/暂无|没有|无市场/).first()).toBeVisible()
+    const emptyTab = !(await firstRow
+      .waitFor({ state: 'visible', timeout: 20_000 })
+      .then(() => true)
+      .catch(() => false))
+    if (emptyTab) {
+      // The opportunities tab explains itself with the product's own honest
+      // reason (an unpromoted model, nothing passing the gate, …), never a
+      // fabricated opportunity. Its CTA reaches every market, where mapped
+      // rows carry the real quotes this acceptance still has to exercise.
+      await expect(
+        page.getByRole('heading', {
+          name: /模型尚未完成验证|当前没有机会|暂无可评估市场|决策数据恢复中|暂无符合门槛的机会/,
+        }),
+      ).toBeVisible()
+      await page.getByRole('button', { name: '查看全部市场' }).click()
+      await page.waitForTimeout(2500)
+      await scanPage(page)
+    }
+
+    const mappedRow = page.locator('a[href^="/matches/"]').first()
+    if ((await mappedRow.count()) === 0) {
+      // Honest quiet market: no mapped rows right now. Annotate instead of
+      // fabricating a match flow.
       test.info().annotations.push({
         type: 'local-runtime-note',
         description: `no mapped market rows on ${new Date().toISOString()}; match workbench not exercised`,
@@ -201,7 +220,7 @@ test.describe('T80 local real runtime browser acceptance', () => {
       return
     }
 
-    await firstRow.click()
+    await mappedRow.click()
     await page.waitForTimeout(2500)
     await scanPage(page)
 
