@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-18 17:30 CST
+**最后更新：** 2026-09-22 15:50 CST
 
 **总体状态：** `in_progress`
 
-**当前里程碑：** P3 已关闭；P4.0 设计与实施计划（T72）已 `done`；P4.1 Local Real Runtime Implementation 已关闭（T73–T80 全部 `done`，Completion Gate 九条逐条实际核验，2026-09-18）；T81 Playwright 视觉门稳定性收口与 T82 一键启动器前端进程修复均已 `done`（2026-09-18）
+**当前里程碑：** P3 已关闭；P4.0 设计与实施计划（T72）已 `done`；P4.1 Local Real Runtime Implementation 已关闭（T73–T80 全部 `done`，Completion Gate 九条逐条实际核验，2026-09-18）；T81 Playwright 视觉门稳定性收口与 T82 一键启动器前端进程修复均已 `done`（2026-09-18）；P4.3 市场数据可信度与覆盖设计（T83）正在冻结
 
-**当前阶段：** 无 active 任务；P4.2（T81/T82）已关闭，P4 后续优化项（真实历史数据与模型晋升、退出阈值、性能打磨等）仍待排期
+**当前阶段：** P4.3 — Market Data Truthfulness & Coverage Design；T83 是唯一 `in_progress` 任务，只写设计规格与交接材料，尚未授权产品实现
 
 ## 状态说明
 
@@ -148,6 +148,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | P4.1 — Local Real Runtime Implementation | `done` | 逐项交付统一本地真实运行入口及其真实核验 | T73–T80 全部 `done`；Completion Gate 九条逐条实际核验（见下方摘要）；真实 init/up/status/浏览器验收/down/up/status 手工流程 2026-09-18 诚实通过；2026-09-18 关闭 |
 | P4.2 — Playwright Visual Gate Stability | `done` | 将批准的视觉快照从并行功能 E2E 中隔离为串行验证通道 | T81 已 `done`（2026-09-18）：仅修改测试元数据与 `frontend/package.json` 运行命令；产品、像素阈值、PNG 基线零改动；默认 `pnpm test:e2e` 连续两次 `110 passed/44 skipped/0 failed`；计划见 [T81](./docs/superpowers/plans/2026-09-18-tennixai-t81-playwright-visual-gate-stabilization.md) |
 | P4.2 — Launcher Reliability | `done` | 让根目录 `./scripts/tennix-live up` 不依赖当前 shell 解析到的 pnpm 版本 | T82 已完成（`2cea490`）：TDD 先红后绿；`up` 直接执行 `frontend/node_modules/.bin/next`，缺失时在其他子进程启动前报 `LOCAL_FRONTEND_MISSING`；真实无环境覆盖 `up` exit 0，API health 200、前端 HTTP 200，进程树无 pnpm；随后 `down` exit 0 且数据保留 |
+| P4.3 — Market Data Truthfulness & Coverage | `in_progress` | 修复市场—比赛 read model 脱节，建立全市场可信报价覆盖与实时决策双通道，并让 Markets/Opportunities 如实表达数据与模型状态 | T83 正在冻结规格；实现须在规格、详细计划和用户交接审阅后由 T84–T89 顺序完成。模型晋升、自动下单和虚构机会均不属于本阶段 |
 
 > **后验核验记录（2026-09-18）：** T80 的 `110 passed / 44 skipped / 0 failed` 是当时真实通过的历史证据。控制者随后在无影响路径产品代码变更的 `2270049` 上两次复跑当前完整 Playwright，均得到 `109 passed / 44 skipped / 1 failed`；唯一失败为 mobile `prototype.visual` 的 `home-answer`，265 像素差异。该用例单独以 `--workers=1 --repeat-each=10` 则 10/10 通过，故 T81 以两条顺序 CLI lane 消除跨文件 worker 并发，而非改动视觉真相。
 
@@ -167,6 +168,8 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 
 | T81 | P4.2 | Stabilize the Parallel Playwright Visual Gate | `done` | `2c1186c`+`9f5a459` | 领取 `f14babb`（起始 `7bd453a`）。诊断复核：隔离前完整并行 suite 在 `2270049` 两次均 `109/44/1`（唯一失败 mobile `prototype.visual` home-answer 265px），同一用例 `--workers=1 --repeat-each=10` 10/10 通过 → 根因为跨文件 worker 并发下的视觉渲染不稳定。实现：`2c1186c` 为 6 个 spec 的 19 个快照测试声明加 Playwright 原生组级 `@visual` tag（`home-history.spec.ts` 只标记 `Home history visual` describe，两个功能测试未标记；`--grep @visual` 列出 38 项=19×desktop/mobile，`--grep-invert @visual` 列出 116 项且保留 home-history 功能项）；`9f5a459` 将 `frontend/package.json` 拆为两条顺序 CLI lane：`test:e2e:functional`（`--grep-invert @visual`，并行）→ `test:e2e:visual`（`--grep @visual --workers=1`，串行），`test:e2e` 以 `&&` 顺序运行，`test:e2e:update` 只走串行视觉 lane；`playwright.config.ts`、测试标题、路由、等待逻辑、截图参数、viewport 均未改。验证（fnm Node 22.22.0 + pnpm 10.30.1，仓库既有 node_modules）：`pnpm test` 395 passed、`pnpm typecheck` 干净、`pnpm build` exit 0；`test:e2e:functional` 76 passed/40 skipped、`test:e2e:visual` 34 passed/4 skipped（4 项为 replay-off 按设计跳过的 P2 Replay 用例）；默认 `pnpm test:e2e` 连续两次均 `110 passed/44 skipped/0 failed`（76+34 / 40+4 精确对账）；`git diff --exit-code -- frontend/e2e/__screenshots__` 零 PNG diff；`git diff --check` 通过。未改 UI/CSS/Next/FastAPI/真实 runtime，未更新/mask/裁剪 PNG，未调阈值，未加 skip/fixme/retry，未运行 live/LLM/API 配额门；受保护未跟踪文件原样保留 |
 | T82 | P4.2 | Make the One-Command Launcher Independent of Shell pnpm | `done` | `2cea490` | 领取 `b5d6f53`（起始 `7b0bf13`）。根因复现为 fallback pnpm 在非 TTY 启动时尝试移除/重建 `node_modules`，以 `PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY` 退出。TDD：先将 frontend spawn 断言改为直接 Next，当前实现按预期失败；随后 `launcher.py` 改为前置检查并直接启动已安装 `frontend/node_modules/.bin/next`，缺失时稳定报 `LOCAL_FRONTEND_MISSING`，不再依赖 PATH pnpm。焦点 launcher `61 passed`；ruff check/format 通过；backend 确定性 `1199 passed, 12 skipped, 25 deselected`；真实普通 `./scripts/tennix-live up` exit 0、API health 200、frontend HTTP 200，进程树为 `.bin/next → next/dist/bin/next`；`down` exit 0，数据与外部容器保留。runbook 已同步 |
+
+| T83 | P4.3 | Freeze Market Data Truthfulness & Coverage Design | `in_progress` | — | 用户已批准“双通道”：全部市场以有界公开 REST snapshot 建立广覆盖；严格映射、主巡单打且进入追踪窗口的市场继续由 WebSocket 驱动模型/decision/paper。交付物仅为规格、路线和 Goal 交接 prompt；不得修改产品代码、运行时、API 或 UI |
 
 ## P4.1 Completion Gate 核验摘要（2026-09-18，逐条实际核验）
 
