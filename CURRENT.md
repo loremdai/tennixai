@@ -2,9 +2,9 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-22 16:07 CST
+**最后更新：** 2026-09-22 18:20 CST
 
-**当前任务：** T84 — Add Active-Link Market Overview Projection
+**当前任务：** T85 — Add Read-Only Batch Quote Coverage
 
 **任务状态：** `in_progress`
 
@@ -12,16 +12,27 @@
 
 **分支：** `main`
 
-**起始提交：** `89de518`
+**起始提交：** `a0d5f5f`
 
-**当前动作：** 用户已于 2026-09-22 书面确认 [P4.3 规格](./docs/superpowers/specs/2026-09-22-tennixai-p4-market-data-truthfulness-and-coverage-design.md)，T83 以设计冻结关闭。本轮先写 T84–T89 详细实施计划并自审，再按顺序执行：T84 以 `market_match_links.status='active'` 为唯一 market→match 查询真相，恢复 link 导航/tier/phase 并消除 Markets 查询 N+1。
+**当前动作：** T84 已实际验证并关闭（提交 `a0d5f5f`）。正在实施 T85：可逆 migration `0006` 与 `market_quote_snapshots` 投影、canonical 报价状态机（七个可见状态）、公开只读 CLOB `POST /books` 批量适配器、幂等 upsert 与 raw batch 14 天保留。详细步骤见 [P4.3 实施计划](./docs/superpowers/plans/2026-09-22-tennixai-p4-market-data-truthfulness-and-coverage-implementation.md)。
 
-## T84 范围与硬边界
+## T85 范围与硬边界
 
-- `market_match_links.status='active'` 是 market→match 的唯一查询真相；不回填、不依赖冗余 `markets.match_id` 制造第二份真相。
-- link、match facts、latest quote 与 prediction/decision 一次批量加载；禁止每行 N+1 SQL 或 Redis 调用。
-- 只有 active link 才产生内部 Match Page 导航；无 link 行保留 canonical 市场信息，但不得出现错误导航。
-- 本轮只做 read model 与查询投影：不引入 snapshot 采集、WebSocket roster 扩容、模型晋升、decision/paper 语义变化。
+- 只读公开 Polymarket CLOB `POST /books`；不新增凭据、钱包、签名或下单路径；不调用 LLM。
+- snapshot 车道只负责展示报价：不得触发 PredictionService、DecisionWorker、PaperTradingService，不得创建或扩大 WebSocket 订阅。
+- 投影每 market 最多一行，只存 canonical 两侧 levels 与展示统计、`source`、`state`、`as_of`、`expires_at`、`book_hash`；不存 token/condition/event ID、原始 provider JSON、模型概率、decision 或 paper 状态。
+- 原始批量响应按 batch 写入既有 `raw_provider_events`，沿用 14 天清理；公共 API、日志、Chat 与页面零 provider identity。
+- 幂等与 precedence：同一内容重跑不写；旧值绝不覆盖新值；同一时刻只允许 realtime 车道覆盖 snapshot 车道，绝不反向。
+
+## T84 完成证据（2026-09-22，全部实际运行）
+
+- 实现提交 `a0d5f5f`：`market_match_links.status='active'` 成为唯一 market→match 查询真相，`markets.match_id` 不再被读取。
+- `cd backend && uv run pytest tests/test_market_overview_projection.py -q` → `1 passed`（spy 断言 overview/facts/predictions/hot books 各恰一次调用；per-row 调用直接抛错）。
+- `cd backend && uv run pytest tests/integration/test_p3_query_service.py -q` → `5 passed`，含两条新证据：active link 生效且 replaced link 不泄漏（旧 `markets.match_id` 仍存值但被忽略）；`markets()` 在行数增加后 SQL 语句数不变（`expanded == baseline`，≤8）。
+- `cd backend && uv run pytest -m "not llm_live and not provider_live and not end_to_end_live and not infrastructure" -q` → `1138 passed, 12 skipped, 89 deselected`，0 failed。
+- `cd backend && uv run pytest -m infrastructure -q` → `64 passed`。
+- ruff：触碰文件 `check` 全部通过；对本人新增/改写文件执行 `format`（`app/markets/publisher.py`、`tests/test_market_overview_projection.py`）；既有 format 债务文件未触碰。
+- 实施偏差（已记录）：计划中 T84.1（仓储）与 T84.2（服务）的两次提交合并为一次，因为单独的仓储改动会让 `P3QueryService.markets()` 处于红色中间态。
 
 ## 受保护的既有未跟踪文件
 
@@ -31,15 +42,14 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
-| 2026-09-22 | 本提交 | 用户书面确认 P4.3 规格后，T83 以设计冻结关闭；T84 已领取：Claude Code（Opus 5）、`main`、起始 `89de518` |
-| 2026-09-22 | `89de518` | T83 规格草案与三份总控记录已推送；规格已获用户书面确认，可写实施计划与产品代码 |
-| 2026-09-22 | `8ffba5e` | T83 规格草案、P4.3 路线和三份总控已推送；当时仍在等待用户书面审阅 |
-| 2026-09-22 | `cccf604` | T83 已领取：Codex、`main`、起始 `f1840b7`；只做 P4.3 双通道市场数据设计冻结 |
-| 2026-09-18 | `2cea490` | T82 关闭：启动器直接运行已安装 Next；普通 up/API/frontend/down 真实门通过；三份总控同步 |
+| 2026-09-22 | 本提交 | T84 关闭（证据见上）并领取 T85：Claude Code（Opus 5）、`main`、起始 `a0d5f5f` |
+| 2026-09-22 | `a0d5f5f` | T84 实现：active link 成为唯一 market→match 真相；批量装载消除 Markets 查询 N+1 |
+| 2026-09-22 | `ff317f1` | T84–T89 详细实施计划（5349 行）入库并推送 |
+| 2026-09-22 | `61c460d` | 用户书面确认规格后 T83 关闭、T84 领取 |
+| 2026-09-22 | `89de518` | T83 规格草案与总控记录推送；规格随后获用户书面确认 |
 
 ## 下一步
 
-1. 写完并自审 T84–T89 详细实施计划，提交并推送。
-2. 按 T84→T89 顺序逐项实现、验证、提交并推送；每个任务的领取、节点、完成与交接更新三份总控。
-3. T89 完成确定性/integration/frontend/E2E、有界真实本地 coverage gate、runbook 与总控收口后，本文件不再有 active 任务。
-4. P4.3 完成后单独排期模型晋升证据链；自动下单继续 `deferred`。
+1. 按 T85 → T86 → T87 → T88 → T89 顺序逐项实现、验证、提交并推送；每个任务的领取、节点与完成更新三份总控。
+2. T89 完成全链回归、有界真实本地 coverage run（零 LLM）、runbook 与总控收口后，本文件不再有 active 任务。
+3. P4.3 完成后单独排期模型晋升证据链；自动下单继续 `deferred`。
