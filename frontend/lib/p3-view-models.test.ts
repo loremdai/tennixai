@@ -54,18 +54,23 @@ function summary(overrides: Partial<MarketSummaryDto> = {}): MarketSummaryDto {
     tier: 'atp',
     gender: 'men',
     phase: 'live',
-    model_covered: true,
-    action: 'buy',
+    model_availability: 'available',
+    decision_action: 'buy',
     reason_code: null,
     player_ids: ['ply_a', 'ply_b'],
     player_names: ['Alpha One', 'Beta Two'],
     model_probability: 0.62,
-    best_bid: ['ply_a', '0.55'],
-    best_ask: ['ply_a', '0.57'],
-    outcome_bids: ['0.55', '0.43'],
-    outcome_asks: ['0.57', '0.45'],
-    spread: '0.0200',
-    depth_usd: '306.00',
+    quote: {
+      state: 'snapshot',
+      source: 'snapshot',
+      as_of: '2026-09-16T11:59:00Z',
+      outcome_bids: ['0.55', '0.43'],
+      outcome_asks: ['0.57', '0.45'],
+      best_bid: ['ply_a', '0.55'],
+      best_ask: ['ply_a', '0.57'],
+      spread: '0.0200',
+      depth_usd: '306.00',
+    },
     is_stale: false,
     has_gap: false,
     as_of: '2026-09-16T11:59:00Z',
@@ -158,7 +163,7 @@ describe('toOpportunityRow', () => {
 })
 
 describe('toMarketRow', () => {
-  it('maps canonical enums and per-outcome levels', () => {
+  it('maps canonical enums, per-outcome levels and the quote label', () => {
     const row = toMarketRow(summary(), NOW)
     expect(row.tierLabel).toBe('ATP')
     expect(row.phase).toBe('live')
@@ -166,39 +171,109 @@ describe('toMarketRow', () => {
     expect(row.playerTwoAsk).toBeCloseTo(0.45)
     expect(row.spread).toBeCloseTo(0.02)
     expect(row.depth).toBeCloseTo(306)
-    expect(row.state).toBe('buy')
+    expect(row.decisionAction).toBe('buy')
+    expect(row.quoteState).toBe('snapshot')
+    expect(row.quoteLabel).toBe('快照报价 · 1 分前')
     expect(row.href).toBe('/matches/mat_1')
   })
 
-  it('renders uncovered challenger markets without negative labels', () => {
+  it('renders low-tier markets with real quotes and no negative model label', () => {
     const row = toMarketRow(
       summary({
         tier: 'challenger',
-        model_covered: false,
-        action: 'market_only',
+        model_availability: 'out_of_scope',
+        decision_action: null,
         match_id: null,
         player_names: null,
         player_ids: null,
         question: 'Challenger Moneyline',
-        outcome_asks: null,
-        spread: null,
-        depth_usd: null,
         model_probability: null,
+        quote: {
+          state: 'snapshot',
+          source: 'snapshot',
+          as_of: '2026-09-16T11:59:00Z',
+          outcome_bids: ['0.55', '0.43'],
+          outcome_asks: ['0.57', '0.45'],
+          best_bid: null,
+          best_ask: null,
+          spread: null,
+          depth_usd: null,
+        },
       }),
       NOW,
     )
-    expect(row.covered).toBe(false)
-    expect(row.state).toBe('market_only')
-    expect(row.reason).toBe('仅市场数据')
-    expect(row.reason).not.toMatch(/不支持|unsupported|uncovered/i)
-    expect(row.playerOneAsk).toBeNull()
+    expect(row.modelAvailability).toBe('out_of_scope')
+    expect(row.modelAvailabilityLabel).toBeNull() // no "uncovered" label
+    expect(row.decisionAction).toBeNull()
+    expect(row.quoteLabel).toBe('快照报价 · 1 分前')
+    expect(row.playerOneAsk).toBeCloseTo(0.57)
     expect(row.href).toBeNull() // unmapped rows are not navigable
     expect(row.match).toBe('Challenger Moneyline')
   })
 
+  it('never invents a decision state from a null action', () => {
+    const row = toMarketRow(
+      summary({
+        decision_action: null,
+        model_availability: 'eligible_unpromoted',
+        quote: {
+          state: 'unavailable',
+          source: null,
+          as_of: null,
+          outcome_bids: null,
+          outcome_asks: null,
+          best_bid: null,
+          best_ask: null,
+          spread: null,
+          depth_usd: null,
+        },
+      }),
+      NOW,
+    )
+    expect(row.decisionAction).toBeNull()
+    expect(row.modelAvailabilityLabel).toBe('模型未晋升 · 不产生 BUY/WAIT')
+    expect(row.quoteState).toBe('unavailable')
+    expect(row.quoteLabel).toBe('报价暂不可用')
+    expect(row.playerOneAsk).toBeNull()
+  })
+
+  it('labels every visible quote state, including a limited one', () => {
+    const states = {
+      realtime: '实时盘口',
+      no_liquidity: '暂无挂单',
+      unavailable: '报价暂不可用',
+      stale: '最后可信报价已过期',
+      limited: '覆盖受限 · 等待下一轮',
+    } as const
+    for (const [state, label] of Object.entries(states)) {
+      const row = toMarketRow(
+        summary({
+          quote: {
+            state: state as keyof typeof states,
+            source: state === 'realtime' ? 'realtime' : 'snapshot',
+            as_of: '2026-09-16T11:59:00Z',
+            outcome_bids: null,
+            outcome_asks: null,
+            best_bid: null,
+            best_ask: null,
+            spread: null,
+            depth_usd: null,
+          },
+        }),
+        NOW,
+      )
+      expect(row.quoteLabel).toBe(label)
+    }
+  })
+
   it('maps closed markets and typed reason codes', () => {
     const row = toMarketRow(
-      summary({ phase: 'closed', status: 'closed', action: 'no_bet', reason_code: 'RULE_CHANGED' }),
+      summary({
+        phase: 'closed',
+        status: 'closed',
+        decision_action: 'no_bet',
+        reason_code: 'RULE_CHANGED',
+      }),
       NOW,
     )
     expect(row.phase).toBe('closed')

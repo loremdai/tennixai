@@ -6,6 +6,11 @@ import type { DecisionOverlay, DecisionState } from '@/components/p3/p3-preview-
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
+import type {
+  DecisionActionValue,
+  ModelAvailabilitySummaryValue,
+  QuoteStateValue,
+} from '@/lib/api/types'
 
 export type MarketRowData = {
   id: string
@@ -13,8 +18,11 @@ export type MarketRowData = {
   tournament: string
   tierLabel: string
   phase: 'live' | 'upcoming' | 'closed'
-  covered: boolean
-  state: DecisionState
+  modelAvailability: ModelAvailabilitySummaryValue
+  modelAvailabilityLabel: string | null
+  decisionAction: DecisionActionValue | null
+  quoteState: QuoteStateValue
+  quoteLabel: string
   playerOne: string
   playerTwo: string
   playerOneAsk: number | null
@@ -22,7 +30,7 @@ export type MarketRowData = {
   spread: number | null
   depth: number | null
   modelProbability: number | null
-  reason: string
+  reason: string | null
   freshness: string
   stale: boolean
   overlay?: DecisionOverlay
@@ -42,6 +50,10 @@ const phaseLabels: Record<MarketRowData['phase'], string> = {
 
 export function MarketRow({ market }: { market: MarketRowData }) {
   const overlay = market.overlay ?? (market.stale ? 'stale' : 'none')
+  // A decision badge only ever comes from a real observation; without one
+  // the row states its quote state instead of inventing MARKET_ONLY.
+  const decision = market.decisionAction
+  const note = market.reason ?? market.modelAvailabilityLabel
   const card = (
     <Card size="sm" className="transition-[transform,box-shadow] group-hover:-translate-y-0.5 group-hover:ring-primary/35">
       <CardContent className="grid min-h-28 grid-cols-2 items-center gap-4 py-1 md:grid-cols-[minmax(15rem,1.5fr)_minmax(11rem,0.9fr)_minmax(8rem,0.65fr)_minmax(11rem,1fr)_auto]">
@@ -52,7 +64,7 @@ export function MarketRow({ market }: { market: MarketRowData }) {
             <Badge variant="secondary">{market.tierLabel}</Badge>
           </div>
           <p className="mt-1 truncate text-sm text-muted-foreground">{market.tournament}</p>
-          <p className="mt-2 text-xs text-muted-foreground">{market.reason}</p>
+          {note ? <p className="mt-2 text-xs text-muted-foreground">{note}</p> : null}
         </div>
 
         <dl className="grid grid-cols-2 gap-3 rounded-lg bg-muted/30 p-3">
@@ -69,7 +81,9 @@ export function MarketRow({ market }: { market: MarketRowData }) {
         <dl>
           <dt className="text-xs text-muted-foreground">模型概率</dt>
           <dd className="mt-1 font-mono text-lg font-semibold tabular-nums">{formatPercent(market.modelProbability)}</dd>
-          <dd className="mt-1 text-xs text-muted-foreground">{market.covered ? '主巡覆盖' : '不伪造模型值'}</dd>
+          {market.modelAvailabilityLabel ? (
+            <dd className="mt-1 text-xs text-muted-foreground">{market.modelAvailabilityLabel}</dd>
+          ) : null}
         </dl>
 
         <dl className="grid grid-cols-2 gap-3">
@@ -79,8 +93,16 @@ export function MarketRow({ market }: { market: MarketRowData }) {
         </dl>
 
         <div className="flex items-center justify-between gap-2 md:justify-end">
-          <DecisionStatusBadge state={market.state} overlay={overlay} />
-          <ArrowRight aria-hidden="true" className="size-4 shrink-0 text-foreground transition-transform group-hover:translate-x-0.5" />
+          {decision !== null ? (
+            <DecisionStatusBadge state={decision as DecisionState} overlay={overlay} />
+          ) : (
+            <Badge variant="outline" data-quote-state={market.quoteState}>
+              {market.quoteLabel}
+            </Badge>
+          )}
+          {market.href !== null ? (
+            <ArrowRight aria-hidden="true" className="size-4 shrink-0 text-foreground transition-transform group-hover:translate-x-0.5" />
+          ) : null}
         </div>
       </CardContent>
     </Card>

@@ -39,6 +39,45 @@ function opportunity(overrides: Record<string, unknown> = {}) {
   }
 }
 
+function quote(overrides: Record<string, unknown> = {}) {
+  return {
+    state: 'snapshot',
+    source: 'snapshot',
+    as_of: NOW,
+    outcome_bids: ['0.55', '0.43'],
+    outcome_asks: ['0.57', '0.45'],
+    best_bid: ['ply_a', '0.55'],
+    best_ask: ['ply_a', '0.57'],
+    spread: '0.0200',
+    depth_usd: '306.00',
+    ...overrides,
+  }
+}
+
+function marketSummary(overrides: Record<string, unknown> = {}) {
+  return {
+    market_id: 'mkt_live',
+    match_id: 'mat_live',
+    question: null,
+    status: 'open',
+    tournament_name: null,
+    tier: 'atp',
+    gender: 'men',
+    phase: 'live',
+    model_availability: 'available',
+    decision_action: 'buy',
+    reason_code: null,
+    player_ids: ['ply_a', 'ply_b'],
+    player_names: ['Alpha One', 'Beta Two'],
+    model_probability: null,
+    quote: quote(),
+    is_stale: false,
+    has_gap: false,
+    as_of: NOW,
+    ...overrides,
+  }
+}
+
 function decisionSnapshot(overrides: Record<string, unknown> = {}) {
   return {
     match_id: 'mat_9',
@@ -63,15 +102,16 @@ function decisionSnapshot(overrides: Record<string, unknown> = {}) {
 
 describe('P3 DTO decoding', () => {
   it('decodes a valid opportunity list and keeps decimals as strings', () => {
-    const rows = decodeOpportunityList({ data: [opportunity()] })
+    const { rows, availability } = decodeOpportunityList({ data: [opportunity()] })
     expect(rows).toHaveLength(1)
     expect(rows[0].conservative_net_edge).toBe('0.07')
     expect(rows[0].player_names).toEqual(['Alpha One', 'Beta Two'])
     expect(rows[0].max_acceptable_price).toBeNull()
+    expect(availability).toBeNull()  // older payloads stay decodable
   })
 
   it('accepts the wait action with a max acceptable price', () => {
-    const rows = decodeOpportunityList({
+    const { rows } = decodeOpportunityList({
       data: [opportunity({ action: 'wait', max_acceptable_price: '0.5500', conservative_net_edge: null })],
     })
     expect(rows[0].action).toBe('wait')
@@ -95,62 +135,36 @@ describe('P3 DTO decoding', () => {
   it('decodes the market page envelope with canonical filters', () => {
     const page = decodeMarketPage({
       data: [
-        {
-          market_id: 'mkt_live',
-          match_id: 'mat_live',
-          question: 'Alpha One vs. Beta Two: Match Winner',
-          status: 'open',
-          tier: 'atp',
-          gender: 'men',
-          phase: 'live',
-          model_covered: true,
-          action: 'buy',
-          reason_code: null,
-          best_bid: ['ply_a', '0.55'],
-          best_ask: ['ply_a', '0.57'],
-          as_of: NOW,
-        },
-        {
+        marketSummary({ question: 'Alpha One vs. Beta Two: Match Winner' }),
+        marketSummary({
           market_id: 'mkt_chall',
           match_id: null,
           question: 'Challenger Moneyline',
-          status: 'open',
           tier: 'challenger',
-          gender: 'men',
           phase: 'prematch',
-          model_covered: false,
-          action: 'market_only',
-          reason_code: null,
-          best_bid: null,
-          best_ask: null,
-          as_of: NOW,
-        },
+          model_availability: 'out_of_scope',
+          decision_action: null,
+          quote: quote({ state: 'unavailable', source: null, as_of: null }),
+        }),
       ],
       page: 1,
       page_size: 20,
       total: 2,
     })
     expect(page.total).toBe(2)
-    expect(page.markets[0].best_ask).toEqual(['ply_a', '0.57'])
+    expect(page.markets[0].quote.best_ask).toEqual(['ply_a', '0.57'])
+    expect(page.markets[0].decision_action).toBe('buy')
     expect(page.markets[1].match_id).toBeNull()
+    expect(page.markets[1].decision_action).toBeNull()
+    expect(page.markets[1].model_availability).toBe('out_of_scope')
   })
 
   it('fails visibly on an unknown market status or tier', () => {
-    const base = {
+    const base = marketSummary({
       market_id: 'm',
       match_id: null,
-      question: null,
-      status: 'open',
-      tier: 'atp',
-      gender: 'men',
-      phase: 'live',
-      model_covered: false,
-      action: null,
-      reason_code: null,
-      best_bid: null,
-      best_ask: null,
-      as_of: null,
-    }
+      quote: quote({ state: 'unavailable', source: null, as_of: null }),
+    })
     expect(() => decodeMarketPage({ data: [{ ...base, status: 'paused' }], page: 1, page_size: 20, total: 1 })).toThrow(
       P3DecodeError,
     )
@@ -163,21 +177,22 @@ describe('P3 DTO decoding', () => {
     expect(() =>
       decodeMarketPage({
         data: [
-          {
+          marketSummary({
             market_id: 'm',
             match_id: null,
-            question: null,
-            status: 'open',
             tier: null,
             gender: null,
             phase: null,
-            model_covered: false,
-            action: null,
-            reason_code: null,
-            best_bid: ['ply_a', '0.55', 'extra'],
-            best_ask: null,
-            as_of: null,
-          },
+            model_availability: 'not_evaluated',
+            decision_action: null,
+            quote: quote({
+              state: 'unavailable',
+              source: null,
+              as_of: null,
+              best_bid: ['ply_a', '0.55', 'extra'],
+              best_ask: null,
+            }),
+          }),
         ],
         page: 1,
         page_size: 20,
@@ -402,7 +417,12 @@ describe('P3 DTO decoding', () => {
 
   it('decodes the markets snapshot counters', () => {
     const snapshot = decodeMarketsSnapshot({ markets: 2, opportunities: 1, open_positions: 0 })
-    expect(snapshot).toEqual({ markets: 2, opportunities: 1, open_positions: 0 })
+    expect(snapshot).toEqual({
+      markets: 2,
+      opportunities: 1,
+      open_positions: 0,
+      availability: null,
+    })
     expect(() => decodeMarketsSnapshot({ markets: -1, opportunities: 0, open_positions: 0 })).toThrow(P3DecodeError)
   })
 })
@@ -525,9 +545,88 @@ describe('decision stream event discriminators', () => {
   })
 })
 
+describe('T87 explicit quote, model and decision semantics', () => {
+  it('decodes an explicit quote state, source and time', () => {
+    const page = decodeMarketPage({
+      data: [marketSummary({ model_availability: 'eligible_unpromoted', decision_action: null })],
+      page: 1,
+      page_size: 20,
+      total: 1,
+    })
+    const row = page.markets[0]
+    expect(row.model_availability).toBe('eligible_unpromoted')
+    expect(row.decision_action).toBeNull()
+    expect(row.quote.state).toBe('snapshot')
+    expect(row.quote.source).toBe('snapshot')
+    expect(row.quote.as_of).toBe(NOW)
+  })
+
+  it('fails visibly on an unknown quote state or source', () => {
+    expect(() =>
+      decodeMarketPage({
+        data: [marketSummary({ quote: quote({ state: 'maybe' }) })],
+        page: 1,
+        page_size: 20,
+        total: 1,
+      }),
+    ).toThrow(P3DecodeError)
+    expect(() =>
+      decodeMarketPage({
+        data: [marketSummary({ quote: quote({ source: 'websocket' }) })],
+        page: 1,
+        page_size: 20,
+        total: 1,
+      }),
+    ).toThrow(P3DecodeError)
+  })
+
+  it('fails visibly on an unknown model availability', () => {
+    expect(() =>
+      decodeMarketPage({
+        data: [marketSummary({ model_availability: 'promoted' })],
+        page: 1,
+        page_size: 20,
+        total: 1,
+      }),
+    ).toThrow(P3DecodeError)
+  })
+
+  it('decodes the opportunity availability envelope', () => {
+    const { rows, availability } = decodeOpportunityList({
+      data: [],
+      availability: { reason: 'ELIGIBLE_UNPROMOTED', model_status: 'not_promoted' },
+    })
+    expect(rows).toEqual([])
+    expect(availability).toEqual({
+      reason: 'ELIGIBLE_UNPROMOTED',
+      model_status: 'not_promoted',
+    })
+  })
+
+  it('fails visibly on an unknown availability reason', () => {
+    expect(() =>
+      decodeOpportunityList({
+        data: [],
+        availability: { reason: 'MAYBE', model_status: 'unknown' },
+      }),
+    ).toThrow(P3DecodeError)
+  })
+
+  it('decodes the stream ready snapshot availability', () => {
+    const snapshot = decodeMarketsSnapshot({
+      markets: 2,
+      opportunities: 0,
+      open_positions: 0,
+      availability: 'ELIGIBLE_UNPROMOTED',
+    })
+    expect(snapshot.availability).toBe('ELIGIBLE_UNPROMOTED')
+    expect(decodeMarketsSnapshot({ markets: 2, opportunities: 0, open_positions: 0 }).availability).toBeNull()
+  })
+})
+
 describe('T68 enriched fields', () => {
   it('decodes enriched opportunity fields', () => {
-    const rows = decodeOpportunityList({
+    const { rows } = decodeOpportunityList({
       data: [
         opportunity({
           player_ids: ['ply_a', 'ply_b'],
@@ -550,31 +649,23 @@ describe('T68 enriched fields', () => {
   it('decodes enriched market summary fields with per-outcome levels', () => {
     const page = decodeMarketPage({
       data: [
-        {
+        marketSummary({
           market_id: 'mkt_2',
           match_id: 'mat_2',
-          question: null,
-          status: 'open',
           tournament_name: 'Test Trophy',
           tier: 'wta',
           gender: 'women',
           phase: 'prematch',
-          model_covered: true,
-          action: 'wait',
-          reason_code: null,
-          player_ids: ['ply_a', 'ply_b'],
-          player_names: ['Alpha One', 'Beta Two'],
+          decision_action: 'wait',
           model_probability: 0.7,
-          best_bid: ['ply_a', '0.68'],
-          best_ask: ['ply_a', '0.70'],
-          outcome_bids: ['0.68', '0.28'],
-          outcome_asks: ['0.70', null],
-          spread: '0.0200',
-          depth_usd: '306.00',
+          quote: quote({
+            state: 'partial',
+            source: 'snapshot',
+            outcome_bids: ['0.68', '0.28'],
+            outcome_asks: ['0.70', null],
+          }),
           is_stale: true,
-          has_gap: false,
-          as_of: NOW,
-        },
+        }),
       ],
       page: 1,
       page_size: 20,
@@ -582,45 +673,33 @@ describe('T68 enriched fields', () => {
     })
     const row = page.markets[0]
     expect(row.tournament_name).toBe('Test Trophy')
-    expect(row.outcome_asks).toEqual(['0.70', null])
-    expect(row.spread).toBe('0.0200')
-    expect(row.depth_usd).toBe('306.00')
+    expect(row.quote.state).toBe('partial')
+    expect(row.quote.outcome_asks).toEqual(['0.70', null])
+    expect(row.quote.spread).toBe('0.0200')
+    expect(row.quote.depth_usd).toBe('306.00')
     expect(row.model_probability).toBe(0.7)
     expect(row.is_stale).toBe(true)
   })
 
   it('fails visibly on a malformed outcome level pair or spread', () => {
-    const base = {
+    const base = marketSummary({
       market_id: 'm',
       match_id: null,
-      question: null,
-      status: 'open',
-      tournament_name: null,
       tier: null,
       gender: null,
       phase: null,
-      model_covered: false,
-      action: null,
-      reason_code: null,
+      model_availability: 'not_evaluated',
+      decision_action: null,
       player_ids: null,
       player_names: null,
-      model_probability: null,
-      best_bid: null,
-      best_ask: null,
-      outcome_bids: null,
-      outcome_asks: ['0.7'],
-      spread: null,
-      depth_usd: null,
-      is_stale: false,
-      has_gap: false,
-      as_of: null,
-    }
+      quote: quote({ outcome_asks: ['0.7'] }),
+    })
     expect(() => decodeMarketPage({ data: [base], page: 1, page_size: 20, total: 1 })).toThrow(
       P3DecodeError,
     )
     expect(() =>
       decodeMarketPage({
-        data: [{ ...base, outcome_asks: ['0.7', '0.3'], spread: 'wide' }],
+        data: [marketSummary({ ...base, quote: quote({ spread: 'wide' }) })],
         page: 1,
         page_size: 20,
         total: 1,

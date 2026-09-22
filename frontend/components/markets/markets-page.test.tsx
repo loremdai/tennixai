@@ -123,6 +123,23 @@ function opportunityDto(overrides: Partial<OpportunityDto> = {}): OpportunityDto
   }
 }
 
+function quoteDto(
+  overrides: Partial<MarketSummaryDto['quote']> = {},
+): MarketSummaryDto['quote'] {
+  return {
+    state: 'snapshot',
+    source: 'snapshot',
+    as_of: AS_OF,
+    outcome_bids: ['0.55', '0.43'],
+    outcome_asks: ['0.57', '0.45'],
+    best_bid: ['ply_a', '0.55'],
+    best_ask: ['ply_a', '0.57'],
+    spread: '0.0200',
+    depth_usd: '306.00',
+    ...overrides,
+  }
+}
+
 function summaryDto(overrides: Partial<MarketSummaryDto> = {}): MarketSummaryDto {
   return {
     market_id: 'mkt_1',
@@ -133,18 +150,13 @@ function summaryDto(overrides: Partial<MarketSummaryDto> = {}): MarketSummaryDto
     tier: 'atp',
     gender: 'men',
     phase: 'live',
-    model_covered: true,
-    action: 'buy',
+    model_availability: 'available',
+    decision_action: 'buy',
     reason_code: null,
     player_ids: ['ply_a', 'ply_b'],
     player_names: ['Alpha One', 'Beta Two'],
     model_probability: 0.62,
-    best_bid: ['ply_a', '0.55'],
-    best_ask: ['ply_a', '0.57'],
-    outcome_bids: ['0.55', '0.43'],
-    outcome_asks: ['0.57', '0.45'],
-    spread: '0.0200',
-    depth_usd: '306.00',
+    quote: quoteDto(),
     is_stale: false,
     has_gap: false,
     as_of: AS_OF,
@@ -173,7 +185,10 @@ function positionDto(overrides: Partial<PaperPositionDto> = {}): PaperPositionDt
 }
 
 function mockWorkspaceData() {
-  listMarketOpportunitiesMock.mockResolvedValue([opportunityDto()])
+  listMarketOpportunitiesMock.mockResolvedValue({
+    rows: [opportunityDto()],
+    availability: { reason: 'HAS_OPPORTUNITIES', model_status: 'unknown' },
+  })
   listMarketsMock.mockResolvedValue({
     markets: [summaryDto()],
     page: 1,
@@ -194,7 +209,8 @@ describe('MarketsWorkspace (production)', () => {
   })
 
   it('renders opportunities from the canonical API in server order', async () => {
-    listMarketOpportunitiesMock.mockResolvedValue([
+    listMarketOpportunitiesMock.mockResolvedValue({
+      rows: [
       opportunityDto(),
       opportunityDto({
         match_id: 'mat_2',
@@ -206,7 +222,9 @@ describe('MarketsWorkspace (production)', () => {
         target_player_id: 'ply_a',
         player_ids: ['ply_a', 'ply_c'],
       }),
-    ])
+      ],
+      availability: { reason: 'HAS_OPPORTUNITIES', model_status: 'unknown' },
+    })
     const user = userEvent.setup()
     render(<MarketsWorkspace />)
 
@@ -249,15 +267,18 @@ describe('MarketsWorkspace (production)', () => {
           match_id: null,
           question: 'Challenger Moneyline',
           tier: 'challenger',
-          model_covered: false,
-          action: 'market_only',
+          model_availability: 'out_of_scope',
+          decision_action: null,
           player_ids: null,
           player_names: null,
           model_probability: null,
-          outcome_bids: null,
-          outcome_asks: null,
-          spread: null,
-          depth_usd: null,
+          quote: quoteDto({
+            state: 'partial',
+            outcome_bids: null,
+            outcome_asks: ['0.57', null],
+            spread: null,
+            depth_usd: null,
+          }),
         }),
       ],
       page: 1,
@@ -269,11 +290,12 @@ describe('MarketsWorkspace (production)', () => {
     await user.click(screen.getByRole('tab', { name: /全部市场/ }))
 
     await waitFor(() => expect(screen.getByText('Challenger Moneyline')).toBeTruthy())
-    expect(screen.getByText('仅市场数据')).toBeTruthy()
-    expect(screen.getByText('不伪造模型值')).toBeTruthy()
-    expect(screen.queryByText(/不支持|unsupported|uncovered/i)).toBeNull()
+    // The row states its real quote state, not an invented MARKET_ONLY.
+    expect(screen.getByText(/部分报价 ·/)).toBeTruthy()
+    expect(screen.queryByText('不伪造模型值')).toBeNull()
+    expect(screen.queryByText(/不支持|unsupported|uncovered|未覆盖/)).toBeNull()
     // Incomplete book → honest em dash, never a fabricated zero.
-    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(3)
+    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(2)
     // Unmapped rows are not navigable.
     expect(
       screen.queryByRole('link', { name: '查看 Challenger Moneyline 市场' }),
@@ -290,7 +312,7 @@ describe('MarketsWorkspace (production)', () => {
           tier: 'wta',
           gender: 'women',
           phase: 'prematch',
-          action: null,
+          decision_action: null,
         }),
       ],
       page: 1,
@@ -364,7 +386,10 @@ describe('MarketsWorkspace (production)', () => {
     await waitFor(() => expect(screen.getByText(/rate_limited/)).toBeTruthy())
     expect(screen.getByRole('alert')).toBeTruthy()
 
-    listMarketOpportunitiesMock.mockResolvedValue([opportunityDto()])
+    listMarketOpportunitiesMock.mockResolvedValue({
+      rows: [opportunityDto()],
+      availability: { reason: 'HAS_OPPORTUNITIES', model_status: 'unknown' },
+    })
     await user.click(screen.getByRole('button', { name: /重试加载/ }))
     await waitFor(() => expect(screen.getByText('Alpha One vs. Beta Two')).toBeTruthy())
   })
@@ -372,7 +397,7 @@ describe('MarketsWorkspace (production)', () => {
   it('keeps last trusted rows visible when a refresh fails', async () => {
     const user = userEvent.setup()
     listMarketsMock.mockResolvedValue({
-      markets: [summaryDto({ is_stale: true, action: 'wait' })],
+      markets: [summaryDto({ is_stale: true, decision_action: 'wait' })],
       page: 1,
       page_size: 50,
       total: 1,
@@ -388,7 +413,7 @@ describe('MarketsWorkspace (production)', () => {
 
   it('renders closed markets with the closed phase badge', async () => {
     listMarketsMock.mockResolvedValue({
-      markets: [summaryDto({ phase: 'closed', status: 'closed', action: 'no_bet' })],
+      markets: [summaryDto({ phase: 'closed', status: 'closed', decision_action: 'no_bet' })],
       page: 1,
       page_size: 50,
       total: 1,
@@ -402,7 +427,10 @@ describe('MarketsWorkspace (production)', () => {
   })
 
   it('renders honest empty states per view', async () => {
-    listMarketOpportunitiesMock.mockResolvedValue([])
+    listMarketOpportunitiesMock.mockResolvedValue({
+      rows: [],
+      availability: { reason: 'NO_ELIGIBLE_ACTION', model_status: 'unknown' },
+    })
     listMarketsMock.mockResolvedValue({ markets: [], page: 1, page_size: 50, total: 0 })
     getPaperPositionsMock.mockResolvedValue({ open: [], recent: [] })
     const user = userEvent.setup()

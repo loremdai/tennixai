@@ -9,6 +9,7 @@ import { expect, test, type Page } from '@playwright/test'
 const AS_OF = new Date().toISOString()
 
 const OPPORTUNITIES = {
+  availability: { reason: 'HAS_OPPORTUNITIES', model_status: 'unknown' },
   data: [
     {
       match_id: 'mat_e2e_1',
@@ -60,18 +61,23 @@ const MARKETS = {
       tier: 'atp',
       gender: 'men',
       phase: 'live',
-      model_covered: true,
-      action: 'buy',
+      model_availability: 'available',
+      decision_action: 'buy',
       reason_code: null,
       player_ids: ['ply_a', 'ply_b'],
       player_names: ['E2E Alpha', 'E2E Beta'],
       model_probability: 0.62,
-      best_bid: ['ply_a', '0.55'],
-      best_ask: ['ply_a', '0.57'],
-      outcome_bids: ['0.55', '0.43'],
-      outcome_asks: ['0.57', '0.45'],
-      spread: '0.0200',
-      depth_usd: '306.00',
+      quote: {
+        state: 'snapshot',
+        source: 'snapshot',
+        as_of: AS_OF,
+        outcome_bids: ['0.55', '0.43'],
+        outcome_asks: ['0.57', '0.45'],
+        best_bid: ['ply_a', '0.55'],
+        best_ask: ['ply_a', '0.57'],
+        spread: '0.0200',
+        depth_usd: '306.00',
+      },
       is_stale: false,
       has_gap: false,
       as_of: AS_OF,
@@ -85,18 +91,23 @@ const MARKETS = {
       tier: 'challenger',
       gender: 'men',
       phase: 'prematch',
-      model_covered: false,
-      action: 'market_only',
+      model_availability: 'out_of_scope',
+      decision_action: null,
       reason_code: null,
       player_ids: null,
       player_names: null,
       model_probability: null,
-      best_bid: null,
-      best_ask: null,
-      outcome_bids: null,
-      outcome_asks: null,
-      spread: null,
-      depth_usd: null,
+      quote: {
+        state: 'no_liquidity',
+        source: 'snapshot',
+        as_of: AS_OF,
+        outcome_bids: null,
+        outcome_asks: null,
+        best_bid: null,
+        best_ask: null,
+        spread: null,
+        depth_usd: null,
+      },
       is_stale: false,
       has_gap: false,
       as_of: AS_OF,
@@ -183,7 +194,7 @@ const PULSE = {
 }
 
 const SSE_READY =
-  'event: ready\ndata: {"markets":2,"opportunities":2,"open_positions":1}\n\n'
+  'event: ready\ndata: {"markets":2,"opportunities":2,"open_positions":1,"availability":"HAS_OPPORTUNITIES"}\n\n'
 
 async function interceptP3(page: Page) {
   await page.route((url) => {
@@ -239,7 +250,8 @@ test.describe('P3 production markets flows', () => {
     await page.getByRole('tab', { name: /全部市场/ }).click()
     await expect(page.getByText('市场筛选')).toBeVisible()
     await expect(page.getByText('E2E Challenger Moneyline')).toBeVisible()
-    await expect(page.getByText('仅市场数据')).toBeVisible()
+    // The low-tier row states its real quote state instead of a model label.
+    await expect(page.getByText('暂无挂单')).toBeVisible()
 
     await page.getByRole('tab', { name: /^Paper/ }).click()
     await expect(page.getByText('Paper 生命周期账本')).toBeVisible()

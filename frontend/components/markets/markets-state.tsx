@@ -21,7 +21,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { ApiError, getPaperPositions, listMarketOpportunities, listMarkets } from '@/lib/api/client'
-import type { CircuitTier } from '@/lib/api/types'
+import type { CircuitTier, OpportunityAvailabilityDto } from '@/lib/api/types'
 import { useMarketStream } from '@/hooks/use-market-stream'
 import {
   toMarketRow,
@@ -41,6 +41,8 @@ export type OpportunitiesState = {
   status: ListStatus
   errorCode: string | null
   rows: OpportunityRowModel[]
+  /** Server-provided explanation for an empty tab; null on older payloads. */
+  availability: OpportunityAvailabilityDto | null
 }
 
 export type ListingsState = {
@@ -85,6 +87,7 @@ export function useMarketsWorkspace(): MarketsWorkspaceData {
     status: 'loading',
     errorCode: null,
     rows: [],
+    availability: null,
   })
   const [listings, setListings] = useState<ListingsState>({
     status: 'loading',
@@ -105,13 +108,14 @@ export function useMarketsWorkspace(): MarketsWorkspaceData {
 
   const loadOpportunities = useCallback(async () => {
     try {
-      const rows = await listMarketOpportunities()
+      const view = await listMarketOpportunities()
       if (!mountedRef.current) return
       const now = new Date()
       setOpportunities({
         status: 'ready',
         errorCode: null,
-        rows: rows.map((row) => toOpportunityRow(row, now)),
+        rows: view.rows.map((row) => toOpportunityRow(row, now)),
+        availability: view.availability,
       })
     } catch (error) {
       if (!mountedRef.current) return
@@ -124,6 +128,7 @@ export function useMarketsWorkspace(): MarketsWorkspaceData {
         status: 'error',
         errorCode: errorCodeOf(error),
         rows: current.rows,
+        availability: current.availability,
       }))
     }
   }, [])

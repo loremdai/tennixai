@@ -11,10 +11,14 @@ import type {
   OutcomeLevelDto,
   PaperEventDto,
   MarketPageDto,
+  MarketQuoteDto,
   MarketStreamEvent,
   MarketsSnapshotDto,
   MarketSummaryDto,
+  ModelAvailabilitySummaryValue,
   ModelAvailabilityValue,
+  OpportunityAvailabilityDto,
+  OpportunityModelStatus,
   OpportunityDto,
   PaperPositionDto,
   PaperPositionsViewDto,
@@ -23,6 +27,8 @@ import type {
   PulseRowDto,
   PulseViewDto,
   QuoteSideValue,
+  QuoteSourceValue,
+  QuoteStateValue,
 } from './types'
 import type { CircuitTier, Gender } from './types'
 
@@ -42,6 +48,30 @@ const MARKET_STATUSES = ['scheduled', 'open', 'closed', 'resolved', 'unknown'] a
 const DECISION_ACTIONS = ['market_only', 'no_bet', 'wait', 'buy', 'hold', 'sell'] as const
 const OPPORTUNITY_ACTIONS = ['buy', 'wait'] as const
 const OPPORTUNITY_PHASES = ['live', 'upcoming'] as const
+const QUOTE_STATES = [
+  'realtime',
+  'snapshot',
+  'partial',
+  'no_liquidity',
+  'unavailable',
+  'stale',
+  'limited',
+] as const
+const QUOTE_SOURCES = ['realtime', 'snapshot'] as const
+const MODEL_AVAILABILITY_SUMMARY = [
+  'available',
+  'eligible_unpromoted',
+  'out_of_scope',
+  'not_evaluated',
+] as const
+const OPPORTUNITY_AVAILABILITY_REASONS = [
+  'HAS_OPPORTUNITIES',
+  'ELIGIBLE_UNPROMOTED',
+  'NO_ELIGIBLE_ACTION',
+  'NO_COVERED_MARKET',
+  'DECISION_GAP',
+] as const
+const OPPORTUNITY_MODEL_STATUSES = ['not_promoted', 'promoted', 'unknown'] as const
 const MARKET_PHASES = ['prematch', 'live', 'closed'] as const
 const MODEL_AVAILABILITY = ['available', 'degraded', 'unpromoted', 'unavailable'] as const
 const QUOTE_SIDES = ['entry', 'exit'] as const
@@ -243,11 +273,53 @@ function decodeOpportunity(value: unknown, path: string): OpportunityDto {
   }
 }
 
-export function decodeOpportunityList(body: unknown): OpportunityDto[] {
+export function decodeOpportunityAvailability(
+  value: unknown,
+  path: string,
+): OpportunityAvailabilityDto {
+  const item = raw(value, path)
+  return {
+    reason: oneOf(item.reason, OPPORTUNITY_AVAILABILITY_REASONS, `${path}.reason`),
+    model_status: oneOf(
+      item.model_status,
+      OPPORTUNITY_MODEL_STATUSES,
+      `${path}.model_status`,
+    ) as OpportunityModelStatus,
+  }
+}
+
+export function decodeOpportunityList(body: unknown): {
+  rows: OpportunityDto[]
+  availability: OpportunityAvailabilityDto | null
+} {
   const envelope = raw(body, 'opportunities')
-  return rawList(envelope.data, 'opportunities.data').map((item, index) =>
-    decodeOpportunity(item, `opportunities.data[${index}]`),
-  )
+  const availability = envelope.availability
+  return {
+    rows: rawList(envelope.data, 'opportunities.data').map((item, index) =>
+      decodeOpportunity(item, `opportunities.data[${index}]`),
+    ),
+    availability:
+      availability === undefined || availability === null
+        ? null
+        : decodeOpportunityAvailability(availability, 'opportunities.availability'),
+  }
+}
+
+export function decodeMarketQuote(value: unknown, path: string): MarketQuoteDto {
+  const item = raw(value, path)
+  return {
+    state: oneOf(item.state, QUOTE_STATES, `${path}.state`) as QuoteStateValue,
+    source: oneOfOrNull(item.source, QUOTE_SOURCES, `${path}.source`) as
+      | QuoteSourceValue
+      | null,
+    as_of: strOrNull(item.as_of, `${path}.as_of`),
+    outcome_bids: nullableLevelPair(item.outcome_bids, `${path}.outcome_bids`),
+    outcome_asks: nullableLevelPair(item.outcome_asks, `${path}.outcome_asks`),
+    best_bid: levelTuple(item.best_bid, `${path}.best_bid`),
+    best_ask: levelTuple(item.best_ask, `${path}.best_ask`),
+    spread: decimalOrNull(item.spread, `${path}.spread`),
+    depth_usd: decimalOrNull(item.depth_usd, `${path}.depth_usd`),
+  }
 }
 
 function decodeMarketSummary(value: unknown, path: string): MarketSummaryDto {
@@ -261,20 +333,21 @@ function decodeMarketSummary(value: unknown, path: string): MarketSummaryDto {
     tier: oneOfOrNull(item.tier, TIERS, `${path}.tier`) as CircuitTier | null,
     gender: oneOfOrNull(item.gender, GENDERS, `${path}.gender`) as Gender | null,
     phase: oneOfOrNull(item.phase, MARKET_PHASES, `${path}.phase`),
-    model_covered: bool(item.model_covered, `${path}.model_covered`),
-    action: oneOfOrNull(item.action, DECISION_ACTIONS, `${path}.action`) as
-      | DecisionActionValue
-      | null,
+    model_availability: oneOf(
+      item.model_availability ?? 'not_evaluated',
+      MODEL_AVAILABILITY_SUMMARY,
+      `${path}.model_availability`,
+    ) as ModelAvailabilitySummaryValue,
+    decision_action: oneOfOrNull(
+      item.decision_action,
+      DECISION_ACTIONS,
+      `${path}.decision_action`,
+    ) as DecisionActionValue | null,
     reason_code: strOrNull(item.reason_code, `${path}.reason_code`),
     player_ids: idsTuple(item.player_ids, `${path}.player_ids`),
     player_names: namesTuple(item.player_names, `${path}.player_names`),
     model_probability: probability(item.model_probability, `${path}.model_probability`),
-    best_bid: levelTuple(item.best_bid, `${path}.best_bid`),
-    best_ask: levelTuple(item.best_ask, `${path}.best_ask`),
-    outcome_bids: nullableLevelPair(item.outcome_bids, `${path}.outcome_bids`),
-    outcome_asks: nullableLevelPair(item.outcome_asks, `${path}.outcome_asks`),
-    spread: decimalOrNull(item.spread, `${path}.spread`),
-    depth_usd: decimalOrNull(item.depth_usd, `${path}.depth_usd`),
+    quote: decodeMarketQuote(item.quote, `${path}.quote`),
     is_stale: boolOrFalse(item.is_stale, `${path}.is_stale`),
     has_gap: boolOrFalse(item.has_gap, `${path}.has_gap`),
     as_of: strOrNull(item.as_of, `${path}.as_of`),
@@ -490,6 +563,14 @@ export function decodeMarketsSnapshot(payload: unknown): MarketsSnapshotDto {
     markets: int(item.markets, 'markets_snapshot.markets', { min: 0 }),
     opportunities: int(item.opportunities, 'markets_snapshot.opportunities', { min: 0 }),
     open_positions: int(item.open_positions, 'markets_snapshot.open_positions', { min: 0 }),
+    availability:
+      item.availability === undefined || item.availability === null
+        ? null
+        : (oneOf(
+            item.availability,
+            OPPORTUNITY_AVAILABILITY_REASONS,
+            'markets_snapshot.availability',
+          ) as MarketsSnapshotDto['availability']),
   }
 }
 

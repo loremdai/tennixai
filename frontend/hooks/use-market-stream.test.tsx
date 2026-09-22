@@ -107,7 +107,12 @@ describe('useMarketStream', () => {
     const { result } = renderHook(() => useMarketStream({ onGap: (gap) => gaps.push(gap) }))
 
     await waitFor(() => expect(result.current.phase).toBe('live'))
-    expect(result.current.snapshot).toEqual({ markets: 3, opportunities: 2, open_positions: 1 })
+    expect(result.current.snapshot).toEqual({
+      markets: 3,
+      opportunities: 2,
+      open_positions: 1,
+      availability: null,
+    })
     expect(streamCalls[0].url).toBe('/api/markets/stream')
   })
 

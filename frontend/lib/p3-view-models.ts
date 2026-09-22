@@ -5,10 +5,14 @@
 // absent values stay null so rows render an honest '—'.
 import type {
   DecisionSnapshotDto,
+  DecisionActionValue,
   MarketSummaryDto,
+  ModelAvailabilitySummaryValue,
   OpportunityDto,
   PaperPositionDto,
   PulseRowDto,
+  QuoteSourceValue,
+  QuoteStateValue,
 } from '@/lib/api/types'
 import type { DecisionOverlay, DecisionState } from '@/components/p3/p3-preview-data'
 
@@ -39,8 +43,14 @@ export type MarketRowModel = {
   tierLabel: string
   gender: string
   phase: RowPhase
-  covered: boolean
-  state: DecisionState
+  /** Explicit model availability; never inferred from a decision action. */
+  modelAvailability: ModelAvailabilitySummaryValue
+  modelAvailabilityLabel: string | null
+  /** Only a real decision observation sets this; null is not MARKET_ONLY. */
+  decisionAction: DecisionActionValue | null
+  quoteState: QuoteStateValue
+  quoteSource: QuoteSourceValue | null
+  quoteLabel: string
   playerOne: string
   playerTwo: string
   playerOneAsk: number | null
@@ -48,7 +58,7 @@ export type MarketRowModel = {
   spread: number | null
   depth: number | null
   modelProbability: number | null
-  reason: string
+  reason: string | null
   freshness: string
   stale: boolean
   overlay: DecisionOverlay
@@ -110,6 +120,44 @@ const REASON_LABELS: Record<string, string> = {
   GAP: '数据缺口 · 动作撤销',
   INSUFFICIENT_LIQUIDITY: '深度不足以执行 $10',
   NO_NET_EDGE: '保守净 edge 未达门槛',
+}
+
+/** Visible quote states (spec §5.3). A bare '—' is never a state. */
+const QUOTE_STATE_LABELS: Record<QuoteStateValue, string> = {
+  realtime: '实时盘口',
+  snapshot: '快照报价',
+  partial: '部分报价',
+  no_liquidity: '暂无挂单',
+  unavailable: '报价暂不可用',
+  stale: '最后可信报价已过期',
+  limited: '覆盖受限 · 等待下一轮',
+}
+
+/** Only these two carry a meaningful "· N 分钟前" suffix. */
+const TIME_AWARE_QUOTE_STATES: QuoteStateValue[] = ['snapshot', 'partial']
+
+/**
+ * Model availability copy. `out_of_scope` deliberately returns null: low-tier
+ * markets show their real quotes without any "model not covered" label.
+ */
+const MODEL_AVAILABILITY_LABELS: Record<
+  ModelAvailabilitySummaryValue,
+  string | null
+> = {
+  available: '主巡覆盖',
+  eligible_unpromoted: '模型未晋升 · 不产生 BUY/WAIT',
+  out_of_scope: null,
+  not_evaluated: '待下一决策周期',
+}
+
+export function quoteStateLabel(
+  state: QuoteStateValue,
+  asOf: string | null,
+  now: Date,
+): string {
+  const base = QUOTE_STATE_LABELS[state]
+  if (!TIME_AWARE_QUOTE_STATES.includes(state) || !asOf) return base
+  return `${base} · ${formatFreshness(asOf, now)}`
 }
 
 const PAPER_DETAIL_LABELS: Record<PaperRowModel['state'], string> = {
@@ -190,12 +238,6 @@ export function toMarketRow(dto: MarketSummaryDto, now: Date): MarketRowModel {
   const tier = dto.tier ?? 'other'
   const phase: RowPhase =
     dto.phase === 'live' ? 'live' : dto.phase === 'prematch' ? 'upcoming' : 'closed'
-  const reason =
-    dto.reason_code !== null
-      ? (REASON_LABELS[dto.reason_code] ?? dto.reason_code)
-      : dto.model_covered
-        ? '模型覆盖 · 等待下一决策周期'
-        : '仅市场数据'
   return {
     id: dto.market_id,
     match: dto.match_id ? `${one} vs. ${two}` : (dto.question ?? '—'),
@@ -204,16 +246,27 @@ export function toMarketRow(dto: MarketSummaryDto, now: Date): MarketRowModel {
     tierLabel: TIER_LABELS[tier] ?? tier,
     gender: dto.gender ?? 'unknown',
     phase,
-    covered: dto.model_covered,
-    state: (dto.action ?? 'market_only') as DecisionState,
+    modelAvailability: dto.model_availability,
+    modelAvailabilityLabel: MODEL_AVAILABILITY_LABELS[dto.model_availability],
+    decisionAction: dto.decision_action,
+    quoteState: dto.quote.state,
+    quoteSource: dto.quote.source,
+    quoteLabel: quoteStateLabel(dto.quote.state, dto.quote.as_of, now),
     playerOne: one,
     playerTwo: two,
-    playerOneAsk: dto.outcome_asks ? parseDecimalOrNull(dto.outcome_asks[0]) : null,
-    playerTwoAsk: dto.outcome_asks ? parseDecimalOrNull(dto.outcome_asks[1]) : null,
-    spread: parseDecimalOrNull(dto.spread),
-    depth: parseDecimalOrNull(dto.depth_usd),
+    playerOneAsk: dto.quote.outcome_asks
+      ? parseDecimalOrNull(dto.quote.outcome_asks[0])
+      : null,
+    playerTwoAsk: dto.quote.outcome_asks
+      ? parseDecimalOrNull(dto.quote.outcome_asks[1])
+      : null,
+    spread: parseDecimalOrNull(dto.quote.spread),
+    depth: parseDecimalOrNull(dto.quote.depth_usd),
     modelProbability: dto.model_probability,
-    reason,
+    reason:
+      dto.reason_code !== null
+        ? (REASON_LABELS[dto.reason_code] ?? dto.reason_code)
+        : null,
     freshness: formatFreshness(dto.as_of, now, dto.is_stale || dto.has_gap),
     stale: dto.is_stale,
     overlay: overlayOf(dto.is_stale, dto.has_gap),

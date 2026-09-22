@@ -321,6 +321,7 @@ import type {
   MarketPageDto,
   MarketPhase,
   MarketStreamEvent,
+  OpportunityAvailabilityDto,
   OpportunityDto,
   PaperPositionsViewDto,
   PulseViewDto,
@@ -338,7 +339,15 @@ async function requestP3<T>(
   return decode(await response.json())
 }
 
-export function listMarketOpportunities(signal?: AbortSignal): Promise<OpportunityDto[]> {
+export type OpportunityView = {
+  rows: OpportunityDto[]
+  /** Why the view looks the way it does; null only on older payloads. */
+  availability: OpportunityAvailabilityDto | null
+}
+
+export function listMarketOpportunities(
+  signal?: AbortSignal,
+): Promise<OpportunityView> {
   return requestP3('/api/markets/opportunities', decodeOpportunityList, signal)
 }
 

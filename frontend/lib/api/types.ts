@@ -437,6 +437,46 @@ export type OpportunityDto = {
   as_of: string | null
 }
 
+export type QuoteStateValue =
+  | 'realtime'
+  | 'snapshot'
+  | 'partial'
+  | 'no_liquidity'
+  | 'unavailable'
+  | 'stale'
+  | 'limited'
+export type QuoteSourceValue = 'realtime' | 'snapshot'
+/** Explicit per-market model availability. Never inferred from a null action. */
+export type ModelAvailabilitySummaryValue =
+  | 'available'
+  | 'eligible_unpromoted'
+  | 'out_of_scope'
+  | 'not_evaluated'
+export type OpportunityAvailabilityReason =
+  | 'HAS_OPPORTUNITIES'
+  | 'ELIGIBLE_UNPROMOTED'
+  | 'NO_ELIGIBLE_ACTION'
+  | 'NO_COVERED_MARKET'
+  | 'DECISION_GAP'
+export type OpportunityModelStatus = 'not_promoted' | 'promoted' | 'unknown'
+
+export type MarketQuoteDto = {
+  state: QuoteStateValue
+  source: QuoteSourceValue | null
+  as_of: string | null
+  outcome_bids: [string | null, string | null] | null
+  outcome_asks: [string | null, string | null] | null
+  best_bid: [string, string] | null
+  best_ask: [string, string] | null
+  spread: string | null
+  depth_usd: string | null
+}
+
+export type OpportunityAvailabilityDto = {
+  reason: OpportunityAvailabilityReason
+  model_status: OpportunityModelStatus
+}
+
 export type MarketSummaryDto = {
   market_id: string
   match_id: string | null
@@ -446,18 +486,13 @@ export type MarketSummaryDto = {
   tier: CircuitTier | null
   gender: Gender | null
   phase: MarketPhase | null
-  model_covered: boolean
-  action: DecisionActionValue | null
+  model_availability: ModelAvailabilitySummaryValue
+  decision_action: DecisionActionValue | null
   reason_code: string | null
   player_ids: [string, string] | null
   player_names: [string, string] | null
   model_probability: number | null
-  best_bid: [string, string] | null
-  best_ask: [string, string] | null
-  outcome_bids: [string | null, string | null] | null
-  outcome_asks: [string | null, string | null] | null
-  spread: string | null
-  depth_usd: string | null
+  quote: MarketQuoteDto
   is_stale: boolean
   has_gap: boolean
   as_of: string | null
@@ -585,6 +620,7 @@ export type MarketsSnapshotDto = {
   markets: number
   opportunities: number
   open_positions: number
+  availability: OpportunityAvailabilityReason | null
 }
 
 // --- P3 SSE events ---------------------------------------------------------
