@@ -84,6 +84,35 @@ class RuntimeSourceHealth(FrozenModel):
         return _require_timezone(value)
 
 
+class MarketQuoteCoverage(FrozenModel):
+    """Aggregate coverage facts for the batch quote lane (T86).
+
+    Counts and timestamps only: candidate/attempted markets, the display
+    state buckets the pages would show, batch failures and the 429 backoff
+    window. Provider identity, tokens, URLs and payloads never appear here.
+    """
+
+    generated_at: datetime
+    candidate: int = Field(default=0, ge=0)
+    attempted: int = Field(default=0, ge=0)
+    fresh_realtime: int = Field(default=0, ge=0)
+    fresh_snapshot: int = Field(default=0, ge=0)
+    partial: int = Field(default=0, ge=0)
+    no_liquidity: int = Field(default=0, ge=0)
+    unavailable: int = Field(default=0, ge=0)
+    stale: int = Field(default=0, ge=0)
+    limited: int = Field(default=0, ge=0)
+    batch_failures: int = Field(default=0, ge=0)
+    rate_limited: bool = False
+    retry_after_until: datetime | None = None
+    last_successful_batch_at: datetime | None = None
+
+    @field_validator("generated_at", "retry_after_until", "last_successful_batch_at")
+    @classmethod
+    def require_coverage_timezone(cls, value: datetime | None) -> datetime | None:
+        return _require_timezone(value)
+
+
 class RuntimeHealth(FrozenModel):
     """Aggregate runtime health summary written by the local runtime daemon.
 
@@ -98,6 +127,7 @@ class RuntimeHealth(FrozenModel):
     counters: dict[str, int] = Field(default_factory=dict)
     paper_status: str | None = None
     model_status: str | None = None
+    market_coverage: MarketQuoteCoverage | None = None
 
     @field_validator("generated_at")
     @classmethod

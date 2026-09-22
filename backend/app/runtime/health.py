@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 from app.runtime.models import (
+    MarketQuoteCoverage,
     RuntimeHealth,
     RuntimeSourceHealth,
     RuntimeSourceStatus,
@@ -93,6 +94,7 @@ class RuntimeHealthRegistry:
     _counter_sources: list[Callable[[], Mapping[str, int]]] = field(
         default_factory=list
     )
+    _market_coverage: MarketQuoteCoverage | None = None
 
     # ------------------------------------------------------------------
     # Marking
@@ -192,6 +194,14 @@ class RuntimeHealthRegistry:
         """
         self._counter_sources.append(source)
 
+    def set_market_coverage(self, coverage: MarketQuoteCoverage | None) -> None:
+        """Store the latest coverage round for the next `persist()`.
+
+        A round that never ran passes `None`; a failed round keeps the last
+        truthful coverage until the next successful round replaces it.
+        """
+        self._market_coverage = coverage
+
     async def persist(self) -> RuntimeHealth:
         counters: dict[str, int] = {}
         for source in self._counter_sources:
@@ -213,6 +223,7 @@ class RuntimeHealthRegistry:
             counters=counters,
             paper_status=self.paper_status,
             model_status=self.model_status,
+            market_coverage=self._market_coverage,
         )
         await self.state.save_health(health)  # type: ignore[attr-defined]
         return health

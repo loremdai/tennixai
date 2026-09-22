@@ -10,9 +10,10 @@ sanitized stable codes; and `persist()` writes one aggregate `RuntimeHealth`
 repository. Health payloads never carry provider identifiers or URLs.
 """
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
+from pydantic import ValidationError
 from test_decision_worker import (
     FakeBookSource,
     FakeDecisionPublisher,
@@ -36,7 +37,8 @@ from app.runtime.health import (
     SPORTS_SOURCE,
     RuntimeHealthRegistry,
 )
-from app.runtime.models import RuntimeSourceStatus
+from app.api.schemas import RuntimeHealthDto
+from app.runtime.models import MarketQuoteCoverage, RuntimeHealth, RuntimeSourceStatus
 from tests.test_decision_worker import POLICY_PATH
 
 INPUTS = build_service_inputs()
@@ -262,4 +264,63 @@ async def test_persisted_payload_stays_free_of_provider_identifiers(
     for source in persisted.sources.values():
         assert (
             source.reason_code is None or source.reason_code.replace("_", "").isalnum()
+        )
+
+
+# ---------------------------------------------------------------------------
+# P4.3 coverage lane: aggregate market quote coverage (T86)
+# ---------------------------------------------------------------------------
+
+
+async def test_market_coverage_is_persisted_as_aggregate_counts(
+    health: RuntimeHealthRegistry, state: FakeStateRepo, clock: FakeClock
+):
+    coverage = MarketQuoteCoverage(
+        generated_at=clock.now(),
+        candidate=181,
+        attempted=181,
+        fresh_snapshot=150,
+        no_liquidity=20,
+        unavailable=11,
+        last_successful_batch_at=clock.now(),
+    )
+    health.set_market_coverage(coverage)
+
+    persisted = await health.persist()
+
+    assert persisted.market_coverage is not None
+    assert persisted.market_coverage.candidate == 181
+    assert persisted.market_coverage.fresh_snapshot == 150
+    assert state.saved[-1].market_coverage.candidate == 181
+    dto = RuntimeHealthDto.model_validate(persisted.model_dump())
+    assert dto.market_coverage is not None
+    assert dto.market_coverage.no_liquidity == 20
+    # Aggregate counts only: no token, URL, host or provider identity.
+    blob = persisted.model_dump_json().lower()
+    for fragment in ("token", "condition", "0x", "http", "wss", "@"):
+        assert fragment not in blob
+
+
+async def test_market_coverage_is_absent_until_a_round_runs(
+    state: FakeStateRepo, clock: FakeClock
+):
+    health = RuntimeHealthRegistry(state=state, clock=clock.now)
+    assert (await health.persist()).market_coverage is None
+
+    health.set_market_coverage(
+        MarketQuoteCoverage(generated_at=clock.now(), candidate=3)
+    )
+    payload = (await health.persist()).model_dump()
+    restored = RuntimeHealth.model_validate(payload)
+    assert restored.market_coverage is not None
+    assert restored.market_coverage.candidate == 3
+
+
+def test_market_coverage_requires_timezone_aware_timestamps():
+    with pytest.raises(ValidationError):
+        MarketQuoteCoverage(generated_at=datetime(2026, 9, 22, 8, 0))
+    with pytest.raises(ValidationError):
+        MarketQuoteCoverage(
+            generated_at=datetime(2026, 9, 22, 8, 0, tzinfo=UTC),
+            retry_after_until=datetime(2026, 9, 22, 8, 0),
         )

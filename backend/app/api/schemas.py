@@ -269,12 +269,33 @@ class RuntimeSourceHealthDto(BaseModel):
     failure_count: int = 0
 
 
+class MarketQuoteCoverageDto(BaseModel):
+    """Aggregate coverage of the batch quote lane: counts and timestamps
+    only, never a provider identifier, token or URL."""
+
+    generated_at: datetime
+    candidate: int = 0
+    attempted: int = 0
+    fresh_realtime: int = 0
+    fresh_snapshot: int = 0
+    partial: int = 0
+    no_liquidity: int = 0
+    unavailable: int = 0
+    stale: int = 0
+    limited: int = 0
+    batch_failures: int = 0
+    rate_limited: bool = False
+    retry_after_until: datetime | None = None
+    last_successful_batch_at: datetime | None = None
+
+
 class RuntimeHealthDto(BaseModel):
     generated_at: datetime
     sources: dict[str, RuntimeSourceHealthDto] = Field(default_factory=dict)
     counters: dict[str, int] = Field(default_factory=dict)
     paper_status: str | None = None
     model_status: str | None = None
+    market_coverage: MarketQuoteCoverageDto | None = None
 
 
 class RuntimeHealthResponse(BaseModel):
