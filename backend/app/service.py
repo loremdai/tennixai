@@ -29,6 +29,7 @@ from app.domain import (
 )
 from app.errors import AppError
 from app.intelligence import IntelligencePacket, IntelligenceTopic, build_intelligence_packet
+from app.markets.quotes import best_levels, outcome_levels
 from app.players.models import (
     PlayerAliasKind,
     PlayerCandidate,
@@ -1188,64 +1189,18 @@ class P3QueryService:
 
     @staticmethod
     def _best_levels(book, outcome_player_id: str | None):
-        """(best_bid, best_ask) as (player_id, price text) or None."""
-        if book is None:
-            return None, None
-        side = None
-        for candidate in book.books:
-            if outcome_player_id is None or (
-                candidate.outcome_player_id == outcome_player_id
-            ):
-                side = candidate
-                break
-        if side is None:
-            return None, None
-        best_bid = (
-            (side.outcome_player_id, str(side.bids[0].price)) if side.bids else None
-        )
-        best_ask = (
-            (side.outcome_player_id, str(side.asks[0].price)) if side.asks else None
-        )
-        return best_bid, best_ask
+        """(best_bid, best_ask) as (player_id, price text) or None.
+
+        Delegates to the shared canonical implementation so the papers, the
+        decision workbench and the market pages format quotes identically.
+        """
+        return best_levels(book, outcome_player_id)
 
     @staticmethod
     def _outcome_levels(book, outcome_ids):
         """Per-outcome top levels aligned to outcome_ids, plus mean spread
         and top-of-book notional depth. Missing sides stay None."""
-        if book is None:
-            return None, None, None, None
-        by_player = {side.outcome_player_id: side for side in book.books}
-        bids: list[str | None] = []
-        asks: list[str | None] = []
-        spreads: list = []
-        depth = Decimal("0")
-        for player_id in outcome_ids:
-            side = by_player.get(player_id) if player_id else None
-            if side is None:
-                bids.append(None)
-                asks.append(None)
-                continue
-            bid = str(side.bids[0].price) if side.bids else None
-            ask = str(side.asks[0].price) if side.asks else None
-            bids.append(bid)
-            asks.append(ask)
-            if side.bids:
-                depth += side.bids[0].price * side.bids[0].size
-            if side.asks:
-                depth += side.asks[0].price * side.asks[0].size
-            if bid is not None and ask is not None:
-                spreads.append(Decimal(ask) - Decimal(bid))
-        spread = (
-            (sum(spreads) / Decimal(len(spreads))).quantize(Decimal("0.0001"))
-            if spreads
-            else None
-        )
-        return (
-            (bids[0], bids[1]) if len(bids) == 2 else None,
-            (asks[0], asks[1]) if len(asks) == 2 else None,
-            spread,
-            depth.quantize(Decimal("0.01")) if (spreads or depth) else None,
-        )
+        return outcome_levels(book, outcome_ids)
 
     async def match_decision(self, match_id: str):
         from app.api.schemas import (
