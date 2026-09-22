@@ -312,6 +312,7 @@ class LocalRuntimeDaemon:
         self._quote_job = quote_job
         self._quote_snapshots = quote_snapshots
         self._quote_fresh_seconds = quote_fresh_seconds
+        self._mirrored_hashes: dict[str, str] = {}
         self._tick_seconds = tick_seconds
         self._max_resolution_targets = max_resolution_targets
         self._closed_window = closed_market_window
@@ -545,12 +546,18 @@ class LocalRuntimeDaemon:
             return
         if book is None:
             return
+        if self._mirrored_hashes.get(market_id) == book.book_hash:
+            # The decision loop must not pay a store round-trip per market per
+            # tick: only a real book change touches the projection.
+            return
         try:
             await self._quote_snapshots.upsert(
                 realtime_quote_record(book, fresh_seconds=self._quote_fresh_seconds)
             )
         except Exception as exc:  # noqa: BLE001 - isolate the mirror
             await self._health.mark_degraded(MARKET_SOURCE, stable_reason_code(exc))
+            return
+        self._mirrored_hashes[market_id] = book.book_hash
 
     # ------------------------------------------------------------------
     # Bounded discovery jobs

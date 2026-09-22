@@ -1462,6 +1462,26 @@ async def test_realtime_hot_books_are_mirrored_into_the_shared_projection():
     assert projections.writes[0].outcome_asks == ("0.57", "0.45")
 
 
+async def test_unchanged_hot_books_are_mirrored_once():
+    """Only a real book change touches the projection store: the decision
+    loop must not pay a write per market per tick."""
+    projections = SpyQuoteProjections()
+    daemon, parts = make_daemon(quote_snapshots=projections)
+    parts["hot_books"].books["mkt_1"] = make_book("mkt_1")
+
+    await daemon.tick_once()
+    await daemon.tick_once()
+    await daemon.tick_once()
+    assert len(projections.writes) == 1  # unchanged hash: no further writes
+
+    parts["hot_books"].books["mkt_1"] = make_book("mkt_1").model_copy(
+        update={"book_hash": "changed_hash", "sequence": 8}
+    )
+    await daemon.tick_once()
+    assert len(projections.writes) == 2
+    assert projections.writes[-1].book_hash == "changed_hash"
+
+
 async def test_missing_hot_books_mirror_nothing():
     projections = SpyQuoteProjections()
     daemon, _parts = make_daemon(quote_snapshots=projections)
