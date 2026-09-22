@@ -477,6 +477,39 @@ class MarketObservationRow(Base):
     )
 
 
+class MarketQuoteSnapshotRow(Base):
+    """Durable latest-quote projection: at most one row per market (T85).
+
+    A display read model for the coverage lane — NOT a market history store.
+    It carries canonical two-outcome levels (internal player ids only) plus
+    the display statistics the pages show. Provider tokens, condition ids,
+    raw provider JSON, model probabilities, decisions and paper state never
+    enter this table; the high-frequency material stays in the existing
+    observation/raw tables under the 14-day retention.
+    """
+
+    __tablename__ = "market_quote_snapshots"
+
+    market_id: Mapped[str] = mapped_column(ForeignKey("markets.id"), primary_key=True)
+    source: Mapped[str] = mapped_column(String(16), nullable=False)
+    quote_state: Mapped[str] = mapped_column(String(16), nullable=False)
+    book_hash: Mapped[str | None] = mapped_column(String(128))
+    as_of: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    outcome_a_bid: Mapped[str | None] = mapped_column(String(32))
+    outcome_a_ask: Mapped[str | None] = mapped_column(String(32))
+    outcome_b_bid: Mapped[str | None] = mapped_column(String(32))
+    outcome_b_ask: Mapped[str | None] = mapped_column(String(32))
+    spread: Mapped[str | None] = mapped_column(String(32))
+    depth_usd: Mapped[str | None] = mapped_column(String(32))
+    payload: Mapped[dict | None] = mapped_column(JSONB)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 class PredictionSnapshotRow(Base):
     """Versioned prediction evidence; idempotent per input state version."""
 
