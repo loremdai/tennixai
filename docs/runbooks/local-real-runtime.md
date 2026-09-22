@@ -14,7 +14,7 @@
 ```
 
 - **只使用仓库根目录 `.env`**：不得创建或读取 `backend/.env`、`frontend/.env`、`frontend/.env.local`；凭据绝不提交、绝不写入日志。
-- `init` 是一次性准备：校验配置、创建并迁移专用回环库 `tennix_live_local`（Redis DB 11）、同步目录；缺失的中文名会在这一步**一次性**调用 LLM 补全（可能消耗 LLM 配额）。
+- `init` 是一次性准备：校验配置、创建并迁移专用回环库 `tennix_live_local`（Redis DB 11）、同步目录；缺失的中文名会在这一步**一次性**调用 LLM 补全。该补全按 25 条一批循环到不再缺失，只要根 `.env` 配了 LLM 凭据就无法跳过，实测可能持续数十分钟并消耗可观配额——因此即使只是为了补一次 schema 迁移，也请把这一步的耗时与配额计入计划（`up` 会在库落后于已初始化 schema 时以 `LOCAL_SCHEMA_BEHIND` 拒绝启动，`init` 是唯一受支持的迁移入口）。
 - `up` 是日常启动：拉起 runtime/api/frontend 三个受管子进程，**绝不调用 LLM、绝不自动执行 init**。
 - `up` 直接运行仓库已安装的 `frontend/node_modules/.bin/next`；启动过程不调用 pnpm，也不会尝试重装或清理 `node_modules`。如果该文件不存在或不可执行，启动器会在拉起其他子进程前明确拒绝并提示先安装前端依赖。
 - `down` 优雅停止自有子进程与本次启动的容器，**保留全部真实数据与 paper ledger**；再次 `up` 后 ID、数据与账本原样存在。
@@ -113,5 +113,6 @@ TENNIX_E2E_LOCAL_RUNTIME_URL=http://127.0.0.1:3100 \
 | 全部源 `skipped` | 多为安静窗口（无 live 比赛/无映射市场），属诚实结果；换个时间重跑 |
 | 浏览器验收失败于 preview 标记 | 确认访问的是无 `?preview=` 参数的生产页面且前端由 launcher 启动 |
 | 数据库连不上 | 确认 compose 的 postgres 在跑且已执行过 `./scripts/tennix-live init` |
+| `up refused: LOCAL_SCHEMA_BEHIND` / `LOCAL_NOT_INITIALIZED` | 库或 launcher 状态落后于已初始化 schema：重跑 `init`（含上面的 LLM 补名，见 §1）。中断过 `init` 时状态文件可能被重置，`status` 会同时显示两者 |
 
 回放（replay）流程、专用 live 测试门与 `NO_PROXY` 注意事项见 [p2-local.md](./p2-local.md)。
