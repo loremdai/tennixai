@@ -60,6 +60,7 @@ EXPECTED_NAMES = (
     "market_discovery",
     "market_book",
     "market_websocket",
+    "market_quote_snapshot",
     "llm_chat",
 )
 
@@ -276,6 +277,9 @@ class RecordingMarkets:
         self._book = book if book is not None else make_book()
         self._discovery_error = discovery_error
         self._book_error = book_error
+        self.batch_calls: list[tuple[str, ...]] = []
+        self._batch_has_books = True
+        self._batch_error = None
 
     async def list_tennis_moneylines(self):
         self.discovery_calls += 1
@@ -289,6 +293,20 @@ class RecordingMarkets:
         if self._book_error is not None:
             raise self._book_error
         return self._book
+
+    async def get_order_books(self, token_ids):
+        self.batch_calls.append(tuple(token_ids))
+        if self._batch_error is not None:
+            raise self._batch_error
+        books = (
+            {
+                token: SimpleNamespace(bids=(SimpleNamespace(),), asks=())
+                for token in token_ids
+            }
+            if self._batch_has_books
+            else {}
+        )
+        return SimpleNamespace(books=books)
 
 
 class SpyLlm:
@@ -439,7 +457,10 @@ async def test_verify_calls_each_source_at_most_once_on_happy_path():
     assert live_feed.constructed_streams == 1
     assert markets.discovery_calls == 1
     assert markets.book_calls == 1
-    assert token_lookup.calls == 1
+    assert len(markets.batch_calls) == 1  # one bounded batch for the quote lane
+    # The private token mapping is a local read, not a provider call: the
+    # WebSocket check and the coverage batch each read it once.
+    assert token_lookup.calls == 2
     assert market_feed.constructed_streams == 1
     assert identities.last == ("match", "api_tennis", "mat_live_one")
     assert market_feed.subscribed_assets == [("t1", "t2")]
@@ -451,6 +472,7 @@ async def test_verify_calls_each_source_at_most_once_on_happy_path():
         "market_discovery": "passed",
         "market_book": "passed",
         "market_websocket": "passed",
+        "market_quote_snapshot": "passed",
         "llm_chat": "skipped",
     }
 
@@ -816,3 +838,82 @@ def test_outcome_is_frozen_and_minimal():
     with pytest.raises(Exception):
         outcome.name = "y"  # type: ignore[misc]
     assert set(outcome.model_dump()) == {"name", "status", "reason_code"}
+
+
+# ---------------------------------------------------------------------------
+# T89: the batch quote lane is verified within bounds and honestly.
+# ---------------------------------------------------------------------------
+
+
+async def test_verify_quote_snapshot_is_bounded_to_two_markets():
+    markets = RecordingMarkets(
+        markets=(make_market("mkt_1"), make_market("mkt_2"), make_market("mkt_3"))
+    )
+    token_lookup = RecordingTokenLookup(
+        {"mkt_1": ("t1a", "t1b"), "mkt_2": ("t2a", "t2b"), "mkt_3": ("t3a", "t3b")}
+    )
+    outcomes = await verify_runtime(
+        with_llm=False,
+        **make_dependencies(
+            markets=markets, token_lookup=token_lookup, tennis=RecordingTennis(live=[])
+        ),
+    )
+
+    assert tuple(outcome.name for outcome in outcomes) == EXPECTED_NAMES
+    outcome = outcome_by_name(outcomes, "market_quote_snapshot")
+    assert outcome.status == "passed"
+    assert len(markets.batch_calls) == 1  # exactly one batch request
+    assert markets.batch_calls[0] == ("t1a", "t1b", "t2a", "t2b")
+    # One lookup for the market WebSocket check plus at most two for the
+    # quote lane: the coverage check never fans out beyond its two markets.
+    assert token_lookup.calls <= 3
+
+
+async def test_verify_quote_snapshot_skips_honestly_without_targets():
+    token_lookup = RecordingTokenLookup({})  # no mapped tokens at all
+    outcomes = await verify_runtime(
+        with_llm=False,
+        **make_dependencies(token_lookup=token_lookup),
+    )
+
+    outcome = outcome_by_name(outcomes, "market_quote_snapshot")
+    assert outcome.status == "skipped"
+    assert outcome.reason_code == "NO_QUOTE_TARGETS"
+
+
+async def test_verify_quote_snapshot_reports_failures_with_stable_codes():
+    markets = RecordingMarkets()
+    markets._batch_error = AppError("rate_limited", "slow down", 429)
+    outcomes = await verify_runtime(
+        with_llm=False,
+        **make_dependencies(markets=markets),
+    )
+
+    outcome = outcome_by_name(outcomes, "market_quote_snapshot")
+    assert outcome.status == "failed"
+    assert outcome.reason_code == "RATE_LIMITED"
+
+
+async def test_verify_quote_snapshot_without_books_is_an_honest_skip():
+    markets = RecordingMarkets()
+    markets._batch_has_books = False
+    outcomes = await verify_runtime(
+        with_llm=False,
+        **make_dependencies(markets=markets),
+    )
+
+    outcome = outcome_by_name(outcomes, "market_quote_snapshot")
+    assert outcome.status == "skipped"
+    assert outcome.reason_code == "EMPTY_RESULT"
+
+
+async def test_verify_quote_snapshot_never_leaks_provider_material():
+    markets = RecordingMarkets()
+    outcomes = await verify_runtime(
+        with_llm=False,
+        **make_dependencies(markets=markets),
+    )
+
+    outcome = outcome_by_name(outcomes, "market_quote_snapshot")
+    blob = outcome.model_dump_json()
+    assert "t1" not in blob and "tok" not in blob and "0x" not in blob

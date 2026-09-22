@@ -61,6 +61,11 @@ RECEIVE_TIMEOUT = "RECEIVE_TIMEOUT"
 STREAM_ENDED = "STREAM_ENDED"
 EMPTY_RESULT = "EMPTY_RESULT"
 BOOK_INCOMPLETE = "BOOK_INCOMPLETE"
+NO_QUOTE_TARGETS = "NO_QUOTE_TARGETS"
+
+#: The coverage lane is verified with at most this many discovered markets,
+#: so one batch request bounds the whole check (T89).
+QUOTE_BATCH_MARKETS = 2
 
 
 class VerifyOutcome(FrozenModel):
@@ -261,6 +266,35 @@ async def _check_market_websocket(
     return _skipped(name, STREAM_ENDED)
 
 
+async def _check_market_quote_snapshot(
+    *,
+    markets: Any,
+    discovered: tuple,
+    quote_batch_lookup: Callable[[str], Awaitable[tuple[str, str] | None]],
+) -> VerifyOutcome:
+    """One bounded batch quote request for the coverage lane (T89).
+
+    At most `QUOTE_BATCH_MARKETS` discovered markets contribute their two
+    private tokens; a quiet or unmapped catalog skips honestly instead of
+    fabricating a quote, and the raw response never leaves the provider.
+    """
+    name = "market_quote_snapshot"
+    token_ids: list[str] = []
+    for market in discovered[:QUOTE_BATCH_MARKETS]:
+        pair = await quote_batch_lookup(market.id)
+        if pair:
+            token_ids.extend(token for token in pair if token)
+    if not token_ids:
+        return _skipped(name, NO_QUOTE_TARGETS)
+    try:
+        batch = await markets.get_order_books(tuple(token_ids))
+    except Exception as exc:  # noqa: BLE001 - honest failure, sanitized code
+        return _failed(name, stable_reason_code(exc))
+    if not getattr(batch, "books", None):
+        return _skipped(name, EMPTY_RESULT)
+    return _passed(name)
+
+
 async def _check_llm(
     *, with_llm: bool, llm_factory: Callable[[], Any] | None
 ) -> VerifyOutcome:
@@ -320,8 +354,22 @@ async def verify_runtime(
     else:
         book = _skipped("market_book", NO_MAPPED_MARKET)
         market_ws = _skipped("market_websocket", NO_ACTIVE_BOOK)
+    quote_snapshot = await _check_market_quote_snapshot(
+        markets=markets,
+        discovered=discovered,
+        quote_batch_lookup=market_token_lookup,
+    )
     llm = await _check_llm(with_llm=with_llm, llm_factory=llm_factory)
-    return (rankings, catalog, tennis_ws, discovery, book, market_ws, llm)
+    return (
+        rankings,
+        catalog,
+        tennis_ws,
+        discovery,
+        book,
+        market_ws,
+        quote_snapshot,
+        llm,
+    )
 
 
 def build_verify_dependencies(settings: Any) -> VerifyDependencies:
