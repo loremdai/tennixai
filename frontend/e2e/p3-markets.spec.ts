@@ -8,7 +8,7 @@ import { expect, test, type Page } from '@playwright/test'
 
 const AS_OF = new Date().toISOString()
 
-const OPPORTUNITIES = {
+const DEFAULT_OPPORTUNITIES = {
   availability: { reason: 'HAS_OPPORTUNITIES', model_status: 'unknown' },
   data: [
     {
@@ -50,7 +50,7 @@ const OPPORTUNITIES = {
   ],
 }
 
-const MARKETS = {
+const DEFAULT_MARKETS = {
   data: [
     {
       market_id: 'mkt_e2e_1',
@@ -117,6 +117,15 @@ const MARKETS = {
   page_size: 50,
   total: 2,
 }
+
+/** Mutable payloads for per-test scenarios; reset before every test. */
+let MARKETS: Record<string, unknown> = structuredClone(DEFAULT_MARKETS)
+let OPPORTUNITIES: Record<string, unknown> = structuredClone(DEFAULT_OPPORTUNITIES)
+
+test.beforeEach(() => {
+  MARKETS = structuredClone(DEFAULT_MARKETS)
+  OPPORTUNITIES = structuredClone(DEFAULT_OPPORTUNITIES)
+})
 
 const PAPER = {
   open: [
@@ -228,7 +237,150 @@ async function interceptP3(page: Page) {
   })
 }
 
-test.describe('P3 production markets flows', () => {
+function defaultMarketRow(): Record<string, unknown> {
+  return (DEFAULT_MARKETS.data as Array<Record<string, unknown>>)[0]
+}
+
+function marketRow(overrides: Record<string, unknown> = {}) {
+  return {
+    ...defaultMarketRow(),
+    market_id: 'mkt_case',
+    // A market without a decision observation has no action: it states its
+    // quote state instead of an invented MARKET_ONLY badge.
+    decision_action: null,
+    ...overrides,
+  }
+}
+
+function marketsPayload(rows: unknown[]) {
+  return { data: rows, page: 1, page_size: 50, total: rows.length }
+}
+
+async function showAllMarkets(page: Page, rows: unknown[]) {
+  MARKETS = marketsPayload(rows)
+  await interceptP3(page)
+  await page.goto('/markets?view=all')
+  await page.getByRole('heading', { name: '市场决策支持' }).waitFor()
+}
+
+function minutesAgo(minutes: number): string {
+  return new Date(Date.now() - minutes * 60_000).toISOString()
+}
+
+function quote(overrides: Record<string, unknown> = {}) {
+  return {
+    ...(defaultMarketRow().quote as Record<string, unknown>),
+    as_of: minutesAgo(2),
+    ...overrides,
+  }
+}
+
+test.describe('P3 production market quote states (T88)', () => {
+  test('all markets show a real snapshot quote with its own time', async ({ page }) => {
+    await showAllMarkets(page, [
+      marketRow({
+        market_id: 'mkt_snap',
+        quote: quote({ state: 'snapshot', source: 'snapshot', as_of: minutesAgo(2) }),
+      }),
+    ])
+
+    await expect(page.getByText(/快照报价 · 2 分前/)).toBeVisible()
+    await expect(page.getByText('57.0%')).toBeVisible() // player one ask
+    await expect(page.getByText('45.0%')).toBeVisible() // player two ask
+  })
+
+  test('partial, no-liquidity, stale and unavailable states stay distinct', async ({ page }) => {
+    await showAllMarkets(page, [
+      marketRow({
+        market_id: 'mkt_partial',
+        quote: quote({ state: 'partial', outcome_asks: ['0.60', null] }),
+      }),
+      marketRow({ market_id: 'mkt_empty', quote: quote({ state: 'no_liquidity' }) }),
+      marketRow({ market_id: 'mkt_stale', quote: quote({ state: 'stale' }) }),
+      marketRow({
+        market_id: 'mkt_gone',
+        quote: quote({ state: 'unavailable', source: null, as_of: null }),
+      }),
+    ])
+
+    await expect(page.getByText(/部分报价 ·/)).toBeVisible()
+    await expect(page.getByText('暂无挂单')).toBeVisible()
+    await expect(page.getByText('最后可信报价已过期')).toBeVisible()
+    await expect(page.getByText('报价暂不可用')).toBeVisible()
+    // The one-sided quote keeps its real ask instead of hiding both.
+    await expect(page.getByText('60.0%')).toBeVisible()
+  })
+
+  test('low-tier markets keep real quotes and no negative model label', async ({ page }) => {
+    await showAllMarkets(page, [
+      marketRow({
+        market_id: 'mkt_challenger',
+        tier: 'challenger',
+        model_availability: 'out_of_scope',
+        decision_action: null,
+        quote: quote({ state: 'snapshot', source: 'snapshot', as_of: minutesAgo(1) }),
+      }),
+    ])
+
+    // The tier chip also carries this text, so scope the badge to the row.
+    await expect(
+      page.getByRole('link', { name: '查看 E2E Alpha vs. E2E Beta 市场' }).getByText('Challenger'),
+    ).toBeVisible()
+    await expect(page.getByText('快照报价 · 1 分前')).toBeVisible()
+    await expect(page.getByText(/未覆盖|不伪造模型值/)).toHaveCount(0)
+  })
+
+  test('row navigation follows the active link only', async ({ page }) => {
+    await showAllMarkets(page, [
+      marketRow({ market_id: 'mkt_linked', match_id: 'mat_e2e_1' }),
+      marketRow({
+        market_id: 'mkt_free',
+        match_id: null,
+        question: 'E2E Unlinked Moneyline',
+        tier: 'itf',
+        decision_action: null,
+        model_availability: 'out_of_scope',
+      }),
+    ])
+
+    await expect(
+      page.getByRole('link', { name: /查看 E2E Alpha vs\. E2E Beta 市场/ }),
+    ).toHaveAttribute('href', '/matches/mat_e2e_1')
+    await expect(page.getByText('E2E Unlinked Moneyline')).toBeVisible()
+    await expect(
+      page.getByRole('link', { name: /E2E Unlinked Moneyline 市场/ }),
+    ).toHaveCount(0)
+  })
+
+  test('the opportunities tab explains an unpromoted model', async ({ page }) => {
+    OPPORTUNITIES = {
+      data: [],
+      availability: { reason: 'ELIGIBLE_UNPROMOTED', model_status: 'not_promoted' },
+    }
+    await interceptP3(page)
+    await page.goto('/markets?view=opportunities')
+
+    await expect(
+      page.getByRole('heading', { name: '模型尚未完成验证' }),
+    ).toBeVisible()
+    await expect(
+      page.getByText('模型尚未完成验证，当前不生成 BUY / WAIT；全部市场的真实报价仍可查看。'),
+    ).toBeVisible()
+    await expect(page.getByText('BUY', { exact: true })).toHaveCount(0)
+    await expect(page.getByText('WAIT', { exact: true })).toHaveCount(0)
+  })
+
+  test('a real actionable opportunity still renders as BUY', async ({ page }) => {
+    await interceptP3(page)
+    await page.goto('/markets?view=opportunities')
+
+    await expect(
+      page.getByRole('link', { name: /查看 E2E Alpha vs\. E2E Beta 的 buy 决策/ }),
+    ).toBeVisible()
+  })
+})
+
+test.describe('P3 production mobile', () => {
   test('direct /markets load renders canonical opportunity rows', async ({ page }) => {
     await interceptP3(page)
     await page.goto('/markets')
@@ -322,6 +474,30 @@ test.describe('P3 production markets flows', () => {
 
 test.describe('P3 production mobile', () => {
   test.use({ viewport: { width: 390, height: 844 } })
+
+  test('quote labels and the unpromoted empty state stay legible', async ({ page }) => {
+    await showAllMarkets(page, [
+      marketRow({
+        market_id: 'mkt_snap',
+        quote: quote({ state: 'snapshot', source: 'snapshot', as_of: minutesAgo(2) }),
+      }),
+    ])
+    await expect(page.getByText(/快照报价 · 2 分前/)).toBeVisible()
+
+    OPPORTUNITIES = {
+      data: [],
+      availability: { reason: 'ELIGIBLE_UNPROMOTED', model_status: 'not_promoted' },
+    }
+    await page.goto('/markets?view=opportunities')
+    await expect(
+      page.getByRole('heading', { name: '模型尚未完成验证' }),
+    ).toBeVisible()
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    )
+    expect(overflow).toBeLessThanOrEqual(0)
+  })
 
   test('no horizontal overflow and 44px touch targets', async ({ page }) => {
     await interceptP3(page)
