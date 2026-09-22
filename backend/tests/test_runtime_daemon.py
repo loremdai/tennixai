@@ -52,7 +52,8 @@ from app.runtime.health import (
     SPORTS_SOURCE,
     RuntimeHealthRegistry,
 )
-from app.runtime.models import RuntimeSourceStatus
+from app.markets.quotes import QuoteSource
+from app.runtime.models import MarketQuoteCoverage, RuntimeSourceStatus
 
 INPUTS = build_service_inputs()
 NOW = FakeClock().now()
@@ -451,6 +452,10 @@ def make_daemon(
         resolver=parts["resolver"],
         metrics=parts["metrics"],
         metadata_cache=parts["metadata_cache"],
+        quote_job=parts.get("quote_job"),
+        quote_snapshots=parts.get("quote_snapshots"),
+        quote_fresh_seconds=parts.get("quote_fresh_seconds", 300),
+        market_snapshot_seconds=parts.get("market_snapshot_seconds", 120),
         tick_seconds=tick_seconds,
     )
     return daemon, parts
@@ -1390,3 +1395,110 @@ async def test_run_loop_cancellation_still_propagates():
     # Persist/recovery suppression never swallows CancelledError.
     with pytest.raises(asyncio.CancelledError):
         await task
+
+
+# ---------------------------------------------------------------------------
+# T86: the bounded snapshot lane and the realtime book mirror
+# ---------------------------------------------------------------------------
+
+
+class SpyQuoteJob:
+    def __init__(self, coverage) -> None:
+        self._coverage = coverage
+        self.runs = 0
+
+    async def run_once(self):
+        self.runs += 1
+        return self._coverage
+
+
+class SpyQuoteProjections:
+    def __init__(self) -> None:
+        self.writes: list[object] = []
+        self.fail = False
+
+    async def upsert(self, record):
+        if self.fail:
+            raise RuntimeError("projection_down")
+        self.writes.append(record)
+        return True
+
+
+async def test_snapshot_job_runs_at_its_own_bounded_interval():
+    clock = FakeClock()
+    quote_job = SpyQuoteJob(
+        MarketQuoteCoverage(
+            generated_at=clock.now(), candidate=3, attempted=3, fresh_snapshot=3
+        )
+    )
+    daemon, parts = make_daemon(clock, quote_job=quote_job, market_snapshot_seconds=120)
+
+    await daemon.tick_once()
+    assert quote_job.runs == 1
+    coverage = parts["state"].saved[-1].market_coverage
+    assert coverage is not None and coverage.candidate == 3
+
+    await daemon.tick_once()
+    assert quote_job.runs == 1  # the interval has not elapsed
+
+    clock.advance(seconds=119)
+    await daemon.tick_once()
+    assert quote_job.runs == 1
+
+    clock.advance(seconds=1)
+    await daemon.tick_once()
+    assert quote_job.runs == 2
+
+
+async def test_realtime_hot_books_are_mirrored_into_the_shared_projection():
+    projections = SpyQuoteProjections()
+    daemon, parts = make_daemon(quote_snapshots=projections)
+    parts["hot_books"].books["mkt_1"] = make_book("mkt_1")
+
+    await daemon.tick_once()
+
+    assert [record.market_id for record in projections.writes] == ["mkt_1"]
+    assert projections.writes[0].source is QuoteSource.REALTIME
+    assert projections.writes[0].outcome_asks == ("0.57", "0.45")
+
+
+async def test_missing_hot_books_mirror_nothing():
+    projections = SpyQuoteProjections()
+    daemon, _parts = make_daemon(quote_snapshots=projections)
+
+    await daemon.tick_once()
+
+    assert projections.writes == []
+
+
+async def test_projection_mirror_failure_degrades_health_and_the_tick_continues():
+    projections = SpyQuoteProjections()
+    projections.fail = True
+    daemon, parts = make_daemon(quote_snapshots=projections)
+    parts["hot_books"].books["mkt_1"] = make_book("mkt_1")
+
+    await daemon.tick_once()
+
+    source = parts["state"].saved[-1].sources[MARKET_SOURCE]
+    assert source.status is RuntimeSourceStatus.DEGRADED
+    assert source.reason_code == "RUNTIME_ERROR"
+    # The decision pump and the persist still ran: a display-store failure
+    # never suppresses the realtime lane or the tick.
+    assert parts["decision_worker"].pump_calls == ["mkt_1"]
+    assert parts["log"][-1] == "persist"
+
+
+async def test_snapshot_lane_has_no_decision_or_paper_side_effects():
+    quote_job = SpyQuoteJob(MarketQuoteCoverage(generated_at=NOW, candidate=0))
+    daemon, parts = make_daemon(
+        quote_job=quote_job, market_worker=FakeMarketRuntime([], markets=())
+    )
+
+    await daemon.tick_once()
+
+    assert quote_job.runs == 1
+    assert parts["decision_worker"].pump_calls == []
+    assert parts["decision_worker"].submitted == []
+    assert parts["decision_worker"].sports == []
+    assert parts["paper"].calls == []
+    assert daemon._market_worker.active_market_ids() == ()

@@ -37,7 +37,10 @@ from app.markets.publisher import MarketHotPublisher
 from app.markets.worker import MarketWorker
 from app.paper.service import PaperTradingService
 from app.persistence.database import Database
-from app.persistence.market_repositories import MarketRepository
+from app.persistence.market_repositories import (
+    MarketQuoteSnapshotRepository,
+    MarketRepository,
+)
 from app.persistence.paper_repositories import PaperLedgerRepository
 from app.persistence.player_directory import PostgresPlayerDirectoryRepository
 from app.persistence.repositories import (
@@ -65,6 +68,7 @@ from app.runtime.daemon import (
 )
 from app.runtime.demand import catalog_match_info
 from app.runtime.health import RuntimeHealthRegistry
+from app.runtime.market_snapshot import MarketQuoteSnapshotJob
 from app.runtime.models import LiveLocalConfigurationError, LocalRuntimeSettings
 from app.service import P3QueryService
 
@@ -244,6 +248,7 @@ class LocalRuntimeDaemonGraph:
     health: RuntimeHealthRegistry
     paper: PaperTradingService
     hot_books: MarketHotPublisher
+    quote_snapshots: MarketQuoteSnapshotRepository
     _market_feed: PolymarketMarketFeed = field(repr=False)
     _market_provider: PolymarketProvider = field(repr=False)
     _api_client: httpx.AsyncClient = field(repr=False)
@@ -444,6 +449,24 @@ def build_local_runtime_daemon(
         metrics=metrics,
     )
 
+    # Coverage lane: bounded batch snapshots for every canonical market. It
+    # shares the projection with the realtime mirror so pages read one
+    # precedence rule, and shares `raw_events` for the 14-day batch retention.
+    quote_snapshots = MarketQuoteSnapshotRepository(database)
+    quote_job = MarketQuoteSnapshotJob(
+        markets=markets,
+        projections=quote_snapshots,
+        provider=market_provider,
+        raw=raw_events,
+        catalog=catalog,
+        hot_books=market_publisher,
+        clock=clock,
+        max_markets=live.market_snapshot_max_markets,
+        token_batch_size=live.market_snapshot_token_batch_size,
+        quote_fresh_seconds=live.market_quote_fresh_seconds,
+        realtime_fresh_seconds=settings.p3_market_book_freshness_seconds,
+    )
+
     daemon = LocalRuntimeDaemon(
         realtime=realtime_worker,
         market_worker=market_worker,
@@ -461,6 +484,10 @@ def build_local_runtime_daemon(
         resolver=resolver,
         metrics=metrics,
         metadata_cache=metadata_cache,
+        quote_job=quote_job,
+        quote_snapshots=quote_snapshots,
+        quote_fresh_seconds=live.market_quote_fresh_seconds,
+        market_snapshot_seconds=live.market_snapshot_seconds,
         live_catalog_seconds=live.live_catalog_seconds,
         upcoming_catalog_seconds=live.upcoming_catalog_seconds,
         ranking_seconds=live.ranking_seconds,
@@ -474,6 +501,7 @@ def build_local_runtime_daemon(
         health=registry,
         paper=paper,
         hot_books=market_publisher,
+        quote_snapshots=quote_snapshots,
         _market_feed=market_feed,
         _market_provider=market_provider,
         _api_client=api_client,

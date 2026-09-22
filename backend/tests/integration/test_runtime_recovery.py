@@ -55,15 +55,26 @@ from app.domain import (
     Tournament,
 )
 from app.markets.models import BookLevel, MarketExternalId, OrderBookState, OutcomeBook
+from app.markets.quotes import (
+    ClobBooksBatch,
+    QuoteSource,
+    QuoteState,
+    TokenBook,
+    realtime_quote_record,
+)
 from app.markets.publisher import MarketHotPublisher
 from app.markets.worker import MarketWorker
 from app.paper.service import PaperTradingService
 from app.persistence.database import Database
-from app.persistence.market_repositories import MarketRepository
+from app.persistence.market_repositories import (
+    MarketQuoteSnapshotRepository,
+    MarketRepository,
+)
 from app.persistence.paper_repositories import PaperLedgerRepository
 from app.persistence.repositories import (
     MatchCatalogRepository,
     PostgresIdentityRepository,
+    RawProviderEventRepository,
     RuntimeStateRepository,
 )
 from app.players.sync import DirectorySyncReport
@@ -79,6 +90,7 @@ from app.runtime.daemon import (
 )
 from app.runtime.demand import catalog_match_info
 from app.runtime.health import MARKET_SOURCE, SPORTS_SOURCE, RuntimeHealthRegistry
+from app.runtime.market_snapshot import MarketQuoteSnapshotJob
 from app.runtime.models import RuntimeSourceStatus
 from p3_fakes import make_intent, make_market, make_rules
 from realtime_fakes import (
@@ -593,3 +605,169 @@ async def test_restarted_daemon_recovers_from_durable_state_without_duplicates(
         assert await paper_counts(restarted_db, match_id) == first_counts
     finally:
         await restarted_db.dispose()
+
+
+# ---------------------------------------------------------------------------
+# T86: the coverage lane against real PostgreSQL. One real snapshot round
+# writes the durable projection plus its raw batch and reports aggregate
+# coverage, while the ledger and the WebSocket roster stay untouched.
+# ---------------------------------------------------------------------------
+
+
+class StubBatchProvider:
+    """Scripted public batch response; records every request."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, ...]] = []
+
+    async def get_order_books(self, token_ids):
+        self.calls.append(tuple(token_ids))
+        marker = f"t86-{uuid4().hex[:8]}"
+        books = {
+            token: TokenBook(
+                token_id=token,
+                bids=(BookLevel(price=Decimal("0.58"), size=Decimal("10")),),
+                asks=(BookLevel(price=Decimal("0.60"), size=Decimal("10")),),
+                book_hash=f"h_{token}",
+                provider_timestamp=NOW,
+            )
+            for token in token_ids
+        }
+        return ClobBooksBatch(
+            books=books,
+            raw=({"asset_id": token_ids[0], "marker": marker},),
+        )
+
+
+class EmptyHotBooks:
+    async def get_hot_books(self, market_ids):
+        return {}
+
+
+async def _no_demand() -> set[str]:
+    """The roster worker is here to prove it stays untouched: no demand."""
+    return set()
+
+
+async def _count_rows(database: Database, table: str, match_id: str) -> int:
+    async with database.session() as session:
+        value = await session.scalar(
+            text(f"SELECT count(*) FROM {table} WHERE match_id = :m"),  # noqa: S608
+            {"m": match_id},
+        )
+    return int(value or 0)
+
+
+async def test_coverage_lane_writes_quotes_without_touching_ledger_or_roster(
+    database: Database,
+) -> None:
+    markets = MarketRepository(database)
+    identity = PostgresIdentityRepository(database)
+    catalog = MatchCatalogRepository(database)
+
+    match_id = await identity.get_or_create(
+        "match", "api_tennis", f"ext_{uuid4().hex[:10]}"
+    )
+    await catalog.upsert_matches([catalog_match(match_id)], observed_at=NOW)
+    event_id = f"ev_{uuid4().hex[:8]}"
+    condition_id = f"0x{uuid4().hex}"
+    market_id = await markets.get_or_create_market_id(
+        provider="polymarket", provider_event_id=event_id, condition_id=condition_id
+    )
+    await markets.save_market(make_market(market_id, match_id=match_id))
+    await markets.save_external_id(
+        MarketExternalId(
+            market_id=market_id,
+            provider="polymarket",
+            provider_event_id=event_id,
+            condition_id=condition_id,
+            token_ids=(TOKEN_A, TOKEN_B),
+        )
+    )
+    await markets.link_match(
+        market_id=market_id, match_id=match_id, evidence={"pair": ["ply_a", "ply_b"]}
+    )
+
+    decisions_before = await _count_rows(database, "decision_observations", match_id)
+    intents_before = await _count_rows(database, "paper_order_intents", match_id)
+
+    feed = FakeMarketFeed()
+    roster_worker = MarketWorker(
+        feed=feed,
+        rest=FakeRest(),
+        publisher=MarketHotPublisher(redis=None),  # never used: no demand
+        observations=FakeObservationSink(),
+        raw=FakeRaw(),
+        demand_source=_no_demand,
+        token_lookup=lambda market_id: (TOKEN_A, TOKEN_B),
+        now=lambda: NOW,
+    )
+    await roster_worker.reconcile_demand_once()
+
+    provider = StubBatchProvider()
+    projections = MarketQuoteSnapshotRepository(database)
+    state = RuntimeStateRepository(database)
+    registry = RuntimeHealthRegistry(state=state, clock=lambda: NOW)
+    job = MarketQuoteSnapshotJob(
+        markets=markets,
+        projections=projections,
+        provider=provider,
+        raw=RawProviderEventRepository(database),
+        catalog=catalog,
+        hot_books=EmptyHotBooks(),
+        clock=lambda: NOW,
+        quote_fresh_seconds=300,
+        realtime_fresh_seconds=5,
+    )
+
+    coverage = await job.run_once()
+    registry.set_market_coverage(coverage)
+    await registry.persist()
+
+    # One bounded request covered this market's two private tokens.
+    assert provider.calls, "the coverage lane must issue its batch request"
+    assert TOKEN_A in provider.calls[0] and TOKEN_B in provider.calls[0]
+
+    stored = await projections.load(market_id)
+    assert stored is not None
+    assert stored.state is QuoteState.SNAPSHOT
+    assert stored.outcome_asks == ("0.60", "0.60")
+    assert stored.as_of == NOW
+
+    # The raw batch landed once, under the existing 14-day retention kind.
+    async with database.session() as session:
+        raw_rows = await session.scalar(
+            text(
+                "SELECT count(*) FROM raw_provider_events"
+                " WHERE kind = 'clob_books_batch'"
+            )
+        )
+    assert int(raw_rows or 0) >= 1
+
+    # Aggregate coverage is persisted with the rest of the health surface.
+    health = await state.load_health()
+    assert health is not None and health.market_coverage is not None
+    assert health.market_coverage.candidate >= 1
+    assert health.market_coverage.attempted >= 1
+    assert health.market_coverage.fresh_snapshot >= 1
+    assert health.market_coverage.rate_limited is False
+
+    # The lane created no decision, no paper and no WebSocket subscription.
+    assert await _count_rows(database, "decision_observations", match_id) == (
+        decisions_before
+    )
+    assert (
+        await _count_rows(database, "paper_order_intents", match_id) == intents_before
+    )
+    assert feed.subscribed == {}
+    assert roster_worker.active_market_ids() == ()
+
+    # A realtime hot book mirrored afterwards takes precedence in the shared
+    # projection, and an older snapshot can never win it back.
+    book = fillable_book(market_id)
+    assert (
+        await projections.upsert(realtime_quote_record(book, fresh_seconds=300)) is True
+    )
+    refreshed = await projections.load(market_id)
+    assert refreshed is not None and refreshed.source is QuoteSource.REALTIME
+    assert await projections.upsert(stored) is False  # older snapshot rejected

@@ -339,3 +339,32 @@ def test_realtime_quote_record_mirrors_levels_with_precedence_metadata():
     assert record.as_of == NOW
     assert record.expires_at == NOW + timedelta(seconds=300)
     assert record.outcome_asks == ("0.63", "0.39")
+
+
+def test_a_stored_realtime_quote_ages_out_at_the_realtime_bound():
+    """A WebSocket-sourced quote is never vouched for by the snapshot window:
+    once it is older than the realtime bound it reads as expired."""
+    record = realtime_quote_record(
+        hot_book(a=("0.61", "0.63"), b=("0.37", "0.39")), fresh_seconds=5
+    )
+    within = display_quote(
+        hot_book=None,
+        snapshot=record,
+        now=NOW + timedelta(seconds=2),
+        realtime_fresh_seconds=5,
+        snapshot_fresh_seconds=300,
+    )
+    assert within.state is QuoteState.REALTIME
+    assert within.source is QuoteSource.REALTIME
+    assert within.outcome_asks == ("0.63", "0.39")
+
+    aged_out = display_quote(
+        hot_book=None,
+        snapshot=record,
+        now=NOW + timedelta(seconds=6),
+        realtime_fresh_seconds=5,
+        snapshot_fresh_seconds=300,
+    )
+    assert aged_out.state is QuoteState.STALE
+    assert aged_out.source is QuoteSource.REALTIME
+    assert aged_out.outcome_asks == ("0.63", "0.39")  # last trusted levels kept

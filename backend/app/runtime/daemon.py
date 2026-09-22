@@ -35,6 +35,7 @@ from app.markets.mapping import (
     map_market,
 )
 from app.markets.models import MarketStatus, ResolutionStatus
+from app.markets.quotes import realtime_quote_record
 from app.persistence.market_repositories import LinkFrozenError
 from app.runtime.health import (
     MARKET_SOURCE,
@@ -281,6 +282,10 @@ class LocalRuntimeDaemon:
         resolver: Any,
         metrics: Any = None,
         metadata_cache: TtlCache | None = None,
+        quote_job: Any = None,
+        quote_snapshots: Any = None,
+        quote_fresh_seconds: int = 300,
+        market_snapshot_seconds: int = 120,
         tick_seconds: float = 1.0,
         live_catalog_seconds: int = 60,
         upcoming_catalog_seconds: int = 600,
@@ -304,6 +309,9 @@ class LocalRuntimeDaemon:
         self._directory = directory
         self._resolver = resolver
         self._metrics = metrics
+        self._quote_job = quote_job
+        self._quote_snapshots = quote_snapshots
+        self._quote_fresh_seconds = quote_fresh_seconds
         self._tick_seconds = tick_seconds
         self._max_resolution_targets = max_resolution_targets
         self._closed_window = closed_market_window
@@ -350,6 +358,11 @@ class LocalRuntimeDaemon:
                     "resolution_recheck",
                     timedelta(seconds=market_discovery_seconds),
                     self._resolution_recheck,
+                ),
+                RuntimeJob(
+                    "market_snapshot",
+                    timedelta(seconds=market_snapshot_seconds),
+                    self._run_market_snapshot,
                 ),
             ],
         )
@@ -430,6 +443,7 @@ class LocalRuntimeDaemon:
             try:
                 await self._decision_worker.pump_once(market_id)
                 await self._execute_due_intents(market_id)
+                await self._mirror_hot_book(market_id)
             except Exception as exc:  # noqa: BLE001 - per-market isolation
                 failures.append(stable_reason_code(exc))
         if failures:
@@ -500,6 +514,43 @@ class LocalRuntimeDaemon:
         # Delegates to the shared TTL cache. A failed load raises and is never
         # served from a stale cache nor cached as an error.
         return await self._metadata_cache.get(market_id)
+
+    # ------------------------------------------------------------------
+    # Coverage lane
+    # ------------------------------------------------------------------
+
+    async def _run_market_snapshot(self) -> None:
+        """Run one bounded coverage round and publish its coverage facts.
+
+        The lane writes display quotes only: no prediction, no decision, no
+        paper, no WebSocket. A failed round keeps the previous coverage and
+        the previous projection rows (the scheduler marks the job degraded).
+        """
+        if self._quote_job is None:
+            return
+        coverage = await self._quote_job.run_once()
+        self._health.set_market_coverage(coverage)
+
+    async def _mirror_hot_book(self, market_id: str) -> None:
+        """Mirror the realtime hot book into the shared projection so pages
+        read one precedence rule for both lanes. A missing book writes
+        nothing; a store failure degrades the market source without
+        suppressing the just-published decision book."""
+        if self._quote_snapshots is None:
+            return
+        try:
+            book = await self._hot_books.get_hot_book(market_id)
+        except Exception as exc:  # noqa: BLE001 - isolate the mirror
+            await self._health.mark_degraded(MARKET_SOURCE, stable_reason_code(exc))
+            return
+        if book is None:
+            return
+        try:
+            await self._quote_snapshots.upsert(
+                realtime_quote_record(book, fresh_seconds=self._quote_fresh_seconds)
+            )
+        except Exception as exc:  # noqa: BLE001 - isolate the mirror
+            await self._health.mark_degraded(MARKET_SOURCE, stable_reason_code(exc))
 
     # ------------------------------------------------------------------
     # Bounded discovery jobs

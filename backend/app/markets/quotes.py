@@ -232,9 +232,10 @@ def display_quote(
     """Single source of truth for the visible quote state (spec §5.3).
 
     A fresh WebSocket book always wins; otherwise the durable snapshot is
-    shown with its own state, upgraded to `stale` once it outlives the
-    configured freshness bound. Nothing is ever fabricated: with neither
-    source the state is `unavailable`, not a zero quote.
+    shown with its own state, upgraded to `stale` once it outlives its own
+    lane's freshness bound (realtime for a WebSocket-sourced quote, the
+    coverage window for a batch snapshot). Nothing is ever fabricated: with
+    neither source the state is `unavailable`, not a zero quote.
     """
     if (
         hot_book is not None
@@ -259,10 +260,16 @@ def display_quote(
         )
     if snapshot is None:
         return DisplayQuote(state=QuoteState.UNAVAILABLE)
+    # A WebSocket-sourced quote ages out at the realtime bound, a batch
+    # snapshot at the coverage bound: the slower window must never vouch for
+    # a quote that was only ever valid for a moment.
+    bound = (
+        realtime_fresh_seconds
+        if snapshot.source is QuoteSource.REALTIME
+        else snapshot_fresh_seconds
+    )
     state = (
-        snapshot.state
-        if _is_fresh(snapshot.as_of, now, snapshot_fresh_seconds)
-        else QuoteState.STALE
+        snapshot.state if _is_fresh(snapshot.as_of, now, bound) else QuoteState.STALE
     )
     return DisplayQuote(
         state=state,
