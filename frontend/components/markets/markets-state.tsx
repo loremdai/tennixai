@@ -15,6 +15,7 @@ import { MarketFilters, type GenderFilter, type PhaseFilter } from '@/components
 import { MarketRow } from '@/components/markets/market-row'
 import { MarketsTabs, type MarketsTabValue } from '@/components/markets/markets-tabs'
 import { OpportunityRow } from '@/components/markets/opportunity-row'
+import { OpportunityEmptyState } from '@/components/markets/opportunity-empty-state'
 import { PaperRow } from '@/components/markets/paper-row'
 import { ProductHeader } from '@/components/match/match-header'
 import { Badge } from '@/components/ui/badge'
@@ -403,16 +404,10 @@ export function MarketsWorkspace({
                 ) : data.opportunities.status === 'error' && data.opportunities.rows.length === 0 ? (
                   <ErrorCard errorCode={data.opportunities.errorCode} onRetry={() => void data.refetch()} />
                 ) : data.opportunities.rows.length === 0 ? (
-                  <Card>
-                    <CardContent className="flex min-h-72 flex-col items-center justify-center gap-3 text-center">
-                      <div>
-                        <h2 className="font-semibold">暂无符合门槛的机会</h2>
-                        <p className="mt-1 max-w-md text-sm leading-relaxed text-muted-foreground">
-                          覆盖市场仍在监测中；下一次通过 hard gate 的 BUY 或 WAIT 会出现在这里。
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
+                  <OpportunityEmptyState
+                    reason={data.opportunities.availability?.reason ?? null}
+                    onViewAllMarkets={() => selectView('all')}
+                  />
                 ) : (
                   <section className="flex flex-col gap-3" aria-labelledby="opportunities-title">
                     <div className="flex items-end justify-between gap-3">

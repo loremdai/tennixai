@@ -62,7 +62,12 @@ describe('P3 markets preview', () => {
 
 import { MarketsWorkspace } from './markets-state'
 import { waitFor } from '@testing-library/react'
-import type { MarketSummaryDto, OpportunityDto, PaperPositionDto } from '@/lib/api/types'
+import type {
+  MarketSummaryDto,
+  OpportunityAvailabilityReason,
+  OpportunityDto,
+  PaperPositionDto,
+} from '@/lib/api/types'
 
 const {
   listMarketOpportunitiesMock,
@@ -436,7 +441,8 @@ describe('MarketsWorkspace (production)', () => {
     const user = userEvent.setup()
     render(<MarketsWorkspace />)
 
-    await waitFor(() => expect(screen.getByText('暂无符合门槛的机会')).toBeTruthy())
+    // NO_ELIGIBLE_ACTION has its own honest copy (T88).
+    await waitFor(() => expect(screen.getByText('当前没有满足策略门的机会。')).toBeTruthy())
     await user.click(screen.getByRole('tab', { name: /全部市场/ }))
     await waitFor(() => expect(screen.getByText('供应商暂无市场')).toBeTruthy())
     await user.click(screen.getByRole('button', { name: 'ITF' }))
@@ -454,5 +460,78 @@ describe('MarketsWorkspace (production)', () => {
 
     await waitFor(() => expect(screen.getByText('市场决策支持未启用')).toBeTruthy())
     expect(screen.getByText(/p3_disabled/)).toBeTruthy()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// T88: the empty opportunities tab explains itself with server-provided
+// availability reasons; a low-tier row never carries a negative model label.
+// ---------------------------------------------------------------------------
+
+describe('MarketsWorkspace opportunity empty states (T88)', () => {
+  // This describe sits outside the production describe, so it must reset the
+  // shared mocks itself instead of inheriting the previous test's failures.
+  beforeEach(() => {
+    listMarketsMock.mockResolvedValue({
+      markets: [],
+      page: 1,
+      page_size: 50,
+      total: 0,
+    })
+    getPaperPositionsMock.mockResolvedValue({ open: [], recent: [] })
+  })
+
+  function emptyOpportunities(reason: OpportunityAvailabilityReason | null) {
+    listMarketOpportunitiesMock.mockResolvedValue({
+      rows: [],
+      availability: reason === null ? null : { reason, model_status: 'unknown' },
+    })
+  }
+
+  it('explains an unpromoted model and offers the real quotes', async () => {
+    emptyOpportunities('ELIGIBLE_UNPROMOTED')
+    render(<MarketsWorkspace initialView="opportunities" />)
+
+    await waitFor(() =>
+      expect(screen.getByText('模型尚未完成验证')).toBeTruthy(),
+    )
+    expect(
+      screen.getByText('模型尚未完成验证，当前不生成 BUY / WAIT；全部市场的真实报价仍可查看。'),
+    ).toBeTruthy()
+    expect(screen.getByRole('button', { name: '查看全部市场' })).toBeTruthy()
+    expect(screen.queryByText('BUY')).toBeNull()
+    expect(screen.queryByText('WAIT')).toBeNull()
+  })
+
+  it('uses a distinct honest copy for every other reason', async () => {
+    const cases = [
+      ['NO_ELIGIBLE_ACTION', '当前没有满足策略门的机会。'],
+      ['NO_COVERED_MARKET', '当前没有可评估的主巡单打市场。'],
+      ['DECISION_GAP', '决策数据正在恢复，暂不生成新机会。'],
+    ] as const
+    for (const [reason, copy] of cases) {
+      emptyOpportunities(reason)
+      const { unmount } = render(<MarketsWorkspace initialView="opportunities" />)
+      await waitFor(() => expect(screen.getByText(copy)).toBeTruthy())
+      unmount()
+    }
+  })
+
+  it('falls back to the neutral copy when the payload carries no reason', async () => {
+    emptyOpportunities(null)
+    render(<MarketsWorkspace initialView="opportunities" />)
+
+    await waitFor(() => expect(screen.getByText('暂无符合门槛的机会')).toBeTruthy())
+    expect(screen.queryByRole('button', { name: '查看全部市场' })).toBeNull()
+  })
+
+  it('switching to the all-markets view works from the empty state', async () => {
+    const user = userEvent.setup()
+    emptyOpportunities('ELIGIBLE_UNPROMOTED')
+    render(<MarketsWorkspace initialView="opportunities" />)
+
+    await waitFor(() => expect(screen.getByText('模型尚未完成验证')).toBeTruthy())
+    await user.click(screen.getByRole('button', { name: '查看全部市场' }))
+    await waitFor(() => expect(screen.getByText('市场筛选')).toBeTruthy())
   })
 })
