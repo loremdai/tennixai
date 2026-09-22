@@ -10,7 +10,7 @@ provider identifiers.
 
 import hashlib
 import json
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -41,6 +41,7 @@ from app.markets.polymarket_dtos import (
     GammaEventDto,
     GammaMarketDto,
 )
+from app.markets.quotes import ClobBooksBatch, TokenBook
 from app.players.models import PlayerResolutionStatus
 from app.players.resolver import PlayerResolver
 
@@ -360,6 +361,95 @@ class PolymarketProvider:
             )
         self._outcome_players[external.condition_id] = player_ids
         return player_ids
+
+    async def get_order_books(self, token_ids: Sequence[str]) -> ClobBooksBatch:
+        """Batch `POST /books` for the coverage lane (T85).
+
+        One public, credential-free, read-only request per batch. Tokens are
+        de-duplicated in first-seen order; a token that is missing from the
+        response or whose levels cannot be parsed is reported instead of
+        fabricated, and never affects the other tokens in the batch. The raw
+        response is returned for the 14-day raw store only and must never
+        reach a public DTO, log or page.
+        """
+        requested = tuple(dict.fromkeys(token for token in token_ids if token))
+        if not requested:
+            return ClobBooksBatch()
+        try:
+            response = await self._clob.post(
+                "/books", json=[{"token_id": token} for token in requested]
+            )
+        except httpx.HTTPError as exc:
+            raise AppError(
+                "provider_unavailable", "Polymarket request failed", 503
+            ) from exc
+        self._raise_for_status(response)
+        try:
+            payload = response.json()
+        except (ValueError, json.JSONDecodeError) as exc:
+            raise AppError(
+                "provider_invalid_response",
+                "Polymarket response was not valid JSON",
+                502,
+            ) from exc
+        if not isinstance(payload, list):
+            raise AppError(
+                "provider_invalid_response",
+                "Polymarket books payload was malformed",
+                502,
+            )
+        books: dict[str, TokenBook] = {}
+        malformed: list[str] = []
+        requested_set = set(requested)
+        for item in payload:
+            if not isinstance(item, dict):
+                continue
+            try:
+                dto = BookDto.model_validate(item)
+            except ValidationError:
+                candidate = item.get("asset_id")
+                if isinstance(candidate, str) and candidate in requested_set:
+                    malformed.append(candidate)
+                continue
+            token_id = dto.asset_id or ""
+            if token_id not in requested_set:
+                continue
+            try:
+                bids = self._canonical_levels(dto.bids, descending=True)
+                asks = self._canonical_levels(dto.asks, descending=False)
+            except AppError:
+                # Per-token isolation: a malformed book affects only its own
+                # market; the rest of the batch still lands.
+                malformed.append(token_id)
+                continue
+            books[token_id] = TokenBook(
+                token_id=token_id,
+                bids=bids,
+                asks=asks,
+                book_hash=dto.hash or "",
+                provider_timestamp=self._epoch_millis(dto.timestamp),
+            )
+        malformed_set = set(malformed)
+        missing = tuple(
+            token
+            for token in requested
+            if token not in books and token not in malformed_set
+        )
+        return ClobBooksBatch(
+            books=books,
+            missing_tokens=missing,
+            malformed_tokens=tuple(malformed),
+            raw=tuple(payload),
+        )
+
+    @staticmethod
+    def _epoch_millis(value: str | int | None) -> datetime | None:
+        if value is None:
+            return None
+        try:
+            return datetime.fromtimestamp(int(str(value)) / 1000, tz=UTC)
+        except (ValueError, OSError, OverflowError):
+            return None
 
     async def get_order_book(self, market_id: str) -> OrderBookState:
         external = await self._external(market_id)
