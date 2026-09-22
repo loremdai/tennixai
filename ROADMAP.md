@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-22 18:20 CST
+**最后更新：** 2026-09-22 19:05 CST
 
 **总体状态：** `in_progress`
 
 **当前里程碑：** P3 已关闭；P4.0 设计与实施计划（T72）已 `done`；P4.1 Local Real Runtime Implementation 已关闭（T73–T80 全部 `done`，Completion Gate 九条逐条实际核验，2026-09-18）；T81 Playwright 视觉门稳定性收口与 T82 一键启动器前端进程修复均已 `done`（2026-09-18）；P4.3 市场数据可信度与覆盖设计（T83）已冻结并由用户于 2026-09-22 书面确认，T84–T89 按顺序实施中
 
-**当前阶段：** P4.3 — Market Data Truthfulness & Coverage；T85 是唯一 `in_progress` 任务（batch quote coverage）
+**当前阶段：** P4.3 — Market Data Truthfulness & Coverage；T86 是唯一 `in_progress` 任务（snapshot 调度与流恢复加固）
 
 ## 状态说明
 
@@ -171,7 +171,8 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 
 | T83 | P4.3 | Freeze Market Data Truthfulness & Coverage Design | `done` | `8ffba5e`（草案）、`89de518`（记录） | 234 行 [设计规格](./docs/superpowers/specs/2026-09-22-tennixai-p4-market-data-truthfulness-and-coverage-design.md)：双通道架构、active-link 真相、显式 quote/model/decision 语义、配置与健康边界、T84–T89 顺序与延期清单；占位符/一致性/范围自审通过。规格中三条根因断言在代码中逐条核对成立（`link_match` 只写 link 表、`P3QueryService.markets()` 读 `MarketRow.match_id` 且逐行 `_hot_book`/`latest_prediction`）。用户于 2026-09-22 书面确认规格，T83 关闭；本任务未修改产品代码、运行时、API 或 UI |
 | T84 | P4.3 | Add Active-Link Market Overview Projection | `done` | `a0d5f5f` | 领取 `61c460d`（起始 `89de518`）。`market_match_links.status='active'` 成为唯一 market→match read truth；`MarketOverviewRow` 单条 LEFT JOIN（join 条件固定 `status='active'`，replaced/inactive link 不泄漏）；`latest_predictions_for_matches` 批量 DISTINCT ON；`MarketHotPublisher.get_hot_books` 单次 MGET；`P3QueryService.markets()` 全部依赖批量装载。验证：`tests/test_market_overview_projection.py` 1 passed（各依赖恰一次调用、per-row 调用直接抛错）；`tests/integration/test_p3_query_service.py` 5 passed（新证据：replaced link 不泄漏且旧 `markets.match_id` 仍存值但被忽略；行数增加后 SQL 语句数 `expanded == baseline` ≤8）；确定性 `1138 passed, 12 skipped, 89 deselected`；infrastructure `64 passed`；触碰文件 ruff check 通过。计划中 T84.1/T84.2 两次提交合并为一次，避免红色中间态 |
-| T85 | P4.3 | Add Read-Only Batch Quote Coverage | `in_progress` | — | 领取见 `CURRENT.md`（起始 `a0d5f5f`）。可逆 migration `0006` 与 `market_quote_snapshots` 单行投影、canonical 七个 quote 状态与 precedence、公开只读 CLOB `POST /books` 批量适配器、幂等 upsert 与 raw batch 14 天保留 |
+| T85 | P4.3 | Add Read-Only Batch Quote Coverage | `done` | `8c311d8`、`27d0cc9`、`5c1f94b`、`f413196` | 领取 `27f1c01`（起始 `a0d5f5f`）。reversible migration `0006` 建 `market_quote_snapshots`（每 market 一行，只存 canonical 两侧 levels + 展示统计 + `source`/`quote_state`/`as_of`/`expires_at`/`book_hash`，零 token/condition/raw）；`app/markets/quotes.py` 实现七个可见状态、批量→双侧 canonical 投影、共享 level 格式与 `decide_quote_write` precedence（旧值不覆盖新值、同刻只允许 realtime 覆盖 snapshot、同内容重跑零写）；`PolymarketProvider.get_order_books` 用公开只读 `POST /books`（去重保序、按 `asset_id` 取样、单 token 隔离、429 `Retry-After`、零 Authorization、空输入不发请求）；raw batch 每批一行写既有 14 天 raw 表。验证：migration `0006` 往返 exit 0；`tests/test_market_quote_snapshot.py` 10 passed；`tests/test_polymarket_batch_books.py` 6 passed；`tests/integration/test_market_quote_persistence.py` 4 passed（连跑两次）；确定性 `1154 passed, 12 skipped, 93 deselected`；infrastructure `68 passed`；ruff 干净 |
+| T86 | P4.3 | Schedule Snapshot Coverage and Harden Market Stream Recovery | `in_progress` | — | 领取见 `CURRENT.md`（起始 `f413196`）。有界 120 秒 snapshot 作业与公平轮转、429/backoff、聚合 coverage 健康、WebSocket 正常关闭/keepalive 加固、实时热 book 镜像进共享投影；不扩大 WebSocket roster |
 | T85 | P4.3 | Add Read-Only Batch Quote Coverage | `planned` | — | 可逆 latest-quote projection、private token target、公开 CLOB batch `/books`、canonical parse、幂等 upsert 与 14 天 raw batch retention；不接 WebSocket/LLM/decision/paper |
 | T86 | P4.3 | Schedule Snapshot Coverage and Harden Market Stream Recovery | `planned` | — | 有界 120 秒 snapshot job、coverage health、429/backoff/fair rotation，以及 normal-close/overflow/reconcile/recovery 证据；不扩大 decision WebSocket roster |
 | T87 | P4.3 | Expose Explicit Market and Opportunity Semantics | `planned` | — | typed REST/SSE/Next transport：active link、quote state/source/as-of、model availability 和真实 decision action 分离；公共面零 provider identity |
