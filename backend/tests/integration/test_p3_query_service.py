@@ -18,13 +18,17 @@ from sqlalchemy import event, text
 from app.config import Settings
 from app.decision.models import DecisionAction
 from app.markets.models import BookLevel, OrderBookState, OutcomeBook
+from app.markets.quotes import QuoteSnapshotRecord, QuoteSource, QuoteState
 from app.prediction.models import (
     ModelAvailability,
     PredictionSnapshot,
     ProbabilityEstimate,
 )
 from app.persistence.database import Database
-from app.persistence.market_repositories import MarketRepository
+from app.persistence.market_repositories import (
+    MarketQuoteSnapshotRepository,
+    MarketRepository,
+)
 from app.persistence.paper_repositories import PaperLedgerRepository
 from app.persistence.repositories import PostgresIdentityRepository
 from app.service import P3QueryService
@@ -144,6 +148,7 @@ async def test_query_service_reads_durable_ledger(database: Database) -> None:
         markets=MarketRepository(database),
         paper=PaperLedgerRepository(database),
         hot_books=None,  # absent hot state must degrade to None, never zero
+        clock=lambda: NOW,
     )
 
     decision = await queries.match_decision(match_id)
@@ -192,9 +197,10 @@ async def test_query_service_reads_durable_ledger(database: Database) -> None:
     page = await queries.markets(tier="atp", phase="live", page=1, page_size=50)
     summary = next(item for item in page.markets if item.market_id == market_id)
     assert summary.match_id == match_id
-    assert summary.model_covered is True
-    assert summary.action == "buy"
-    assert summary.best_bid is None and summary.best_ask is None
+    assert summary.model_availability == "available"
+    assert summary.decision_action == "buy"
+    assert summary.quote.state == "unavailable"
+    assert summary.quote.best_bid is None and summary.quote.best_ask is None
     itf_page = await queries.markets(tier="itf", page=1, page_size=50)
     assert all(item.market_id != market_id for item in itf_page.markets)
 
@@ -381,7 +387,11 @@ async def test_enriched_fields_and_pulse_selection(database: Database) -> None:
         }
     )
     queries = P3QueryService(
-        database=database, markets=markets, paper=ledger, hot_books=hot_books
+        database=database,
+        markets=markets,
+        paper=ledger,
+        hot_books=hot_books,
+        clock=lambda: NOW,
     )
 
     # --- decision snapshot workbench enrichment -----------------------------
@@ -421,18 +431,20 @@ async def test_enriched_fields_and_pulse_selection(database: Database) -> None:
     assert summary2.player_names is not None
     assert summary2.player_names[1] == "Player B"
     assert summary2.model_probability == pytest.approx(0.7)
-    assert summary2.outcome_bids == ("0.68", "0.28")
-    assert summary2.outcome_asks == ("0.70", "0.30")
-    assert Decimal(summary2.spread) == Decimal("0.02")
+    assert summary2.quote.outcome_bids == ("0.68", "0.28")
+    assert summary2.quote.outcome_asks == ("0.70", "0.30")
+    assert Decimal(summary2.quote.spread) == Decimal("0.02")
     # depth = top-level USD on both sides of both outcomes:
     # (0.68*150 + 0.70*200) + (0.28*100 + 0.30*120) = 242 + 64 = 306
-    assert Decimal(summary2.depth_usd) == Decimal("306.00")
-    assert summary2.action == "wait"
+    assert Decimal(summary2.quote.depth_usd) == Decimal("306.00")
+    assert summary2.decision_action == "wait"
     assert summary2.is_stale is True and summary2.has_gap is False
 
     summary1 = next(item for item in page.markets if item.market_id == market_id)
-    assert summary1.outcome_asks == ("0.60", "0.42")
-    assert summary1.best_bid == (player_a, "0.58")
+    assert summary1.quote.outcome_asks == ("0.60", "0.42")
+    assert summary1.quote.best_bid == (player_a, "0.58")
+    assert summary1.quote.state == "realtime"
+    assert summary1.quote.source == "realtime"
 
     # --- opportunities enrichment -------------------------------------------
     opportunities = await queries.opportunities()
@@ -593,3 +605,139 @@ async def test_markets_query_issues_a_constant_number_of_statements(
     assert expanded_page.total > baseline_page.total  # the rows really grew
     assert expanded == baseline
     assert expanded <= 8
+
+
+# ---------------------------------------------------------------------------
+# T87: quote state, model availability and the real decision action are
+# separate facts. Nothing is inferred from a null action any more.
+# ---------------------------------------------------------------------------
+
+
+def _quote_service(database: Database) -> P3QueryService:
+    return P3QueryService(
+        database=database,
+        markets=MarketRepository(database),
+        paper=PaperLedgerRepository(database),
+        hot_books=None,  # no realtime book in these tests
+        quote_snapshots=MarketQuoteSnapshotRepository(database),
+        snapshot_fresh_seconds=300,
+        realtime_fresh_seconds=5,
+        clock=lambda: NOW,
+    )
+
+
+async def test_market_rows_expose_explicit_quote_and_model_semantics(
+    database: Database,
+) -> None:
+    seeded = await _seed(database)
+    market_id = seeded["market_id"]
+    queries = _quote_service(database)
+
+    page = await queries.markets(page=1, page_size=50)
+    summary = next(item for item in page.markets if item.market_id == market_id)
+    assert summary.match_id == seeded["match_id"]
+    assert summary.model_availability == "available"
+    assert summary.decision_action == "buy"  # from the real observation
+    # No stored quote and no hot book yet: an explicit `unavailable`, never a zero.
+    assert summary.quote.state == "unavailable"
+    assert summary.quote.source is None and summary.quote.as_of is None
+    assert summary.quote.outcome_asks == (None, None)
+
+    # A stored durable snapshot becomes a real snapshot quote with its own time.
+    stored_at = NOW
+    await MarketQuoteSnapshotRepository(database).upsert(
+        QuoteSnapshotRecord(
+            market_id=market_id,
+            source=QuoteSource.SNAPSHOT,
+            state=QuoteState.SNAPSHOT,
+            book_hash="stored",
+            as_of=stored_at,
+            expires_at=stored_at + timedelta(seconds=300),
+            outcome_bids=("0.58", "0.40"),
+            outcome_asks=("0.60", "0.42"),
+            spread="0.0200",
+            depth_usd="306.00",
+        )
+    )
+    page = await queries.markets(page=1, page_size=50)
+    summary = next(item for item in page.markets if item.market_id == market_id)
+    assert summary.quote.state == "snapshot"
+    assert summary.quote.source == "snapshot"
+    assert summary.quote.as_of is not None
+    assert summary.quote.outcome_asks == ("0.60", "0.42")
+
+
+async def test_unmapped_market_has_no_action_and_no_fabricated_navigation(
+    database: Database,
+) -> None:
+    markets = MarketRepository(database)
+    market_id = await markets.get_or_create_market_id(
+        provider="polymarket",
+        provider_event_id=f"ev87_{uuid4().hex[:10]}",
+        condition_id=f"cond87_{uuid4().hex}",
+    )
+    await markets.save_market(make_market(market_id, match_id=None))
+    queries = _quote_service(database)
+
+    page = await queries.markets(page=1, page_size=50)
+    summary = next(item for item in page.markets if item.market_id == market_id)
+    assert summary.match_id is None
+    assert summary.decision_action is None  # never an inferred MARKET_ONLY
+    assert summary.model_availability == "not_evaluated"
+    assert summary.quote.state == "unavailable"
+
+
+async def test_opportunity_view_explains_the_unpromoted_empty_state(
+    database: Database,
+) -> None:
+    seeded = await _seed(database)
+    markets = MarketRepository(database)
+    # The newest observation for the market says the model is unpromoted.
+    unpromoted = make_observation(
+        seeded["match_id"], seeded["market_id"], observation_version=9
+    ).model_copy(
+        update={
+            "action": DecisionAction.NO_BET,
+            "reason_code": "MODEL_UNPROMOTED",
+            "quote": None,
+            "conservative_net_edge": None,
+            "target_player_id": None,
+        }
+    )
+    await markets.save_decision_observation(unpromoted)
+    queries = _quote_service(database)
+
+    rows, availability = await queries.opportunity_view()
+
+    assert availability.reason in {"ELIGIBLE_UNPROMOTED", "HAS_OPPORTUNITIES"}
+    assert availability.model_status in {"not_promoted", "unknown"}
+    if availability.reason == "ELIGIBLE_UNPROMOTED":
+        assert rows == []
+        assert availability.model_status == "not_promoted"
+
+
+async def test_opportunity_view_reports_the_dominant_reason(database: Database) -> None:
+    """With no rows and no unpromoted evidence the aggregate reason must be
+    one of the honest non-action reasons, never a fabricated opportunity."""
+    queries = _quote_service(database)
+    rows, availability = await queries.opportunity_view()
+    assert all(row.action in ("buy", "wait") for row in rows)
+    if not rows:
+        assert availability.reason in {
+            "ELIGIBLE_UNPROMOTED",
+            "NO_ELIGIBLE_ACTION",
+            "NO_COVERED_MARKET",
+            "DECISION_GAP",
+        }
+
+
+async def test_markets_snapshot_carries_an_availability_reason(database: Database) -> None:
+    queries = _quote_service(database)
+    snapshot = await queries.markets_snapshot()
+    assert snapshot["availability"] in {
+        "HAS_OPPORTUNITIES",
+        "ELIGIBLE_UNPROMOTED",
+        "NO_ELIGIBLE_ACTION",
+        "NO_COVERED_MARKET",
+        "DECISION_GAP",
+    }

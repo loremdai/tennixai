@@ -14,6 +14,7 @@ from httpx import ASGITransport, AsyncClient
 from app.api.schemas import (
     DecisionSnapshotDto,
     MarketPageDto,
+    MarketQuoteDto,
     MarketSummaryDto,
     OpportunityDto,
     PaperPositionDto,
@@ -78,11 +79,18 @@ class FakeP3Queries:
                 tier="atp",
                 gender="men",
                 phase="live",
-                model_covered=True,
-                action="buy",
+                model_availability="available",
+                decision_action="buy",
                 reason_code=None,
-                best_bid=("ply_a", "0.55"),
-                best_ask=("ply_a", "0.57"),
+                quote=MarketQuoteDto(
+                    state="snapshot",
+                    source="snapshot",
+                    as_of=NOW,
+                    outcome_bids=("0.55", "0.43"),
+                    outcome_asks=("0.57", "0.45"),
+                    best_bid=("ply_a", "0.55"),
+                    best_ask=("ply_a", "0.57"),
+                ),
                 as_of=NOW,
             ),
             MarketSummaryDto(
@@ -93,11 +101,14 @@ class FakeP3Queries:
                 tier="challenger",
                 gender="men",
                 phase="upcoming",
-                model_covered=False,
-                action="market_only",
+                model_availability="out_of_scope",
+                decision_action=None,
                 reason_code=None,
-                best_bid=None,
-                best_ask=None,
+                quote=MarketQuoteDto(
+                    state="unavailable",
+                    source=None,
+                    as_of=None,
+                ),
                 as_of=NOW,
             ),
         ]
@@ -137,6 +148,15 @@ class FakeP3Queries:
 
     async def opportunities(self):
         return self.opportunities_rows
+
+    async def opportunity_view(self):
+        from app.api.schemas import OpportunityAvailabilityDto
+
+        rows = list(self.opportunities_rows)
+        return rows, OpportunityAvailabilityDto(
+            reason="HAS_OPPORTUNITIES" if rows else "NO_ELIGIBLE_ACTION",
+            model_status="unknown",
+        )
 
     async def markets(
         self, *, tier=None, gender=None, phase=None, page=1, page_size=20
@@ -214,6 +234,14 @@ async def test_opportunities_are_ordered_live_buy_first(client):
     assert rows[0]["action"] == "buy"
     assert rows[1]["action"] == "wait"
     assert rows[1]["max_acceptable_price"] == "0.5500"
+    # The empty-state explanation travels with the list, as a reason code.
+    assert body["availability"]["reason"] in {
+        "HAS_OPPORTUNITIES",
+        "ELIGIBLE_UNPROMOTED",
+        "NO_ELIGIBLE_ACTION",
+        "NO_COVERED_MARKET",
+        "DECISION_GAP",
+    }
     assert_no_forbidden(response.text)
 
 
@@ -240,7 +268,8 @@ async def test_challenger_rows_show_market_data_without_negative_labels(client):
     rows = response.json()["data"]
     assert len(rows) == 1
     row = rows[0]
-    assert row["model_covered"] is False
+    assert row["model_availability"] == "out_of_scope"
+    assert row["decision_action"] is None
     assert row["reason_code"] is None  # no "uncovered"-style negative label
     assert_no_forbidden(response.text)
 

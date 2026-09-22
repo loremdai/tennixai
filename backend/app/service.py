@@ -29,7 +29,12 @@ from app.domain import (
 )
 from app.errors import AppError
 from app.intelligence import IntelligencePacket, IntelligenceTopic, build_intelligence_packet
-from app.markets.quotes import best_levels, outcome_levels
+from app.markets.quotes import (
+    best_levels,
+    display_quote,
+    outcome_levels,
+    QuoteState,
+)
 from app.players.models import (
     PlayerAliasKind,
     PlayerCandidate,
@@ -45,6 +50,33 @@ from app.players.models import (
 )
 from app.providers.base import TennisDataProvider
 from app.realtime.reducer import normalize_snapshot_quality, reduce_live_snapshot
+
+UNPROMOTED_REASONS = frozenset(
+    {"MODEL_UNPROMOTED", "PROMOTION_NOT_GRANTED", "ARTIFACT_INVALID"}
+)
+MAIN_TOUR_TIERS = frozenset({"atp", "wta"})
+
+
+def p3_model_availability(*, tier, prediction, observation) -> str:
+    """Explicit model availability for one market row (spec §6.1).
+
+    Never inferred from a null action: `out_of_scope` marks levels the model
+    deliberately does not cover, `not_evaluated` means no evidence exists
+    yet, `eligible_unpromoted` means the market is in domain but the model is
+    not promoted, and `available` requires real prediction evidence.
+    """
+    if tier is None:
+        return "not_evaluated"  # no active link: nothing was evaluated
+    if tier not in MAIN_TOUR_TIERS:
+        return "out_of_scope"  # deliberately outside the model domain
+    if prediction is not None:
+        if prediction.availability.value in ("available", "degraded"):
+            return "available"
+        if prediction.availability.value in ("unpromoted", "unavailable"):
+            return "eligible_unpromoted"
+    if observation is not None and (observation.reason_code or "") in UNPROMOTED_REASONS:
+        return "eligible_unpromoted"
+    return "not_evaluated"
 
 
 class MatchTimeScope(StrEnum):
@@ -1083,11 +1115,26 @@ class P3QueryService:
     and the Redis hot books (fresh best bid/ask only). Internal IDs only;
     never touches provider identifiers, wallets or model internals."""
 
-    def __init__(self, *, database, markets, paper, hot_books=None) -> None:
+    def __init__(
+        self,
+        *,
+        database,
+        markets,
+        paper,
+        hot_books=None,
+        quote_snapshots=None,
+        snapshot_fresh_seconds: int = 300,
+        realtime_fresh_seconds: int = 5,
+        clock=None,
+    ) -> None:
         self._database = database
         self._markets = markets
         self._paper = paper
         self._hot_books = hot_books
+        self._quote_snapshots = quote_snapshots
+        self._snapshot_fresh_seconds = snapshot_fresh_seconds
+        self._realtime_fresh_seconds = realtime_fresh_seconds
+        self._clock = clock or (lambda: datetime.now(timezone.utc))
 
     async def _match_facts(self, match_ids) -> dict:
         """One batched lookup: players, tournament tier/gender, phase."""
@@ -1486,8 +1533,62 @@ class P3QueryService:
         rows.sort(key=lambda item: item[:3])
         return [row[3] for row in rows]
 
+    async def opportunity_view(self):
+        """Rows plus the aggregate availability reason (spec §6.2).
+
+        `opportunities()` keeps returning the plain row list for the Chat
+        tools; the page uses this view so an empty tab can explain itself
+        without ever fabricating an action.
+        """
+        from app.api.schemas import OpportunityAvailabilityDto
+
+        rows = await self.opportunities()
+        if rows:
+            return rows, OpportunityAvailabilityDto(
+                reason="HAS_OPPORTUNITIES", model_status="unknown"
+            )
+        observations = await self._markets.latest_decision_observations()
+        unpromoted = any(
+            (observation.reason_code or "") in UNPROMOTED_REASONS
+            for observation in observations
+        )
+        if unpromoted:
+            return rows, OpportunityAvailabilityDto(
+                reason="ELIGIBLE_UNPROMOTED", model_status="not_promoted"
+            )
+        if observations and all(
+            observation.is_stale or observation.has_gap
+            for observation in observations
+        ):
+            return rows, OpportunityAvailabilityDto(
+                reason="DECISION_GAP", model_status="unknown"
+            )
+        overviews = await self._markets.list_market_overviews()
+        linked = [row for row in overviews if row.active_match_id]
+        facts = await self._match_facts([row.active_match_id for row in linked])
+        covered = [
+            row
+            for row in linked
+            if facts.get(row.active_match_id, {}).get("tier") in MAIN_TOUR_TIERS
+        ]
+        if not covered:
+            return rows, OpportunityAvailabilityDto(
+                reason="NO_COVERED_MARKET", model_status="unknown"
+            )
+        predictions = await self._markets.latest_predictions_for_matches(
+            [row.active_match_id for row in covered]
+        )
+        promoted = any(
+            snapshot.availability.value in ("available", "degraded")
+            for snapshot in predictions.values()
+        )
+        return rows, OpportunityAvailabilityDto(
+            reason="NO_ELIGIBLE_ACTION",
+            model_status="promoted" if promoted else "unknown",
+        )
+
     async def markets(self, *, tier=None, gender=None, phase=None, page=1, page_size=20):
-        from app.api.schemas import MarketPageDto, MarketSummaryDto
+        from app.api.schemas import MarketPageDto, MarketQuoteDto, MarketSummaryDto
 
         market_rows = await self._markets.list_market_overviews()
         observations = await self._markets.latest_decision_observations()
@@ -1500,6 +1601,13 @@ class P3QueryService:
         facts = await self._match_facts(match_ids)
         predictions = await self._markets.latest_predictions_for_matches(match_ids)
         hot_books = await self._bulk_hot_books([row.market_id for row in market_rows])
+        stored_quotes = (
+            await self._quote_snapshots.load_many(
+                [row.market_id for row in market_rows]
+            )
+            if self._quote_snapshots is not None
+            else {}
+        )
         summaries = []
         for row in market_rows:
             match_id = row.active_match_id
@@ -1513,14 +1621,18 @@ class P3QueryService:
             book = hot_books.get(row.market_id)
             outcome_ids = (row.outcome_a_player_id, row.outcome_b_player_id)
             outcome_names = (row.outcome_a_name, row.outcome_b_name)
-            best_bid, best_ask = self._best_levels(book, row.outcome_a_player_id)
-            outcome_bids, outcome_asks, spread, depth = self._outcome_levels(
-                book, outcome_ids
+            quote = display_quote(
+                hot_book=book,
+                snapshot=stored_quotes.get(row.market_id),
+                now=self._clock(),
+                realtime_fresh_seconds=self._realtime_fresh_seconds,
+                snapshot_fresh_seconds=self._snapshot_fresh_seconds,
             )
             prediction = predictions.get(match_id) if match_id else None
-            model_covered = prediction is not None and prediction.availability.value in (
-                "available",
-                "degraded",
+            model_availability = p3_model_availability(
+                tier=match_facts.get("tier"),
+                prediction=prediction,
+                observation=observation,
             )
             model_probability = None
             if prediction is not None and row.outcome_a_player_id is not None:
@@ -1556,8 +1668,8 @@ class P3QueryService:
                     tier=match_facts.get("tier"),
                     gender=match_facts.get("gender"),
                     phase=market_phase,
-                    model_covered=model_covered,
-                    action=(
+                    model_availability=model_availability,
+                    decision_action=(
                         observation.action.value if observation is not None else None
                     ),
                     reason_code=(
@@ -1570,15 +1682,22 @@ class P3QueryService:
                     ),
                     player_names=player_names,
                     model_probability=model_probability,
-                    best_bid=best_bid,
-                    best_ask=best_ask,
-                    outcome_bids=outcome_bids,
-                    outcome_asks=outcome_asks,
-                    spread=_p3_decimal_text(spread),
-                    depth_usd=_p3_decimal_text(depth),
+                    quote=MarketQuoteDto(
+                        state=quote.state.value,
+                        source=(
+                            quote.source.value if quote.source is not None else None
+                        ),
+                        as_of=quote.as_of,
+                        outcome_bids=quote.outcome_bids,
+                        outcome_asks=quote.outcome_asks,
+                        best_bid=quote.best_bid,
+                        best_ask=quote.best_ask,
+                        spread=quote.spread,
+                        depth_usd=quote.depth_usd,
+                    ),
                     is_stale=(
                         (observation.is_stale if observation is not None else False)
-                        or (book.is_stale if book is not None else False)
+                        or quote.state is QuoteState.STALE
                     ),
                     has_gap=observation.has_gap if observation is not None else False,
                     as_of=row.observed_at,
@@ -1832,12 +1951,14 @@ class P3QueryService:
         )
         positions = await self._paper.load_all_positions()
         open_positions = sum(
-            1
+           1
             for position in positions
             if position.status.value in _P3_OPEN_POSITION_STATUSES
         )
+        _, availability = await self.opportunity_view()
         return {
             "markets": len(market_rows),
             "opportunities": actionable,
             "open_positions": open_positions,
+            "availability": availability.reason,
         }

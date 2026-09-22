@@ -305,7 +305,10 @@ def create_app(
                 TrackingDemand,
             )
             from app.paper.service import PaperTradingService
-            from app.persistence.market_repositories import MarketRepository
+            from app.persistence.market_repositories import (
+                MarketQuoteSnapshotRepository,
+                MarketRepository,
+            )
             from app.persistence.paper_repositories import PaperLedgerRepository
             from app.prediction.service import PredictionService
 
@@ -405,6 +408,11 @@ def create_app(
                 markets=market_repository,
                 paper=paper_ledger,
                 hot_books=market_publisher,
+                quote_snapshots=MarketQuoteSnapshotRepository(database),
+                snapshot_fresh_seconds=(
+                    settings.local_runtime_market_quote_fresh_seconds
+                ),
+                realtime_fresh_seconds=settings.p3_market_book_freshness_seconds,
             )
 
     if local_assembly is not None:

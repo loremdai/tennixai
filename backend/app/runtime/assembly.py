@@ -160,6 +160,9 @@ def build_local_runtime_assembly(
         markets=MarketRepository(database),
         paper=PaperLedgerRepository(database),
         hot_books=MarketHotPublisher(redis_client, now_fn=now),
+        quote_snapshots=MarketQuoteSnapshotRepository(database),
+        snapshot_fresh_seconds=settings.local_runtime_market_quote_fresh_seconds,
+        realtime_fresh_seconds=settings.p3_market_book_freshness_seconds,
     )
     return LocalRuntimeAssembly(
         database=database,

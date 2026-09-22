@@ -93,8 +93,35 @@ class OpportunityDto(BaseModel):
     as_of: datetime | None = None
 
 
+class OpportunityAvailabilityDto(BaseModel):
+    """Why the opportunities view currently looks the way it does.
+
+    A stable reason code only: the page owns the copy. NEVER used to
+    synthesize an action — an unpromoted model produces zero rows here.
+    """
+
+    reason: str  # HAS_OPPORTUNITIES | ELIGIBLE_UNPROMOTED | NO_ELIGIBLE_ACTION | NO_COVERED_MARKET | DECISION_GAP
+    model_status: str  # not_promoted | promoted | unknown
+
+
+class MarketQuoteDto(BaseModel):
+    """One market's display quote: state, source, time and independent
+    per-outcome levels. A missing side stays None — never a zero."""
+
+    state: str  # realtime | snapshot | partial | no_liquidity | unavailable | stale | limited
+    source: str | None = None  # realtime | snapshot | None
+    as_of: datetime | None = None
+    outcome_bids: tuple[str | None, str | None] | None = None
+    outcome_asks: tuple[str | None, str | None] | None = None
+    best_bid: tuple[str, str] | None = None
+    best_ask: tuple[str, str] | None = None
+    spread: str | None = None
+    depth_usd: str | None = None
+
+
 class MarketSummaryDto(BaseModel):
     market_id: str
+    # Only ever the ACTIVE `market_match_links` match; navigable when set.
     match_id: str | None = None
     question: str | None = None
     status: str
@@ -102,22 +129,16 @@ class MarketSummaryDto(BaseModel):
     tier: str | None = None
     gender: str | None = None
     phase: str | None = None
-    model_covered: bool = False
-    action: str | None = None
+    # available | eligible_unpromoted | out_of_scope | not_evaluated
+    model_availability: str = "not_evaluated"
+    # Only a real DecisionObservation may set this; a null action is not
+    # MARKET_ONLY and the pages must never infer one from the other.
+    decision_action: str | None = None
     reason_code: str | None = None
     player_ids: tuple[str, str] | None = None
     player_names: tuple[str, str] | None = None
     model_probability: float | None = None
-    best_bid: tuple[str, str] | None = None
-    best_ask: tuple[str, str] | None = None
-    # Per-outcome top levels aligned with player_ids order; None when the
-    # hot book is absent or one-sided (never fabricated zeros).
-    outcome_bids: tuple[str | None, str | None] | None = None
-    outcome_asks: tuple[str | None, str | None] | None = None
-    # Mean top-of-book spread (ask-bid) over outcomes quoting both sides.
-    spread: str | None = None
-    # Sum of top-level notional USD across both sides of both outcomes.
-    depth_usd: str | None = None
+    quote: MarketQuoteDto
     is_stale: bool = False
     has_gap: bool = False
     as_of: datetime | None = None
@@ -229,6 +250,7 @@ class DecisionSnapshotDto(BaseModel):
 
 class OpportunityListResponse(BaseModel):
     data: list[OpportunityDto]
+    availability: OpportunityAvailabilityDto | None = None
 
 
 class MarketListResponse(BaseModel):

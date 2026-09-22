@@ -97,6 +97,7 @@ def book(market_id: str) -> OrderBookState:
         sequence=9,
         book_hash=f"hash_{market_id}",
         provider_timestamp=NOW,
+        # A live book is seconds old; the service clock is pinned to NOW.
         received_at=NOW,
     )
 
@@ -144,6 +145,7 @@ async def test_markets_uses_active_link_and_loads_dependencies_in_bulk() -> None
         markets=spy,
         paper=None,
         hot_books=hot,
+        clock=lambda: NOW,
     )
 
     page = await service.markets(page=1, page_size=50)
@@ -155,7 +157,9 @@ async def test_markets_uses_active_link_and_loads_dependencies_in_bulk() -> None
     assert by_id["mkt_linked"].phase == "live"
     assert by_id["mkt_linked"].tournament_name == "Test Open"
     assert by_id["mkt_linked"].player_names == ("Alpha", "Beta")
-    assert by_id["mkt_linked"].outcome_asks == ("0.60", "0.42")
+    assert by_id["mkt_linked"].quote.outcome_asks == ("0.60", "0.42")
+    assert by_id["mkt_linked"].quote.state == "realtime"
+    assert by_id["mkt_linked"].quote.source == "realtime"
     assert by_id["mkt_linked_two"].match_id == "mat_2"
     assert by_id["mkt_linked_two"].tier == "challenger"
 
@@ -164,8 +168,11 @@ async def test_markets_uses_active_link_and_loads_dependencies_in_bulk() -> None
     assert unlinked.match_id is None
     assert unlinked.question == "Unlinked moneyline"
     assert unlinked.tier is None and unlinked.tournament_name is None
-    assert unlinked.best_ask is None
+    assert unlinked.quote.state == "unavailable"
+    assert unlinked.quote.best_ask is None
     assert unlinked.model_probability is None
+    assert unlinked.model_availability == "not_evaluated"
+    assert unlinked.decision_action is None
 
     # Bulk-only: one call each, regardless of row count.
     assert spy.overview_calls == 1

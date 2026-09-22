@@ -296,8 +296,8 @@ def get_p3_redis(request: Request):
 
 @router.get("/markets/opportunities", response_model=OpportunityListResponse)
 async def market_opportunities(queries=Depends(get_p3_queries)):
-    rows = await queries.opportunities()
-    return OpportunityListResponse(data=list(rows))
+    rows, availability = await queries.opportunity_view()
+    return OpportunityListResponse(data=list(rows), availability=availability)
 
 
 @router.get("/markets/pulse", response_model=PulseResponse)

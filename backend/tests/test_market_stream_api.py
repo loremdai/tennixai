@@ -96,7 +96,12 @@ class _MinimalQueries:
         return None
 
     async def markets_snapshot(self):
-        return {"markets": 2, "opportunities": 1, "open_positions": 0}
+        return {
+            "markets": 2,
+            "opportunities": 1,
+            "open_positions": 0,
+            "availability": "HAS_OPPORTUNITIES",
+        }
 
 
 def _frames(text: str) -> list[tuple[str, dict, str | None]]:
@@ -158,6 +163,7 @@ async def test_markets_stream_emits_ready_then_typed_deltas(env):
     frames = _frames(text)
     events = [frame[0] for frame in frames]
     assert events[0] == "ready"
+    assert frames[0][1]["availability"] == "HAS_OPPORTUNITIES"
     assert "market_delta" in events
     assert "decision_delta" in events
     market_frame = next(frame for frame in frames if frame[0] == "market_delta")
