@@ -551,3 +551,91 @@ async def test_start_is_guarded_against_reentrant_callers():
     assert parts["rest"].calls.count(MKT_1) == 1
     assert worker.subscription_state(MKT_1) == "live"
     await worker.stop()
+
+
+# ---------------------------------------------------------------------------
+# T86: a provider-side normal close parks the subscription without a gap and
+# without misreporting the whole market source as failed.
+# ---------------------------------------------------------------------------
+
+
+class NormalCloseFeed(FakeMarketFeed):
+    """Ends a subscription with the provider's normal-close signal."""
+
+    def stream_market(self, market_id: str, asset_ids: tuple[str, ...]):
+        self.subscribed[market_id] = asset_ids
+        queue = self.queues.setdefault(market_id, asyncio.Queue())
+        feed = self
+
+        async def generator():
+            from app.markets.live import MarketFeedClosed
+
+            try:
+                while True:
+                    item = await queue.get()
+                    if item is None:
+                        raise MarketFeedClosed("normal_close")
+                    yield item
+            finally:
+                feed.closed.add(market_id)
+
+        return generator()
+
+
+async def test_normal_close_parks_the_subscription_without_a_gap():
+    clock = FakeClock()
+    feed = NormalCloseFeed()
+    demand = DemandSource({MKT_1})
+    connections: list[tuple[str, str]] = []
+
+    async def on_connection(market_id: str, state: str) -> None:
+        connections.append((market_id, state))
+
+    worker, parts = make_worker(
+        clock, feed=feed, demand=demand, on_connection=on_connection
+    )
+    await worker.reconcile_demand_once()
+    assert worker.subscription_state(MKT_1) == "live"
+    assert parts["rest"].calls == [MKT_1]
+
+    await feed.disconnect(MKT_1)  # provider-side normal close
+    await worker.reconcile_demand_once()
+
+    # Parked closed: no gap, no reconnect, no transition, no REST storm.
+    assert worker.subscription_state(MKT_1) == "closed"
+    assert parts["publisher"].gaps == []
+    assert connections == []
+    assert parts["rest"].calls == [MKT_1]
+    assert parts["sink"].gaps == []
+
+    # A second cycle must not restart it while demand is unchanged.
+    await worker.reconcile_demand_once()
+    assert parts["rest"].calls == [MKT_1]
+    assert worker.subscription_state(MKT_1) == "closed"
+
+    # When demand drops it, the parked entry is released.
+    demand.markets = set()
+    await worker.reconcile_demand_once()
+    assert worker.active_market_ids() == ()
+
+    # A later demand for the same market subscribes again with a fresh stream.
+    demand.markets = {MKT_1}
+    await worker.reconcile_demand_once()
+    assert worker.subscription_state(MKT_1) == "live"
+    assert parts["rest"].calls == [MKT_1, MKT_1]
+
+
+async def test_abnormal_close_still_records_a_gap_and_reconciles():
+    """The regression guard for the existing recovery contract."""
+    clock = FakeClock()
+    feed = FakeMarketFeed()
+    worker, parts = make_worker(clock, feed=feed)
+    await worker.reconcile_demand_once()
+
+    await feed.disconnect(MKT_1)  # abnormal: MarketFeedDisconnected
+    await worker.reconcile_demand_once()
+
+    assert parts["publisher"].gaps == ["reconnect"]
+    assert parts["sink"].gaps and parts["sink"].gaps[-1]["reason"] == "reconnect"
+    assert worker.subscription_state(MKT_1) == "live"
+    assert parts["rest"].calls == [MKT_1, MKT_1]

@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
-from app.markets.live import MarketFeedDisconnected
+from app.markets.live import MarketFeedClosed, MarketFeedDisconnected
 from app.markets.publisher import MarketHotPublisher
 from app.markets.reducer import MarketBookReducer, RawMarketEvent
 
@@ -138,6 +138,10 @@ class MarketWorker:
             active += 1
 
         for sub in list(self._subs.values()):
+            if sub.state == "closed":
+                # A normally closed subscription has no stream to reconcile
+                # and must not be restarted while it is still in demand.
+                continue
             if sub.state == "reconnecting":
                 await self._rest_reconcile(sub, reason="reconnect", record_gap=True)
             elif sub.needs_reconcile:
@@ -244,6 +248,11 @@ class MarketWorker:
                         self._metrics.increment("queue_overflow")
         except asyncio.CancelledError:
             raise
+        except MarketFeedClosed:
+            # Provider-side normal end (a finished market): stop this stream
+            # without a gap and without marking the source failed. The entry
+            # stays parked until the demand source drops it.
+            sub.state = "closed"
         except MarketFeedDisconnected:
             sub.state = "reconnecting"
         except Exception:

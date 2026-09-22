@@ -16,6 +16,7 @@ from app.markets.live import MarketFeedDisconnected, PolymarketMarketFeed
 
 NOW = datetime(2026, 9, 16, 12, 0, tzinfo=UTC)
 TOKEN_A = "990001112223334445551"
+TOKEN_B = "990001112223334445552"
 
 
 class FakeWebSocketConnection:
@@ -213,3 +214,107 @@ async def test_disconnect_surfaces_typed_signal_without_leakage():
     message = str(error.value)
     assert "wss://" not in message
     assert "example.invalid" not in message
+
+
+# ---------------------------------------------------------------------------
+# T86: normal closes are a lifecycle branch, and every connection keeps its
+# own keepalive task (a second subscription must never clobber the first).
+# ---------------------------------------------------------------------------
+
+
+class NormalCloseConnection(FakeWebSocketConnection):
+    """Ends the stream with the provider's normal close, not a failure."""
+
+    async def recv(self) -> str:
+        if self._frames:
+            return self._frames.pop(0)
+        import websockets.exceptions
+
+        raise websockets.exceptions.ConnectionClosedOK(None, None)
+
+
+async def test_normal_close_raises_the_typed_lifecycle_signal():
+    from app.markets.live import MarketFeedClosed
+
+    feed = PolymarketMarketFeed(
+        websocket_factory=lambda url: NormalCloseConnection([]),
+        ping_interval_seconds=3600,
+        now_fn=lambda: NOW,
+    )
+    with pytest.raises(MarketFeedClosed):
+        async for _event in feed.subscribe((TOKEN_A,)):
+            pass
+
+
+async def test_frames_before_a_normal_close_are_still_delivered():
+    from app.markets.live import MarketFeedClosed
+
+    feed = PolymarketMarketFeed(
+        websocket_factory=lambda url: NormalCloseConnection([book_frame()]),
+        ping_interval_seconds=3600,
+        now_fn=lambda: NOW,
+    )
+    events = []
+    with pytest.raises(MarketFeedClosed):
+        async for event in feed.subscribe((TOKEN_A,)):
+            events.append(event)
+    assert [event.event_type for event in events] == ["book"]
+
+
+async def test_every_connection_keeps_its_own_ping_stream():
+    connections: list[FakeWebSocketConnection] = []
+
+    def factory(url: str) -> FakeWebSocketConnection:
+        connection = FakeWebSocketConnection([book_frame(), book_frame()])
+        connections.append(connection)
+        return connection
+
+    feed = PolymarketMarketFeed(
+        websocket_factory=factory,
+        ping_interval_seconds=0.01,
+        now_fn=lambda: NOW,
+    )
+
+    async def drain(stream) -> None:
+        async for _event in stream:
+            pass
+
+    tasks = [
+        asyncio.create_task(drain(feed.subscribe((TOKEN_A,)))),
+        asyncio.create_task(drain(feed.subscribe((TOKEN_B,)))),
+    ]
+    try:
+        await asyncio.sleep(0.08)
+        assert len(connections) == 2
+        # Both live connections are kept alive independently.
+        assert all("PING" in connection.sent for connection in connections)
+    finally:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        await feed.shutdown()
+    await asyncio.sleep(0.02)
+    assert [
+        task
+        for task in asyncio.all_tasks()
+        if not task.done() and "keep_alive" in repr(task.get_coro())
+    ] == []
+
+
+async def test_a_normal_close_leaves_no_keepalive_task_behind():
+    feed = PolymarketMarketFeed(
+        websocket_factory=lambda url: NormalCloseConnection([]),
+        ping_interval_seconds=0.01,
+        now_fn=lambda: NOW,
+    )
+    before = asyncio.all_tasks()
+    with pytest.raises(Exception):
+        async for _event in feed.subscribe((TOKEN_A,)):
+            pass
+    await asyncio.sleep(0.02)
+    leaked = [
+        task
+        for task in asyncio.all_tasks() - before
+        if not task.done() and "keep_alive" in repr(task.get_coro())
+    ]
+    assert leaked == []

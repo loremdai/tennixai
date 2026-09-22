@@ -28,6 +28,14 @@ class MarketFeedDisconnected(Exception):
     """Transport-level disconnect; the reason never contains URIs or IDs."""
 
 
+class MarketFeedClosed(Exception):
+    """The provider closed this subscription normally (a finished market).
+
+    Not a fault: the worker stops that subscription without recording a gap
+    and without marking the whole market source as failed.
+    """
+
+
 class PolymarketMarketFeed:
     def __init__(
         self,
@@ -43,14 +51,17 @@ class PolymarketMarketFeed:
         self._ping_interval = ping_interval_seconds
         self._now = now_fn or (lambda: datetime.now(UTC))
         self._sleep = sleep_fn or asyncio.sleep
-        self._ping_task: asyncio.Task | None = None
+        self._ping_tasks: set[asyncio.Task] = set()
 
     async def shutdown(self) -> None:
-        if self._ping_task is not None and not self._ping_task.done():
-            self._ping_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._ping_task
-        self._ping_task = None
+        """Cancel every in-flight keepalive task for this feed instance."""
+        tasks = [task for task in self._ping_tasks if not task.done()]
+        self._ping_tasks.clear()
+        for task in tasks:
+            task.cancel()
+        for task in tasks:
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await task
 
     def subscribe(self, asset_ids: tuple[str, ...]) -> AsyncIterator[RawMarketEvent]:
         feed = self
@@ -63,15 +74,29 @@ class PolymarketMarketFeed:
                 await connection.send(subscribe_frame)
 
                 async def keep_alive() -> None:
+                    # One task per connection: a second subscription must
+                    # never clobber the first one's keepalive.
                     while True:
                         await feed._sleep(feed._ping_interval)
-                        await connection.send("PING")
+                        try:
+                            await connection.send("PING")
+                        except Exception:
+                            # A dead socket ends this subscription through the
+                            # normal receive path instead of a silent task.
+                            with contextlib.suppress(Exception):
+                                await connection.close()
+                            return
 
-                feed._ping_task = asyncio.create_task(keep_alive())
+                ping_task = asyncio.create_task(keep_alive())
+                feed._ping_tasks.add(ping_task)
                 try:
                     while True:
                         try:
                             raw = await connection.recv()
+                        except websockets.exceptions.ConnectionClosedOK as error:
+                            # A finished market closes normally: an explicit
+                            # lifecycle branch, not a transport failure.
+                            raise MarketFeedClosed("normal_close") from error
                         except websockets.exceptions.ConnectionClosed as error:
                             raise MarketFeedDisconnected("connection_closed") from error
                         if isinstance(raw, bytes):
@@ -94,7 +119,11 @@ class PolymarketMarketFeed:
                             received_at=feed._now(),
                         )
                 finally:
-                    await feed.shutdown()
+                    feed._ping_tasks.discard(ping_task)
+                    if not ping_task.done():
+                        ping_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError, Exception):
+                        await ping_task
 
         return generator()
 
