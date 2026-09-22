@@ -1171,6 +1171,21 @@ class P3QueryService:
         except Exception:
             return None  # missing hot state degrades to None, never to zeros
 
+    async def _bulk_hot_books(self, market_ids) -> dict:
+        """One MGET for every requested market (T84: no per-row Redis calls).
+
+        Absent hot state simply leaves the market out of the result — the
+        caller degrades to the durable snapshot or to an explicit state,
+        never to a fabricated book.
+        """
+        ids = tuple(market_id for market_id in market_ids if market_id)
+        if self._hot_books is None or not ids:
+            return {}
+        try:
+            return await self._hot_books.get_hot_books(ids)
+        except Exception:
+            return {}
+
     @staticmethod
     def _best_levels(book, outcome_player_id: str | None):
         """(best_bid, best_ask) as (player_id, price text) or None."""
@@ -1524,30 +1539,30 @@ class P3QueryService:
         decision_by_match = {
             observation.match_id: observation for observation in observations
         }
-        facts = await self._match_facts([row.match_id for row in market_rows])
+        # ACTIVE links are the only match truth; every dependency below is
+        # loaded in ONE bulk call regardless of row count (T84: no N+1).
+        match_ids = [row.active_match_id for row in market_rows if row.active_match_id]
+        facts = await self._match_facts(match_ids)
+        predictions = await self._markets.latest_predictions_for_matches(match_ids)
+        hot_books = await self._bulk_hot_books([row.market_id for row in market_rows])
         summaries = []
         for row in market_rows:
-            match_facts = facts.get(row.match_id, {}) if row.match_id else {}
+            match_id = row.active_match_id
+            match_facts = facts.get(match_id, {}) if match_id else {}
             market_phase = match_facts.get("phase")
             if row.status in ("closed", "resolved"):
                 market_phase = "closed"
             elif market_phase is None:
                 market_phase = "prematch" if row.status in ("scheduled", "open", "unknown") else "closed"
-            observation = (
-                decision_by_match.get(row.match_id) if row.match_id else None
-            )
-            book = await self._hot_book(row.id)
+            observation = decision_by_match.get(match_id) if match_id else None
+            book = hot_books.get(row.market_id)
             outcome_ids = (row.outcome_a_player_id, row.outcome_b_player_id)
             outcome_names = (row.outcome_a_name, row.outcome_b_name)
             best_bid, best_ask = self._best_levels(book, row.outcome_a_player_id)
             outcome_bids, outcome_asks, spread, depth = self._outcome_levels(
                 book, outcome_ids
             )
-            prediction = (
-                await self._markets.latest_prediction(row.match_id)
-                if row.match_id
-                else None
-            )
+            prediction = predictions.get(match_id) if match_id else None
             model_covered = prediction is not None and prediction.availability.value in (
                 "available",
                 "degraded",
@@ -1578,8 +1593,8 @@ class P3QueryService:
             )
             summaries.append(
                 MarketSummaryDto(
-                    market_id=row.id,
-                    match_id=row.match_id,
+                    market_id=row.market_id,
+                    match_id=match_id,
                     question=row.question,
                     status=row.status,
                     tournament_name=match_facts.get("tournament_name"),
@@ -1633,9 +1648,12 @@ class P3QueryService:
         from app.api.schemas import PaperPositionDto
 
         facts = await self._match_facts([position.match_id for position in positions])
+        hot_books = await self._bulk_hot_books(
+            [position.market_id for position in positions]
+        )
         rows = []
         for position in positions:
-            book = await self._hot_book(position.market_id)
+            book = hot_books.get(position.market_id)
             best_bid, _ = self._best_levels(book, position.outcome_player_id)
             current_exit_value = None
             freshness = position.updated_at

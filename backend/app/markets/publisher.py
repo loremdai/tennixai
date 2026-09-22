@@ -6,7 +6,7 @@ rebuilds books from REST. Events carry internal IDs only.
 """
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 
 from app.markets.models import OrderBookState
@@ -65,3 +65,29 @@ class MarketHotPublisher:
         if isinstance(raw, bytes):
             raw = raw.decode("utf-8")
         return OrderBookState.model_validate_json(raw)
+
+    async def get_hot_books(
+        self, market_ids: Sequence[str]
+    ) -> dict[str, OrderBookState]:
+        """One MGET for every requested market (T84: no per-row Redis calls).
+
+        Missing keys and unparsable payloads are skipped: absent hot state
+        degrades to "not present", never to a fabricated book.
+        """
+        ids = [market_id for market_id in market_ids if market_id]
+        if not ids:
+            return {}
+        raw_values = await self._redis.mget(
+            [market_hot_key(market_id) for market_id in ids]
+        )
+        books: dict[str, OrderBookState] = {}
+        for market_id, raw in zip(ids, raw_values, strict=True):
+            if raw is None:
+                continue
+            if isinstance(raw, bytes):
+                raw = raw.decode("utf-8")
+            try:
+                books[market_id] = OrderBookState.model_validate_json(raw)
+            except ValueError:
+                continue
+        return books

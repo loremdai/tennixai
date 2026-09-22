@@ -54,6 +54,9 @@ class InMemoryRedis:
             return None
         return entry[0]
 
+    async def mget(self, names: list[str]) -> list[str | None]:
+        return [await self.get(name) for name in names]
+
     async def delete(self, *names: str) -> None:
         for name in names:
             self._strings.pop(name, None)

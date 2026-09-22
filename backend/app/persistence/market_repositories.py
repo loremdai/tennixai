@@ -7,6 +7,7 @@ observations. Provider identifiers are written only to
 """
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
@@ -39,6 +40,30 @@ from app.prediction.models import PredictionSnapshot
 
 class LinkFrozenError(Exception):
     """Raised when a market/match link would change after an intent exists."""
+
+
+@dataclass(frozen=True)
+class MarketOverviewRow:
+    """One market joined to its ACTIVE match link (T84).
+
+    `active_match_id` comes exclusively from `market_match_links` with
+    `status='active'`; the legacy `markets.match_id` column is historical
+    compatibility only and is never read as market→match truth. The row
+    carries internal IDs only.
+    """
+
+    market_id: str
+    question: str | None
+    status: str
+    rules_version: int
+    observed_at: datetime | None
+    updated_at: datetime
+    outcome_a_player_id: str | None
+    outcome_a_name: str | None
+    outcome_b_player_id: str | None
+    outcome_b_name: str | None
+    active_match_id: str | None
+    link_evidence_available: bool
 
 
 def _parse_observed_at(value: Any) -> datetime:
@@ -475,19 +500,57 @@ class MarketRepository:
 
     # -- read-only query paths for the P3 API layer (T66) -------------------
 
-    async def list_market_overviews(self) -> list[MarketRow]:
-        """Every known market row (internal IDs only), most recent first."""
-        async with self._database.session() as session:
-            rows = (
-                (
-                    await session.execute(
-                        select(MarketRow).order_by(MarketRow.updated_at.desc())
-                    )
-                )
-                .scalars()
-                .all()
+    async def list_market_overviews(self) -> list[MarketOverviewRow]:
+        """Every known market with its ACTIVE match link, most recent first.
+
+        ONE query: `market_match_links` is joined on `status='active'` as
+        part of the join condition, so replaced/inactive links can never leak
+        a match identity into the read model. Callers must load match facts,
+        quotes and prediction/decision evidence in bulk — never per row
+        (T84 forbids N+1 SQL/Redis on this path).
+        """
+        statement = (
+            select(
+                MarketRow.id,
+                MarketRow.question,
+                MarketRow.status,
+                MarketRow.rules_version,
+                MarketRow.observed_at,
+                MarketRow.updated_at,
+                MarketRow.outcome_a_player_id,
+                MarketRow.outcome_a_name,
+                MarketRow.outcome_b_player_id,
+                MarketRow.outcome_b_name,
+                MarketMatchLinkRow.match_id,
+                MarketMatchLinkRow.evidence,
             )
-        return list(rows)
+            .select_from(MarketRow)
+            .outerjoin(
+                MarketMatchLinkRow,
+                (MarketMatchLinkRow.market_id == MarketRow.id)
+                & (MarketMatchLinkRow.status == "active"),
+            )
+            .order_by(MarketRow.updated_at.desc())
+        )
+        async with self._database.session() as session:
+            rows = (await session.execute(statement)).all()
+        return [
+            MarketOverviewRow(
+                market_id=row[0],
+                question=row[1],
+                status=row[2],
+                rules_version=int(row[3]),
+                observed_at=row[4],
+                updated_at=row[5],
+                outcome_a_player_id=row[6],
+                outcome_a_name=row[7],
+                outcome_b_player_id=row[8],
+                outcome_b_name=row[9],
+                active_match_id=row[10],
+                link_evidence_available=bool(row[10]) and bool(row[11]),
+            )
+            for row in rows
+        ]
 
     async def latest_decision_observations(self) -> list[DecisionObservation]:
         """The newest decision observation per match, newest decision first."""
@@ -527,8 +590,36 @@ class MarketRepository:
             return None
         return PredictionSnapshot.model_validate(row.payload)
 
+    async def latest_predictions_for_matches(
+        self, match_ids: Sequence[str]
+    ) -> dict[str, PredictionSnapshot]:
+        """Newest prediction evidence per match in ONE query (no N+1).
+
+        Same ordering contract as `latest_prediction`: newest `as_of`, then
+        newest row id for identical timestamps.
+        """
+        ids = {match_id for match_id in match_ids if match_id}
+        if not ids:
+            return {}
+        statement = (
+            select(PredictionSnapshotRow)
+            .where(PredictionSnapshotRow.match_id.in_(ids))
+            .distinct(PredictionSnapshotRow.match_id)
+            .order_by(
+                PredictionSnapshotRow.match_id,
+                PredictionSnapshotRow.as_of.desc(),
+                PredictionSnapshotRow.id.desc(),
+            )
+        )
+        async with self._database.session() as session:
+            rows = (await session.execute(statement)).scalars().all()
+        return {
+            row.match_id: PredictionSnapshot.model_validate(row.payload) for row in rows
+        }
+
 
 __all__ = [
     "LinkFrozenError",
+    "MarketOverviewRow",
     "MarketRepository",
 ]

@@ -13,7 +13,7 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import event, text
 
 from app.config import Settings
 from app.decision.models import DecisionAction
@@ -252,6 +252,11 @@ async def test_query_service_exposes_internal_ids_only(database: Database) -> No
 class StubHotBooks:
     def __init__(self, states: dict) -> None:
         self._states = states
+        self.bulk_calls: list[tuple[str, ...]] = []
+
+    async def get_hot_books(self, market_ids):
+        self.bulk_calls.append(tuple(market_ids))
+        return {mid: self._states[mid] for mid in market_ids if mid in self._states}
 
     async def get_hot_book(self, market_id: str):
         return self._states.get(market_id)
@@ -469,3 +474,122 @@ async def test_enriched_fields_and_pulse_selection(database: Database) -> None:
     assert Decimal(top.conservative_net_edge) == Decimal("0.041")
     assert top.is_stale is False
     assert pulse["data"][0].kind == "position"
+
+    # Both seeded markets were read in ONE bulk call (T84: no per-row reads).
+    assert any(
+        market_id in call and market2 in call for call in hot_books.bulk_calls
+    )
+
+
+# ---------------------------------------------------------------------------
+# T84: the ACTIVE link is the only market→match read truth. `markets.match_id`
+# stays a historical column and must never drive the read model again.
+# ---------------------------------------------------------------------------
+
+
+async def test_market_overview_joins_active_links_only(database: Database) -> None:
+    markets = MarketRepository(database)
+    identity = PostgresIdentityRepository(database)
+    suffix = uuid4().hex[:10]
+    # A fresh match with no paper intent: its link may still be replaced.
+    match_id = await identity.get_or_create("match", "itest-t84", suffix)
+    player_a = await identity.get_or_create("player", "itest-t84", f"a{suffix}")
+    player_b = await identity.get_or_create("player", "itest-t84", f"b{suffix}")
+
+    older = await markets.get_or_create_market_id(
+        provider="polymarket",
+        provider_event_id=f"ev84a_{suffix}",
+        condition_id=f"cond84a_{uuid4().hex}",
+    )
+    await markets.save_market(
+        make_market(older, match_id=match_id, player_a=player_a, player_b=player_b)
+    )
+    await markets.link_match(
+        market_id=older, match_id=match_id, evidence={"pair": [player_a, player_b]}
+    )
+    overviews = {row.market_id: row for row in await markets.list_market_overviews()}
+    assert overviews[older].active_match_id == match_id
+
+    # A newer market takes over the same match: the older link flips to
+    # `replaced` and must never leak a match identity again.
+    replacement = await markets.get_or_create_market_id(
+        provider="polymarket",
+        provider_event_id=f"ev84b_{suffix}",
+        condition_id=f"cond84b_{uuid4().hex}",
+    )
+    await markets.save_market(
+        make_market(replacement, match_id=None, player_a=player_a, player_b=player_b)
+    )
+    await markets.link_match(
+        market_id=replacement,
+        match_id=match_id,
+        evidence={"pair": [player_a, player_b]},
+    )
+
+    overviews = {row.market_id: row for row in await markets.list_market_overviews()}
+    assert overviews[replacement].active_match_id == match_id
+    assert overviews[replacement].link_evidence_available is True
+
+    # The replaced market keeps its historical column value — and loses its
+    # match identity, because only `status='active'` counts as read truth.
+    async with database.session() as session:
+        legacy = await session.scalar(
+            text("SELECT match_id FROM markets WHERE id = :m"), {"m": older}
+        )
+    assert legacy == match_id
+    assert overviews[older].active_match_id is None
+
+
+async def test_markets_query_issues_a_constant_number_of_statements(
+    database: Database,
+) -> None:
+    """Row count must not change the statement count (T84: no N+1).
+
+    One statement-counting run with a handful of markets and one with three
+    more linked markets must issue exactly the same number of SQL statements.
+    """
+    seeded = await _seed(database)
+    markets = MarketRepository(database)
+    identity = PostgresIdentityRepository(database)
+    queries = P3QueryService(
+        database=database,
+        markets=markets,
+        paper=PaperLedgerRepository(database),
+        hot_books=None,
+    )
+
+    statements: list[str] = []
+
+    def _record(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+
+    event.listen(database.engine.sync_engine, "before_cursor_execute", _record)
+    try:
+        statements.clear()
+        baseline_page = await queries.markets(page=1, page_size=50)
+        baseline = len(statements)
+
+        for index in range(3):
+            suffix = f"{uuid4().hex[:8]}{index}"
+            match = await identity.get_or_create("match", "itest-t84-count", suffix)
+            market = await markets.get_or_create_market_id(
+                provider="polymarket",
+                provider_event_id=f"ev84c_{suffix}",
+                condition_id=f"cond84c_{uuid4().hex}",
+            )
+            await markets.save_market(make_market(market, match_id=None))
+            await markets.link_match(
+                market_id=market,
+                match_id=match,
+                evidence={"pair": [seeded["player_a"], seeded["player_b"]]},
+            )
+
+        statements.clear()
+        expanded_page = await queries.markets(page=1, page_size=50)
+        expanded = len(statements)
+    finally:
+        event.remove(database.engine.sync_engine, "before_cursor_execute", _record)
+
+    assert expanded_page.total > baseline_page.total  # the rows really grew
+    assert expanded == baseline
+    assert expanded <= 8
