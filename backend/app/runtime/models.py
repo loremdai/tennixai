@@ -36,6 +36,10 @@ class LocalRuntimeSettings(FrozenModel):
     upcoming_catalog_seconds: int = Field(ge=300, le=86_400)
     ranking_seconds: int = Field(ge=3_600, le=604_800)
     market_discovery_seconds: int = Field(ge=60, le=3_600)
+    market_snapshot_seconds: int = Field(default=120, ge=60, le=900)
+    market_snapshot_max_markets: int = Field(default=250, ge=1, le=500)
+    market_snapshot_token_batch_size: int = Field(default=100, ge=2, le=100)
+    market_quote_fresh_seconds: int = Field(default=300, ge=120, le=1800)
 
 
 class RuntimeInitRecord(FrozenModel):

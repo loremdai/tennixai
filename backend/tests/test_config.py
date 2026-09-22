@@ -186,3 +186,42 @@ def test_local_runtime_interval_bounds_are_enforced():
         Settings(_env_file=None, local_runtime_market_discovery_seconds=59)
     with pytest.raises(ValidationError):
         Settings(_env_file=None, local_runtime_market_discovery_seconds=3601)
+
+
+# ---------------------------------------------------------------------------
+# P4.3 bounded batch quote coverage (T86)
+# ---------------------------------------------------------------------------
+
+
+def test_market_snapshot_defaults_are_bounded():
+    settings = Settings(_env_file=None)
+    assert settings.local_runtime_market_snapshot_seconds == 120
+    assert settings.local_runtime_market_snapshot_max_markets == 250
+    assert settings.local_runtime_market_snapshot_token_batch_size == 100
+    assert settings.local_runtime_market_quote_fresh_seconds == 300
+
+
+def test_market_snapshot_bounds_are_enforced():
+    for field, value in (
+        ("local_runtime_market_snapshot_seconds", 59),
+        ("local_runtime_market_snapshot_seconds", 901),
+        ("local_runtime_market_snapshot_max_markets", 0),
+        ("local_runtime_market_snapshot_max_markets", 501),
+        ("local_runtime_market_snapshot_token_batch_size", 1),
+        ("local_runtime_market_snapshot_token_batch_size", 101),
+        ("local_runtime_market_quote_fresh_seconds", 119),
+        ("local_runtime_market_quote_fresh_seconds", 1801),
+    ):
+        with pytest.raises(ValidationError):
+            Settings(_env_file=None, **{field: value})
+
+
+def test_env_example_declares_market_snapshot_defaults():
+    text = (REPOSITORY_ROOT / ".env.example").read_text(encoding="utf-8")
+    for key in (
+        "TENNIX_LOCAL_RUNTIME_MARKET_SNAPSHOT_SECONDS=120",
+        "TENNIX_LOCAL_RUNTIME_MARKET_SNAPSHOT_MAX_MARKETS=250",
+        "TENNIX_LOCAL_RUNTIME_MARKET_SNAPSHOT_TOKEN_BATCH_SIZE=100",
+        "TENNIX_LOCAL_RUNTIME_MARKET_QUOTE_FRESH_SECONDS=300",
+    ):
+        assert key in text

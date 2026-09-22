@@ -59,12 +59,13 @@ async def database():
         await db.dispose()
 
 
-async def _market(database: Database) -> str:
+async def _market(database: Database, *, tokens: tuple[str, str] | None = None) -> str:
     markets = MarketRepository(database)
     market_id = await markets.get_or_create_market_id(
         provider="polymarket",
         provider_event_id=f"ev85_{uuid4().hex[:10]}",
         condition_id=f"cond85_{uuid4().hex}",
+        token_ids=tokens,
     )
     await markets.save_market(make_market(market_id, match_id=None))
     return market_id
@@ -200,6 +201,22 @@ async def test_raw_batch_is_written_per_batch_and_purged_by_age(
     purged = await raw.purge_raw_events(NOW - timedelta(days=14))
     assert purged >= 1
     assert await remaining() == {f"{marker}-fresh"}  # only the fresh one survives
+
+
+async def test_list_external_ids_reads_the_private_mapping_in_bulk(
+    database: Database,
+) -> None:
+    markets = MarketRepository(database)
+    first = await _market(database, tokens=("tok_a1", "tok_b1"))
+    second = await _market(database)
+
+    mapping = await markets.list_external_ids([first, second, "mkt_absent"])
+    assert set(mapping) == {first, second}
+    assert mapping[first].token_ids == ("tok_a1", "tok_b1")
+    assert mapping[second].token_ids == ("", "")
+    assert mapping[second].provider == "polymarket"
+    assert mapping[second].condition_id
+    assert await markets.list_external_ids([]) == {}
 
 
 async def test_canonical_batch_projection_round_trips_through_postgres(

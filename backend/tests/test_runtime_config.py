@@ -340,3 +340,23 @@ def test_live_local_configuration_error_is_a_value_error():
     assert isinstance(error, ValueError)
     assert error.code == "LOCAL_DATABASE_NAME_INVALID"
     assert str(error) == "LOCAL_DATABASE_NAME_INVALID"
+
+
+def test_live_local_settings_carry_the_bounded_snapshot_configuration():
+    settings = local_settings(
+        local_runtime_market_snapshot_seconds=300,
+        local_runtime_market_snapshot_max_markets=120,
+        local_runtime_market_snapshot_token_batch_size=40,
+        local_runtime_market_quote_fresh_seconds=600,
+    )
+    live = require_live_local(settings)
+    assert live.market_snapshot_seconds == 300
+    assert live.market_snapshot_max_markets == 120
+    assert live.market_snapshot_token_batch_size == 40
+    assert live.market_quote_fresh_seconds == 600
+
+    defaults = require_live_local(local_settings())
+    assert defaults.market_snapshot_seconds == 120
+    assert defaults.market_snapshot_max_markets == 250
+    assert defaults.market_snapshot_token_batch_size == 100
+    assert defaults.market_quote_fresh_seconds == 300

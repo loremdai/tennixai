@@ -65,6 +65,7 @@ class MarketOverviewRow:
     status: str
     rules_version: int
     observed_at: datetime | None
+    event_start: datetime | None
     updated_at: datetime
     outcome_a_player_id: str | None
     outcome_a_name: str | None
@@ -173,6 +174,40 @@ class MarketRepository:
             condition_id=row.condition_id,
             token_ids=(row.token_a_id, row.token_b_id),
         )
+
+    async def list_external_ids(
+        self, market_ids: Sequence[str]
+    ) -> dict[str, MarketExternalId]:
+        """PRIVATE mapping for many markets in ONE query (no per-row reads).
+
+        The returned model carries provider identity; callers must keep it
+        inside the adapter/runtime boundary.
+        """
+        ids = {market_id for market_id in market_ids if market_id}
+        if not ids:
+            return {}
+        async with self._database.session() as session:
+            rows = (
+                (
+                    await session.execute(
+                        select(MarketExternalIdRow).where(
+                            MarketExternalIdRow.market_id.in_(ids)
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+        return {
+            row.market_id: MarketExternalId(
+                market_id=row.market_id,
+                provider=row.provider,
+                provider_event_id=row.provider_event_id,
+                condition_id=row.condition_id,
+                token_ids=(row.token_a_id, row.token_b_id),
+            )
+            for row in rows
+        }
 
     async def save_market(self, market: Market) -> None:
         first, second = market.outcomes
@@ -524,6 +559,7 @@ class MarketRepository:
                 MarketRow.status,
                 MarketRow.rules_version,
                 MarketRow.observed_at,
+                MarketRow.event_start,
                 MarketRow.updated_at,
                 MarketRow.outcome_a_player_id,
                 MarketRow.outcome_a_name,
@@ -549,13 +585,14 @@ class MarketRepository:
                 status=row[2],
                 rules_version=int(row[3]),
                 observed_at=row[4],
-                updated_at=row[5],
-                outcome_a_player_id=row[6],
-                outcome_a_name=row[7],
-                outcome_b_player_id=row[8],
-                outcome_b_name=row[9],
-                active_match_id=row[10],
-                link_evidence_available=bool(row[10]) and bool(row[11]),
+                event_start=row[5],
+                updated_at=row[6],
+                outcome_a_player_id=row[7],
+                outcome_a_name=row[8],
+                outcome_b_player_id=row[9],
+                outcome_b_name=row[10],
+                active_match_id=row[11],
+                link_evidence_available=bool(row[11]) and bool(row[12]),
             )
             for row in rows
         ]

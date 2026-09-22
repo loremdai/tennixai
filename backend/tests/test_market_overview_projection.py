@@ -5,7 +5,7 @@ one overview query, one decision query, one batched match-facts call, one
 batched prediction call and one batched Redis read — for any row count.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from app.markets.models import BookLevel, OrderBookState, OutcomeBook
@@ -28,6 +28,7 @@ def overview(
         status=status,
         rules_version=1,
         observed_at=NOW,
+        event_start=NOW + timedelta(hours=1),
         updated_at=NOW,
         outcome_a_player_id="ply_a",
         outcome_a_name="Provider A",

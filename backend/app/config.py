@@ -65,6 +65,15 @@ class Settings(BaseSettings):
     local_runtime_upcoming_catalog_seconds: int = Field(default=600, ge=300, le=86400)
     local_runtime_ranking_seconds: int = Field(default=86400, ge=3600, le=604800)
     local_runtime_market_discovery_seconds: int = Field(default=120, ge=60, le=3600)
+    # P4.3 coverage lane: bounded public batch quote snapshots. The lane only
+    # fills display quotes; it never subscribes a WebSocket, calls the LLM or
+    # touches prediction/decision/paper.
+    local_runtime_market_snapshot_seconds: int = Field(default=120, ge=60, le=900)
+    local_runtime_market_snapshot_max_markets: int = Field(default=250, ge=1, le=500)
+    local_runtime_market_snapshot_token_batch_size: int = Field(
+        default=100, ge=2, le=100
+    )
+    local_runtime_market_quote_fresh_seconds: int = Field(default=300, ge=120, le=1800)
 
     @model_validator(mode="after")
     def validate_required_credentials(self) -> "Settings":

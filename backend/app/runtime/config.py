@@ -44,6 +44,12 @@ def require_live_local(settings: Settings) -> LocalRuntimeSettings:
         upcoming_catalog_seconds=settings.local_runtime_upcoming_catalog_seconds,
         ranking_seconds=settings.local_runtime_ranking_seconds,
         market_discovery_seconds=settings.local_runtime_market_discovery_seconds,
+        market_snapshot_seconds=settings.local_runtime_market_snapshot_seconds,
+        market_snapshot_max_markets=settings.local_runtime_market_snapshot_max_markets,
+        market_snapshot_token_batch_size=(
+            settings.local_runtime_market_snapshot_token_batch_size
+        ),
+        market_quote_fresh_seconds=settings.local_runtime_market_quote_fresh_seconds,
     )
 
 
