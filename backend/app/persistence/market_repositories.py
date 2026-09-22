@@ -779,6 +779,57 @@ class MarketQuoteSnapshotRepository:
             )
         return {row.market_id: _quote_record(row.market_id, row) for row in rows}
 
+    async def mark_limited(
+        self, market_ids: Sequence[str], *, now: datetime, expires_at: datetime
+    ) -> int:
+        """Retag markets the protection cap did not reach this round.
+
+        Stored levels and their `as_of` are preserved (the page keeps showing
+        the last trusted quote with a `limited` label); a market without a
+        row yet gets a minimal limited row so the cap is explained instead of
+        showing an unexplained `—`.
+        """
+        ids = [market_id for market_id in market_ids if market_id]
+        if not ids:
+            return 0
+        written = 0
+        async with self._database.session() as session:
+            async with session.begin():
+                present = set(
+                    (
+                        await session.execute(
+                            select(MarketQuoteSnapshotRow.market_id).where(
+                                MarketQuoteSnapshotRow.market_id.in_(ids)
+                            )
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+                if present:
+                    result = await session.execute(
+                        update(MarketQuoteSnapshotRow)
+                        .where(MarketQuoteSnapshotRow.market_id.in_(present))
+                        .values(quote_state=QuoteState.LIMITED.value, updated_at=now)
+                    )
+                    written += result.rowcount or 0
+                for market_id in ids:
+                    if market_id in present:
+                        continue
+                    session.add(
+                        MarketQuoteSnapshotRow(
+                            market_id=market_id,
+                            source=QuoteSource.SNAPSHOT.value,
+                            quote_state=QuoteState.LIMITED.value,
+                            book_hash=None,
+                            as_of=now,
+                            expires_at=expires_at,
+                            updated_at=now,
+                        )
+                    )
+                    written += 1
+        return written
+
 
 __all__ = [
     "LinkFrozenError",

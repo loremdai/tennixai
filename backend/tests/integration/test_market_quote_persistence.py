@@ -219,6 +219,33 @@ async def test_list_external_ids_reads_the_private_mapping_in_bulk(
     assert await markets.list_external_ids([]) == {}
 
 
+async def test_mark_limited_retags_without_losing_the_last_trusted_quote(
+    database: Database,
+) -> None:
+    quoted = await _market(database)
+    never_quoted = await _market(database)
+    repo = MarketQuoteSnapshotRepository(database)
+    await repo.upsert(_record(quoted, as_of=NOW, digest="h1"))
+
+    written = await repo.mark_limited(
+        [quoted, never_quoted],
+        now=NOW + timedelta(seconds=5),
+        expires_at=NOW + timedelta(seconds=305),
+    )
+    assert written == 2
+
+    stored = await repo.load(quoted)
+    assert stored is not None
+    assert stored.state is QuoteState.LIMITED
+    assert stored.outcome_asks == ("0.60", "0.42")  # last trusted levels kept
+    assert stored.as_of == NOW  # its own timestamp kept, never re-stamped
+
+    created = await repo.load(never_quoted)
+    assert created is not None
+    assert created.state is QuoteState.LIMITED
+    assert created.outcome_asks == (None, None)  # nothing fabricated
+
+
 async def test_canonical_batch_projection_round_trips_through_postgres(
     database: Database,
 ) -> None:
