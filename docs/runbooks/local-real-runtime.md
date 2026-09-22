@@ -19,18 +19,52 @@
 - `up` 直接运行仓库已安装的 `frontend/node_modules/.bin/next`；启动过程不调用 pnpm，也不会尝试重装或清理 `node_modules`。如果该文件不存在或不可执行，启动器会在拉起其他子进程前明确拒绝并提示先安装前端依赖。
 - `down` 优雅停止自有子进程与本次启动的容器，**保留全部真实数据与 paper ledger**；再次 `up` 后 ID、数据与账本原样存在。
 
+## 1.1 两条市场数据车道（P4.3）
+
+| 车道 | 覆盖范围 | 数据来源 | 能做什么 |
+|---|---|---|---|
+| A — 快照报价 | 全部 canonical 网球单场胜者市场（`open`/`scheduled`） | 公开只读 CLOB `POST /books` 批量快照，默认每 120 秒一轮 | 只填充页面展示报价与状态；**绝不**触发预测、决策、paper 或 WebSocket 订阅 |
+| B — 实时决策 | 严格映射 + ATP/WTA 主巡单打 + 在 tracking window 内（或已有未结持仓） | 公开市场 WebSocket + REST 对账 | 驱动 Prediction → Decision → paper ledger 与 Match 工作台 |
+
+- 两条车道共享同一份 latest-quote projection 与同一条优先级规则（新值优先；同一时刻只允许实时车道覆盖快照车道，绝不反向）。
+- 浏览器是否打开**不影响**后台采集：车道 A 由 runtime 进程按周期执行。
+- 车道 A 的有界配置（根 `.env`）：
+
+```text
+TENNIX_LOCAL_RUNTIME_MARKET_SNAPSHOT_SECONDS=120        # 60–900
+TENNIX_LOCAL_RUNTIME_MARKET_SNAPSHOT_MAX_MARKETS=250     # 1–500
+TENNIX_LOCAL_RUNTIME_MARKET_SNAPSHOT_TOKEN_BATCH_SIZE=100 # 2–100（每批私有 token 数）
+TENNIX_LOCAL_RUNTIME_MARKET_QUOTE_FRESH_SECONDS=300      # 120–1800（快照→过期阈值）
+```
+
+- 页面可见的报价状态（`/markets` 全部市场；`—` 只是某个缺失字段，从不是状态本身）：
+
+| 状态 | 含义 |
+|---|---|
+| `realtime` | 实时盘口（fresh WebSocket 热盘口） |
+| `snapshot` | 快照报价 · N 分钟前 |
+| `partial` | 部分报价 · N 分钟前（仅一侧有可显示档位） |
+| `no_liquidity` | 暂无挂单（响应可信但两侧都没有可显示档位） |
+| `unavailable` | 报价暂不可用（本轮请求/解析失败且无可用旧值） |
+| `stale` | 最后可信报价已过期 |
+| `limited` | 覆盖受限 · 等待下一轮（受保护上限未轮到，保留上次报价与时间） |
+
 ## 2. 健康语义（一句话版）
 
 - **fresh**：连接开放且心跳确认，数据在预期窗口内——网球比分安静时保持 fresh，沉默不等于过期。
 - **degraded**：低频任务失败但既有规范数据路径仍在（保留最近成功时间与计数）。
 - **stale**：超过预期窗口没有任何新数据到达。
 - **gap**：流序列出现断口；系统保留最后可信状态，并在 REST 对账成功前撤销新的 BUY/SELL 决策。
+- **market coverage**：`runtime/health` 的 `market_coverage` 只含聚合数字——candidate/attempted、各报价状态计数、batch_failures、rate_limited/retry_after_until 与 last_successful_batch_at；不含 token、URL 或 provider ID。
 
 ## 3. 正常事实状态（不是故障）
 
 - **没有 live 比赛**：赛程安静时段属正常；实时源诚实报告 skip，绝不伪造成通过。
 - **没有已映射市场**：Polymarket 上当前没有可精确映射的网球 moneyline 属正常。
-- **模型未晋升**：未晋升模型只能输出事实性的 `NO BET` / `MARKET_ONLY`，属预期行为。
+- **模型未晋升**：未晋升模型只能输出事实性的 `NO BET` / `MARKET_ONLY`，属预期行为；`/markets` 的「机会」会明确说明「模型尚未完成验证，当前不生成 BUY / WAIT」，而不是把空标签页伪装成故障。
+- **低级别市场**（Challenger/ITF）：展示真实报价，但不带「模型未覆盖」之类的负向标签，也不进入模型建议。
+- **没有挂单**：真实市场在冷门时段可以两侧皆无挂单（`no_liquidity`），这是有效结果。
+- **429 / 退避**：CLOB 限流时本轮标记 degraded 并尊重 `Retry-After`；`market_coverage.rate_limited` 与 `retry_after_until` 会如实反映，不忙等重试。
 
 ## 4. 真实核验 verify（受限、只读）
 
@@ -39,7 +73,8 @@
 ./scripts/tennix-live verify --with-llm  # 显式额外做一次真实 Chat 调用（消耗 LLM 配额）
 ```
 
-- 每个源至多调用一次：ATP 排名、当前比赛目录、网球 WebSocket（仅当存在 live 比赛）、市场发现、盘口、公共市场 WebSocket（仅当存在活跃已映射盘口）；每次流接收等待以 45 秒为界。
+- 每个源至多调用一次：ATP 排名、当前比赛目录、网球 WebSocket（仅当存在 live 比赛）、市场发现、盘口、公共市场 WebSocket（仅当存在活跃已映射盘口）、批量报价快照（`market_quote_snapshot`，至多 2 个已映射市场的私有 token 组成**一次** `POST /books`）；每次流接收等待以 45 秒为界。
+- `market_quote_snapshot` 的诚实结果：无已映射 token → `skipped · NO_QUOTE_TARGETS`；批量响应无可解析盘口 → `skipped · EMPTY_RESULT`；限流/网络失败 → `failed` + 稳定 reason code（如 `RATE_LIMITED`）。
 - 输出只含名称/状态/稳定 reason code，绝不含 provider ID、密钥、URL query 或原始载荷。
 - 退出码：任一源 `failed` → 非零；全部 `passed` 或 `passed`+`skipped` 混合 → 0，且 skip 会逐条明确打印。**安静窗口的 skip 永远不算通过。**
 - verify 绝不写入比赛 fixture、绝不下单、绝不动 paper ledger；没有 `--with-llm` 时甚至不构造 LLM 客户端。
