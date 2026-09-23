@@ -2,11 +2,11 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-23 14:06 CST
+**最后更新：** 2026-09-23 14:53 CST
 
 **当前任务：** T91 — Diagnose and Restore Polymarket Quote Refresh
 
-**任务状态：** `blocked`
+**任务状态：** `in_progress`
 
 **执行者 / ADE：** Codex
 
@@ -14,16 +14,18 @@
 
 **起始提交：** `5ee62ed`
 
-**当前动作：** 代码已修复：快照批次失败或遇到 429 时保留 coverage 统计并把 `market_snapshot` 标为 `degraded`（`4ba96f7`）。后端确定性测试 `1202 passed, 12 skipped, 102 deselected`；daemon 专项 `50 passed`；Ruff 通过。已用真实 API-Tennis REST 测试确认试用认证有效，不是过期导致。按用户要求重试后，Gamma GET 与 CLOB `/books` POST 均在 TLS 握手阶段失败（curl exit 60 / verify 18 / HTTP 000），尚未触及 Polymarket API。当前 runtime 正常 tick，但 185 个报价候选仍为 `attempted=0 / stale=185`，发现及快照任务继续降级；三个 Polymarket 域名返回 `CN=rpz10-landing` 自签名证书。需先让当前运行环境通过可信证书访问这些主机；不信任或绕过拦截证书。
+**当前动作：** 快照错误健康误报已由 `4ba96f7` 修复（失败/429 会保留 coverage 并标记 `degraded`）。网络不是完全不可达，但连接间歇不稳。更关键的根因已查明：当前 Gamma 有 61 个活跃网球胜者市场，其中 49 个是双打组合、12 个是单打；provider 仅接收两个 outcome 都能解析成单一内部球员 ID 的市场，所以只保留 2 场，49 场双打及 10 场单打因 `UNRESOLVED_PLAYER` 跳过。对当前 12 场单打直接查 CLOB，24/24 个 token 均返回订单簿、22 个有挂单；数据实际存在，主要是应用的球员身份模型阻止报价进入展示。另有本地 185 个旧 active 候选中仅 2 个 token 对仍在当前 Gamma 目录；370 个旧 token 的成功批量查询只回 15 本，runtime coverage 为 `fresh_snapshot=2 / no_liquidity=5 / unavailable=178`。因此修复需要让全部当前网球胜者市场能以独立 outcome 名称/顺序展示真实报价，同时仅在严格解析并映射的单打上启用模型；还要在完整成功的 Gamma 刷新后把消失市场移出当前候选集、但保留历史记录。机会页为空另因 `model_status=not_promoted`，不属于报价刷新。
 
 ## T91 已确认事实
 
-- 域名证书检查：`gamma-api.polymarket.com`、`clob.polymarket.com`、`ws-subscriptions-clob.polymarket.com` 均返回自签名 `CN=rpz10-landing`；`api.api-tennis.com` 返回有效 Let’s Encrypt 证书。真实命令 `TENNIX_RUN_API_TENNIS_LIVE=1 uv run pytest -q tests/live/test_api_tennis_live.py::test_api_tennis_rest_capability_and_canonical_shape` 通过（1 passed），认证和赛程读取成功；API-Tennis 免费试用未过期。
-- 用户重试后，直接请求 `https://gamma-api.polymarket.com/markets?...` 和 `https://clob.polymarket.com/books` 均为 curl exit 60 / TLS verify 18 / HTTP 000（self-signed certificate）；请求未抵达 HTTP 层，因此这不是 Polymarket key、额度或 API 响应问题。
-- HTTPX 直接访问 Polymarket 因证书链失败；宿主 `NO_PROXY` 的 `::1` 曾导致 HTTPX 环境代理解析报 `Invalid port: ':1'`（T90 已修复应用避开隐式代理环境）。复查当前 shell 仅有 `NO_PROXY/no_proxy`，macOS HTTP/HTTPS/SOCKS 系统代理均关闭，无可用代理通道。
-- 重启后 runtime 正常 tick；本次重试时已持续 355 ticks。`/api/v1/runtime/health` 的细项显示 `market_snapshot=degraded (MARKET_SNAPSHOT_BATCH_FAILED)`、`market_discovery=degraded (PROVIDER_UNAVAILABLE)`，source failure_count 均为 9；coverage `candidate=185 / attempted=0 / batch_failures=4 / stale=185`。简略 `tennix-live status` 中的 `polymarket=ok` 是独立且未更新的流健康项，不代表快照报价成功；详细报价健康仍为降级。
+- 较早 OpenSSL 检查曾观察到 Polymarket 主机证书链异常（`CN=rpz10-landing`）；本轮 curl 又报告 `TLS=0`，之后同一主机出现 `SSL_ERROR_SYSCALL`。证书/连接结果在不同尝试间不一致，不能据单次检查断言固定的沙盒封锁。真实 API-Tennis REST gate `1 passed`，认证和赛程读取成功；API-Tennis 免费试用未过期。
+- 用户终端报告 `https://clob.polymarket.com/time` 为 `HTTP=200 TLS=0`；本执行环境对同端点也曾成功，但随后 curl 出现 `SSL_ERROR_SYSCALL`、HTTPX 连续三次 `ConnectError`，证明连通性间歇不稳定，不能称为完全不可达。
+- 重新从 Gamma 读取当前网球胜者市场：61 个活跃市场中 provider 成功解析 2 个，59 个因球员名未命中 canonical directory 而记为 `UNRESOLVED_PLAYER`。本地数据库仍有 185 个 open/scheduled 快照候选，但仅 2 个 token 对与当前 Gamma 目录一致，显示旧市场仍留在有效候选集合。
+- 将当前 Gamma 61 场按 outcome 名称形态核验：49 场为双打组合、12 场为单打；现有 `MarketOutcome` 必须绑定两个独立 player ID，provider 因此无法表示未识别单打选手或双打组合。12 场单打中 resolver 仅能完整解析 2 场。另对这 12 场直接请求 CLOB：HTTP 200、24/24 订单簿返回、22 本有挂单；因此真实单打报价存在，瓶颈是进入应用的身份/展示模型而非报价源无数据。
+- 对本地 370 个候选 token 的一次成功 CLOB 批量核验返回 15 本：2 场两侧均有挂单、5 场两侧均为空簿、178 场未返回任一侧订单簿；runtime 同期 coverage 为 `fresh_snapshot=2 / no_liquidity=5 / unavailable=178`。Polymarket 官方文档说明 `/books` 应对每个请求 token 返回一本订单簿，因此大量缺失不能解释为“只有空挂单”；需核实 token/市场是否已过期或不再有效。见[官方订单簿文档](https://docs.polymarket.com/market-data/prices-order-books)。
+- 较早 HTTPX 连接失败与宿主 `NO_PROXY` 的 `::1` 曾触发的 `Invalid port: ':1'` 已由 T90 分别排查/修复客户端代理继承；本轮仍看到 CLOB 偶发连接失败，须继续验证是否为网络路径波动。此前一个失败窗口曾有 `candidate=185 / attempted=0 / batch_failures=4 / stale=185`，快照健康正确为降级；本轮另一次成功窗口已拿到 `attempted=185`，`fresh_snapshot=2 / no_liquidity=5 / unavailable=178`。简略 `tennix-live status` 的 `polymarket=ok` 是独立流健康项，不代表报价覆盖充分。
 - 原运行时曾把 4 个快照批次全失败报告成 `market_snapshot=ok`；`4ba96f7` 已改成按批次失败/429 报 `degraded`，并保留完整 coverage 聚合。
-- Polymarket 网络放行前无法证明真实报价能刷新。即使报价恢复，机会页仍会因独立的 `model_status=not_promoted` 保持无 `BUY/WAIT`，模型晋升不在 T91 范围内。
+- 机会页仍会因独立的 `model_status=not_promoted` 保持无 `BUY/WAIT`，模型晋升不在 T91 范围内；报价可用性与机会生成必须分开验收。
 
 ## T89 完成证据（2026-09-23，全部实际运行）
 
@@ -51,11 +53,11 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
+| 2026-09-23 | `10ff93e` | 记录当时 Polymarket TLS 失败；本轮复测补充为连接间歇，并确认报价缺失主要来自市场/outcome 身份模型与旧候选未退役 |
 | 2026-09-23 | `ca91580` | 领取 T91：Codex / `main` / 起始 `5ee62ed`；确认 Polymarket 主机 TLS 拦截与快照健康误报 |
 | 2026-09-23 | `4ba96f7` | 快照批次失败或限流时正确报告 `degraded`；1202 后端确定性用例通过 |
 | 2026-09-23 | `b3ef97d` | T90 修复 HTTP/WS 客户端隐式继承宿主代理环境；确定性后端 1200 passed，根 `.env` 未改 |
 | 2026-09-23 | `a61dcd2` | 领取 T90 |
-| 2026-09-23 | `e9426d5` | runbook 明确 `init` 的中文名 LLM 补全（迁移也无法跳过）与 `LOCAL_SCHEMA_BEHIND` 排障行 |
 
 ## 下一步
 
