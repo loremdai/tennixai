@@ -13,11 +13,9 @@ from app.api.schemas import (
     MatchCatalogResponse,
     MatchListResponse,
     MatchSnapshotResponse,
-    PlayerListResponse,
     PlayerProfileViewResponse,
     PlayerResolutionResponse,
     PlayerResultPageResponse,
-    PlayerResultsResponse,
     MarketListResponse,
     MatchDecisionResponse,
     OpportunityListResponse,
@@ -262,12 +260,14 @@ async def head_to_head(
 # ---------------------------------------------------------------------------
 
 P3_STREAM_PATTERNS = (
+    "tnx:p3:quotes",
     "tnx:p3:market:*",
     "tnx:p3:decision:*",
     "tnx:p3:paper:*",
     "tnx:p3:resolution:*",
 )
 MARKET_EVENT_TYPES = {
+    "quotes_changed",
     "market_delta",
     "market_gap",
     "decision_delta",

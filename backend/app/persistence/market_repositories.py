@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import func, select, update
+from sqlalchemy import case, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 
@@ -20,6 +20,7 @@ from app.decision.models import DecisionObservation
 from app.markets.models import (
     Market,
     MarketExternalId,
+    MarketListingScan,
     MarketOutcome,
     MarketRules,
     MarketStatus,
@@ -236,22 +237,155 @@ class MarketRepository:
             async with session.begin():
                 await session.execute(statement)
 
+    async def reconcile_market_listings(
+        self, scan: MarketListingScan, *, observed_at: datetime
+    ) -> int:
+        """Upsert the display catalog and retire unseen active rows atomically.
+
+        Incomplete scans may add/update trustworthy rows, but can never close
+        an unseen listing. Only open/scheduled Polymarket rows are retired;
+        resolved state and every related audit/ledger row remain untouched.
+        """
+        async with self._database.session() as session:
+            async with session.begin():
+                listing_ids = {listing.id for listing in scan.listings}
+                existing_rows = []
+                if listing_ids:
+                    existing_rows = (
+                        await session.scalars(
+                            select(MarketRow).where(MarketRow.id.in_(listing_ids))
+                        )
+                    ).all()
+                existing_by_id = {row.id: row for row in existing_rows}
+                changed_ids: set[str] = set()
+                for listing in scan.listings:
+                    first_id, second_id = listing.outcome_player_ids
+                    existing = existing_by_id.get(listing.id)
+                    if existing is None:
+                        changed_ids.add(listing.id)
+                    else:
+                        effective_status = (
+                            MarketStatus.RESOLVED.value
+                            if existing.status == MarketStatus.RESOLVED.value
+                            else listing.status.value
+                        )
+                        visible_values = (
+                            listing.question,
+                            first_id or existing.outcome_a_player_id,
+                            listing.outcome_names[0],
+                            second_id or existing.outcome_b_player_id,
+                            listing.outcome_names[1],
+                            effective_status,
+                            listing.event_start,
+                            listing.event_end,
+                            listing.provider,
+                        )
+                        stored_values = (
+                            existing.question,
+                            existing.outcome_a_player_id,
+                            existing.outcome_a_name,
+                            existing.outcome_b_player_id,
+                            existing.outcome_b_name,
+                            existing.status,
+                            existing.event_start,
+                            existing.event_end,
+                            existing.provider,
+                        )
+                        if visible_values != stored_values:
+                            changed_ids.add(listing.id)
+                    values: dict[str, Any] = {
+                        "id": listing.id,
+                        "question": listing.question,
+                        "outcome_a_player_id": first_id,
+                        "outcome_a_name": listing.outcome_names[0],
+                        "outcome_b_player_id": second_id,
+                        "outcome_b_name": listing.outcome_names[1],
+                        "status": listing.status.value,
+                        "event_start": listing.event_start,
+                        "event_end": listing.event_end,
+                        "provider": listing.provider,
+                        "observed_at": listing.observed_at,
+                        "updated_at": observed_at,
+                    }
+                    statement = pg_insert(MarketRow).values(**values)
+                    statement = statement.on_conflict_do_update(
+                        index_elements=["id"],
+                        set_={
+                            "question": statement.excluded.question,
+                            "outcome_a_player_id": func.coalesce(
+                                statement.excluded.outcome_a_player_id,
+                                MarketRow.outcome_a_player_id,
+                            ),
+                            "outcome_a_name": statement.excluded.outcome_a_name,
+                            "outcome_b_player_id": func.coalesce(
+                                statement.excluded.outcome_b_player_id,
+                                MarketRow.outcome_b_player_id,
+                            ),
+                            "outcome_b_name": statement.excluded.outcome_b_name,
+                            "status": case(
+                                (
+                                    MarketRow.status == MarketStatus.RESOLVED.value,
+                                    MarketStatus.RESOLVED.value,
+                                ),
+                                else_=statement.excluded.status,
+                            ),
+                            "event_start": statement.excluded.event_start,
+                            "event_end": statement.excluded.event_end,
+                            "provider": statement.excluded.provider,
+                            "observed_at": statement.excluded.observed_at,
+                            "updated_at": (
+                                statement.excluded.updated_at
+                                if listing.id in changed_ids
+                                else MarketRow.updated_at
+                            ),
+                        },
+                    )
+                    await session.execute(statement)
+
+                if not scan.complete:
+                    return len(changed_ids)
+
+                retirement = update(MarketRow).where(
+                    MarketRow.provider == "polymarket",
+                    MarketRow.status.in_(
+                        (MarketStatus.OPEN.value, MarketStatus.SCHEDULED.value)
+                    ),
+                )
+                market_ids = {listing.id for listing in scan.listings}
+                if market_ids:
+                    retirement = retirement.where(MarketRow.id.not_in(market_ids))
+                result = await session.execute(
+                    retirement.values(
+                        status=MarketStatus.CLOSED.value,
+                        observed_at=observed_at,
+                        updated_at=observed_at,
+                    )
+                )
+                return len(changed_ids) + max(result.rowcount or 0, 0)
+
     async def get_market(self, market_id: str) -> Market | None:
         async with self._database.session() as session:
             row = await session.get(MarketRow, market_id)
-        if row is None or row.question is None:
+        if (
+            row is None
+            or row.question is None
+            or not row.outcome_a_player_id
+            or not row.outcome_a_name
+            or not row.outcome_b_player_id
+            or not row.outcome_b_name
+        ):
             return None
         return Market(
             id=row.id,
             question=row.question,
             outcomes=(
                 MarketOutcome(
-                    player_id=row.outcome_a_player_id or "",
-                    name=row.outcome_a_name or "",
+                    player_id=row.outcome_a_player_id,
+                    name=row.outcome_a_name,
                 ),
                 MarketOutcome(
-                    player_id=row.outcome_b_player_id or "",
-                    name=row.outcome_b_name or "",
+                    player_id=row.outcome_b_player_id,
+                    name=row.outcome_b_name,
                 ),
             ),
             status=MarketStatus(row.status),
@@ -574,7 +708,7 @@ class MarketRepository:
                 (MarketMatchLinkRow.market_id == MarketRow.id)
                 & (MarketMatchLinkRow.status == "active"),
             )
-            .order_by(MarketRow.updated_at.desc())
+            .order_by(MarketRow.updated_at.desc(), MarketRow.id.asc())
         )
         async with self._database.session() as session:
             rows = (await session.execute(statement)).all()
@@ -614,9 +748,7 @@ class MarketRepository:
                 .scalars()
                 .all()
             )
-        observations = [
-            DecisionObservation.model_validate(row.payload) for row in rows
-        ]
+        observations = [DecisionObservation.model_validate(row.payload) for row in rows]
         observations.sort(key=lambda item: item.as_of, reverse=True)
         return observations
 

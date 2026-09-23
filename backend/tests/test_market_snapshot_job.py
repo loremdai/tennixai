@@ -28,6 +28,8 @@ def overview(
     *,
     status: str = "open",
     match_id: str | None = None,
+    unmapped: bool = False,
+    player_ids: tuple[str | None, str | None] = ("ply_a", "ply_b"),
     event_start: datetime | None = None,
 ) -> MarketOverviewRow:
     return MarketOverviewRow(
@@ -38,11 +40,15 @@ def overview(
         observed_at=NOW,
         event_start=event_start or NOW + timedelta(hours=1),
         updated_at=NOW,
-        outcome_a_player_id=f"ply_a_{market_id}",
+        outcome_a_player_id=(
+            f"ply_a_{market_id}" if player_ids[0] is not None else None
+        ),
         outcome_a_name="Provider A",
-        outcome_b_player_id=f"ply_b_{market_id}",
+        outcome_b_player_id=(
+            f"ply_b_{market_id}" if player_ids[1] is not None else None
+        ),
         outcome_b_name="Provider B",
-        active_match_id=match_id or f"mat_{market_id}",
+        active_match_id=(None if unmapped else match_id or f"mat_{market_id}"),
         link_evidence_available=True,
     )
 
@@ -79,6 +85,8 @@ class FakeProjections:
         self.load_many_calls = 0
 
     async def upsert(self, record):
+        if self.stored.get(record.market_id) == record:
+            return False
         self.writes.append(record)
         self.stored[record.market_id] = record
         return True
@@ -92,9 +100,12 @@ class FakeProjections:
         self.limited.append(ids)
         # Mirror the repository: stored levels survive, the state is retagged
         # (or a minimal limited row is created when none exists yet).
+        changed = 0
         for market_id in ids:
             existing = self.stored.get(market_id)
             if existing is not None:
+                if existing.state is QuoteState.LIMITED:
+                    continue
                 self.stored[market_id] = existing.model_copy(
                     update={"state": QuoteState.LIMITED}
                 )
@@ -106,7 +117,8 @@ class FakeProjections:
                     as_of=now,
                     expires_at=expires_at,
                 )
-        return len(ids)
+            changed += 1
+        return changed
 
 
 class FakeProvider:
@@ -171,8 +183,9 @@ def job(
     raw=None,
     catalog=None,
     hot=None,
-    max_markets=250,
-    token_batch_size=100,
+    max_markets=500,
+    token_batch_size=500,
+    on_quotes_changed=None,
 ) -> MarketQuoteSnapshotJob:
     return MarketQuoteSnapshotJob(
         markets=markets,
@@ -186,6 +199,7 @@ def job(
         token_batch_size=token_batch_size,
         quote_fresh_seconds=300,
         realtime_fresh_seconds=5,
+        on_quotes_changed=on_quotes_changed,
     )
 
 
@@ -231,6 +245,26 @@ async def test_snapshot_job_splits_batches_and_writes_every_candidate():
     assert coverage.rate_limited is False
 
 
+async def test_snapshot_job_coalesces_quote_change_notifications_and_skips_noop():
+    markets = FakeMarkets([overview(MARKET_IDS[0])])
+    projections = FakeProjections()
+    notifications = []
+
+    async def notify(*, count):
+        notifications.append(count)
+
+    runner = job(
+        markets=markets,
+        projections=projections,
+        on_quotes_changed=notify,
+    )
+
+    await runner.run_once()
+    await runner.run_once()
+
+    assert notifications == [1]
+
+
 async def test_snapshot_job_marks_the_overflow_as_limited_without_dropping_it():
     markets = FakeMarkets([overview(market_id) for market_id in MARKET_IDS])
     projections = FakeProjections()
@@ -241,6 +275,48 @@ async def test_snapshot_job_marks_the_overflow_as_limited_without_dropping_it():
     assert projections.limited == [tuple(MARKET_IDS[3:])]
     assert coverage.candidate == 5 and coverage.attempted == 3
     assert coverage.limited == 2
+
+
+async def test_snapshot_job_rotates_the_protection_cap_without_starving_tail():
+    markets = FakeMarkets([overview(market_id) for market_id in MARKET_IDS])
+    projections = FakeProjections()
+    provider = FakeProvider()
+    runner = job(
+        markets=markets,
+        projections=projections,
+        provider=provider,
+        max_markets=3,
+        token_batch_size=6,
+    )
+
+    await runner.run_once()
+    await runner.run_once()
+
+    # The selected tail rotates even when one quote is unchanged and the
+    # idempotent projection correctly skips a redundant write.
+    assert provider.calls[0] == tuple(
+        token for market_id in MARKET_IDS[:3] for token in TOKENS[market_id]
+    )
+    assert provider.calls[1] == tuple(
+        token
+        for market_id in ("mkt_3", "mkt_4", "mkt_0")
+        for token in TOKENS[market_id]
+    )
+
+
+async def test_snapshot_job_includes_unmapped_listings_with_private_tokens():
+    listing = overview("mkt_display_only", unmapped=True, player_ids=(None, None))
+    markets = FakeMarkets([listing], tokens={"mkt_display_only": ("tok_a", "tok_b")})
+    projections = FakeProjections()
+    runner = job(markets=markets, projections=projections)
+
+    coverage = await runner.run_once()
+
+    assert coverage.candidate == 1 and coverage.attempted == 1
+    assert [record.market_id for record in projections.writes] == ["mkt_display_only"]
+    record = projections.writes[0]
+    assert record.outcome_asks == ("0.60", "0.60")
+    assert record.levels is None
 
 
 async def test_snapshot_job_rotates_live_markets_first():

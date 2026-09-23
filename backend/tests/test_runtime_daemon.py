@@ -32,7 +32,14 @@ from app.domain import (
     Tournament,
 )
 from app.errors import AppError
-from app.markets.models import Market, MarketOutcome, MarketStatus, ResolutionStatus
+from app.markets.models import (
+    Market,
+    MarketListing,
+    MarketListingScan,
+    MarketOutcome,
+    MarketStatus,
+    ResolutionStatus,
+)
 from app.persistence.market_repositories import LinkFrozenError
 from app.players.models import PlayerResolution, PlayerResolutionStatus
 from app.players.sync import DirectorySyncReport
@@ -108,6 +115,25 @@ def make_provider_market(
         ),
         status=status,
         rules_version=1,
+        event_start=NOW,
+        event_end=NOW + timedelta(hours=3),
+        provider="polymarket",
+        observed_at=NOW,
+    )
+
+
+def make_market_listing(
+    market_id: str,
+    *,
+    names: tuple[str, str] = ("Player One", "Player Two"),
+    player_ids: tuple[str | None, str | None] = ("ply_a", "ply_b"),
+) -> MarketListing:
+    return MarketListing(
+        id=market_id,
+        question=f"{names[0]} vs. {names[1]}: Match Winner",
+        outcome_names=names,
+        outcome_player_ids=player_ids,
+        status=MarketStatus.OPEN,
         event_start=NOW,
         event_end=NOW + timedelta(hours=3),
         provider="polymarket",
@@ -199,6 +225,7 @@ class FakeMarketProvider:
     def __init__(self, log: list[str]) -> None:
         self.log = log
         self.markets: list[Market] = []
+        self.listing_scan: MarketListingScan | None = None
         self.rules: dict[str, object] = {}
         self.rules_missing: set[str] = set()
         self.resolutions: dict[str, object] = {}
@@ -213,6 +240,35 @@ class FakeMarketProvider:
         self.log.append("job:market_discovery")
         self.discovery_calls += 1
         return tuple(self.markets)
+
+    async def list_tennis_market_listings(self) -> MarketListingScan:
+        self.log.append("job:market_discovery")
+        self.discovery_calls += 1
+        if self.listing_scan is not None:
+            return self.listing_scan
+        return MarketListingScan(
+            listings=tuple(
+                MarketListing(
+                    id=market.id,
+                    question=market.question,
+                    outcome_names=(
+                        market.outcomes[0].name,
+                        market.outcomes[1].name,
+                    ),
+                    outcome_player_ids=(
+                        market.outcomes[0].player_id,
+                        market.outcomes[1].player_id,
+                    ),
+                    status=market.status,
+                    event_start=market.event_start,
+                    event_end=market.event_end,
+                    provider=market.provider,
+                    observed_at=market.observed_at,
+                )
+                for market in self.markets
+            ),
+            complete=True,
+        )
 
     async def get_rules(self, market_id: str):
         self.rules_calls.append(market_id)
@@ -234,14 +290,24 @@ class FakeMarketProvider:
 class FakeMarketsRepo:
     def __init__(self) -> None:
         self.saved_markets: list[str] = []
+        self.saved_listings: list[str] = []
+        self.reconciled_scans: list[MarketListingScan] = []
         self.saved_rules: list[str] = []
         self.links: list[tuple[str, str]] = []
         self.link_evidence: list[dict] = []
         self.active_links_rows: list[LinkRow] = []
         self.frozen: set[str] = set()
+        self.catalog_changed_count = 0
 
     async def save_market(self, market: Market) -> None:
         self.saved_markets.append(market.id)
+
+    async def reconcile_market_listings(
+        self, scan: MarketListingScan, *, observed_at
+    ) -> int:
+        self.reconciled_scans.append(scan)
+        self.saved_listings.extend(listing.id for listing in scan.listings)
+        return self.catalog_changed_count
 
     async def save_rules(self, rules) -> int:
         self.saved_rules.append(rules.market_id)
@@ -389,6 +455,19 @@ class FakeMarketRuntime:
         self.stopped = True
 
 
+class BlockingCatalogQuoteFeed:
+    def __init__(self) -> None:
+        self.started = asyncio.Event()
+        self.stopped = False
+
+    async def run(self) -> None:
+        self.started.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            self.stopped = True
+
+
 class FakeStateRepo:
     def __init__(self, log: list[str]) -> None:
         self.log = log
@@ -454,11 +533,29 @@ def make_daemon(
         metadata_cache=parts["metadata_cache"],
         quote_job=parts.get("quote_job"),
         quote_snapshots=parts.get("quote_snapshots"),
+        catalog_quote_feed=parts.get("catalog_quote_feed"),
+        quote_change_notifier=parts.get("quote_change_notifier"),
         quote_fresh_seconds=parts.get("quote_fresh_seconds", 300),
         market_snapshot_seconds=parts.get("market_snapshot_seconds", 120),
         tick_seconds=tick_seconds,
     )
     return daemon, parts
+
+
+async def test_discovery_notifies_only_when_catalog_projection_changes():
+    notifications: list[int] = []
+
+    async def notify(*, count: int) -> None:
+        notifications.append(count)
+
+    daemon, parts = make_daemon(quote_change_notifier=notify)
+    parts["markets"].catalog_changed_count = 2
+
+    await daemon._discover_markets()
+    parts["markets"].catalog_changed_count = 0
+    await daemon._discover_markets()
+
+    assert notifications == [2]
 
 
 # ---------------------------------------------------------------------------
@@ -661,8 +758,8 @@ async def test_discovery_saves_canonical_markets_and_only_strict_links():
 
     await daemon.tick_once()
 
-    # Canonical markets are saved regardless of mapping outcome.
-    assert repo.saved_markets == ["mkt_mapped", "mkt_unmapped"]
+    # Every supplier listing is retained for display regardless of mapping.
+    assert repo.saved_listings == ["mkt_mapped", "mkt_unmapped"]
     # Only the strict mapping produced a link; the failed mapping stays
     # MARKET_ONLY (no link, no fuzzy/manual fallback).
     assert repo.links == [("mkt_mapped", "mat_1")]
@@ -673,6 +770,40 @@ async def test_discovery_saves_canonical_markets_and_only_strict_links():
     # Rules were captured for the mapped market; a not_found rules response
     # for the unmapped market is tolerated.
     assert repo.saved_rules == ["mkt_mapped"]
+    assert state.saved[-1].sources["market_discovery"].status is RuntimeSourceStatus.OK
+
+
+async def test_discovery_reconciles_unresolved_and_doubles_as_display_only():
+    daemon, parts = make_daemon()
+    provider: FakeMarketProvider = parts["market_provider"]
+    repo: FakeMarketsRepo = parts["markets"]
+    store: FakeCatalogStore = parts["catalog_store"]
+    state: FakeStateRepo = parts["state"]
+    store.rows["mat_1"] = make_match("mat_1")
+    provider.listing_scan = MarketListingScan(
+        listings=(
+            make_market_listing("mkt_mapped"),
+            make_market_listing(
+                "mkt_unknown",
+                names=("B. Unlisted", "Unknown Player"),
+                player_ids=(None, None),
+            ),
+            make_market_listing(
+                "mkt_doubles",
+                names=("Player One / Partner A", "Player Two / Partner B"),
+                player_ids=(None, None),
+            ),
+        ),
+        complete=False,
+    )
+    provider.rules = {"mkt_mapped": make_rules("mkt_mapped")}
+
+    await daemon.tick_once()
+
+    assert repo.reconciled_scans == [provider.listing_scan]
+    assert repo.saved_listings == ["mkt_mapped", "mkt_unknown", "mkt_doubles"]
+    assert provider.rules_calls == ["mkt_mapped"]
+    assert repo.links == [("mkt_mapped", "mat_1")]
     assert state.saved[-1].sources["market_discovery"].status is RuntimeSourceStatus.OK
 
 
@@ -1297,6 +1428,18 @@ async def test_run_loop_ticks_until_stop_and_shuts_down_gracefully():
     assert len(parts["state"].saved) >= 2
 
 
+async def test_run_starts_and_awaits_catalog_quote_feed_on_stop():
+    feed = BlockingCatalogQuoteFeed()
+    daemon, _ = make_daemon(tick_seconds=0.01, catalog_quote_feed=feed)
+    task = asyncio.create_task(daemon.run())
+
+    await asyncio.wait_for(feed.started.wait(), timeout=2)
+    await daemon.stop()
+    await asyncio.wait_for(task, timeout=2)
+
+    assert feed.stopped is True
+
+
 async def test_run_loop_survives_repeated_tick_failures():
     clock = FakeClock()
     daemon, parts = make_daemon(clock, tick_seconds=0.01)
@@ -1453,7 +1596,11 @@ async def test_snapshot_job_runs_at_its_own_bounded_interval():
 async def test_snapshot_batch_failures_mark_snapshot_health_degraded():
     clock = FakeClock()
     coverage = MarketQuoteCoverage(
-        generated_at=clock.now(), candidate=185, attempted=0, stale=185, batch_failures=4
+        generated_at=clock.now(),
+        candidate=185,
+        attempted=0,
+        stale=185,
+        batch_failures=4,
     )
     daemon, parts = make_daemon(clock, quote_job=SpyQuoteJob(coverage))
 
@@ -1469,7 +1616,11 @@ async def test_snapshot_batch_failures_mark_snapshot_health_degraded():
 async def test_snapshot_rate_limit_marks_snapshot_health_degraded():
     clock = FakeClock()
     coverage = MarketQuoteCoverage(
-        generated_at=clock.now(), candidate=185, attempted=0, stale=185, rate_limited=True
+        generated_at=clock.now(),
+        candidate=185,
+        attempted=0,
+        stale=185,
+        rate_limited=True,
     )
     daemon, parts = make_daemon(clock, quote_job=SpyQuoteJob(coverage))
 

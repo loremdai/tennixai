@@ -25,6 +25,8 @@ from app.markets.models import (
     MarketEnvelope,
     MarketExecutionMetadata,
     MarketExternalId,
+    MarketListing,
+    MarketListingScan,
     MarketOutcome,
     MarketResolution,
     MarketRules,
@@ -39,7 +41,9 @@ from app.markets.polymarket_dtos import (
     ClobMarketInfoDto,
     FeeRateDto,
     GammaEventDto,
+    GammaEventsKeysetPageDto,
     GammaMarketDto,
+    GammaTagDto,
 )
 from app.markets.quotes import ClobBooksBatch, TokenBook
 from app.players.models import PlayerResolutionStatus
@@ -48,7 +52,8 @@ from app.players.resolver import PlayerResolver
 PROVIDER_NAME = "polymarket"
 TENNIS_TAG_SLUG = "tennis"
 MONEYLINE_TYPE = "moneyline"
-EVENTS_LIMIT = 200
+EVENTS_LIMIT = 100
+MAX_EVENTS_KEYSET_PAGES = 100
 
 Registrar = Callable[[str, str, tuple[str, str]], Awaitable[str]]
 ExternalLookup = Callable[[str], Awaitable[MarketExternalId | None]]
@@ -108,16 +113,23 @@ class PolymarketProvider:
         now_fn: Callable[[], datetime] | None = None,
     ) -> None:
         self._gamma = httpx.AsyncClient(
-            base_url=gamma_base_url, transport=transport, timeout=timeout, trust_env=False
+            base_url=gamma_base_url,
+            transport=transport,
+            timeout=timeout,
+            trust_env=False,
         )
         self._clob = httpx.AsyncClient(
-            base_url=clob_base_url, transport=transport, timeout=timeout, trust_env=False
+            base_url=clob_base_url,
+            transport=transport,
+            timeout=timeout,
+            trust_env=False,
         )
         self._resolver = resolver
         self._registrar = registrar
         self._external_lookup = external_lookup
         self._now_fn = now_fn or (lambda: datetime.now(UTC))
         self._skipped: list[MarketSkip] = []
+        self._tennis_tag_id: str | None = None
         # condition_id -> resolved internal player ids, in outcome order.
         self._outcome_players: dict[str, tuple[str, str]] = {}
 
@@ -242,65 +254,140 @@ class PolymarketProvider:
     # ------------------------------------------------------------------
 
     async def list_tennis_moneylines(self) -> tuple[Market, ...]:
-        if self._registrar is None:
-            raise RuntimeError(
-                "list_tennis_moneylines requires a market registrar binding"
-            )
-        payload = await self._get_json(
-            self._gamma,
-            "/events",
-            params={
-                "tag_slug": TENNIS_TAG_SLUG,
-                "active": "true",
-                "closed": "false",
-                "limit": EVENTS_LIMIT,
-            },
+        """Strict-identity subset retained for decision-path callers."""
+        scan = await self.list_tennis_market_listings()
+        return tuple(
+            market
+            for listing in scan.listings
+            if (market := listing.to_market()) is not None
         )
-        if not isinstance(payload, list):
+
+    async def _get_tennis_tag_id(self) -> str:
+        if self._tennis_tag_id is not None:
+            return self._tennis_tag_id
+        payload = await self._get_json(self._gamma, f"/tags/slug/{TENNIS_TAG_SLUG}")
+        try:
+            tag = GammaTagDto.model_validate(payload)
+            tag_id = str(int(str(tag.id)))
+        except (ValidationError, TypeError, ValueError) as exc:
             raise AppError(
                 "provider_invalid_response",
-                "Polymarket events payload was malformed",
+                "Polymarket tag response was malformed",
+                502,
+            ) from exc
+        if tag.slug != TENNIS_TAG_SLUG:
+            raise AppError(
+                "provider_invalid_response",
+                "Polymarket tag response was malformed",
                 502,
             )
-        self._skipped = []
-        markets: list[Market] = []
-        for raw_event in payload:
-            if not isinstance(raw_event, dict):
-                continue
-            try:
-                event = GammaEventDto.model_validate(raw_event)
-            except ValidationError:
-                self._skipped.append(
-                    MarketSkip(
-                        slug="",
-                        reason="malformed_event",
-                        quality_code="MALFORMED_EVENT",
-                    )
-                )
-                continue
-            for dto in event.markets:
-                market = await self._market_from_listing(dto, event)
-                if market is not None:
-                    markets.append(market)
-        return tuple(markets)
+        self._tennis_tag_id = tag_id
+        return tag_id
 
-    async def _market_from_listing(
+    async def _all_tennis_events(self) -> tuple[GammaEventDto, ...]:
+        tag_id = await self._get_tennis_tag_id()
+        events: list[GammaEventDto] = []
+        seen_cursors: set[str] = set()
+        cursor: str | None = None
+        for _ in range(MAX_EVENTS_KEYSET_PAGES):
+            params: dict[str, Any] = {
+                "tag_id": tag_id,
+                "closed": "false",
+                "limit": EVENTS_LIMIT,
+            }
+            if cursor is not None:
+                params["after_cursor"] = cursor
+            payload = await self._get_json(self._gamma, "/events/keyset", params=params)
+            try:
+                page = GammaEventsKeysetPageDto.model_validate(payload)
+            except ValidationError as exc:
+                raise AppError(
+                    "provider_invalid_response",
+                    "Polymarket events page was malformed",
+                    502,
+                ) from exc
+            events.extend(page.events)
+            next_cursor = page.next_cursor
+            if next_cursor is None or next_cursor == "":
+                return tuple(events)
+            if next_cursor == cursor or next_cursor in seen_cursors:
+                raise AppError(
+                    "provider_invalid_response",
+                    "Polymarket pagination cursor repeated",
+                    502,
+                )
+            seen_cursors.add(next_cursor)
+            cursor = next_cursor
+        raise AppError(
+            "provider_invalid_response",
+            "Polymarket pagination exceeded its safety limit",
+            502,
+        )
+
+    async def list_tennis_market_listings(self) -> MarketListingScan:
+        """Read the complete public tennis moneyline catalog for display.
+
+        Unresolved identities remain as supplier-labeled listings. Any
+        malformed active moneyline makes the scan incomplete so callers may
+        upsert valid rows but must not retire unseen catalog rows.
+        """
+        if self._registrar is None:
+            raise RuntimeError(
+                "list_tennis_market_listings requires a market registrar binding"
+            )
+        self._skipped = []
+        events = await self._all_tennis_events()
+        listings: list[MarketListing] = []
+        complete = True
+        seen_conditions: set[str] = set()
+        for event in events:
+            for dto in event.markets:
+                if event.closed is True or event.active is False:
+                    self._skipped.append(
+                        MarketSkip(
+                            slug=dto.slug or event.slug or "",
+                            reason="closed",
+                            quality_code="MARKET_CLOSED",
+                        )
+                    )
+                    continue
+                listing, valid = await self._market_listing(dto, event)
+                complete = complete and valid
+                if listing is None:
+                    continue
+                external = str(dto.conditionId)
+                if external in seen_conditions:
+                    self._skipped.append(
+                        MarketSkip(
+                            slug=dto.slug or event.slug or "",
+                            reason="duplicate_condition",
+                            quality_code="DUPLICATE_LISTING",
+                        )
+                    )
+                    complete = False
+                    continue
+                seen_conditions.add(external)
+                listings.append(listing)
+        return MarketListingScan(listings=tuple(listings), complete=complete)
+
+    async def _market_listing(
         self, dto: GammaMarketDto, event: GammaEventDto
-    ) -> Market | None:
+    ) -> tuple[MarketListing | None, bool]:
         slug = dto.slug or event.slug or ""
-        if dto.closed or dto.active is False or dto.acceptingOrders is False:
+        if dto.closed or dto.active is False:
             self._skipped.append(
                 MarketSkip(slug=slug, reason="closed", quality_code="MARKET_CLOSED")
             )
-            return None
+            return None, True
         if (dto.sportsMarketType or "").casefold() != MONEYLINE_TYPE:
             self._skipped.append(
                 MarketSkip(
                     slug=slug, reason="not_moneyline", quality_code="NOT_MONEYLINE"
                 )
             )
-            return None
-        if len(dto.outcome_names()) != 2:
+            return None, True
+        names = tuple(name.strip() for name in dto.outcome_names())
+        if len(names) != 2 or any(not name for name in names):
             self._skipped.append(
                 MarketSkip(
                     slug=slug,
@@ -308,9 +395,14 @@ class PolymarketProvider:
                     quality_code="MALFORMED_OUTCOMES",
                 )
             )
-            return None
+            return None, False
         token_ids = dto.token_ids()
-        if len(token_ids) != 2 or not dto.conditionId:
+        if (
+            len(token_ids) != 2
+            or any(not token_id for token_id in token_ids)
+            or not dto.conditionId
+            or event.id is None
+        ):
             self._skipped.append(
                 MarketSkip(
                     slug=slug,
@@ -318,7 +410,7 @@ class PolymarketProvider:
                     quality_code="MALFORMED_TOKENS",
                 )
             )
-            return None
+            return None, False
         player_ids = await self._resolve_outcome_players(dto)
         if player_ids is None:
             self._skipped.append(
@@ -328,14 +420,41 @@ class PolymarketProvider:
                     quality_code="UNRESOLVED_PLAYER",
                 )
             )
-            return None
+            outcome_player_ids: tuple[str | None, str | None] = (None, None)
+        elif player_ids[0] == player_ids[1]:
+            self._skipped.append(
+                MarketSkip(
+                    slug=slug,
+                    reason="duplicate_player_identity",
+                    quality_code="UNRESOLVED_PLAYER",
+                )
+            )
+            outcome_player_ids = (None, None)
+        else:
+            outcome_player_ids = player_ids
+            self._outcome_players[dto.conditionId] = player_ids
         assert self._registrar is not None  # noqa: S101 - checked by caller
         internal_id = await self._registrar(
-            str(event.id or ""), dto.conditionId, (token_ids[0], token_ids[1])
+            str(event.id), dto.conditionId, (token_ids[0], token_ids[1])
         )
-        self._outcome_players[dto.conditionId] = player_ids
-        return self._canonical_market(
-            market_id=internal_id, dto=dto, player_ids=player_ids
+        status = (
+            MarketStatus.SCHEDULED
+            if dto.acceptingOrders is False
+            else MarketStatus.OPEN
+        )
+        return (
+            MarketListing(
+                id=internal_id,
+                question=(dto.question or "").strip() or f"{names[0]} vs. {names[1]}",
+                outcome_names=(names[0], names[1]),
+                outcome_player_ids=outcome_player_ids,
+                status=status,
+                event_start=_parse_iso(dto.gameStartTime) or _parse_iso(dto.startDate),
+                event_end=_parse_iso(dto.endDate),
+                provider=PROVIDER_NAME,
+                observed_at=self._now_fn(),
+            ),
+            True,
         )
 
     async def get_market(self, market_id: str) -> Market:

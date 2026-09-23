@@ -127,6 +127,25 @@ describe('useMarketStream', () => {
     expect(gaps).toEqual([])
   })
 
+  it('reports catalog quote changes without sharing market or decision cursors', async () => {
+    const onQuotesChanged = vi.fn()
+    script.frameSets = [[
+      readyFrame(),
+      frame('quotes_changed', { sequence: 100, count: 2, as_of: NOW }, '100'),
+      marketDelta('mkt_1', 1),
+      decisionDelta('mat_1', 1),
+      frame('quotes_changed', { sequence: 100, count: 2, as_of: NOW }, '100'),
+    ]]
+
+    const { result } = renderHook(() => useMarketStream({ onQuotesChanged }))
+
+    await waitFor(() => expect(result.current.books['mkt_1']?.sequence).toBe(1))
+    await waitFor(() => expect(result.current.decisions['mat_1']?.observation_version).toBe(1))
+    expect(onQuotesChanged).toHaveBeenCalledTimes(1)
+    expect(onQuotesChanged).toHaveBeenCalledWith({ sequence: 100, count: 2, as_of: NOW })
+    expect(gaps).toEqual([])
+  })
+
   it('ignores duplicate and stale events without marking gaps', async () => {
     script.frameSets = [[readyFrame(), marketDelta('mkt_1', 12), marketDelta('mkt_1', 12), marketDelta('mkt_1', 11), decisionDelta('mat_1', 5), decisionDelta('mat_1', 5), decisionDelta('mat_1', 3)]]
 

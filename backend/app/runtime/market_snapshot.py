@@ -59,7 +59,7 @@ def retry_after_seconds(error: AppError) -> int:
 class SnapshotCandidate:
     market_id: str
     tokens: tuple[str, str]
-    player_ids: tuple[str, str]
+    player_ids: tuple[str | None, str | None]
     sort_key: tuple
 
 
@@ -76,10 +76,11 @@ class MarketQuoteSnapshotJob:
         catalog,
         hot_books,
         clock: Callable[[], datetime],
-        max_markets: int = 250,
-        token_batch_size: int = 100,
+        max_markets: int = 500,
+        token_batch_size: int = 500,
         quote_fresh_seconds: int = 300,
         realtime_fresh_seconds: int = 5,
+        on_quotes_changed=None,
     ) -> None:
         self._markets = markets
         self._projections = projections
@@ -92,8 +93,10 @@ class MarketQuoteSnapshotJob:
         self._token_batch_size = token_batch_size
         self._quote_fresh_seconds = quote_fresh_seconds
         self._realtime_fresh_seconds = realtime_fresh_seconds
+        self._on_quotes_changed = on_quotes_changed
         self._retry_after_until: datetime | None = None
         self._last_successful_batch_at: datetime | None = None
+        self._rotation_offset = 0
 
     @property
     def retry_after_until(self) -> datetime | None:
@@ -105,10 +108,16 @@ class MarketQuoteSnapshotJob:
             self._retry_after_until is not None and now < self._retry_after_until
         )
         candidates = await self._candidates()
+        if candidates:
+            start = self._rotation_offset % len(candidates)
+            candidates = candidates[start:] + candidates[:start]
         selected = candidates[: self._max_markets]
         beyond = candidates[self._max_markets :]
+        if selected and not backoff_active:
+            self._rotation_offset = (start + len(selected)) % len(candidates)
+        changed = 0
         if beyond:
-            await self._projections.mark_limited(
+            changed += await self._projections.mark_limited(
                 [candidate.market_id for candidate in beyond],
                 now=now,
                 expires_at=now + timedelta(seconds=self._quote_fresh_seconds),
@@ -144,10 +153,10 @@ class MarketQuoteSnapshotJob:
                         observed_at=now,
                         expires_at=now + timedelta(seconds=self._quote_fresh_seconds),
                     )
-                    await self._projections.upsert(record)
+                    changed += int(await self._projections.upsert(record))
                     written[candidate.market_id] = record
                     attempted.append(candidate.market_id)
-        return await self._coverage(
+        coverage = await self._coverage(
             now,
             candidates=candidates,
             attempted=attempted,
@@ -155,26 +164,23 @@ class MarketQuoteSnapshotJob:
             batch_failures=batch_failures,
             rate_limited=rate_limited or backoff_active,
         )
+        if changed and self._on_quotes_changed is not None:
+            await self._on_quotes_changed(count=changed)
+        return coverage
 
     # ------------------------------------------------------------------
     # Candidate selection and fair rotation
     # ------------------------------------------------------------------
 
     async def _candidates(self) -> list[SnapshotCandidate]:
-        """Canonical open/scheduled markets with identity and private tokens.
+        """Canonical open/scheduled listings with private token pairs.
 
-        Fair rotation order: live matches first, then scheduled start time,
-        then ATP/WTA before Challenger/ITF, then the stable internal market
-        id — so the protection cap can never starve the tail silently.
+        Stable priority is live first, then scheduled start time, then
+        ATP/WTA before Challenger/ITF. A per-process round-robin offset moves
+        the protection window across the ordered catalog each round.
         """
         overviews = await self._markets.list_market_overviews()
-        eligible = [
-            row
-            for row in overviews
-            if row.status in ELIGIBLE_MARKET_STATUSES
-            and row.outcome_a_player_id
-            and row.outcome_b_player_id
-        ]
+        eligible = [row for row in overviews if row.status in ELIGIBLE_MARKET_STATUSES]
         if not eligible:
             return []
         externals = await self._markets.list_external_ids(

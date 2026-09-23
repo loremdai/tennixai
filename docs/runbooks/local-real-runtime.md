@@ -23,7 +23,7 @@
 
 | 车道 | 覆盖范围 | 数据来源 | 能做什么 |
 |---|---|---|---|
-| A — 快照报价 | 全部 canonical 网球单场胜者市场（`open`/`scheduled`） | 公开只读 CLOB `POST /books` 批量快照，默认每 120 秒一轮 | 只填充页面展示报价与状态；**绝不**触发预测、决策、paper 或 WebSocket 订阅 |
+| A — 全目录展示报价 | 全部活跃网球胜者 listing（`open`/`scheduled`，含未识别球员名/双打） | 一条独立只读市场 WebSocket 接收 `best_bid_ask`；REST `POST /books` 做启动/重连基线及每 120 秒校准 | 只更新页面展示报价与状态；不要求或伪造球员 ID；**绝不**触发预测、决策或 paper |
 | B — 实时决策 | 严格映射 + ATP/WTA 主巡单打 + 在 tracking window 内（或已有未结持仓） | 公开市场 WebSocket + REST 对账 | 驱动 Prediction → Decision → paper ledger 与 Match 工作台 |
 
 - 两条车道共享同一份 latest-quote projection 与同一条优先级规则（新值优先；同一时刻只允许实时车道覆盖快照车道，绝不反向）。
@@ -32,8 +32,8 @@
 
 ```text
 TENNIX_LOCAL_RUNTIME_MARKET_SNAPSHOT_SECONDS=120        # 60–900
-TENNIX_LOCAL_RUNTIME_MARKET_SNAPSHOT_MAX_MARKETS=250     # 1–500
-TENNIX_LOCAL_RUNTIME_MARKET_SNAPSHOT_TOKEN_BATCH_SIZE=100 # 2–100（每批私有 token 数）
+TENNIX_LOCAL_RUNTIME_MARKET_SNAPSHOT_MAX_MARKETS=500     # 1–500
+TENNIX_LOCAL_RUNTIME_MARKET_SNAPSHOT_TOKEN_BATCH_SIZE=500 # 2–500（每批私有 token 数；CLOB 官方上限）
 TENNIX_LOCAL_RUNTIME_MARKET_QUOTE_FRESH_SECONDS=300      # 120–1800（快照→过期阈值）
 ```
 

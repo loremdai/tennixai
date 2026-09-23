@@ -669,11 +669,17 @@ export type ResolutionDeltaDto = {
   payouts?: ResolutionPayoutDto[]
   confirmed_at?: string | null
 }
+export type QuoteCatalogChangedDto = {
+  sequence: number
+  count: number
+  as_of: string
+}
 
 export type MarketStreamReadyEvent = { type: 'ready'; payload: MarketsSnapshotDto }
 export type MarketStreamHeartbeatEvent = { type: 'heartbeat'; payload: Record<string, never> }
 export type MalformedStreamEvent = { type: 'malformed'; payload: { reason: string } }
 export type MarketStreamDeltaEvent =
+  | { type: 'quotes_changed'; payload: QuoteCatalogChangedDto }
   | { type: 'market_delta'; payload: MarketDeltaDto }
   | { type: 'market_gap'; payload: MarketGapEventDto }
   | { type: 'decision_delta'; payload: DecisionDeltaDto }

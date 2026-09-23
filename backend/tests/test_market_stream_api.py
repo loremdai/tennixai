@@ -174,6 +174,43 @@ async def test_markets_stream_emits_ready_then_typed_deltas(env):
     assert decision_frame[2] == "5"  # decision cursor stays independent
 
 
+async def test_markets_stream_emits_independent_quote_catalog_invalidation(env):
+    client, redis = env
+
+    async def consume() -> str:
+        chunks: list[str] = []
+        async with client.stream("GET", "/api/v1/markets/stream") as response:
+            assert response.status_code == 200
+            async for chunk in response.aiter_text():
+                chunks.append(chunk)
+                if "event: quotes_changed" in "".join(chunks):
+                    break
+        return "".join(chunks)
+
+    task = asyncio.create_task(consume())
+    await asyncio.sleep(0.05)
+    await redis.publish_pattern(
+        "tnx:p3:quotes",
+        {
+            "type": "quotes_changed",
+            "sequence": 17,
+            "count": 3,
+            "as_of": NOW.isoformat(),
+        },
+    )
+    text = await asyncio.wait_for(task, timeout=5)
+
+    frames = _frames(text)
+    quote_frame = next(frame for frame in frames if frame[0] == "quotes_changed")
+    assert quote_frame[1] == {
+        "type": "quotes_changed",
+        "sequence": 17,
+        "count": 3,
+        "as_of": NOW.isoformat(),
+    }
+    assert quote_frame[2] == "17"
+
+
 async def test_decision_stream_ready_carries_own_version_cursor(env):
     client, redis = env
 

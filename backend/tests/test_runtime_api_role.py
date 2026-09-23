@@ -395,6 +395,7 @@ async def test_build_local_runtime_assembly_constructs_offline_without_worker():
         assert assembly.catalog is not None
         assert assembly.state is not None
         assert assembly.p3_queries is not None
+        assert assembly.p3_queries._runtime_state is assembly.state
         # The API role never owns an upstream connection.
         assert assembly.realtime.worker is None
         assert assembly.realtime.leases is not None

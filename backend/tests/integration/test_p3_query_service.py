@@ -746,6 +746,64 @@ async def test_market_rows_expose_explicit_quote_and_model_semantics(
     assert summary.quote.outcome_asks == ("0.60", "0.42")
 
 
+async def test_catalog_realtime_quote_follows_its_own_connection_health(
+    database: Database,
+) -> None:
+    from types import SimpleNamespace
+
+    seeded = await _seed(database)
+    market_id = seeded["market_id"]
+    observed_at = NOW - timedelta(minutes=10)
+    await MarketQuoteSnapshotRepository(database).upsert(
+        QuoteSnapshotRecord(
+            market_id=market_id,
+            source=QuoteSource.REALTIME,
+            state=QuoteState.REALTIME,
+            book_hash="catalog-ws",
+            as_of=observed_at,
+            expires_at=observed_at + timedelta(seconds=300),
+            outcome_bids=("0.58", "0.40"),
+            outcome_asks=("0.60", "0.42"),
+        )
+    )
+
+    class RuntimeState:
+        status = "ok"
+
+        async def load_health(self):
+            return SimpleNamespace(
+                sources={
+                    "polymarket_catalog_quotes": SimpleNamespace(status=self.status)
+                }
+            )
+
+    runtime_state = RuntimeState()
+    queries = P3QueryService(
+        database=database,
+        markets=MarketRepository(database),
+        paper=PaperLedgerRepository(database),
+        quote_snapshots=MarketQuoteSnapshotRepository(database),
+        runtime_state=runtime_state,
+        realtime_fresh_seconds=5,
+        clock=lambda: NOW,
+    )
+
+    page = await queries.markets(page=1, page_size=50)
+    summary = next(item for item in page.markets if item.market_id == market_id)
+    assert summary.quote.state == "realtime"  # quiet market, healthy socket
+
+    runtime_state.status = "degraded"
+    page = await queries.markets(page=1, page_size=50)
+    summary = next(item for item in page.markets if item.market_id == market_id)
+    assert summary.quote.state == "stale"
+    assert summary.quote.outcome_asks == ("0.60", "0.42")  # keep last trusted quote
+
+    runtime_state.status = "ok"  # REST baseline + reconnect restored trust
+    page = await queries.markets(page=1, page_size=50)
+    summary = next(item for item in page.markets if item.market_id == market_id)
+    assert summary.quote.state == "realtime"
+
+
 async def test_unmapped_market_has_no_action_and_no_fabricated_navigation(
     database: Database,
 ) -> None:

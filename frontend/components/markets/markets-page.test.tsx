@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -73,10 +73,12 @@ const {
   listMarketOpportunitiesMock,
   listMarketsMock,
   getPaperPositionsMock,
+  useMarketStreamMock,
 } = vi.hoisted(() => ({
   listMarketOpportunitiesMock: vi.fn(),
   listMarketsMock: vi.fn(),
   getPaperPositionsMock: vi.fn(),
+  useMarketStreamMock: vi.fn(),
 }))
 
 vi.mock('@/lib/api/client', async (importOriginal) => {
@@ -90,19 +92,22 @@ vi.mock('@/lib/api/client', async (importOriginal) => {
 })
 
 vi.mock('@/hooks/use-market-stream', () => ({
-  useMarketStream: () => ({
-    snapshot: null,
-    books: {},
-    decisions: {},
-    paper: {},
-    resolutions: {},
-    gaps: [],
-    phase: 'live',
-    errorCode: null,
-    lastEventId: null,
-    refresh: async () => {},
-  }),
+  useMarketStream: useMarketStreamMock,
 }))
+
+let onQuotesChanged: ((event: { sequence: number; count: number; as_of: string }) => void) | undefined
+const STATIC_MARKET_STREAM_STATE = {
+  snapshot: null,
+  books: {},
+  decisions: {},
+  paper: {},
+  resolutions: {},
+  gaps: [],
+  phase: 'live',
+  errorCode: null,
+  lastEventId: null,
+  refresh: async () => {},
+}
 
 const AS_OF = '2026-09-16T11:59:30Z'
 
@@ -211,6 +216,13 @@ async function apiError(status: number, code: string) {
 describe('MarketsWorkspace (production)', () => {
   beforeEach(() => {
     mockWorkspaceData()
+    onQuotesChanged = undefined
+    useMarketStreamMock.mockImplementation((options: {
+      onQuotesChanged?: typeof onQuotesChanged
+    }) => {
+      onQuotesChanged = options.onQuotesChanged
+      return STATIC_MARKET_STREAM_STATE
+    })
   })
 
   it('renders opportunities from the canonical API in server order', async () => {
@@ -341,6 +353,58 @@ describe('MarketsWorkspace (production)', () => {
     await waitFor(() =>
       expect(screen.getAllByRole('link', { name: /查看 .* 市场/ })).toHaveLength(2),
     )
+  })
+
+  it('shows the full server total, loads more, and quote changes refresh only loaded pages', async () => {
+    const firstPage = Array.from({ length: 50 }, (_, index) =>
+      summaryDto({
+        market_id: `mkt_${index}`,
+        tier: 'atp',
+        gender: 'men',
+        player_names: [`Player ${index}`, `Opponent ${index}`],
+      }),
+    )
+    const tailRow = summaryDto({
+      market_id: 'mkt_50',
+      tier: 'wta',
+      gender: 'women',
+      player_names: ['Player Tail', 'Opponent Tail'],
+    })
+    listMarketsMock.mockImplementation(async ({ page }: { page: number }) =>
+      page === 1
+        ? { markets: firstPage, page: 1, page_size: 50, total: 51 }
+        : { markets: [tailRow], page: 2, page_size: 50, total: 51 },
+    )
+    const user = userEvent.setup()
+    render(<MarketsWorkspace initialView="all" />)
+
+    await waitFor(() => expect(screen.getByText('已加载 50 / 51 场')).toBeTruthy())
+    await user.click(screen.getByRole('button', { name: '女子' }))
+    expect(screen.getByText('筛选后无市场')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '加载更多' })).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: '加载更多' }))
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: '查看 Player Tail vs. Opponent Tail 市场' })).toBeTruthy(),
+    )
+    expect(screen.getByText('已加载 51 / 51 场')).toBeTruthy()
+
+    const opportunityCalls = listMarketOpportunitiesMock.mock.calls.length
+    const paperCalls = getPaperPositionsMock.mock.calls.length
+    const marketCalls = listMarketsMock.mock.calls.length
+    await act(async () => {
+      onQuotesChanged?.({ sequence: 5, count: 2, as_of: AS_OF })
+      onQuotesChanged?.({ sequence: 6, count: 2, as_of: AS_OF })
+      onQuotesChanged?.({ sequence: 7, count: 1, as_of: AS_OF })
+    })
+    await waitFor(() =>
+      expect(listMarketsMock).toHaveBeenCalledTimes(marketCalls + 2),
+    )
+    expect(listMarketsMock.mock.calls.slice(-2)).toEqual([
+      [{ page: 1, pageSize: 50 }],
+      [{ page: 2, pageSize: 50 }],
+    ])
+    expect(listMarketOpportunitiesMock).toHaveBeenCalledTimes(opportunityCalls)
+    expect(getPaperPositionsMock).toHaveBeenCalledTimes(paperCalls)
   })
 
   it('renders the paper ledger from the ledger with lifecycle priority', async () => {

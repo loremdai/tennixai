@@ -8,7 +8,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { openMarketStream, parseMarketStream, type MarketStreamFrame } from '@/lib/api/client'
-import type { MarketsSnapshotDto, ResolutionStatusValue } from '@/lib/api/types'
+import type {
+  MarketsSnapshotDto,
+  QuoteCatalogChangedDto,
+  ResolutionStatusValue,
+} from '@/lib/api/types'
 
 const RETRY_MS = 2_000
 // Three times the backend default heartbeat interval (15s).
@@ -81,7 +85,10 @@ function isAbort(error: unknown): boolean {
 }
 
 export function useMarketStream(
-  options: { onGap?: (gap: MarketStreamGap) => void } = {},
+  options: {
+    onGap?: (gap: MarketStreamGap) => void
+    onQuotesChanged?: (event: QuoteCatalogChangedDto) => void
+  } = {},
 ): MarketStreamState {
   const [view, setView] = useState<ViewState>(EMPTY_VIEW)
   const [phase, setPhase] = useState<MarketStreamPhase>('loading')
@@ -93,6 +100,7 @@ export function useMarketStream(
     decisions: Record<string, number>
   }>({ markets: {}, decisions: {} })
   const resolvedRef = useRef<Set<string>>(new Set())
+  const quoteCatalogSequenceRef = useRef(0)
   const lastEventIdRef = useRef<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const retryRef = useRef<number | null>(null)
@@ -100,6 +108,8 @@ export function useMarketStream(
   const hasSnapshotRef = useRef(false)
   const onGapRef = useRef(options.onGap)
   onGapRef.current = options.onGap
+  const onQuotesChangedRef = useRef(options.onQuotesChanged)
+  onQuotesChangedRef.current = options.onQuotesChanged
   const openStreamRef = useRef<() => Promise<void>>(async () => {})
 
   const recordGap = useCallback((gap: MarketStreamGap) => {
@@ -122,8 +132,15 @@ export function useMarketStream(
           // the next delta per resource starts a fresh trusted sequence.
           hasSnapshotRef.current = true
           cursorsRef.current = { markets: {}, decisions: {} }
+          quoteCatalogSequenceRef.current = 0
           resolvedRef.current = new Set()
           setView((current) => ({ ...current, snapshot: frame.payload }))
+          return
+        }
+        case 'quotes_changed': {
+          if (frame.payload.sequence <= quoteCatalogSequenceRef.current) return
+          quoteCatalogSequenceRef.current = frame.payload.sequence
+          onQuotesChangedRef.current?.(frame.payload)
           return
         }
         case 'market_delta': {

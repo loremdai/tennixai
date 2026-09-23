@@ -20,6 +20,29 @@ def market_channel(market_id: str) -> str:
     return f"tnx:p3:market:{market_id}"
 
 
+QUOTE_CATALOG_CHANNEL = "tnx:p3:quotes"
+QUOTE_CATALOG_SEQUENCE_KEY = "tnx:p3:quotes:sequence"
+
+
+class QuoteCatalogPublisher:
+    """Global, payload-free invalidation for market-list quote changes."""
+
+    def __init__(self, redis, *, now_fn: Callable[[], datetime] | None = None) -> None:
+        self._redis = redis
+        self._now = now_fn or (lambda: datetime.now(UTC))
+
+    async def publish_quotes_changed(self, *, count: int) -> dict:
+        sequence = await self._redis.incr(QUOTE_CATALOG_SEQUENCE_KEY)
+        event = {
+            "type": "quotes_changed",
+            "sequence": int(sequence),
+            "count": count,
+            "as_of": self._now().isoformat(),
+        }
+        await self._redis.publish(QUOTE_CATALOG_CHANNEL, json.dumps(event))
+        return event
+
+
 class MarketHotPublisher:
     def __init__(self, redis, *, now_fn: Callable[[], datetime] | None = None) -> None:
         self._redis = redis

@@ -22,6 +22,7 @@ class GammaFeeScheduleDto(VendorModel):
 
 
 class GammaTagDto(VendorModel):
+    id: str | int | None = None
     slug: str | None = None
     label: str | None = None
 
@@ -95,6 +96,11 @@ class GammaEventDto(VendorModel):
     closed: bool | None = None
     tags: list[GammaTagDto] = Field(default_factory=list)
     markets: list[GammaMarketDto] = Field(default_factory=list)
+
+
+class GammaEventsKeysetPageDto(VendorModel):
+    events: list[GammaEventDto]
+    next_cursor: str | None = None
 
 
 class ClobFeeDetailsDto(VendorModel):

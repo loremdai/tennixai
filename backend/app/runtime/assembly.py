@@ -33,7 +33,7 @@ from app.decision.worker import DecisionWorker, MarketRepositoryLinks, TrackingD
 from app.errors import AppError
 from app.markets.live import PolymarketMarketFeed
 from app.markets.polymarket import PolymarketProvider
-from app.markets.publisher import MarketHotPublisher
+from app.markets.publisher import MarketHotPublisher, QuoteCatalogPublisher
 from app.markets.worker import MarketWorker
 from app.paper.service import PaperTradingService
 from app.persistence.database import Database
@@ -67,7 +67,8 @@ from app.runtime.daemon import (
     TtlCache,
 )
 from app.runtime.demand import catalog_match_info
-from app.runtime.health import RuntimeHealthRegistry
+from app.runtime.health import RuntimeHealthRegistry, stable_reason_code
+from app.runtime.market_catalog_quote_feed import MarketCatalogQuoteFeed
 from app.runtime.market_snapshot import MarketQuoteSnapshotJob
 from app.runtime.models import LiveLocalConfigurationError, LocalRuntimeSettings
 from app.service import P3QueryService
@@ -163,6 +164,7 @@ def build_local_runtime_assembly(
         paper=PaperLedgerRepository(database),
         hot_books=MarketHotPublisher(redis_client, now_fn=now),
         quote_snapshots=MarketQuoteSnapshotRepository(database),
+        runtime_state=state,
         snapshot_fresh_seconds=settings.local_runtime_market_quote_fresh_seconds,
         realtime_fresh_seconds=settings.p3_market_book_freshness_seconds,
         # The read side needs the deployment's model truth (promoted artifact
@@ -358,6 +360,17 @@ def build_local_runtime_daemon(
     rules_cache = TtlCache(market_provider.get_rules, clock, ttl=metadata_ttl)
 
     registry = RuntimeHealthRegistry(state=state, clock=clock)
+    quote_catalog_publisher = QuoteCatalogPublisher(redis_client, now_fn=clock)
+
+    async def notify_quotes_changed(*, count: int) -> None:
+        try:
+            await quote_catalog_publisher.publish_quotes_changed(count=count)
+        except Exception as exc:  # noqa: BLE001 - isolated from provider health
+            await registry.mark_degraded(
+                "polymarket_quote_notifications", stable_reason_code(exc)
+            )
+        else:
+            await registry.mark_success("polymarket_quote_notifications")
 
     links = MarketRepositoryLinks(markets)
     tracking = TrackingDemand(
@@ -478,6 +491,17 @@ def build_local_runtime_daemon(
         token_batch_size=live.market_snapshot_token_batch_size,
         quote_fresh_seconds=live.market_quote_fresh_seconds,
         realtime_fresh_seconds=settings.p3_market_book_freshness_seconds,
+        on_quotes_changed=notify_quotes_changed,
+    )
+    catalog_quote_feed = MarketCatalogQuoteFeed(
+        markets=markets,
+        projections=quote_snapshots,
+        baseline=quote_job.run_once,
+        health=registry,
+        clock=clock,
+        ws_url=settings.polymarket_ws_url,
+        fresh_seconds=live.market_quote_fresh_seconds,
+        on_quotes_changed=notify_quotes_changed,
     )
 
     daemon = LocalRuntimeDaemon(
@@ -499,6 +523,8 @@ def build_local_runtime_daemon(
         metadata_cache=metadata_cache,
         quote_job=quote_job,
         quote_snapshots=quote_snapshots,
+        catalog_quote_feed=catalog_quote_feed,
+        quote_change_notifier=notify_quotes_changed,
         quote_fresh_seconds=live.market_quote_fresh_seconds,
         market_snapshot_seconds=live.market_snapshot_seconds,
         live_catalog_seconds=live.live_catalog_seconds,

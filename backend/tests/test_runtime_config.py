@@ -357,6 +357,6 @@ def test_live_local_settings_carry_the_bounded_snapshot_configuration():
 
     defaults = require_live_local(local_settings())
     assert defaults.market_snapshot_seconds == 120
-    assert defaults.market_snapshot_max_markets == 250
-    assert defaults.market_snapshot_token_batch_size == 100
+    assert defaults.market_snapshot_max_markets == 500
+    assert defaults.market_snapshot_token_batch_size == 500
     assert defaults.market_quote_fresh_seconds == 300

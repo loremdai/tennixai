@@ -288,7 +288,7 @@ def build_quote_snapshot(
     *,
     market_id: str,
     token_ids: tuple[str, str],
-    player_ids: tuple[str, str],
+    player_ids: tuple[str | None, str | None],
     batch: ClobBooksBatch,
     observed_at: datetime,
     expires_at: datetime,
@@ -298,8 +298,78 @@ def build_quote_snapshot(
     Exactly one token may be absent or malformed without discarding the
     other side: the state becomes `partial` (with the parsed side's real
     levels) when that side has any level, `unavailable` when it does not.
+    Unresolved listings retain their supplier-ordered prices without
+    manufacturing outcome/player identities or `OutcomeBook` records.
     """
     parsed = [batch.books.get(token_id) for token_id in token_ids]
+    if any(not player_id for player_id in player_ids):
+        present = sum(token_book is not None for token_book in parsed)
+        has_levels = [
+            token_book is not None and bool(token_book.bids or token_book.asks)
+            for token_book in parsed
+        ]
+        if present == 2:
+            state = (
+                QuoteState.SNAPSHOT
+                if all(has_levels)
+                else QuoteState.PARTIAL
+                if any(has_levels)
+                else QuoteState.NO_LIQUIDITY
+            )
+        elif any(has_levels):
+            state = QuoteState.PARTIAL
+        else:
+            state = QuoteState.UNAVAILABLE
+
+        bids = tuple(
+            str(book.bids[0].price) if book is not None and book.bids else None
+            for book in parsed
+        )
+        asks = tuple(
+            str(book.asks[0].price) if book is not None and book.asks else None
+            for book in parsed
+        )
+        spreads = [
+            book.asks[0].price - book.bids[0].price
+            for book in parsed
+            if book is not None and book.bids and book.asks
+        ]
+        depth = sum(
+            (
+                book.bids[0].price * book.bids[0].size
+                if book is not None and book.bids
+                else Decimal("0")
+            )
+            + (
+                book.asks[0].price * book.asks[0].size
+                if book is not None and book.asks
+                else Decimal("0")
+            )
+            for book in parsed
+        )
+        hashes = [book.book_hash for book in parsed if book is not None]
+        book_hash = (
+            hashlib.sha256(":".join(hashes).encode("utf-8")).hexdigest()
+            if hashes
+            else None
+        )
+        return QuoteSnapshotRecord(
+            market_id=market_id,
+            source=QuoteSource.SNAPSHOT,
+            state=state,
+            book_hash=book_hash,
+            as_of=observed_at,
+            expires_at=expires_at,
+            outcome_bids=bids,
+            outcome_asks=asks,
+            spread=(
+                str((sum(spreads) / Decimal(len(spreads))).quantize(SPREAD_TEXT))
+                if spreads
+                else None
+            ),
+            depth_usd=str(depth.quantize(DEPTH_TEXT)) if depth else None,
+        )
+
     books = tuple(
         OutcomeBook(
             outcome_player_id=player_id,
@@ -362,6 +432,53 @@ def realtime_quote_record(
     )
 
 
+def realtime_listing_quote_record(
+    *,
+    market_id: str,
+    outcome_bids: tuple[str | None, str | None],
+    outcome_asks: tuple[str | None, str | None],
+    as_of: datetime,
+    fresh_seconds: int,
+) -> QuoteSnapshotRecord:
+    """Persist supplier-ordered best quotes without inventing player IDs."""
+    spreads = [
+        Decimal(ask) - Decimal(bid)
+        for bid, ask in zip(outcome_bids, outcome_asks, strict=True)
+        if bid is not None and ask is not None
+    ]
+    has_values = [
+        bid is not None or ask is not None
+        for bid, ask in zip(outcome_bids, outcome_asks, strict=True)
+    ]
+    state = (
+        QuoteState.REALTIME
+        if all(has_values)
+        else QuoteState.PARTIAL
+        if any(has_values)
+        else QuoteState.NO_LIQUIDITY
+    )
+    spread = (
+        (sum(spreads) / Decimal(len(spreads))).quantize(SPREAD_TEXT)
+        if spreads
+        else None
+    )
+    content = ":".join(
+        f"{bid or ''}/{ask or ''}"
+        for bid, ask in zip(outcome_bids, outcome_asks, strict=True)
+    )
+    return QuoteSnapshotRecord(
+        market_id=market_id,
+        source=QuoteSource.REALTIME,
+        state=state,
+        book_hash=hashlib.sha256(content.encode("utf-8")).hexdigest(),
+        as_of=as_of,
+        expires_at=as_of + timedelta(seconds=fresh_seconds),
+        outcome_bids=outcome_bids,
+        outcome_asks=outcome_asks,
+        spread=str(spread) if spread is not None else None,
+    )
+
+
 def decide_quote_write(
     existing: QuoteSnapshotRecord | None, incoming: QuoteSnapshotRecord
 ) -> bool:
@@ -398,5 +515,6 @@ __all__ = [
     "decide_quote_write",
     "display_quote",
     "outcome_levels",
+    "realtime_listing_quote_record",
     "realtime_quote_record",
 ]

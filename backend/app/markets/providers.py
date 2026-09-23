@@ -10,6 +10,7 @@ from typing import AsyncIterator, Protocol, runtime_checkable
 from app.markets.models import (
     Market,
     MarketEnvelope,
+    MarketListingScan,
     MarketResolution,
     OrderBookState,
 )
@@ -17,6 +18,8 @@ from app.markets.models import (
 
 @runtime_checkable
 class MarketDataProvider(Protocol):
+    async def list_tennis_market_listings(self) -> MarketListingScan: ...
+
     async def list_tennis_moneylines(self) -> tuple[Market, ...]: ...
 
     async def get_market(self, market_id: str) -> Market: ...

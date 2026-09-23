@@ -594,6 +594,17 @@ export function decodeMarketStreamEvent(type: string, payload: unknown): MarketS
   switch (type) {
     case 'ready':
       return { type: 'ready', payload: decodeMarketsSnapshot(payload) }
+    case 'quotes_changed': {
+      const item = raw(payload, path)
+      return {
+        type: 'quotes_changed',
+        payload: {
+          sequence: int(item.sequence, `${path}.sequence`, { min: 1 }),
+          count: int(item.count, `${path}.count`, { min: 0 }),
+          as_of: str(item.as_of, `${path}.as_of`),
+        },
+      }
+    }
     case 'market_delta': {
       const item = raw(payload, path)
       return {

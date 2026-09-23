@@ -1019,6 +1019,7 @@ def test_launcher_state_roundtrip(launcher):
 
 async def test_build_local_runtime_daemon_constructs_offline():
     from app.runtime.assembly import build_local_runtime_daemon
+    from app.runtime.market_catalog_quote_feed import MarketCatalogQuoteFeed
 
     settings = local_settings(local_runtime_role="runtime")
     live = require_live_local(settings)
@@ -1030,6 +1031,13 @@ async def test_build_local_runtime_daemon_constructs_offline():
         assert graph.decision_worker is not None
         assert graph.health is not None
         assert graph.paper is not None
+        assert isinstance(graph.daemon._catalog_quote_feed, MarketCatalogQuoteFeed)
+        assert graph.daemon._quote_change_notifier is not None
+        assert (
+            graph.daemon._quote_job._on_quotes_changed
+            is graph.daemon._catalog_quote_feed._on_quotes_changed
+            is graph.daemon._quote_change_notifier
+        )
         # Wiring pin (review nit on c61947b): the decision book source must
         # share the daemon's single metadata cache instance, and both cache
         # loaders must be bound methods of the graph's PolymarketProvider —

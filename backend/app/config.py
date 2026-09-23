@@ -14,7 +14,9 @@ class Settings(BaseSettings):
         env_prefix="TENNIX_", env_file=ROOT_ENV_FILE, extra="ignore"
     )
 
-    provider_mode: Literal["fake", "live", "livetennis", "api_tennis", "replay"] = "fake"
+    provider_mode: Literal["fake", "live", "livetennis", "api_tennis", "replay"] = (
+        "fake"
+    )
     livetennis_api_key: SecretStr | None = None
     livetennis_base_url: str = "https://api.livetennisapi.com/api/public/v1"
     api_tennis_api_key: SecretStr | None = None
@@ -69,9 +71,9 @@ class Settings(BaseSettings):
     # fills display quotes; it never subscribes a WebSocket, calls the LLM or
     # touches prediction/decision/paper.
     local_runtime_market_snapshot_seconds: int = Field(default=120, ge=60, le=900)
-    local_runtime_market_snapshot_max_markets: int = Field(default=250, ge=1, le=500)
+    local_runtime_market_snapshot_max_markets: int = Field(default=500, ge=1, le=500)
     local_runtime_market_snapshot_token_batch_size: int = Field(
-        default=100, ge=2, le=100
+        default=500, ge=2, le=500
     )
     local_runtime_market_quote_fresh_seconds: int = Field(default=300, ge=120, le=1800)
 
@@ -81,7 +83,9 @@ class Settings(BaseSettings):
             self.livetennis_api_key is None
             or not self.livetennis_api_key.get_secret_value().strip()
         ):
-            raise ValueError("TENNIX_LIVETENNIS_API_KEY is required in live provider mode")
+            raise ValueError(
+                "TENNIX_LIVETENNIS_API_KEY is required in live provider mode"
+            )
         if self.provider_mode == "api_tennis" and (
             self.api_tennis_api_key is None
             or not self.api_tennis_api_key.get_secret_value().strip()

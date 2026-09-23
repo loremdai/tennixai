@@ -447,6 +447,26 @@ describe('market stream event discriminators', () => {
     }
   })
 
+  it('decodes quotes_changed as an independent catalog invalidation', () => {
+    const event = decodeMarketStreamEvent('quotes_changed', {
+      sequence: 42,
+      count: 3,
+      as_of: NOW,
+    })
+
+    expect(event).toEqual({
+      type: 'quotes_changed',
+      payload: { sequence: 42, count: 3, as_of: NOW },
+    })
+    expect(() =>
+      decodeMarketStreamEvent('quotes_changed', {
+        sequence: 42,
+        count: -1,
+        as_of: NOW,
+      }),
+    ).toThrow(P3DecodeError)
+  })
+
   it('decodes market_gap, decision_delta, paper_delta and resolution_delta', () => {
     expect(
       decodeMarketStreamEvent('market_gap', { market_id: 'mkt_1', reason: 'reconnect', as_of: NOW }).type,

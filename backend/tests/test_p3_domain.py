@@ -20,6 +20,7 @@ from app.markets.models import (
     MarketEnvelope,
     MarketEventKind,
     MarketExternalId,
+    MarketListingScan,
     MarketOutcome,
     MarketResolution,
     MarketRules,
@@ -870,6 +871,9 @@ def test_three_track_names_are_fixed():
 
 def test_market_data_provider_protocol_is_satisfied_by_read_only_fake():
     class FakeMarketDataProvider:
+        async def list_tennis_market_listings(self) -> MarketListingScan:
+            return MarketListingScan(listings=(), complete=True)
+
         async def list_tennis_moneylines(self) -> tuple[Market, ...]:
             return (make_market(),)
 

@@ -34,7 +34,7 @@ from app.markets.mapping import (
     evaluate_link_change,
     map_market,
 )
-from app.markets.models import MarketStatus, ResolutionStatus
+from app.markets.models import MarketListingScan, MarketStatus, ResolutionStatus
 from app.markets.quotes import realtime_quote_record
 from app.persistence.market_repositories import LinkFrozenError
 from app.runtime.health import (
@@ -284,6 +284,8 @@ class LocalRuntimeDaemon:
         metadata_cache: TtlCache | None = None,
         quote_job: Any = None,
         quote_snapshots: Any = None,
+        catalog_quote_feed: Any = None,
+        quote_change_notifier: Callable[..., Awaitable[Any]] | None = None,
         quote_fresh_seconds: int = 300,
         market_snapshot_seconds: int = 120,
         tick_seconds: float = 1.0,
@@ -311,6 +313,9 @@ class LocalRuntimeDaemon:
         self._metrics = metrics
         self._quote_job = quote_job
         self._quote_snapshots = quote_snapshots
+        self._catalog_quote_feed = catalog_quote_feed
+        self._quote_change_notifier = quote_change_notifier
+        self._catalog_quote_task: asyncio.Task | None = None
         self._quote_fresh_seconds = quote_fresh_seconds
         self._mirrored_hashes: dict[str, str] = {}
         self._tick_seconds = tick_seconds
@@ -380,31 +385,41 @@ class LocalRuntimeDaemon:
 
     async def run(self) -> None:
         self._stopping = False
-        while not self._stopping:
-            try:
-                if not self._recovered:
-                    await self.recover_once()
-                await self.tick_once()
-            except Exception as exc:  # noqa: BLE001 - the loop must survive
-                await self._health.mark_degraded(TICK_SOURCE, stable_reason_code(exc))
-                # A failing state persist must never kill the loop: health
-                # stays truthful in memory and the next tick re-persists it
-                # once the database returns. Cancellation still propagates.
-                with contextlib.suppress(Exception):
-                    await self._health.persist()
-            else:
-                # A clean tick ends the degradation: a transient persist or DB
-                # blip must never leave `status` reporting a stale
-                # RUNTIME_ERROR while the daemon actually ticks fine. The next
-                # persist (the following tick or shutdown) carries the OK.
-                await self._health.mark_success(TICK_SOURCE)
-            await asyncio.sleep(self._tick_seconds)
+        try:
+            while not self._stopping:
+                try:
+                    if not self._recovered:
+                        await self.recover_once()
+                    await self.tick_once()
+                except Exception as exc:  # noqa: BLE001 - the loop must survive
+                    await self._health.mark_degraded(
+                        TICK_SOURCE, stable_reason_code(exc)
+                    )
+                    # A failing state persist never kills the loop; cancellation
+                    # still propagates.
+                    with contextlib.suppress(Exception):
+                        await self._health.persist()
+                else:
+                    await self._health.mark_success(TICK_SOURCE)
+                if (
+                    not self._stopping
+                    and self._catalog_quote_feed is not None
+                    and self._catalog_quote_task is None
+                ):
+                    self._catalog_quote_task = asyncio.create_task(
+                        self._catalog_quote_feed.run(),
+                        name="market-catalog-quote-feed",
+                    )
+                await asyncio.sleep(self._tick_seconds)
+        finally:
+            await self._stop_catalog_quote_feed()
 
     async def stop(self) -> None:
         """Graceful shutdown: no new demand, sockets closed, buffered
         observations flushed by the workers, final health persisted.
         Nothing is deleted."""
         self._stopping = True
+        await self._stop_catalog_quote_feed()
         with contextlib.suppress(Exception):
             await self._realtime.stop()
         with contextlib.suppress(Exception):
@@ -414,6 +429,15 @@ class LocalRuntimeDaemon:
         # deleted.
         with contextlib.suppress(Exception):
             await self._health.persist()
+
+    async def _stop_catalog_quote_feed(self) -> None:
+        task, self._catalog_quote_task = self._catalog_quote_task, None
+        if task is None:
+            return
+        if not task.done():
+            task.cancel()
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await task
 
     async def tick_once(self) -> None:
         await self._realtime.reconcile_demand_once()
@@ -590,7 +614,13 @@ class LocalRuntimeDaemon:
             raise RuntimeJobError("RANKINGS_SYNC_FAILED")
 
     async def _discover_markets(self) -> None:
-        markets = await self._market_provider.list_tennis_moneylines()
+        scan: MarketListingScan = (
+            await self._market_provider.list_tennis_market_listings()
+        )
+        now = self._clock()
+        changed = await self._markets.reconcile_market_listings(scan, observed_at=now)
+        if changed and self._quote_change_notifier is not None:
+            await self._quote_change_notifier(count=changed)
         candidates = [
             *await self._catalog_store.list_matches(MatchStatus.LIVE),
             *await self._catalog_store.list_matches(MatchStatus.SCHEDULED),
@@ -599,15 +629,19 @@ class LocalRuntimeDaemon:
             row.match_id: row.market_id
             for row in await self._markets.list_active_links()
         }
-        now = self._clock()
         failures: list[str] = []
-        for market in markets:
+        for listing in scan.listings:
+            market = listing.to_market()
+            if market is None:
+                continue
             try:
-                await self._markets.save_market(market)
                 if market.status is MarketStatus.CLOSED:
                     self._recently_closed[market.id] = now
-                await self._capture_rules(market.id)
-                await self._link_if_strict_match(market, candidates, current_by_match)
+                mapped = await self._link_if_strict_match(
+                    market, candidates, current_by_match
+                )
+                if mapped:
+                    await self._capture_rules(market.id)
             except Exception as exc:  # noqa: BLE001 - one bad market never
                 failures.append(stable_reason_code(exc))  # aborts the batch
         if failures:
@@ -625,12 +659,12 @@ class LocalRuntimeDaemon:
 
     async def _link_if_strict_match(
         self, market: Any, candidates: list[Any], current_by_match: dict[str, str]
-    ) -> None:
+    ) -> bool:
         result = await map_market(market, candidates, self._resolver)
         if result.status is not MappingStatus.MAPPED or result.match_id is None:
             # A failed mapping stays MARKET_ONLY: no fuzzy, LLM or manual
             # fallback ever creates a link.
-            return
+            return False
         intent_exists = (
             await self._ledger.count_intents_for_match(result.match_id)
         ) > 0
@@ -640,7 +674,7 @@ class LocalRuntimeDaemon:
             intent_exists=intent_exists,
         )
         if decision not in (LinkDecision.CREATE, LinkDecision.REPLACE):
-            return
+            return True
         evidence = {
             "player_ids": list(result.player_ids or ()),
             "candidate_count": result.candidate_count,
@@ -652,8 +686,9 @@ class LocalRuntimeDaemon:
             )
         except LinkFrozenError:
             # Frozen links are authoritative; discovery never rewrites them.
-            return
+            return True
         current_by_match[result.match_id] = market.id
+        return True
 
     async def _resolution_recheck(self) -> None:
         now = self._clock()

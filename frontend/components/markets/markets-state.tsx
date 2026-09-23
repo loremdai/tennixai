@@ -34,6 +34,7 @@ import {
 } from '@/lib/p3-view-models'
 
 const REFRESH_DEBOUNCE_MS = 750
+const LISTING_QUOTE_REFRESH_INTERVAL_MS = 1_000
 const PAGE_SIZE = 50
 
 type ListStatus = 'loading' | 'ready' | 'error'
@@ -50,6 +51,9 @@ export type ListingsState = {
   status: ListStatus
   errorCode: string | null
   rows: MarketRowModel[]
+  page: number
+  total: number
+  loadingMore: boolean
 }
 
 export type PaperState = {
@@ -81,6 +85,7 @@ export type MarketsWorkspaceData = {
   paper: PaperState
   disabled: boolean
   refetch: () => Promise<void>
+  loadMoreListings: () => void
 }
 
 export function useMarketsWorkspace(): MarketsWorkspaceData {
@@ -94,6 +99,9 @@ export function useMarketsWorkspace(): MarketsWorkspaceData {
     status: 'loading',
     errorCode: null,
     rows: [],
+    page: 0,
+    total: 0,
+    loadingMore: false,
   })
   const [paper, setPaper] = useState<PaperState>({
     status: 'loading',
@@ -103,6 +111,9 @@ export function useMarketsWorkspace(): MarketsWorkspaceData {
   })
   const [disabled, setDisabled] = useState(false)
   const debounceRef = useRef<number | null>(null)
+  const listingsDebounceRef = useRef<number | null>(null)
+  const lastListingsRefreshAtRef = useRef(0)
+  const loadedListingsPageRef = useRef(0)
   const mountedRef = useRef(true)
   mountedRef.current = true
   useEffect(() => () => { mountedRef.current = false }, [])
@@ -134,26 +145,52 @@ export function useMarketsWorkspace(): MarketsWorkspaceData {
     }
   }, [])
 
-  const loadListings = useCallback(async () => {
+  const loadListings = useCallback(async (
+    options: { throughPage?: number; append?: boolean } = {},
+  ) => {
+    const throughPage = options.throughPage ?? Math.max(loadedListingsPageRef.current, 1)
+    const append = options.append ?? false
+    if (append && throughPage !== loadedListingsPageRef.current + 1) return
+    if (append) {
+      setListings((current) => ({ ...current, loadingMore: true, errorCode: null }))
+    }
     try {
-      const page = await listMarkets({ page: 1, pageSize: PAGE_SIZE })
+      const firstPage = append ? throughPage : 1
+      const pages = []
+      for (let page = firstPage; page <= throughPage; page += 1) {
+        pages.push(await listMarkets({ page, pageSize: PAGE_SIZE }))
+      }
       if (!mountedRef.current) return
       const now = new Date()
-      setListings({
-        status: 'ready',
-        errorCode: null,
-        rows: page.markets.map((row) => toMarketRow(row, now)),
+      const incoming = pages.flatMap((page) => page.markets.map((row) => toMarketRow(row, now)))
+      const total = pages[0]?.total ?? 0
+      loadedListingsPageRef.current = throughPage
+      setListings((current) => {
+        const combined = append ? [...current.rows, ...incoming] : incoming
+        const unique = new Map(combined.map((row) => [row.id, row]))
+        return {
+          status: 'ready',
+          errorCode: null,
+          rows: [...unique.values()],
+          page: throughPage,
+          total,
+          loadingMore: false,
+        }
       })
     } catch (error) {
       if (!mountedRef.current) return
       if (error instanceof ApiError && error.code === 'p3_disabled') {
         setDisabled(true)
+        setListings((current) => ({ ...current, loadingMore: false }))
         return
       }
       setListings((current) => ({
         status: 'error',
         errorCode: errorCodeOf(error),
         rows: current.rows,
+        page: current.page,
+        total: current.total,
+        loadingMore: false,
       }))
     }
   }, [])
@@ -194,7 +231,11 @@ export function useMarketsWorkspace(): MarketsWorkspaceData {
   }, [])
 
   const refetch = useCallback(async () => {
-    await Promise.all([loadOpportunities(), loadListings(), loadPaper()])
+    await Promise.all([
+      loadOpportunities(),
+      loadListings({ throughPage: Math.max(loadedListingsPageRef.current, 1) }),
+      loadPaper(),
+    ])
   }, [loadOpportunities, loadListings, loadPaper])
 
   useEffect(() => {
@@ -209,16 +250,33 @@ export function useMarketsWorkspace(): MarketsWorkspaceData {
     }, REFRESH_DEBOUNCE_MS)
   }, [refetch])
 
+  const scheduleListingsRefresh = useCallback(() => {
+    if (listingsDebounceRef.current !== null) return
+    const elapsed = Date.now() - lastListingsRefreshAtRef.current
+    const delay = Math.max(0, LISTING_QUOTE_REFRESH_INTERVAL_MS - elapsed)
+    listingsDebounceRef.current = window.setTimeout(() => {
+      listingsDebounceRef.current = null
+      lastListingsRefreshAtRef.current = Date.now()
+      void loadListings({ throughPage: Math.max(loadedListingsPageRef.current, 1) })
+    }, delay)
+  }, [loadListings])
+
   useEffect(
     () => () => {
       if (debounceRef.current !== null) window.clearTimeout(debounceRef.current)
+      if (listingsDebounceRef.current !== null) {
+        window.clearTimeout(listingsDebounceRef.current)
+      }
     },
     [],
   )
 
   // Stream deltas and gaps only trigger debounced REST refetches of the
   // authoritative lists; nothing is applied from partial stream payloads.
-  const stream = useMarketStream({ onGap: scheduleRefresh })
+  const stream = useMarketStream({
+    onGap: scheduleRefresh,
+    onQuotesChanged: scheduleListingsRefresh,
+  })
   const firstRender = useRef(true)
   useEffect(() => {
     if (firstRender.current) {
@@ -228,7 +286,12 @@ export function useMarketsWorkspace(): MarketsWorkspaceData {
     scheduleRefresh()
   }, [stream.books, stream.decisions, stream.paper, stream.resolutions, scheduleRefresh])
 
-  return { opportunities, listings, paper, disabled, refetch }
+  const loadMoreListings = useCallback(() => {
+    if (listings.loadingMore || listings.rows.length >= listings.total) return
+    void loadListings({ throughPage: loadedListingsPageRef.current + 1, append: true })
+  }, [listings.loadingMore, listings.rows.length, listings.total, loadListings])
+
+  return { opportunities, listings, paper, disabled, refetch, loadMoreListings }
 }
 
 function LoadingSkeleton() {
@@ -448,6 +511,9 @@ export function MarketsWorkspace({
                       onPhaseChange={changePhase}
                       onReset={resetFilters}
                     />
+                    <p className="text-sm text-muted-foreground" aria-live="polite">
+                      已加载 {data.listings.rows.length} / {data.listings.total} 场
+                    </p>
                     {data.listings.status === 'error' && data.listings.rows.length === 0 ? (
                       <ErrorCard errorCode={data.listings.errorCode} onRetry={() => void data.refetch()} />
                     ) : filteredListings.length === 0 ? (
@@ -462,6 +528,15 @@ export function MarketsWorkspace({
                             </p>
                           </div>
                           {hasFilters ? <Button variant="outline" onClick={resetFilters}>重置筛选</Button> : null}
+                          {data.listings.rows.length < data.listings.total ? (
+                            <Button
+                              variant="outline"
+                              onClick={data.loadMoreListings}
+                              disabled={data.listings.loadingMore}
+                            >
+                              {data.listings.loadingMore ? '加载中…' : '加载更多'}
+                            </Button>
+                          ) : null}
                         </CardContent>
                       </Card>
                     ) : (
@@ -477,6 +552,17 @@ export function MarketsWorkspace({
                             <MarketRow key={row.id} market={row} />
                           ))}
                         </div>
+                        {data.listings.rows.length < data.listings.total ? (
+                          <div className="flex justify-center">
+                            <Button
+                              variant="outline"
+                              onClick={data.loadMoreListings}
+                              disabled={data.listings.loadingMore}
+                            >
+                              {data.listings.loadingMore ? '加载中…' : '加载更多'}
+                            </Button>
+                          </div>
+                        ) : null}
                       </>
                     )}
                   </div>

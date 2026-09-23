@@ -84,8 +84,20 @@ class RecordingTransport:
         key = f"{url.host}{url.path}"
         for pattern, response in self.overrides.items():
             if pattern in key:
-                return response
+                return response(request) if callable(response) else response
         if url.host == "gamma-api.polymarket.com":
+            if url.path == "/tags/slug/tennis":
+                return httpx.Response(
+                    200, json={"id": "42", "slug": "tennis", "label": "Tennis"}
+                )
+            if url.path == "/events/keyset":
+                return httpx.Response(
+                    200,
+                    json={
+                        "events": _fixture("events_tennis.json"),
+                        "next_cursor": None,
+                    },
+                )
             if url.path == "/events":
                 return httpx.Response(200, json=_fixture("events_tennis.json"))
             if url.path == "/markets":
@@ -204,7 +216,9 @@ async def test_list_resolves_bilingual_outcome_names_to_same_internal_ids(resolv
     events[0]["markets"][0]["outcomes"] = json.dumps(["阿尔法一号", "贝塔二号"])
     recorder = RecordingTransport(
         overrides={
-            "gamma-api.polymarket.com/events": httpx.Response(200, json=events),
+            "gamma-api.polymarket.com/events": httpx.Response(
+                200, json={"events": events, "next_cursor": None}
+            ),
         }
     )
     provider, _ = make_provider(resolver, recorder)
@@ -223,7 +237,9 @@ async def test_unresolved_outcome_skips_market_with_typed_reason(resolver):
     events[0]["markets"][0]["outcomes"] = json.dumps(["Nobody Known", "Beta Two"])
     recorder = RecordingTransport(
         overrides={
-            "gamma-api.polymarket.com/events": httpx.Response(200, json=events),
+            "gamma-api.polymarket.com/events": httpx.Response(
+                200, json={"events": events, "next_cursor": None}
+            ),
         }
     )
     provider, _ = make_provider(resolver, recorder)
@@ -232,6 +248,88 @@ async def test_unresolved_outcome_skips_market_with_typed_reason(resolver):
 
     assert markets == ()
     assert any(skip.reason == "unresolved_player" for skip in provider.skipped)
+
+
+async def test_keyset_listing_keeps_unknown_doubles_and_reads_every_page(resolver):
+    first_event = _fixture("events_tennis.json")[0]
+    first_event["markets"][0]["outcomes"] = json.dumps(
+        ["Team A / Team B", "Team C / Team D"]
+    )
+    second_event = _fixture("events_tennis.json")[0]
+    second_event["id"] = "900009"
+    second_event["markets"][0]["conditionId"] = CONDITION_A1[:-2] + "a9"
+    second_event["markets"][0]["clobTokenIds"] = json.dumps(
+        ["990001112223334445559", "990001112223334445560"]
+    )
+    calls: list[httpx.Request] = []
+
+    def page_response(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        if request.url.params.get("after_cursor") == "cursor-two":
+            return httpx.Response(
+                200, json={"events": [second_event], "next_cursor": None}
+            )
+        return httpx.Response(
+            200, json={"events": [first_event], "next_cursor": "cursor-two"}
+        )
+
+    recorder = RecordingTransport(
+        overrides={
+            "gamma-api.polymarket.com/events/keyset": page_response,
+        }
+    )
+    provider, recorder = make_provider(resolver, recorder)
+
+    scan = await provider.list_tennis_market_listings()
+
+    assert scan.complete is True
+    assert len(scan.listings) == 2
+    doubles, singles = scan.listings
+    assert doubles.outcome_names == ("Team A / Team B", "Team C / Team D")
+    assert doubles.outcome_player_ids == (None, None)
+    assert doubles.to_market() is None
+    assert singles.outcome_names == ("Alpha One", "Beta Two")
+    assert singles.to_market() is not None
+    assert len(calls) == 2
+    assert calls[0].url.params["tag_id"] == "42"
+    assert calls[0].url.params["closed"] == "false"
+    assert calls[1].url.params["after_cursor"] == "cursor-two"
+    public = json.dumps(doubles.model_dump(mode="json"))
+    assert CONDITION_A1 not in public
+    assert TOKEN_A not in public and TOKEN_B not in public
+
+
+async def test_keyset_listing_rejects_repeated_cursor(resolver):
+    event = _fixture("events_tennis.json")[0]
+    recorder = RecordingTransport(
+        overrides={
+            "gamma-api.polymarket.com/events/keyset": lambda _request: httpx.Response(
+                200, json={"events": [event], "next_cursor": "same-cursor"}
+            ),
+        }
+    )
+    provider, _ = make_provider(resolver, recorder)
+
+    with pytest.raises(AppError) as error:
+        await provider.list_tennis_market_listings()
+
+    assert error.value.code == "provider_invalid_response"
+
+
+async def test_keyset_listing_rejects_malformed_page(resolver):
+    recorder = RecordingTransport(
+        overrides={
+            "gamma-api.polymarket.com/events/keyset": httpx.Response(
+                200, json={"items": [], "next_cursor": None}
+            ),
+        }
+    )
+    provider, _ = make_provider(resolver, recorder)
+
+    with pytest.raises(AppError) as error:
+        await provider.list_tennis_market_listings()
+
+    assert error.value.code == "provider_invalid_response"
 
 
 # ---------------------------------------------------------------------------
@@ -509,6 +607,7 @@ async def test_adapter_only_issues_public_get_requests(resolver):
 
     assert recorder.requests, "expected recorded requests"
     public_prefixes = (
+        "gamma-api.polymarket.com/tags/",
         "gamma-api.polymarket.com/events",
         "gamma-api.polymarket.com/markets",
         "clob.polymarket.com/clob-markets/",

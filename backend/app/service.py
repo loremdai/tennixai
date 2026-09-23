@@ -33,6 +33,7 @@ from app.markets.quotes import (
     best_levels,
     display_quote,
     outcome_levels,
+    QuoteSource,
     QuoteState,
 )
 from app.players.models import (
@@ -1151,6 +1152,7 @@ class P3QueryService:
         paper,
         hot_books=None,
         quote_snapshots=None,
+        runtime_state=None,
         snapshot_fresh_seconds: int = 300,
         realtime_fresh_seconds: int = 5,
         clock=None,
@@ -1161,6 +1163,7 @@ class P3QueryService:
         self._paper = paper
         self._hot_books = hot_books
         self._quote_snapshots = quote_snapshots
+        self._runtime_state = runtime_state
         self._snapshot_fresh_seconds = snapshot_fresh_seconds
         self._realtime_fresh_seconds = realtime_fresh_seconds
         self._clock = clock or (lambda: datetime.now(timezone.utc))
@@ -1650,6 +1653,14 @@ class P3QueryService:
             if self._quote_snapshots is not None
             else {}
         )
+        has_catalog_realtime = any(
+            quote.source is QuoteSource.REALTIME and quote.levels is None
+            for market_id, quote in stored_quotes.items()
+            if hot_books.get(market_id) is None
+        )
+        catalog_stream_live = (
+            await self._catalog_quote_stream_live() if has_catalog_realtime else False
+        )
         summaries = []
         for row in market_rows:
             match_id = row.active_match_id
@@ -1670,6 +1681,22 @@ class P3QueryService:
                 realtime_fresh_seconds=self._realtime_fresh_seconds,
                 snapshot_fresh_seconds=self._snapshot_fresh_seconds,
             )
+            stored_quote = stored_quotes.get(row.market_id)
+            if (
+                book is None
+                and stored_quote is not None
+                and stored_quote.source is QuoteSource.REALTIME
+                and stored_quote.levels is None
+            ):
+                quote = quote.model_copy(
+                    update={
+                        "state": (
+                            stored_quote.state
+                            if catalog_stream_live
+                            else QuoteState.STALE
+                        )
+                    }
+                )
             prediction = predictions.get(match_id) if match_id else None
             model_availability = p3_model_availability(
                 tier=match_facts.get("tier"),
@@ -1759,6 +1786,22 @@ class P3QueryService:
             page_size=page_size,
             total=total,
         )
+
+    async def _catalog_quote_stream_live(self) -> bool:
+        """A quiet catalog stream remains current; only its connection ages it."""
+        if self._runtime_state is None:
+            return False
+        try:
+            health = await self._runtime_state.load_health()
+        except Exception:  # noqa: BLE001 - fail closed for display freshness
+            return False
+        source = (
+            health.sources.get("polymarket_catalog_quotes")
+            if health is not None
+            else None
+        )
+        status = getattr(source, "status", None)
+        return getattr(status, "value", status) == "ok"
 
     async def _position_dtos(self, positions):
         from app.api.schemas import PaperPositionDto

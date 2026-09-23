@@ -13,6 +13,7 @@ from app.markets.quotes import (
     build_quote_snapshot,
     decide_quote_write,
     display_quote,
+    realtime_listing_quote_record,
     realtime_quote_record,
 )
 from app.persistence.models import Base, MarketQuoteSnapshotRow
@@ -301,6 +302,91 @@ def test_build_quote_snapshot_classifies_both_sides_partial_and_empty():
     assert unavailable.levels is None
 
 
+def test_build_quote_snapshot_keeps_real_prices_without_player_identity():
+    batch = ClobBooksBatch(
+        books={
+            "tok_a": TokenBook(
+                token_id="tok_a",
+                bids=(BookLevel(price=Decimal("0.58"), size=Decimal("10")),),
+                asks=(BookLevel(price=Decimal("0.60"), size=Decimal("20")),),
+                book_hash="ha",
+                provider_timestamp=NOW,
+            ),
+            "tok_b": TokenBook(
+                token_id="tok_b",
+                bids=(BookLevel(price=Decimal("0.40"), size=Decimal("30")),),
+                asks=(BookLevel(price=Decimal("0.42"), size=Decimal("40")),),
+                book_hash="hb",
+                provider_timestamp=NOW,
+            ),
+        },
+        missing_tokens=(),
+        malformed_tokens=(),
+        raw=(),
+    )
+
+    record = build_quote_snapshot(
+        market_id="mkt_unresolved",
+        token_ids=("tok_a", "tok_b"),
+        player_ids=(None, None),
+        batch=batch,
+        observed_at=NOW,
+        expires_at=NOW + timedelta(seconds=300),
+    )
+
+    assert record.state is QuoteState.SNAPSHOT
+    assert record.outcome_bids == ("0.58", "0.40")
+    assert record.outcome_asks == ("0.60", "0.42")
+    assert record.spread == "0.0200"
+    assert record.depth_usd == "46.60"
+    assert record.best_bid is None and record.best_ask is None
+    assert record.levels is None
+
+
+def test_idless_snapshot_distinguishes_empty_books_from_missing_books():
+    empty = TokenBook(token_id="tok_a", book_hash="empty")
+    no_liquidity = build_quote_snapshot(
+        market_id="mkt_empty",
+        token_ids=("tok_a", "tok_b"),
+        player_ids=(None, None),
+        batch=ClobBooksBatch(
+            books={"tok_a": empty, "tok_b": TokenBook(token_id="tok_b")},
+        ),
+        observed_at=NOW,
+        expires_at=NOW + timedelta(seconds=300),
+    )
+    assert no_liquidity.state is QuoteState.NO_LIQUIDITY
+    assert no_liquidity.outcome_bids == (None, None)
+
+    present = TokenBook(
+        token_id="tok_a",
+        asks=(BookLevel(price=Decimal("0.60"), size=Decimal("10")),),
+        book_hash="present",
+    )
+    partial = build_quote_snapshot(
+        market_id="mkt_partial",
+        token_ids=("tok_a", "tok_b"),
+        player_ids=(None, None),
+        batch=ClobBooksBatch(books={"tok_a": present}, missing_tokens=("tok_b",)),
+        observed_at=NOW,
+        expires_at=NOW + timedelta(seconds=300),
+    )
+    assert partial.state is QuoteState.PARTIAL
+    assert partial.outcome_asks == ("0.60", None)
+    assert partial.levels is None
+
+    unavailable = build_quote_snapshot(
+        market_id="mkt_missing",
+        token_ids=("tok_a", "tok_b"),
+        player_ids=(None, None),
+        batch=ClobBooksBatch(missing_tokens=("tok_a", "tok_b")),
+        observed_at=NOW,
+        expires_at=NOW + timedelta(seconds=300),
+    )
+    assert unavailable.state is QuoteState.UNAVAILABLE
+    assert unavailable.outcome_asks == (None, None)
+
+
 def test_decide_quote_write_precedence_truth_table():
     current = snapshot_record(as_of=NOW)
     assert decide_quote_write(None, current) is True
@@ -339,6 +425,36 @@ def test_realtime_quote_record_mirrors_levels_with_precedence_metadata():
     assert record.as_of == NOW
     assert record.expires_at == NOW + timedelta(seconds=300)
     assert record.outcome_asks == ("0.63", "0.39")
+
+
+def test_realtime_listing_quote_record_needs_no_player_identity_or_orderbook():
+    record = realtime_listing_quote_record(
+        market_id="internal-market",
+        outcome_bids=("0.56", None),
+        outcome_asks=("0.58", "0.42"),
+        as_of=NOW,
+        fresh_seconds=5,
+    )
+
+    assert record.source is QuoteSource.REALTIME
+    assert record.state is QuoteState.REALTIME
+    assert record.outcome_bids == ("0.56", None)
+    assert record.outcome_asks == ("0.58", "0.42")
+    assert record.spread == "0.0200"
+    assert record.levels is None
+    assert record.best_bid is None and record.best_ask is None
+    assert record.depth_usd is None
+    assert record.expires_at == NOW + timedelta(seconds=5)
+    assert (
+        realtime_listing_quote_record(
+            market_id="internal-market",
+            outcome_bids=(None, None),
+            outcome_asks=(None, None),
+            as_of=NOW,
+            fresh_seconds=5,
+        ).state
+        is QuoteState.NO_LIQUIDITY
+    )
 
 
 def test_a_stored_realtime_quote_ages_out_at_the_realtime_bound():

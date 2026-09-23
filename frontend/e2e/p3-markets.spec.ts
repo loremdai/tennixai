@@ -121,10 +121,14 @@ const DEFAULT_MARKETS = {
 /** Mutable payloads for per-test scenarios; reset before every test. */
 let MARKETS: Record<string, unknown> = structuredClone(DEFAULT_MARKETS)
 let OPPORTUNITIES: Record<string, unknown> = structuredClone(DEFAULT_OPPORTUNITIES)
+let MARKET_PAGES: Record<number, Record<string, unknown>> = {}
+let MARKET_REQUEST_PAGES: number[] = []
 
 test.beforeEach(() => {
   MARKETS = structuredClone(DEFAULT_MARKETS)
   OPPORTUNITIES = structuredClone(DEFAULT_OPPORTUNITIES)
+  MARKET_PAGES = {}
+  MARKET_REQUEST_PAGES = []
 })
 
 const PAPER = {
@@ -216,7 +220,8 @@ async function interceptP3(page: Page) {
       path === '/api/paper/positions'
     )
   }, async (route) => {
-    const path = new URL(route.request().url()).pathname
+    const url = new URL(route.request().url())
+    const path = url.pathname
     if (path === '/api/markets/stream') {
       await route.fulfill({
         status: 200,
@@ -225,7 +230,7 @@ async function interceptP3(page: Page) {
       })
       return
     }
-    const payload =
+    let payload =
       path === '/api/markets/opportunities'
         ? OPPORTUNITIES
         : path === '/api/markets'
@@ -233,6 +238,11 @@ async function interceptP3(page: Page) {
           : path === '/api/paper/positions'
             ? PAPER
             : PULSE
+    if (path === '/api/markets') {
+      const pageNumber = Number(url.searchParams.get('page') ?? 1)
+      MARKET_REQUEST_PAGES.push(pageNumber)
+      payload = MARKET_PAGES[pageNumber] ?? MARKETS
+    }
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(payload) })
   })
 }
@@ -276,6 +286,37 @@ function quote(overrides: Record<string, unknown> = {}) {
 }
 
 test.describe('P3 production market quote states (T88)', () => {
+  test('loads later market pages and keeps filters local to loaded rows', async ({ page }) => {
+    const firstPage = Array.from({ length: 50 }, (_, index) =>
+      marketRow({
+        market_id: `mkt_page_${index}`,
+        tier: 'atp',
+        gender: 'men',
+        player_names: [`Player ${index}`, `Opponent ${index}`],
+      }),
+    )
+    const tail = marketRow({
+      market_id: 'mkt_page_tail',
+      tier: 'wta',
+      gender: 'women',
+      player_names: ['Tail Player', 'Tail Opponent'],
+    })
+    MARKET_PAGES = {
+      1: { data: firstPage, page: 1, page_size: 50, total: 51 },
+      2: { data: [tail], page: 2, page_size: 50, total: 51 },
+    }
+    await interceptP3(page)
+    await page.goto('/markets?view=all')
+
+    await expect(page.getByText('已加载 50 / 51 场')).toBeVisible()
+    await page.getByRole('button', { name: '女子' }).click()
+    await expect(page.getByText('筛选后无市场')).toBeVisible()
+    await page.getByRole('button', { name: '加载更多' }).click()
+    await expect(page.getByRole('link', { name: '查看 Tail Player vs. Tail Opponent 市场' })).toBeVisible()
+    await expect(page.getByText('已加载 51 / 51 场')).toBeVisible()
+    expect(MARKET_REQUEST_PAGES.slice(-2)).toEqual([1, 2])
+  })
+
   test('all markets show a real snapshot quote with its own time', async ({ page }) => {
     await showAllMarkets(page, [
       marketRow({

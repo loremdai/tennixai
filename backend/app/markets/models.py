@@ -68,6 +68,57 @@ class Market(FrozenModel):
         return self
 
 
+class MarketListing(FrozenModel):
+    """Display-catalog row with supplier labels and optional resolved identity.
+
+    Unlike Market, this model permits unresolved outcomes and doubles. It is
+    never sufficient by itself for prediction, decision, or paper workflows.
+    """
+
+    id: str = Field(min_length=1)
+    question: str = Field(min_length=1)
+    outcome_names: tuple[str, str]
+    outcome_player_ids: tuple[str | None, str | None] = (None, None)
+    status: MarketStatus
+    event_start: AwareDatetime | None = None
+    event_end: AwareDatetime | None = None
+    provider: str = Field(min_length=1)
+    observed_at: AwareDatetime
+
+    @model_validator(mode="after")
+    def validate_names(self) -> "MarketListing":
+        if any(not name.strip() for name in self.outcome_names):
+            raise ValueError("market listing outcome names must not be empty")
+        return self
+
+    def to_market(self) -> Market | None:
+        first_id, second_id = self.outcome_player_ids
+        if not first_id or not second_id or first_id == second_id:
+            return None
+        return Market(
+            id=self.id,
+            question=self.question,
+            outcomes=(
+                MarketOutcome(player_id=first_id, name=self.outcome_names[0]),
+                MarketOutcome(player_id=second_id, name=self.outcome_names[1]),
+            ),
+            status=self.status,
+            rules_version=1,
+            match_id=None,
+            event_start=self.event_start,
+            event_end=self.event_end,
+            provider=self.provider,
+            observed_at=self.observed_at,
+        )
+
+
+class MarketListingScan(FrozenModel):
+    """One complete or fail-closed Gamma catalog scan."""
+
+    listings: tuple[MarketListing, ...]
+    complete: bool
+
+
 class MarketExternalId(FrozenModel):
     """PRIVATE adapter/identity-persistence mapping. Never a public DTO."""
 
