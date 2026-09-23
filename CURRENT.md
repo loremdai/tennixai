@@ -2,7 +2,7 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-23 13:55 CST
+**最后更新：** 2026-09-23 14:06 CST
 
 **当前任务：** T91 — Diagnose and Restore Polymarket Quote Refresh
 
@@ -14,13 +14,14 @@
 
 **起始提交：** `5ee62ed`
 
-**当前动作：** 代码已修复：快照批次失败或遇到 429 时保留 coverage 统计并把 `market_snapshot` 标为 `degraded`（`4ba96f7`）。后端确定性测试 `1202 passed, 12 skipped, 102 deselected`；daemon 专项 `50 passed`；Ruff 通过。已用真实 API-Tennis REST 测试确认试用认证有效，不是过期导致。当前本地 runtime 正常运行并持续 tick，但 185 个报价候选 `attempted=0 / batch_failures=4 / stale=185`；Gamma、CLOB、Polymarket market WebSocket 三个域名仍返回 `CN=rpz10-landing` 自签名证书，系统未配置 HTTP(S)/SOCKS 代理。需先允许当前运行环境通过可信证书访问这三个 Polymarket 主机，再重启/验收；不信任或绕过拦截证书。
+**当前动作：** 代码已修复：快照批次失败或遇到 429 时保留 coverage 统计并把 `market_snapshot` 标为 `degraded`（`4ba96f7`）。后端确定性测试 `1202 passed, 12 skipped, 102 deselected`；daemon 专项 `50 passed`；Ruff 通过。已用真实 API-Tennis REST 测试确认试用认证有效，不是过期导致。按用户要求重试后，Gamma GET 与 CLOB `/books` POST 均在 TLS 握手阶段失败（curl exit 60 / verify 18 / HTTP 000），尚未触及 Polymarket API。当前 runtime 正常 tick，但 185 个报价候选仍为 `attempted=0 / stale=185`，发现及快照任务继续降级；三个 Polymarket 域名返回 `CN=rpz10-landing` 自签名证书。需先让当前运行环境通过可信证书访问这些主机；不信任或绕过拦截证书。
 
 ## T91 已确认事实
 
 - 域名证书检查：`gamma-api.polymarket.com`、`clob.polymarket.com`、`ws-subscriptions-clob.polymarket.com` 均返回自签名 `CN=rpz10-landing`；`api.api-tennis.com` 返回有效 Let’s Encrypt 证书。真实命令 `TENNIX_RUN_API_TENNIS_LIVE=1 uv run pytest -q tests/live/test_api_tennis_live.py::test_api_tennis_rest_capability_and_canonical_shape` 通过（1 passed），认证和赛程读取成功；API-Tennis 免费试用未过期。
+- 用户重试后，直接请求 `https://gamma-api.polymarket.com/markets?...` 和 `https://clob.polymarket.com/books` 均为 curl exit 60 / TLS verify 18 / HTTP 000（self-signed certificate）；请求未抵达 HTTP 层，因此这不是 Polymarket key、额度或 API 响应问题。
 - HTTPX 直接访问 Polymarket 因证书链失败；宿主 `NO_PROXY` 的 `::1` 曾导致 HTTPX 环境代理解析报 `Invalid port: ':1'`（T90 已修复应用避开隐式代理环境）。复查当前 shell 仅有 `NO_PROXY/no_proxy`，macOS HTTP/HTTPS/SOCKS 系统代理均关闭，无可用代理通道。
-- 重启后 runtime 正常 tick；`/api/v1/runtime/health` 的细项显示 `market_snapshot=degraded (MARKET_SNAPSHOT_BATCH_FAILED)`、`market_discovery=degraded (PROVIDER_UNAVAILABLE)`，coverage `candidate=185 / attempted=0 / batch_failures=4 / stale=185`。简略 `tennix-live status` 中的 `polymarket=ok` 是独立的流健康项，不代表快照报价成功；详细报价健康仍为降级。
+- 重启后 runtime 正常 tick；本次重试时已持续 355 ticks。`/api/v1/runtime/health` 的细项显示 `market_snapshot=degraded (MARKET_SNAPSHOT_BATCH_FAILED)`、`market_discovery=degraded (PROVIDER_UNAVAILABLE)`，source failure_count 均为 9；coverage `candidate=185 / attempted=0 / batch_failures=4 / stale=185`。简略 `tennix-live status` 中的 `polymarket=ok` 是独立且未更新的流健康项，不代表快照报价成功；详细报价健康仍为降级。
 - 原运行时曾把 4 个快照批次全失败报告成 `market_snapshot=ok`；`4ba96f7` 已改成按批次失败/429 报 `degraded`，并保留完整 coverage 聚合。
 - Polymarket 网络放行前无法证明真实报价能刷新。即使报价恢复，机会页仍会因独立的 `model_status=not_promoted` 保持无 `BUY/WAIT`，模型晋升不在 T91 范围内。
 
