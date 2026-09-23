@@ -2,11 +2,11 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-23 13:40 CST
+**最后更新：** 2026-09-23 13:45 CST
 
 **当前任务：** T91 — Diagnose and Restore Polymarket Quote Refresh
 
-**任务状态：** `in_progress`
+**任务状态：** `blocked`
 
 **执行者 / ADE：** Codex
 
@@ -14,13 +14,14 @@
 
 **起始提交：** `5ee62ed`
 
-**当前动作：** API‑Tennis REST 真实认证通过。Gamma、CLOB、Polymarket market WebSocket 均被当前网络导向同一张 `rpz10-landing` 自签名证书；API‑Tennis 证书有效。当前 live-local coverage 为 `candidate=185 / attempted=0 / batch_failures=4 / stale=185`。代码另有健康状态误报：快照批次全部失败时 `market_snapshot` 仍为 `ok`。先修正失败状态报告并验证，再等待 Polymarket 域名可从此运行环境正常访问后完成真实报价恢复验收。不得信任或绕过拦截证书。
+**当前动作：** 代码已修复：快照批次失败或遇到 429 时保留 coverage 统计并把 `market_snapshot` 标为 `degraded`（`4ba96f7`）。后端确定性测试 `1202 passed, 12 skipped, 102 deselected`；daemon 专项 `50 passed`；Ruff 通过。真实刷新被当前网络拦截阻断：Gamma、CLOB、Polymarket market WebSocket 三个域名均返回 `CN=rpz10-landing` 自签名证书。需要先允许当前运行环境访问这三个 Polymarket 主机，再重启本地 runtime 验收真实报价刷新；不可信任或绕过拦截证书。
 
 ## T91 已确认事实
 
-- 域名证书检查：`gamma-api.polymarket.com`、`clob.polymarket.com`、`ws-subscriptions-clob.polymarket.com` 均返回自签名 `CN=rpz10-landing`；`api.api-tennis.com` 返回有效 Let’s Encrypt 证书。
+- 域名证书检查：`gamma-api.polymarket.com`、`clob.polymarket.com`、`ws-subscriptions-clob.polymarket.com` 均返回自签名 `CN=rpz10-landing`；`api.api-tennis.com` 返回有效 Let’s Encrypt 证书，真实 REST gate 通过。
 - HTTPX 直接访问 Polymarket 因该证书链失败；开启环境代理解析则先被宿主 `NO_PROXY` 的 `::1` 配置以 `Invalid port: ':1'` 拒绝（T90 已修复应用避开隐式代理环境）。
-- 实时健康端点连续记录 market discovery `PROVIDER_UNAVAILABLE`、快照 4 个批次失败；`/markets/opportunities` 仍诚实返回 `ELIGIBLE_UNPROMOTED`。Polymarket 网络放行前无法证明真实报价能刷新。
+- 原运行时曾把 4 个快照批次全失败报告成 `market_snapshot=ok`；`4ba96f7` 已改成按批次失败/429 报 `degraded`，并保留完整 coverage 聚合。
+- Polymarket 网络放行前无法证明真实报价能刷新。即使报价恢复，机会页仍会因独立的 `model_status=not_promoted` 保持无 `BUY/WAIT`，模型晋升不在 T91 范围内。
 
 ## T89 完成证据（2026-09-23，全部实际运行）
 
@@ -48,7 +49,8 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
-| 2026-09-23 | 本更新 | 领取 T91：Codex / `main` / 起始 `5ee62ed`；已确认 Polymarket 域名 TLS 拦截与快照健康误报 |
+| 2026-09-23 | `ca91580` | 领取 T91：Codex / `main` / 起始 `5ee62ed`；确认 Polymarket 主机 TLS 拦截与快照健康误报 |
+| 2026-09-23 | `4ba96f7` | 快照批次失败或限流时正确报告 `degraded`；1202 后端确定性用例通过 |
 | 2026-09-23 | `b3ef97d` | T90 修复 HTTP/WS 客户端隐式继承宿主代理环境；确定性后端 1200 passed，根 `.env` 未改 |
 | 2026-09-23 | `a61dcd2` | 领取 T90 |
 | 2026-09-23 | `e9426d5` | runbook 明确 `init` 的中文名 LLM 补全（迁移也无法跳过）与 `LOCAL_SCHEMA_BEHIND` 排障行 |
