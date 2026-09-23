@@ -531,6 +531,10 @@ class LocalRuntimeDaemon:
             return
         coverage = await self._quote_job.run_once()
         self._health.set_market_coverage(coverage)
+        if coverage.batch_failures:
+            raise RuntimeJobError("MARKET_SNAPSHOT_BATCH_FAILED")
+        if coverage.rate_limited:
+            raise RuntimeJobError("MARKET_SNAPSHOT_RATE_LIMITED")
 
     async def _mirror_hot_book(self, market_id: str) -> None:
         """Mirror the realtime hot book into the shared projection so pages

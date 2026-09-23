@@ -1450,6 +1450,36 @@ async def test_snapshot_job_runs_at_its_own_bounded_interval():
     assert quote_job.runs == 2
 
 
+async def test_snapshot_batch_failures_mark_snapshot_health_degraded():
+    clock = FakeClock()
+    coverage = MarketQuoteCoverage(
+        generated_at=clock.now(), candidate=185, attempted=0, stale=185, batch_failures=4
+    )
+    daemon, parts = make_daemon(clock, quote_job=SpyQuoteJob(coverage))
+
+    await daemon.tick_once()
+
+    health = parts["state"].saved[-1]
+    assert health.market_coverage == coverage
+    snapshot_health = health.sources["market_snapshot"]
+    assert snapshot_health.status is RuntimeSourceStatus.DEGRADED
+    assert snapshot_health.reason_code == "MARKET_SNAPSHOT_BATCH_FAILED"
+
+
+async def test_snapshot_rate_limit_marks_snapshot_health_degraded():
+    clock = FakeClock()
+    coverage = MarketQuoteCoverage(
+        generated_at=clock.now(), candidate=185, attempted=0, stale=185, rate_limited=True
+    )
+    daemon, parts = make_daemon(clock, quote_job=SpyQuoteJob(coverage))
+
+    await daemon.tick_once()
+
+    snapshot_health = parts["state"].saved[-1].sources["market_snapshot"]
+    assert snapshot_health.status is RuntimeSourceStatus.DEGRADED
+    assert snapshot_health.reason_code == "MARKET_SNAPSHOT_RATE_LIMITED"
+
+
 async def test_realtime_hot_books_are_mirrored_into_the_shared_projection():
     projections = SpyQuoteProjections()
     daemon, parts = make_daemon(quote_snapshots=projections)
