@@ -2,7 +2,7 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-23 13:45 CST
+**最后更新：** 2026-09-23 13:55 CST
 
 **当前任务：** T91 — Diagnose and Restore Polymarket Quote Refresh
 
@@ -14,12 +14,13 @@
 
 **起始提交：** `5ee62ed`
 
-**当前动作：** 代码已修复：快照批次失败或遇到 429 时保留 coverage 统计并把 `market_snapshot` 标为 `degraded`（`4ba96f7`）。后端确定性测试 `1202 passed, 12 skipped, 102 deselected`；daemon 专项 `50 passed`；Ruff 通过。真实刷新被当前网络拦截阻断：Gamma、CLOB、Polymarket market WebSocket 三个域名均返回 `CN=rpz10-landing` 自签名证书。需要先允许当前运行环境访问这三个 Polymarket 主机，再重启本地 runtime 验收真实报价刷新；不可信任或绕过拦截证书。
+**当前动作：** 代码已修复：快照批次失败或遇到 429 时保留 coverage 统计并把 `market_snapshot` 标为 `degraded`（`4ba96f7`）。后端确定性测试 `1202 passed, 12 skipped, 102 deselected`；daemon 专项 `50 passed`；Ruff 通过。已用真实 API-Tennis REST 测试确认试用认证有效，不是过期导致。当前本地 runtime 正常运行并持续 tick，但 185 个报价候选 `attempted=0 / batch_failures=4 / stale=185`；Gamma、CLOB、Polymarket market WebSocket 三个域名仍返回 `CN=rpz10-landing` 自签名证书，系统未配置 HTTP(S)/SOCKS 代理。需先允许当前运行环境通过可信证书访问这三个 Polymarket 主机，再重启/验收；不信任或绕过拦截证书。
 
 ## T91 已确认事实
 
-- 域名证书检查：`gamma-api.polymarket.com`、`clob.polymarket.com`、`ws-subscriptions-clob.polymarket.com` 均返回自签名 `CN=rpz10-landing`；`api.api-tennis.com` 返回有效 Let’s Encrypt 证书，真实 REST gate 通过。
-- HTTPX 直接访问 Polymarket 因该证书链失败；开启环境代理解析则先被宿主 `NO_PROXY` 的 `::1` 配置以 `Invalid port: ':1'` 拒绝（T90 已修复应用避开隐式代理环境）。
+- 域名证书检查：`gamma-api.polymarket.com`、`clob.polymarket.com`、`ws-subscriptions-clob.polymarket.com` 均返回自签名 `CN=rpz10-landing`；`api.api-tennis.com` 返回有效 Let’s Encrypt 证书。真实命令 `TENNIX_RUN_API_TENNIS_LIVE=1 uv run pytest -q tests/live/test_api_tennis_live.py::test_api_tennis_rest_capability_and_canonical_shape` 通过（1 passed），认证和赛程读取成功；API-Tennis 免费试用未过期。
+- HTTPX 直接访问 Polymarket 因证书链失败；宿主 `NO_PROXY` 的 `::1` 曾导致 HTTPX 环境代理解析报 `Invalid port: ':1'`（T90 已修复应用避开隐式代理环境）。复查当前 shell 仅有 `NO_PROXY/no_proxy`，macOS HTTP/HTTPS/SOCKS 系统代理均关闭，无可用代理通道。
+- 重启后 runtime 正常 tick；`/api/v1/runtime/health` 的细项显示 `market_snapshot=degraded (MARKET_SNAPSHOT_BATCH_FAILED)`、`market_discovery=degraded (PROVIDER_UNAVAILABLE)`，coverage `candidate=185 / attempted=0 / batch_failures=4 / stale=185`。简略 `tennix-live status` 中的 `polymarket=ok` 是独立的流健康项，不代表快照报价成功；详细报价健康仍为降级。
 - 原运行时曾把 4 个快照批次全失败报告成 `market_snapshot=ok`；`4ba96f7` 已改成按批次失败/429 报 `degraded`，并保留完整 coverage 聚合。
 - Polymarket 网络放行前无法证明真实报价能刷新。即使报价恢复，机会页仍会因独立的 `model_status=not_promoted` 保持无 `BUY/WAIT`，模型晋升不在 T91 范围内。
 
@@ -54,8 +55,6 @@
 | 2026-09-23 | `b3ef97d` | T90 修复 HTTP/WS 客户端隐式继承宿主代理环境；确定性后端 1200 passed，根 `.env` 未改 |
 | 2026-09-23 | `a61dcd2` | 领取 T90 |
 | 2026-09-23 | `e9426d5` | runbook 明确 `init` 的中文名 LLM 补全（迁移也无法跳过）与 `LOCAL_SCHEMA_BEHIND` 排障行 |
-| 2026-09-23 | `0145752` | P4.3 关闭：T89 `done`、阶段 `done`，三份总控无 active 任务 |
-| 2026-09-23 | `ce4a495` | 机会空态按部署真实模型状态解释（`ELIGIBLE_UNPROMOTED`），T80 验收匹配器跟进 |
 
 ## 下一步
 
