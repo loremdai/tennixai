@@ -424,6 +424,109 @@ def test_statistics_only_change_emits_statistics_updated_and_keeps_points() -> N
     assert aces.player1_value == 4
 
 
+def test_empty_statistics_update_retains_last_values_as_stale() -> None:
+    initial_quality = DataQuality(
+        capability="statistics",
+        status=CapabilityStatus.AVAILABLE,
+        provider="api_tennis",
+        observed_at=NOW,
+    )
+    previous = reduce_live_snapshot(
+        None,
+        supplier_snapshot(
+            statistics=[statistic(StatisticName.ACES, 3, 1)],
+            quality=[initial_quality],
+        ),
+    ).snapshot
+    next_match = base_match()
+    assert next_match.live_state is not None and next_match.live_state.score is not None
+    next_score = next_match.live_state.score.model_copy(update={"points": ("40", "15")})
+    next_match = next_match.model_copy(
+        update={
+            "live_state": next_match.live_state.model_copy(update={"score": next_score})
+        }
+    )
+    observed_at = NOW + timedelta(seconds=10)
+    reduction = reduce_live_snapshot(
+        previous,
+        supplier_snapshot(
+            match=next_match,
+            quality=[
+                DataQuality(
+                    capability="statistics",
+                    status=CapabilityStatus.UNAVAILABLE,
+                    provider="api_tennis",
+                    reason="not_reported",
+                    observed_at=observed_at,
+                )
+            ],
+            as_of=observed_at,
+        ),
+    )
+
+    assert len(reduction.snapshot.statistics) == 1
+    retained = reduction.snapshot.statistics[0]
+    assert (retained.player1_value, retained.player2_value) == (3, 1)
+    assert retained.as_of == NOW
+    assert retained.availability is CapabilityStatus.STALE
+    statistics_quality = next(
+        item for item in reduction.snapshot.quality if item.capability == "statistics"
+    )
+    assert statistics_quality.status is CapabilityStatus.STALE
+    assert statistics_quality.observed_at == observed_at
+
+
+def test_sparse_statistics_update_refreshes_present_metric_only() -> None:
+    previous = reduce_live_snapshot(
+        None,
+        supplier_snapshot(
+            statistics=[
+                statistic(StatisticName.ACES, 3, 1),
+                statistic(StatisticName.DOUBLE_FAULTS, 2, 1),
+            ],
+            quality=[
+                DataQuality(
+                    capability="statistics",
+                    status=CapabilityStatus.AVAILABLE,
+                    provider="api_tennis",
+                    observed_at=NOW,
+                )
+            ],
+        ),
+    ).snapshot
+    observed_at = NOW + timedelta(seconds=10)
+    refreshed_aces = statistic(StatisticName.ACES, 4, 1).model_copy(
+        update={"as_of": observed_at}
+    )
+    reduction = reduce_live_snapshot(
+        previous,
+        supplier_snapshot(
+            statistics=[refreshed_aces],
+            quality=[
+                DataQuality(
+                    capability="statistics",
+                    status=CapabilityStatus.AVAILABLE,
+                    provider="api_tennis",
+                    observed_at=observed_at,
+                )
+            ],
+            as_of=observed_at,
+        ),
+    )
+    by_name = {item.name: item for item in reduction.snapshot.statistics}
+
+    assert by_name[StatisticName.ACES].player1_value == 4
+    assert by_name[StatisticName.ACES].as_of == observed_at
+    assert by_name[StatisticName.ACES].availability is CapabilityStatus.AVAILABLE
+    assert by_name[StatisticName.DOUBLE_FAULTS].player1_value == 2
+    assert by_name[StatisticName.DOUBLE_FAULTS].as_of == NOW
+    assert by_name[StatisticName.DOUBLE_FAULTS].availability is CapabilityStatus.STALE
+    statistics_quality = next(
+        item for item in reduction.snapshot.quality if item.capability == "statistics"
+    )
+    assert statistics_quality.status is CapabilityStatus.PARTIAL
+
+
 def test_terminal_status_advances_version_with_connection_updated() -> None:
     history = seven_point_history()
     first = reduce_live_snapshot(None, supplier_snapshot(points=history))

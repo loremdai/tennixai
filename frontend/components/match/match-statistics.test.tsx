@@ -13,8 +13,9 @@ function stat(
   name: string,
   p1: number | null,
   p2: number | null,
-  availability: 'available' | 'partial' | 'unavailable' = 'available',
+  availability: 'available' | 'partial' | 'stale' | 'unavailable' = 'available',
   period = 'match',
+  asOf = '2026-09-09T12:00:00Z',
 ): MatchStatisticDto {
   return {
     match_id: 'mat_1',
@@ -25,7 +26,7 @@ function stat(
     unit: null,
     provenance: 'provider',
     availability,
-    as_of: '2026-09-09T12:00:00Z',
+    as_of: asOf,
   }
 }
 
@@ -72,7 +73,6 @@ describe('MatchStatisticsCard', () => {
         ]}
         points={[]}
         players={players}
-        asOf="2026-09-09T12:00:00Z"
       />,
     )
 
@@ -93,7 +93,6 @@ describe('MatchStatisticsCard', () => {
         statistics={[stat('aces', 8, 5)]}
         points={[]}
         players={players}
-        asOf="2026-09-09T12:00:00Z"
       />,
     )
 
@@ -103,9 +102,7 @@ describe('MatchStatisticsCard', () => {
   })
 
   it('shows a single unavailable summary when no statistics exist', () => {
-    render(
-      <MatchStatisticsCard statistics={[]} points={[]} players={players} asOf={null} />,
-    )
+    render(<MatchStatisticsCard statistics={[]} points={[]} players={players} />)
 
     expect(screen.getByText(/供应商尚未返回本场技术统计/)).toBeVisible()
   })
@@ -116,7 +113,6 @@ describe('MatchStatisticsCard', () => {
         statistics={[stat('winners', 12, null, 'partial')]}
         points={[]}
         players={players}
-        asOf="2026-09-09T12:00:00Z"
       />,
     )
 
@@ -134,7 +130,6 @@ describe('MatchStatisticsCard', () => {
         ]}
         points={[]}
         players={players}
-        asOf="2026-09-09T12:00:00Z"
       />,
     )
 
@@ -151,12 +146,27 @@ describe('MatchStatisticsCard', () => {
         statistics={[stat('aces', 1, 1)]}
         points={points}
         players={players}
-        asOf="2026-09-09T12:00:00Z"
       />,
     )
 
     const strip = screen.getByLabelText('最近 10 分')
     // Two of the last twelve points are indeterminate and excluded.
     expect(strip.querySelectorAll('li')).toHaveLength(10)
+  })
+
+  it('marks retained values stale and shows the newest statistic observation time', () => {
+    render(
+      <MatchStatisticsCard
+        statistics={[
+          stat('aces', 8, 5, 'stale', 'match', '2026-09-09T10:00:00Z'),
+          stat('double_faults', 1, 3, 'available', 'match', '2026-09-09T11:00:00Z'),
+        ]}
+        points={[]}
+        players={players}
+      />,
+    )
+
+    expect(screen.getByText('数据较旧')).toBeVisible()
+    expect(screen.getByText(/统计数据截至.*19:00/)).toBeVisible()
   })
 })

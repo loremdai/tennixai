@@ -180,12 +180,73 @@ def _statistics_fingerprint(snapshot: MatchSnapshot) -> tuple:
     )
 
 
+def _merge_sparse_statistics(
+    previous: MatchSnapshot, candidate: MatchSnapshot
+) -> MatchSnapshot:
+    if not previous.statistics:
+        return candidate
+
+    incoming_keys = {(item.name, item.period) for item in candidate.statistics}
+    retained = tuple(
+        item.model_copy(update={"availability": CapabilityStatus.STALE})
+        for item in previous.statistics
+        if (item.name, item.period) not in incoming_keys
+    )
+    if not retained:
+        return candidate
+
+    previous_quality = next(
+        (item for item in previous.quality if item.capability == "statistics"),
+        None,
+    )
+    candidate_quality = next(
+        (item for item in candidate.quality if item.capability == "statistics"),
+        None,
+    )
+    status = (
+        CapabilityStatus.PARTIAL if candidate.statistics else CapabilityStatus.STALE
+    )
+    reason = (
+        "some_statistics_not_reported_in_latest_snapshot"
+        if candidate.statistics
+        else "statistics_not_reported_in_latest_snapshot"
+    )
+    quality_item = None
+    quality_source = candidate_quality or previous_quality
+    if quality_source is not None:
+        observed_at = (
+            previous_quality.observed_at
+            if previous_quality is not None
+            and previous_quality.status is status
+            and previous_quality.reason == reason
+            else candidate.as_of
+        )
+        quality_item = quality_source.model_copy(
+            update={"status": status, "reason": reason, "observed_at": observed_at}
+        )
+
+    quality = tuple(
+        quality_item if item.capability == "statistics" else item
+        for item in candidate.quality
+    )
+    if quality_item is not None and not any(
+        item.capability == "statistics" for item in candidate.quality
+    ):
+        quality = (*quality, quality_item)
+
+    return candidate.model_copy(
+        update={"statistics": (*candidate.statistics, *retained), "quality": quality}
+    )
+
+
 def reduce_live_snapshot(
     previous: MatchSnapshot | None,
     candidate: MatchSnapshot,
     *,
     momentum_engine: RecentControlEngine | None = None,
 ) -> LiveReduction:
+    if previous is not None:
+        candidate = _merge_sparse_statistics(previous, candidate)
     match = candidate.match
     if previous is not None:
         match = _preserve_player_metadata(previous.match, match)

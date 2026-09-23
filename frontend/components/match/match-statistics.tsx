@@ -3,6 +3,7 @@
 import { Badge } from '@/components/ui/badge'
 import type { MatchStatisticDto, PlayerDto, PointEventDto } from '@/lib/api/types'
 import {
+  formatAsOf,
   formatStatValue,
   STAT_GROUP_ORDER,
   STAT_META,
@@ -19,6 +20,7 @@ type StatisticGroupView = {
     p1: number | null
     p2: number | null
     partial: boolean
+    stale: boolean
   }>
   missing: string[]
 }
@@ -38,14 +40,19 @@ export function MatchStatisticsCard({
   statistics,
   points,
   players,
-  asOf,
 }: {
   statistics: MatchStatisticDto[]
   points: PointEventDto[]
   players: [PlayerDto, PlayerDto]
-  asOf: string | null
 }) {
   const known = statistics.filter((stat) => STAT_META[stat.name])
+  const latestStatisticAsOf = known.reduce<string | null>((latest, stat) => {
+    const observedAt = Date.parse(stat.as_of)
+    if (!Number.isFinite(observedAt)) return latest
+    if (latest === null || observedAt > Date.parse(latest)) return stat.as_of
+    return latest
+  }, null)
+  const formattedAsOf = formatAsOf(latestStatisticAsOf)
   const byGroup = new Map<StatGroup, StatisticGroupView>()
   for (const stat of known) {
     const meta = STAT_META[stat.name]
@@ -58,6 +65,7 @@ export function MatchStatisticsCard({
       p1: stat.player1_value,
       p2: stat.player2_value,
       partial: stat.availability === 'partial',
+      stale: stat.availability === 'stale',
     })
     byGroup.set(meta.group, view)
   }
@@ -100,6 +108,7 @@ export function MatchStatisticsCard({
                   <span className="flex items-center gap-2 text-center text-xs text-muted-foreground sm:text-sm">
                     {formatPeriod(row.period)} · {row.label}
                     {row.partial ? <Badge variant="outline">部分提供</Badge> : null}
+                    {row.stale ? <Badge variant="outline">数据较旧</Badge> : null}
                   </span>
                   <span className="font-mono text-sm font-medium tabular-nums">
                     {row.p2 === null ? '官方未返回' : formatStatValue(row.p2, row.unit)}
@@ -138,7 +147,10 @@ export function MatchStatisticsCard({
       ) : null}
 
       <p className="text-xs text-muted-foreground">
-        {asOf ? `统计更新于 ${asOf}` : '统计更新时间官方未返回'} · 缺失能力保持缺失，不猜测
+        {formattedAsOf
+          ? `统计数据截至 ${formattedAsOf}`
+          : '统计时间官方未返回'}{' '}
+        · 缺失能力保持缺失，不猜测
       </p>
     </div>
   )

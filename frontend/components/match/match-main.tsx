@@ -27,7 +27,6 @@ import {
 import { Separator } from '@/components/ui/separator'
 import type { MatchSnapshotDto } from '@/lib/api/types'
 import type { MatchViewModel } from '@/lib/view-models'
-import { formatAsOf } from '@/lib/view-models'
 import { cn } from '@/lib/utils'
 
 import { FutureModule } from './future-module'
@@ -348,7 +347,6 @@ export function StatsCard({ match, preview, highlight, snapshot }: Pick<MainColu
             statistics={liveSnapshot.statistics}
             points={liveSnapshot.points}
             players={liveSnapshot.match.players}
-            asOf={formatAsOf(liveSnapshot.as_of)}
           />
         ) : match.visualStatus === 'upcoming' ? (
           <FutureModule
