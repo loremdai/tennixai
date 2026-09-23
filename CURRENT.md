@@ -9,7 +9,7 @@
 **任务状态：** `in_progress`
 
 **执行者 / ADE：** Codex；**分支：** `main`；**起始提交：** `08c4c1a`
-**领取记录：** 待提交并推送；**完成提交：** —
+**领取记录：** `3f7f121`（已推送）；**完成提交：** —
 
 ## 当前目标
 
@@ -21,6 +21,8 @@
 - 本地完整应用已在运行；不停止、不重启其所有者进程，必要时只使用只读本地 API 核验。
 - 根 `.env` 不读取/改写/输出；现存未跟踪文件均属用户，保持原样。
 - API-Tennis 官方 standings 文档示例字段为 `place/player/player_key/league/movement/country/points`，没有正式生效日期字段；供应商 `get_players.stats` 是按赛季且区分 singles/doubles 的资料，不能未经筛选作为当前单打世界排名。
+- 本地复现（2026-09-24）：Alycia Parks 排名页 `rank=70, points=957`，嵌套 `player.ranking=72`；搜索和个人页也返回 72。WTA 官方记录 Sep 21 为 70、Sep 14 为 72。ATP/WTA Top 200 共 400 行中，97 行嵌套 rank 缺失、另有 2 行非空 rank 不一致；97 行名字缩写、103 行缺国家代码、98 行缺中文主名。
+- 根因方向已证实：搜索/个人页使用 `PlayerRow.ranking` 或 `_latest_ranking(get_players.stats)`；比赛 persistence 可覆盖排名/国家/姓名；profile frontend 将积分、变动和快照时间硬编码映射为空。逐项实施见 [T92 计划](docs/superpowers/plans/2026-09-24-tennixai-player-data-integrity-implementation.md)。
 
 ## 最近完成
 
