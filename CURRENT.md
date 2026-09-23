@@ -2,23 +2,23 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-23 04:20 CST
+**最后更新：** 2026-09-23 11:05 CST
 
-**当前任务：** T90 — Make Project HTTP Clients Independent of Malformed Host Proxy Exclusions
+**当前任务：** 无（当前没有 active 任务）
 
-**任务状态：** `in_progress`
+**任务状态：** `idle`
 
-**执行者 / ADE：** Codex（GPT-5）
+**最近完成：** T90 — Make Project HTTP Clients Independent of Malformed Host Proxy Exclusions（Codex）
 
 **分支：** `main`
 
-**起始提交：** `78b14ab`
+**起始提交：** `78b14ab`；领取提交：`a61dcd2`；实现提交：`b3ef97d`
 
-**当前动作：** 以 TDD 修复宿主代理环境污染：已证实根 `.env` 的 API 基址合法；导入失败来自宿主 `NO_PROXY` / `no_proxy` 中的 IPv6 `::1` 被 HTTPX 默认环境代理解析为非法端口。先写出不依赖用户 `.env`、不发网络请求的回归证明，再让所有项目自建 outbound HTTP/LLM client 显式不继承宿主代理环境；不改根 `.env`，不启动 stack，不调用真实 API/LLM，不触及 paper-only 或自动下单边界。
+**完成证据：** 宿主 `NO_PROXY` / `no_proxy` 的 `::1` 触发 HTTPX 默认代理环境解析错误；不是根 `.env` API 地址问题。项目 HTTPX 客户端已显式不读取代理环境，WebSocket 显式禁用隐式代理，launcher 不再过滤环境变量。环境回归 `5 passed`；runtime launcher + 环境回归 `66 passed`；确定性后端 `1200 passed, 114 deselected`；真实配置下 `import app.main` 成功；受影响生产模块及新回归测试 Ruff 通过、diff 检查通过。未调用真实 API/LLM、未启动运行栈，根 `.env` 未修改。
 
 ## T89 完成证据（2026-09-23，全部实际运行）
 
-- 提交：`c1c8297`（关闭 T87/T88 并领取 T89）、`7f9201f`（`verify` 有界批量报价检查）、`25e81b1`（runbook 双车道/七状态/配置/coverage 健康）、`6484ec6`（未变化热簿只镜像一次，配合既有 `decide_quote_write` 幂等规则）、`ce4a495`（机会空态按部署真实模型状态解释）、本提交（总控收口）。
+- 提交：`c1c8297`（关闭 T87/T88 并领取 T89）、`7f9201f`（`verify` 有界批量报价检查）、`25e81b1`（runbook 双车道/七状态/配置/coverage 健康）、`6484ec6`（未变化热簿只镜像一次，配合既有 `decide_quote_write` 幂等规则）、`ce4a495`（机会空态按部署真实模型状态解释）、`0145752`（T89/阶段收口）。
 - 全链回归（最终提交状态）：确定性 `1195 passed, 114 deselected, 0 failed`；infrastructure 一次 `77 passed` 全绿，另一次 `1 failed`（既有 `test_p3_latency_gate` wall-clock 守卫抖动；控制实验见下）；前端 `pnpm test` 407 passed + typecheck exit 0 + build exit 0；默认 E2E lane 两次：run1 功能 `90 passed/40 skipped/0 failed` + 视觉 `33 passed/4 skipped/1 failed`（`p1.visual p1-home-initial`，1111 像素/0.01，基线 PNG 未变），run2 功能 `90/40/0` + 视觉 `34/4/0` 且 exit 0；视觉 lane 单跑 `34 passed/4 skipped/0 failed`；`frontend/e2e/__screenshots__` 全程零 diff。
 - 既有抖动判定（未用 mask/阈值/skip/retry/重录规避）：① 延迟门——同命令在 pre-P4.3 提交 `61c460d`（无任何 P4.3 代码）失败更严重（`book replay wall clock 66.1s` vs 60s 上限），单跑该用例通过（该用例只跑 `DecisionWorker`，其代码路径 P4.3 未改动，diff 可核对）；② 视觉门——失败用例为冻结原型基线页，单独运行时通过，且基线 PNG 零改动。
 - 真实本地 coverage gate（两次窗口，`up`→健康/接口/浏览器→`down`）：
@@ -42,13 +42,11 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
+| 2026-09-23 | `b3ef97d` | T90 修复 HTTP/WS 客户端隐式继承宿主代理环境；确定性后端 1200 passed，根 `.env` 未改 |
+| 2026-09-23 | `a61dcd2` | 领取 T90 |
 | 2026-09-23 | `e9426d5` | runbook 明确 `init` 的中文名 LLM 补全（迁移也无法跳过）与 `LOCAL_SCHEMA_BEHIND` 排障行 |
 | 2026-09-23 | `0145752` | P4.3 关闭：T89 `done`、阶段 `done`，三份总控无 active 任务 |
 | 2026-09-23 | `ce4a495` | 机会空态按部署真实模型状态解释（`ELIGIBLE_UNPROMOTED`），T80 验收匹配器跟进 |
-| 2026-09-23 | `6484ec6` | 未变化热簿只镜像一次（幂等等价于 `decide_quote_write`） |
-| 2026-09-23 | `25e81b1`、`7f9201f`、`c1c8297` | T89：runbook、`verify` 有界批量报价检查，关闭 T87/T88 并领取 T89 |
-| 2026-09-23 | `56d71df`、`4f6adf1` | T88：机会空态按真实原因解释；5 个双视口 e2e 场景 |
-| 2026-09-23 | `4c92e2a`、`aa50350` | T87：后端显式 quote/model/decision 语义；前端 typed 解码与行渲染 |
 
 ## 下一步
 
