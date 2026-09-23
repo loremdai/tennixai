@@ -445,6 +445,7 @@ def build_local_runtime_daemon(
         raw=raw_events,
         now=clock,
         max_live_subscriptions=settings.max_live_subscriptions,
+        directory=directory_repo,
         demand_source=TrackingDemandSource(
             tracking=tracking, links=links, health=registry
         ),

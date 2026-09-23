@@ -197,6 +197,7 @@ def create_app(
                 raw=RawProviderEventRepository(database),
                 now=clock,
                 max_live_subscriptions=settings.max_live_subscriptions,
+                directory=directory,
             )
         elif settings.provider_mode == "replay":
             worker = RealtimeWorker(
@@ -210,6 +211,7 @@ def create_app(
                 now=clock,
                 max_live_subscriptions=settings.max_live_subscriptions,
                 provider_name=provider.identity_namespace,
+                directory=directory,
             )
         realtime = SimpleNamespace(
             redis=redis_client,

@@ -15,22 +15,20 @@ from realtime_fakes import (
 )
 
 from app.domain import (
-    CapabilityStatus,
     DataFreshness,
     LiveMatchState,
     Match,
     MatchScore,
     MatchSnapshot,
-    MatchStatistic,
     MatchStatus,
     Player,
     PointEvent,
     SetScore,
-    StatisticName,
-    StatisticProvenance,
     Tournament,
 )
 from app.identity import MemoryIdentityRepository
+from app.players.models import RankingEntry, RankingMovement, Tour
+from app.players.repository import MemoryPlayerDirectoryRepository
 from app.realtime.leases import ViewerLeaseStore
 from app.realtime.publisher import RealtimePublisher
 from app.realtime.worker import RealtimeWorker
@@ -146,6 +144,7 @@ def make_worker(
     leases: ViewerLeaseStore,
     rest: FakeRestProvider,
     max_live_subscriptions: int = 8,
+    directory: MemoryPlayerDirectoryRepository | None = None,
 ):
     store = InMemorySnapshotStore()
     publisher = RealtimePublisher(InMemoryRedis(clock), now=clock.utcnow)
@@ -161,6 +160,7 @@ def make_worker(
         raw=raw,
         now=clock.utcnow,
         max_live_subscriptions=max_live_subscriptions,
+        directory=directory,
     )
     return worker, store, publisher, feed, raw
 
@@ -241,6 +241,67 @@ async def test_rest_reconcile_hydrates_profiles_before_live_feed_deltas(
         "Ryota Tanuma",
     ]
     assert rest.profile_calls == ["ply_a", "ply_b"]
+    await worker.stop()
+
+
+@pytest.mark.asyncio
+async def test_realtime_reconcile_replaces_stale_ranks_and_keeps_them_on_sparse_frame(
+    identity, leases, clock
+) -> None:
+    match = await match_id(identity)
+    directory = MemoryPlayerDirectoryRepository()
+    await directory.save_ranking_snapshot(
+        (
+            RankingEntry(
+                player=Player(id="ply_a", name="A"),
+                tour=Tour.ATP,
+                rank=106,
+                points=583,
+                movement=RankingMovement.UNKNOWN,
+                ranking_date=NOW().date(),
+                fetched_at=NOW(),
+            ),
+        )
+    )
+    worker, store, publisher, feed, raw = make_worker(
+        identity=identity,
+        clock=clock,
+        leases=leases,
+        rest=FakeRestProvider([candidate(match), candidate(match, points=1)]),
+        directory=directory,
+    )
+    stale = candidate(match).model_copy(
+        update={
+            "match": base_match(match).model_copy(
+                update={
+                    "players": (
+                        Player(id="ply_a", name="A", ranking=741),
+                        Player(id="ply_b", name="B", ranking=999),
+                    )
+                }
+            )
+        }
+    )
+    store.current[match] = stale
+
+    await worker._rest_reconcile(match, recovery=True)
+
+    assert [player.ranking for player in store.current[match].match.players] == [
+        106,
+        None,
+    ]
+    first_published = MatchSnapshot.model_validate(publisher.events[-1]["snapshot"])
+    assert [player.ranking for player in first_published.match.players] == [106, None]
+
+    await worker._apply(match, candidate(match, points=1))
+
+    assert len(store.saved) == 2
+    assert [player.ranking for player in store.current[match].match.players] == [
+        106,
+        None,
+    ]
+    second_published = MatchSnapshot.model_validate(publisher.events[-1]["snapshot"])
+    assert [player.ranking for player in second_published.match.players] == [106, None]
     await worker.stop()
 
 

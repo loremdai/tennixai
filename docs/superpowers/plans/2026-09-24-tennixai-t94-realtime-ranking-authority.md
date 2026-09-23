@@ -59,11 +59,11 @@
 - `RealtimeWorker(..., directory=None)` accepts the existing player-directory repository as an optional dependency; absent a directory, behavior stays unchanged.
 - Before each reduction/publication, the worker obtains current ranks for the snapshot's two internal player IDs and applies the authoritative reducer mode. Missing entries explicitly clear stale ranks.
 
-- [ ] Add a worker regression that seeds `InMemorySnapshotStore.current` with a stale 741/999 snapshot, seeds `MemoryPlayerDirectoryRepository` with only player A at rank 106, reconciles an unranked API snapshot, and asserts both persisted and published snapshots contain 106/None.
-- [ ] Add a sparse subsequent live-frame assertion proving the current standings ranks remain correct and the stale values do not reappear.
-- [ ] Run the new worker test and confirm it fails before implementation.
-- [ ] Pass the already-constructed directory repository into realtime-worker construction in `main.py` and `runtime/assembly.py`; make `_apply` project the current snapshot by internal player ID and use `rankings_authoritative=True` only when that repository exists.
-- [ ] Run `uv run pytest tests/test_realtime_worker.py -q` and confirm all worker tests pass, including the pre-existing sparse metadata-preservation cases.
+- [x] Add a worker regression that seeds `InMemorySnapshotStore.current` with a stale 741/999 snapshot, seeds `MemoryPlayerDirectoryRepository` with only player A at rank 106, reconciles an unranked API snapshot, and asserts both persisted and published snapshots contain 106/None.
+- [x] Add a sparse subsequent live-frame assertion proving the current standings ranks remain correct and the stale values do not reappear.
+- [x] Run the new worker test and confirm it fails before implementation because `RealtimeWorker` has no directory dependency.
+- [x] Pass the already-constructed directory repository into realtime-worker construction in `main.py` and `runtime/assembly.py`; make `_apply` project the current snapshot by internal player ID and use `rankings_authoritative=True` only when that repository exists.
+- [x] Run `uv run pytest tests/test_realtime_worker.py -q` (`10 passed`), including the pre-existing sparse metadata-preservation cases.
 
 ### Task 3: Verify and close T94
 

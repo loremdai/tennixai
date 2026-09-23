@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 
 from app.domain import MatchSnapshot, MatchStatus, Player
 from app.identity import IdentityRepository
+from app.players.repository import PlayerDirectoryRepository
 from app.realtime.leases import ViewerLeaseStore
 from app.realtime.models import FeedDisconnected, LiveReduction
 from app.realtime.publisher import RealtimePublisher
@@ -80,6 +81,7 @@ class RealtimeWorker:
         now: Callable[[], datetime],
         max_live_subscriptions: int,
         provider_name: str = PROVIDER_NAME,
+        directory: PlayerDirectoryRepository | None = None,
         demand_source: Callable[[], Awaitable[dict[str, str]]] | None = None,
         on_snapshot: Callable[[str, MatchSnapshot], Awaitable[None]] | None = None,
         on_connection: Callable[[str, str], Awaitable[None]] | None = None,
@@ -94,6 +96,7 @@ class RealtimeWorker:
         self._now = now
         self._max = max_live_subscriptions
         self._provider_name = provider_name
+        self._directory = directory
         self._demand_source = demand_source
         self._on_snapshot = on_snapshot
         self._on_connection = on_connection
@@ -189,9 +192,35 @@ class RealtimeWorker:
                     await self._close(match_id)
                     break
 
-    async def _apply(self, match_id: str, candidate: MatchSnapshot) -> LiveReduction | None:
+    async def _apply(
+        self, match_id: str, candidate: MatchSnapshot
+    ) -> LiveReduction | None:
         previous = self._current.get(match_id)
-        reduction = reduce_live_snapshot(previous, candidate)
+        if self._directory is not None:
+            player_ids = tuple(player.id for player in candidate.match.players)
+            current_rankings = await self._directory.get_current_rankings(player_ids)
+            players = tuple(
+                player.model_copy(
+                    update={
+                        "ranking": (
+                            current_rankings[player.id].rank
+                            if player.id in current_rankings
+                            else None
+                        )
+                    }
+                )
+                for player in candidate.match.players
+            )
+            candidate = candidate.model_copy(
+                update={
+                    "match": candidate.match.model_copy(update={"players": players})
+                }
+            )
+        reduction = reduce_live_snapshot(
+            previous,
+            candidate,
+            rankings_authoritative=self._directory is not None,
+        )
         if not reduction.changed:
             return None
         await self._snapshots.save_reduction(reduction)
