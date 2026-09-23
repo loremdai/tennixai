@@ -2,13 +2,13 @@
 
 > 快速了解现在做到哪里、最近做完什么、接下来由谁接手。长期路线与阶段证据见 [ROADMAP.md](./ROADMAP.md)，产品定位和稳定架构见 [PROJECT.md](./PROJECT.md)。
 
-**最后更新：** 2026-09-24 03:30 CST
+**最后更新：** 2026-09-24 04:07 CST
 
-**当前主任务：** T94 — Keep Match Rankings Consistent in REST and Realtime Snapshots（`in_progress`）。修复 REST/实时快照仍可能保留旧球员排名的问题；不重启共享服务。
+**当前主任务：** 无。T94 已完成；P4.5 实时数据审计仍在进行，下一项尚未领取。
 
-**最近任务：** T94 — Keep Match Rankings Consistent in REST and Realtime Snapshots (`in_progress`)
+**最近任务：** T94 — Keep Match Rankings Consistent in REST and Realtime Snapshots (`done`)
 
-**执行者 / 分支：** Codex / `main`；起始提交 `2215951`；领取提交 `e85226f`；T94 实现 `bbb7d4a`、`d302316`。此前 T93 已完成并推送（实现 `a28b971`、审查修复 `fa00f46`）；T92 排名映射修复已在 `0621c18` 完成，但运行中服务尚未加载。
+**执行者 / 分支：** Codex / `main`；T94 起始提交 `2215951`；领取提交 `e85226f`；实现提交 `bbb7d4a`、`d302316`、`93e1243`。此前 T93 已完成并推送（实现 `a28b971`、审查修复 `fa00f46`）；共享运行服务未重启，因此尚未加载 T92/T94 修复。
 
 **实施计划：** [T94 实施计划](docs/superpowers/plans/2026-09-24-tennixai-t94-realtime-ranking-authority.md)。
 
@@ -19,7 +19,9 @@
 - 目标：REST 与实时发布都只以最新 standings snapshot 为排名依据；缺少当前记录时必须输出 `null`，同时继续保留稀疏 feed 中完整姓名/国家。通过单元/worker 回归证明后完成；生产构建与运行时浏览器验证需另行获准重启共享服务。
 - Task 1 已完成代码与 RED→GREEN：比赛详情中目录缺失球员曾错误回退显示供应商旧 rank `40`；现在目录已配置时缺少最新 standings 就返回 `null`。Reducer 新增显式权威模式，rank `106/null` 能替换旧 `741/999`；默认稀疏更新行为不变。验证：`tests/test_live_reducer.py tests/test_player_profile_service.py` 为 `47 passed`。
 - Task 2 已完成：`RealtimeWorker` 在每次实时更新前按内部球员 ID 投影最新 standings，排名缺失时清空旧值；`main.py` 与 runtime assembly 都传入现有目录 repo。旧快照和后续稀疏 frame 的存储/SSE 回归均通过，worker suite `10 passed`，Ruff lint 通过。
-- **状态：** 领取记录 `e85226f`、补充记录 `21fad96` 已推送；实现 `bbb7d4a`、`d302316` 已提交。下一步跑全量 deterministic backend、可用的隔离 PostgreSQL 回归与最终 diff review；运行中服务复验仍需重启授权。
+- 独立审查后补齐两个一致性边缘：REST 排名修正现在同步发布到 Redis/SSE 热快照，worker 会先基于更新后的热快照归约；目录读取临时失败会保留当前 frame 并在 1 秒后重试，不会把错误当作“排名缺失”。新增回归覆盖这两条路径。
+- **验收：** 全量后端 `1336 passed, 12 skipped, 25 deselected`（208.49 秒）；player-directory PostgreSQL `9 passed`；改动文件 Ruff 与 `git diff --check` 通过；差异无新增供应商调用、凭据、UI/schema/config 改动。实现提交 `93e1243`。
+- **范围说明：** 共享服务未重启，当前浏览器仍可能显示旧进程中的错误排名；服务重启和运行时界面复验需用户授权。排名快照单独同步时不主动 fan-out 到空闲实时订阅；下一次 REST/worker reconcile/feed event 才会看到更新。每个 feed frame 会多做目录与 Redis 热快照读取，先观察延迟/积压再决定是否优化。P4.5 其他字段审计继续，T94 不代表整个 P4.5 完成。
 
 ## 最近完成：T93
 
@@ -39,16 +41,16 @@
 
 ## 验证结果
 
-- 确定性 backend：`1237 passed`（不含 live 与 integration 测试）。
+- 最新 T94 全量确定性 backend：`1336 passed, 12 skipped, 25 deselected`；包括 PostgreSQL 集成用例。T92 历史验证为 `1237 passed`。
 - PostgreSQL：player-directory `9 passed`；runtime-catalog `13 passed`。
-- 前端：Vitest `415 passed`；`tsc --noEmit` 通过。
+- 前端最近验证：T93 Vitest `416 passed`；`tsc --noEmit` 通过。T94 无前端改动。
 - 本次改动文件 Ruff 通过；`git diff --check` 通过。全仓 Ruff 仍有 27 条旧问题，均位于本次未修改的文件。
 - 为保护运行现场，没有执行 Next production build/Playwright：本地 Next 服务正在使用共享 `.next`，且 `frontend/next-env.d.ts` 是用户未跟踪文件。
 
 ## 运行状态与交接
 
 - `.env` 未读取、改写或输出；用户原有未跟踪文件均保留。
-- 本地服务没有重启。只读 API 核验发现当前 Match API 对 Martin Damm 返回排名 `741`，排名列表 standings 快照为 `106`，而官网个人页也显示 `106`。原因是运行中的 backend 进程早于 T92 修复；T92 代码现已改为从最新 standings 快照读取排名。需要用户同意后重启本地服务，才能验证浏览器中的修复结果。
+- 本地服务没有重启。现场核验显示 Match API 对 Martin Damm 返回排名 `741`，最新 standings 与 ATP 官方排名页均为 `106`。代码中的 T92/T94 修复已完成，但浏览器仍连接旧 backend 进程；须经用户授权重启后才能确认页面实际显示修复后的排名。
 - T93 实现与审查修复提交 `a28b971`、`fa00f46` 已完成；本文件和 ROADMAP 的最终关闭记录随本次推送。
 - P4.5 其余实时字段审计仍在继续。模型晋升证据链需另行设计与授权，自动下单继续 `deferred`。
 
@@ -56,6 +58,7 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
+| 2026-09-24 | `93e1243` | 完成 T94：REST 排名权威修正同步至热快照/SSE，实时 worker 对临时目录故障保留 frame 并重试；全后端 1336 passed、12 skipped，PostgreSQL player directory 9 passed |
 | 2026-09-24 | `fa00f46` | 按独立审查补齐逐项统计时间显示及数值不变时的新观测时间更新 |
 | 2026-09-24 | `a28b971` | 完成 T93 主体：保留稀疏 WebSocket 帧遗漏的技术统计并标记过时 |
 | 2026-09-24 | `ec60ad8` | 领取 T93：修复稀疏 WebSocket 帧清空已有技术统计及统计时间戳误用 |

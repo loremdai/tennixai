@@ -76,7 +76,8 @@
 - [x] Run focused PostgreSQL ranking/realtime integration tests using verified target database `tennix` (not `tennix_live_local`): player-directory integration `9 passed`; live-reduction persistence also passed in full deterministic run.
 - [x] Run Ruff on changed Python files and `git diff --check` (both pass).
 - [x] Inspect the diff for accidental provider calls, stale-rank fallbacks, credentials, and unrelated files; preserve the shared service without restart. No provider calls, credential changes, UI/schema/config changes, or unrelated tracked files were introduced. User-owned untracked files remain untouched.
-- [ ] Update task evidence in `CURRENT.md` and `ROADMAP.md`; commit and push the implementation and control-document closure to `origin/main`.
+- [x] Update final task evidence in `CURRENT.md` and `ROADMAP.md` (2026-09-24 04:07 CST).
+- [ ] Commit and push the implementation and control-document closure to `origin/main`.
 
 ### Independent review follow-up
 
