@@ -135,6 +135,8 @@ TennisService → REST DTO / Home Chat / Match Chat
 
 前端、Chat 和比赛数据只能共享同一份球员主数据与 resolver，不能各自维护中文名或名字匹配表。解析成功后必须按内部 `player_id` 查 external ID，再调用 provider；不得让业务层按供应商字符串反查身份。
 
+当前单打世界排名、积分、变动和抓取时间统一以本地保存的最新 API-Tennis `get_standings` 快照为准；`get_players.stats` 中按赛季/单双打区分的 `rank` 不是当前世界排名。排名页、搜索候选、比赛卡和球员主页必须读取同一快照；比赛数据只能补充球员，不得覆盖较完整的规范姓名、国家或排名。供应商未提供或语义不清的值继续显示为未知，不填造默认值。
+
 ## P1 已批准方案
 
 - 前端：Next.js、TypeScript、Tailwind CSS、现有 v0 原型；原型是视觉真源。
