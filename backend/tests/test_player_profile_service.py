@@ -242,7 +242,7 @@ async def test_match_current_rank_comes_from_directory_not_provider_profile(
     match = await service.get_match("mat_rank_source")
 
     assert match.players[0].ranking == 5
-    assert match.players[1].ranking == 40
+    assert match.players[1].ranking is None
 
 
 @pytest.mark.asyncio

@@ -113,7 +113,12 @@ def _match_metadata_fingerprint(match: Match) -> tuple:
     )
 
 
-def _preserve_player_metadata(previous: Match, candidate: Match) -> Match:
+def _preserve_player_metadata(
+    previous: Match,
+    candidate: Match,
+    *,
+    rankings_authoritative: bool = False,
+) -> Match:
     """Do not erase profile fields when a live row carries only match data."""
     if tuple(player.id for player in previous.players) != tuple(
         player.id for player in candidate.players
@@ -127,7 +132,7 @@ def _preserve_player_metadata(previous: Match, candidate: Match) -> Match:
                 "country_code": incoming.country_code or stored.country_code,
                 "ranking": (
                     incoming.ranking
-                    if incoming.ranking is not None
+                    if rankings_authoritative or incoming.ranking is not None
                     else stored.ranking
                 ),
             }
@@ -245,12 +250,17 @@ def reduce_live_snapshot(
     candidate: MatchSnapshot,
     *,
     momentum_engine: RecentControlEngine | None = None,
+    rankings_authoritative: bool = False,
 ) -> LiveReduction:
     if previous is not None:
         candidate = _merge_sparse_statistics(previous, candidate)
     match = candidate.match
     if previous is not None:
-        match = _preserve_player_metadata(previous.match, match)
+        match = _preserve_player_metadata(
+            previous.match,
+            match,
+            rankings_authoritative=rankings_authoritative,
+        )
     match_id = match.id
 
     if previous is None:

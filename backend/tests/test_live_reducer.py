@@ -235,6 +235,38 @@ def test_profile_metadata_change_advances_version() -> None:
     ]
 
 
+def test_authoritative_rankings_replace_and_clear_stale_values() -> None:
+    previous_match = base_match().model_copy(
+        update={
+            "players": (
+                Player(id=PLY_A, name="Player A", ranking=741),
+                Player(id=PLY_B, name="Player B", ranking=999),
+            )
+        }
+    )
+    candidate_match = base_match().model_copy(
+        update={
+            "players": (
+                Player(id=PLY_A, name="Player A", ranking=106),
+                Player(id=PLY_B, name="Player B", ranking=None),
+            )
+        }
+    )
+    previous = supplier_snapshot(match=previous_match).model_copy(
+        update={"state_version": 4}
+    )
+    candidate = supplier_snapshot(match=candidate_match)
+
+    reduction = reduce_live_snapshot(
+        previous, candidate, rankings_authoritative=True
+    )
+
+    assert reduction.changed is True
+    assert reduction.events == (ReductionChange.PLAYER_METADATA_UPDATED,)
+    assert reduction.snapshot.state_version == 5
+    assert [player.ranking for player in reduction.snapshot.match.players] == [106, None]
+
+
 def test_match_metadata_change_advances_version_and_reports_metadata_event() -> None:
     previous = MatchSnapshot(match=base_match(), state_version=0, as_of=NOW)
     candidate = MatchSnapshot(

@@ -40,12 +40,12 @@
 - `reduce_live_snapshot(previous, candidate, *, momentum_engine=None, rankings_authoritative=False)` preserves existing defaults; when `rankings_authoritative=True`, each incoming ranking (including `None`) replaces the stored rank while other sparse player metadata retains its existing merge rules.
 - `TennisService._hydrate_matches_players` treats directory lookup as authoritative: no latest entry means no current ranking.
 
-- [ ] Update the existing `test_match_current_rank_comes_from_directory_not_provider_profile` regression: the provider returns ranks 72 and 40, only the first player exists in latest standings at rank 5, and the returned ranks must be `[5, None]` (replace its stale expectation of 40).
-- [ ] Run `uv run pytest tests/test_player_profile_service.py::test_match_current_rank_comes_from_directory_not_provider_profile -q` and confirm the absent-player assertion fails against current code.
-- [ ] Add a reducer regression with a previous snapshot ranked 741/999 and an authoritative candidate ranked 106/None; assert 106/None, a changed version, and `PLAYER_METADATA_UPDATED`.
-- [ ] Run the new reducer test and confirm it fails because the current reducer preserves the old non-null rank.
-- [ ] Implement the optional `rankings_authoritative` reducer flag without changing default sparse-frame preservation; make service ranking projection return `None` when a configured directory has no current entry, and pass the flag when persisting a normalized snapshot.
-- [ ] Run `uv run pytest tests/test_live_reducer.py tests/test_player_profile_service.py -q` and confirm both regressions pass.
+- [x] Update the existing `test_match_current_rank_comes_from_directory_not_provider_profile` regression: the provider returns ranks 72 and 40, only the first player exists in latest standings at rank 5, and the returned ranks must be `[5, None]` (replace its stale expectation of 40).
+- [x] Run `uv run pytest tests/test_player_profile_service.py::test_match_current_rank_comes_from_directory_not_provider_profile -q` and confirm the absent-player assertion fails against current code (`40` was incorrectly retained).
+- [x] Add a reducer regression with a previous snapshot ranked 741/999 and an authoritative candidate ranked 106/None; assert 106/None, a changed version, and `PLAYER_METADATA_UPDATED`.
+- [x] Run the reducer regression and confirm a non-authoritative reduction preserves stale `999`; then exercise the intended authoritative mode after implementing it.
+- [x] Implement the optional `rankings_authoritative` reducer flag without changing default sparse-frame preservation; make service ranking projection return `None` when a configured directory has no current entry, and pass the flag when persisting a normalized snapshot.
+- [x] Run `uv run pytest tests/test_live_reducer.py tests/test_player_profile_service.py -q` (`47 passed`).
 
 ### Task 2: Apply current standings to realtime worker publications
 

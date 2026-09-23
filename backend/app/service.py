@@ -962,7 +962,7 @@ class TennisService:
             for player_id, profile in zip(pending, profiles)
             if profile is not None
         }
-        if not profile_by_id and not current_rankings:
+        if not profile_by_id and not current_rankings and self._directory is None:
             return matches
 
         hydrated: list[Match] = []
@@ -998,6 +998,8 @@ class TennisService:
                         "ranking": (
                             current_rankings[player.id].rank
                             if player.id in current_rankings
+                            else None
+                            if self._directory is not None
                             else (
                                 profile_by_id[player.id].ranking
                                 if player.id in profile_by_id
@@ -1038,7 +1040,11 @@ class TennisService:
     ) -> MatchSnapshot:
         if candidate == previous or self._snapshots is None:
             return candidate
-        reduction = reduce_live_snapshot(previous, candidate)
+        reduction = reduce_live_snapshot(
+            previous,
+            candidate,
+            rankings_authoritative=self._directory is not None,
+        )
         if not reduction.changed:
             return candidate
         await self._snapshots.save_reduction(reduction)
