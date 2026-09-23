@@ -77,7 +77,7 @@
 - [x] Run Ruff on changed Python files and `git diff --check` (both pass).
 - [x] Inspect the diff for accidental provider calls, stale-rank fallbacks, credentials, and unrelated files; preserve the shared service without restart. No provider calls, credential changes, UI/schema/config changes, or unrelated tracked files were introduced. User-owned untracked files remain untouched.
 - [x] Update final task evidence in `CURRENT.md` and `ROADMAP.md` (2026-09-24 04:07 CST).
-- [ ] Commit and push the implementation and control-document closure to `origin/main`.
+- [x] Commit and push the implementation and control-document closure to `origin/main` (`93e1243`, `bb19bd9`).
 
 ### Independent review follow-up
 
