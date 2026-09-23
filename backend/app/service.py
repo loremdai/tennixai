@@ -1048,6 +1048,9 @@ class TennisService:
         if not reduction.changed:
             return candidate
         await self._snapshots.save_reduction(reduction)
+        publish_delta = getattr(self._publisher, "publish_delta", None)
+        if callable(publish_delta):
+            await publish_delta(reduction)
         return reduction.snapshot
 
     async def _refresh_missing_match_metadata(

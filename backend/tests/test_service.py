@@ -19,6 +19,9 @@ from app.domain import (
     Tournament,
 )
 from app.errors import AppError
+from app.players.models import RankingEntry, RankingMovement, Tour
+from app.players.repository import MemoryPlayerDirectoryRepository
+from app.realtime.models import ReductionChange
 from app.service import MatchTimeScope, TennisService, tonight_window
 
 UTC = timezone.utc
@@ -146,6 +149,19 @@ class MemorySnapshotStore:
         self.snapshot = reduction.snapshot
 
 
+class MemorySnapshotPublisher:
+    def __init__(self, snapshot: MatchSnapshot) -> None:
+        self.snapshot = snapshot
+        self.events = []
+
+    async def get_hot_snapshot(self, match_id: str) -> MatchSnapshot | None:
+        return self.snapshot if self.snapshot.match.id == match_id else None
+
+    async def publish_delta(self, reduction) -> None:
+        self.events.append(reduction)
+        self.snapshot = reduction.snapshot
+
+
 def build_match(
     match_id: str,
     status: MatchStatus,
@@ -180,7 +196,9 @@ def build_service(
     now: datetime = NOW_UTC,
     *,
     snapshots=None,
+    publisher=None,
     resolver=None,
+    directory=None,
 ) -> tuple[TennisService, UtcClock, NumericClock]:
     utc_clock = UtcClock(now)
     numeric_clock = NumericClock()
@@ -191,7 +209,9 @@ def build_service(
         now=utc_clock,
         timezone="Asia/Macau",
         snapshots=snapshots,
+        publisher=publisher,
         resolver=resolver,
+        directory=directory,
     )
     return service, utc_clock, numeric_clock
 
@@ -474,6 +494,49 @@ async def test_match_snapshot_refreshes_and_persists_missing_match_metadata() ->
     assert provider.calls["get_match_snapshot"] == 1
     assert len(store.saved) == 1
     assert store.saved[0].snapshot.match.surface == "hard"
+
+
+@pytest.mark.asyncio
+async def test_match_snapshot_rank_upgrade_updates_persistence_and_hot_sse_snapshot() -> None:
+    stale_players = (
+        SINNER.model_copy(update={"ranking": 741}),
+        ALCARAZ.model_copy(update={"ranking": 999}),
+    )
+    match = build_match(
+        "mat_rank_upgrade", MatchStatus.SCHEDULED, NOW_UTC, stale_players
+    ).model_copy(update={"surface": "hard", "round": "R1"})
+    stored = MatchSnapshot(match=match, state_version=0, as_of=NOW_UTC)
+    store = MemorySnapshotStore(stored)
+    publisher = MemorySnapshotPublisher(stored)
+    directory = MemoryPlayerDirectoryRepository()
+    await directory.save_ranking_snapshot(
+        (
+            RankingEntry(
+                player=SINNER,
+                tour=Tour.ATP,
+                rank=106,
+                points=583,
+                movement=RankingMovement.UNKNOWN,
+                ranking_date=NOW_UTC.date(),
+                fetched_at=NOW_UTC,
+            ),
+        )
+    )
+    service, _, _ = build_service(
+        CountingProvider(),
+        snapshots=store,
+        publisher=publisher,
+        directory=directory,
+    )
+
+    resolved = await service.resolve_match_snapshot(match.id)
+
+    assert resolved.state_version == 1
+    assert [player.ranking for player in resolved.match.players] == [106, None]
+    assert [player.ranking for player in store.snapshot.match.players] == [106, None]
+    assert publisher.snapshot == store.snapshot
+    assert len(publisher.events) == 1
+    assert publisher.events[0].events == (ReductionChange.PLAYER_METADATA_UPDATED,)
 
 
 @pytest.mark.asyncio

@@ -31,6 +31,7 @@ from app.players.models import RankingEntry, RankingMovement, Tour
 from app.players.repository import MemoryPlayerDirectoryRepository
 from app.realtime.leases import ViewerLeaseStore
 from app.realtime.publisher import RealtimePublisher
+from app.realtime.reducer import reduce_live_snapshot
 from app.realtime.worker import RealtimeWorker
 
 PROVIDER = "api_tennis"
@@ -163,6 +164,19 @@ def make_worker(
         directory=directory,
     )
     return worker, store, publisher, feed, raw
+
+
+class FlakyPlayerDirectory(MemoryPlayerDirectoryRepository):
+    def __init__(self, fail_on_calls: set[int]) -> None:
+        super().__init__()
+        self.fail_on_calls = fail_on_calls
+        self.lookup_calls = 0
+
+    async def get_current_rankings(self, player_ids: tuple[str, ...]):
+        self.lookup_calls += 1
+        if self.lookup_calls in self.fail_on_calls:
+            raise RuntimeError("directory unavailable")
+        return await super().get_current_rankings(player_ids)
 
 
 @pytest.mark.asyncio
@@ -302,6 +316,134 @@ async def test_realtime_reconcile_replaces_stale_ranks_and_keeps_them_on_sparse_
     ]
     second_published = MatchSnapshot.model_validate(publisher.events[-1]["snapshot"])
     assert [player.ranking for player in second_published.match.players] == [106, None]
+    await worker.stop()
+
+
+@pytest.mark.asyncio
+async def test_worker_rebases_on_newer_hot_snapshot_published_by_rest_read(
+    identity, leases, clock
+) -> None:
+    match = await match_id(identity)
+    directory = MemoryPlayerDirectoryRepository()
+    await directory.save_ranking_snapshot(
+        (
+            RankingEntry(
+                player=Player(id="ply_a", name="A"),
+                tour=Tour.ATP,
+                rank=106,
+                points=583,
+                movement=RankingMovement.UNKNOWN,
+                ranking_date=NOW().date(),
+                fetched_at=NOW(),
+            ),
+        )
+    )
+    worker, store, publisher, feed, raw = make_worker(
+        identity=identity,
+        clock=clock,
+        leases=leases,
+        rest=FakeRestProvider([candidate(match)]),
+        directory=directory,
+    )
+    stale = candidate(match).model_copy(
+        update={
+            "match": base_match(match).model_copy(
+                update={
+                    "players": (
+                        Player(id="ply_a", name="A", ranking=741),
+                        Player(id="ply_b", name="B", ranking=999),
+                    )
+                }
+            )
+        }
+    )
+    worker._current[match] = stale
+    store.current[match] = stale
+    corrected_candidate = stale.model_copy(
+        update={
+            "match": stale.match.model_copy(
+                update={
+                    "players": (
+                        Player(id="ply_a", name="A", ranking=106),
+                        Player(id="ply_b", name="B", ranking=None),
+                    )
+                }
+            )
+        }
+    )
+    rest_read_reduction = reduce_live_snapshot(
+        stale, corrected_candidate, rankings_authoritative=True
+    )
+    store.current[match] = rest_read_reduction.snapshot
+    await publisher.publish_delta(rest_read_reduction)
+
+    reduction = await worker._apply(match, candidate(match, points=1))
+
+    assert reduction is not None
+    assert reduction.previous_version == 1
+    assert reduction.snapshot.state_version == 2
+    assert [player.ranking for player in store.current[match].match.players] == [
+        106,
+        None,
+    ]
+    assert [event["state_version"] for event in publisher.events] == [1, 2]
+    await worker.stop()
+
+
+@pytest.mark.asyncio
+async def test_directory_read_failures_retry_without_losing_worker_or_frame(
+    identity, leases, clock
+) -> None:
+    match = await match_id(identity)
+    directory = FlakyPlayerDirectory({1, 3})
+    await directory.save_ranking_snapshot(
+        (
+            RankingEntry(
+                player=Player(id="ply_a", name="A"),
+                tour=Tour.ATP,
+                rank=106,
+                points=583,
+                movement=RankingMovement.UNKNOWN,
+                ranking_date=NOW().date(),
+                fetched_at=NOW(),
+            ),
+        )
+    )
+    worker, store, publisher, feed, raw = make_worker(
+        identity=identity,
+        clock=clock,
+        leases=leases,
+        rest=FakeRestProvider([candidate(match), candidate(match)]),
+        directory=directory,
+    )
+    await leases.acquire(match, "viewer_a")
+
+    await worker.reconcile_demand_once()
+
+    assert worker.subscription_state(match) == "closed"
+    assert store.saved == []
+    clock.advance(1)
+    await worker.reconcile_demand_once()
+    assert worker.subscription_state(match) == "live"
+    assert len(store.saved) == 1
+
+    await feed.push(EXTERNAL, snapshot_envelope(candidate(match, points=1), NOW()))
+    await worker.reconcile_demand_once()
+    assert len(store.saved) == 1
+    assert worker._subs[match].pending_envelope is not None
+
+    await worker.reconcile_demand_once()
+    assert len(store.saved) == 1
+    clock.advance(1)
+    await worker.reconcile_demand_once()
+
+    assert len(store.saved) == 2
+    assert worker._subs[match].pending_envelope is None
+    assert [event["state_version"] for event in publisher.events] == [1, 2]
+    assert [player.ranking for player in store.current[match].match.players] == [
+        106,
+        None,
+    ]
     await worker.stop()
 
 

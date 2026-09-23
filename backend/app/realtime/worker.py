@@ -20,6 +20,11 @@ from app.realtime.reducer import reduce_live_snapshot
 
 PROVIDER_NAME = "api_tennis"
 RAW_RETENTION_DAYS = 14
+RANKINGS_RETRY_SECONDS = 1.0
+
+
+class _CurrentRankingsUnavailable(Exception):
+    """The directory could not answer; this is not an empty standings result."""
 
 
 class Subscription:
@@ -29,6 +34,7 @@ class Subscription:
         self._feed = feed
         self._stream = feed.stream_match(external_id)
         self.queue: asyncio.Queue = asyncio.Queue()
+        self.pending_envelope = None
         self.state = "live"  # live | reconnecting | terminal | closed
         self.disconnect_detected = False
         self._reader: asyncio.Task | None = None
@@ -103,6 +109,7 @@ class RealtimeWorker:
         self._subs: dict[str, Subscription] = {}
         self._capacity_blocked: set[str] = set()
         self._current: dict[str, MatchSnapshot] = {}
+        self._rankings_retry_after: dict[str, datetime] = {}
         # Isolated downstream-callback failures, readable by runtime health.
         self.callback_failures: dict[str, int] = {
             "on_snapshot": 0,
@@ -143,6 +150,10 @@ class RealtimeWorker:
                 continue
             if state != "active":
                 continue
+            retry_after = self._rankings_retry_after.get(match_id)
+            if retry_after is not None and retry_after > self._now():
+                continue
+            self._rankings_retry_after.pop(match_id, None)
             if active >= self._max:
                 self._capacity_blocked.add(match_id)
                 continue
@@ -155,7 +166,12 @@ class RealtimeWorker:
             sub = Subscription(match_id, external_id, self._feed)
             self._subs[match_id] = sub
             # REST snapshot first: the stream only ever carries deltas onto it.
-            await self._rest_reconcile(match_id, recovery=False)
+            try:
+                await self._rest_reconcile(match_id, recovery=False)
+            except _CurrentRankingsUnavailable:
+                await self._close(match_id)
+                self._defer_rankings_retry(match_id)
+                continue
             await sub.start_reader()
             active += 1
 
@@ -171,18 +187,39 @@ class RealtimeWorker:
                 await self._notify_connection(match_id, "reconnecting")
                 while not sub.queue.empty():
                     sub.queue.get_nowait()
-                await self._rest_reconcile(match_id, recovery=True)
+                sub.pending_envelope = None
+                self._rankings_retry_after.pop(match_id, None)
+                try:
+                    await self._rest_reconcile(match_id, recovery=True)
+                except _CurrentRankingsUnavailable:
+                    await self._close(match_id)
+                    self._defer_rankings_retry(match_id)
+                    continue
                 await sub.restart_reader()
                 sub.state = "live"
                 await self._publisher.publish_connection(match_id, "live", self._now())
                 await self._notify_connection(match_id, "live")
                 continue
-            while not sub.queue.empty():
-                envelope = sub.queue.get_nowait()
+            while sub.pending_envelope is not None or not sub.queue.empty():
+                retry_after = self._rankings_retry_after.get(match_id)
+                if retry_after is not None and retry_after > self._now():
+                    break
+                envelope = (
+                    sub.pending_envelope
+                    if sub.pending_envelope is not None
+                    else sub.queue.get_nowait()
+                )
+                sub.pending_envelope = None
                 candidate = await self._feed.to_candidate(envelope)
                 if candidate is None:
                     continue
-                await self._apply(match_id, candidate)
+                try:
+                    await self._apply(match_id, candidate)
+                except _CurrentRankingsUnavailable:
+                    sub.pending_envelope = envelope
+                    self._defer_rankings_retry(match_id)
+                    break
+                self._rankings_retry_after.pop(match_id, None)
                 if candidate.match.status is MatchStatus.FINISHED:
                     current = self._current.get(match_id)
                     version = current.state_version if current else 0
@@ -196,9 +233,23 @@ class RealtimeWorker:
         self, match_id: str, candidate: MatchSnapshot
     ) -> LiveReduction | None:
         previous = self._current.get(match_id)
+        get_hot_snapshot = getattr(self._publisher, "get_hot_snapshot", None)
+        if previous is not None and callable(get_hot_snapshot):
+            hot_snapshot = await get_hot_snapshot(match_id)
+            if (
+                hot_snapshot is not None
+                and hot_snapshot.state_version > previous.state_version
+            ):
+                previous = hot_snapshot
+                self._current[match_id] = hot_snapshot
         if self._directory is not None:
             player_ids = tuple(player.id for player in candidate.match.players)
-            current_rankings = await self._directory.get_current_rankings(player_ids)
+            try:
+                current_rankings = await self._directory.get_current_rankings(
+                    player_ids
+                )
+            except Exception:
+                raise _CurrentRankingsUnavailable from None
             players = tuple(
                 player.model_copy(
                     update={
@@ -228,6 +279,11 @@ class RealtimeWorker:
         await self._publisher.publish_delta(reduction)
         await self._notify_snapshot(match_id, reduction.snapshot)
         return reduction
+
+    def _defer_rankings_retry(self, match_id: str) -> None:
+        self._rankings_retry_after[match_id] = self._now() + timedelta(
+            seconds=RANKINGS_RETRY_SECONDS
+        )
 
     async def _notify_snapshot(self, match_id: str, snapshot: MatchSnapshot) -> None:
         """Hand a committed snapshot downstream (P3); failures are isolated so

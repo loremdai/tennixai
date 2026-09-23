@@ -72,8 +72,16 @@
 - Modify: `ROADMAP.md`
 - No product UI, schema, or configuration files.
 
-- [ ] Run the full deterministic backend suite: `uv run pytest -m "not llm_live and not provider_live and not end_to_end_live and not integration"`.
-- [ ] Run focused PostgreSQL ranking/realtime integration tests if their configured local test database is available; do not point tests at `tennix_live_local`.
-- [ ] Run Ruff on changed Python files and `git diff --check`.
-- [ ] Inspect the diff for accidental provider calls, stale-rank fallbacks, credentials, and unrelated files; preserve the shared service without restart.
+- [x] Run the full deterministic backend suite: `uv run pytest -m "not llm_live and not provider_live and not end_to_end_live and not integration"` (`1336 passed, 12 skipped, 25 deselected`, 208.49s; final run after review fixes).
+- [x] Run focused PostgreSQL ranking/realtime integration tests using verified target database `tennix` (not `tennix_live_local`): player-directory integration `9 passed`; live-reduction persistence also passed in full deterministic run.
+- [x] Run Ruff on changed Python files and `git diff --check` (both pass).
+- [x] Inspect the diff for accidental provider calls, stale-rank fallbacks, credentials, and unrelated files; preserve the shared service without restart. No provider calls, credential changes, UI/schema/config changes, or unrelated tracked files were introduced. User-owned untracked files remain untouched.
 - [ ] Update task evidence in `CURRENT.md` and `ROADMAP.md`; commit and push the implementation and control-document closure to `origin/main`.
+
+### Independent review follow-up
+
+- Fixed: a REST rank-only correction was persisted but not published to the Redis/SSE hot snapshot. `TennisService` now publishes the reduction after persistence; the realtime worker rebases from a newer hot snapshot before applying its next frame. Regression tests prove versions advance and the corrected rank is not overwritten.
+- Fixed: a transient player-directory read failure could interrupt realtime processing and lose a dequeued frame. The worker now keeps the pending envelope and retries after a bounded one-second delay; a lookup failure is never treated as an empty standings result. The regression test covers both initial sync and a subsequent frame failure/retry.
+- Verification after these fixes: the two added regressions pass in the full suite (`1336 passed, 12 skipped, 25 deselected`); Ruff and `git diff --check` pass.
+- Deferred minor review note: each live frame currently does directory reads and checks the Redis hot snapshot. This adds work to the realtime path; monitor worker latency/backlog and optimize/coalesce only if measurements justify it.
+- Reviewer did not assess three broader questions. (1) A standings sync alone does not fan out a rank correction until a REST read, worker reconcile, or feed event; if this matters, an idle active view may retain its prior rank temporarily. (2) This task relies on the stored provider standings and existing tour selection; it does not independently prove upstream feed correctness, so a bad upstream snapshot can still be shown. (3) The shared service was intentionally not restarted; until an authorized restart, the running browser process continues serving its older code. These are explicit scope limits, not claims of runtime verification.

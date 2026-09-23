@@ -257,9 +257,7 @@ def test_authoritative_rankings_replace_and_clear_stale_values() -> None:
     )
     candidate = supplier_snapshot(match=candidate_match)
 
-    reduction = reduce_live_snapshot(
-        previous, candidate, rankings_authoritative=True
-    )
+    reduction = reduce_live_snapshot(previous, candidate, rankings_authoritative=True)
 
     assert reduction.changed is True
     assert reduction.events == (ReductionChange.PLAYER_METADATA_UPDATED,)
