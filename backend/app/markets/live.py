@@ -9,6 +9,7 @@ URLs, tokens or any credential (none exist for this read-only feed).
 import asyncio
 import contextlib
 import json
+from functools import partial
 from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime
 
@@ -47,7 +48,7 @@ class PolymarketMarketFeed:
         sleep_fn: Callable[[float], object] | None = None,
     ) -> None:
         self._ws_url = ws_url
-        self._connect = websocket_factory or websockets.connect
+        self._connect = websocket_factory or partial(websockets.connect, proxy=None)
         self._ping_interval = ping_interval_seconds
         self._now = now_fn or (lambda: datetime.now(UTC))
         self._sleep = sleep_fn or asyncio.sleep

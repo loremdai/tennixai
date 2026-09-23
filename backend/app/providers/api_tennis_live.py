@@ -9,6 +9,7 @@ mapping helpers as the REST adapter. Disconnects surface as
 from __future__ import annotations
 
 import json
+from functools import partial
 from collections.abc import AsyncIterator, Callable
 from datetime import datetime
 from urllib.parse import urlencode
@@ -43,7 +44,7 @@ class ApiTennisLiveFeedProvider:
         self._now = now
         self._base_url = base_url
         self._timezone = timezone
-        self._connect = websocket_factory or websockets.connect
+        self._connect = websocket_factory or partial(websockets.connect, proxy=None)
 
     def _build_url(self, external_match_id: str) -> str:
         params = urlencode(

@@ -102,7 +102,7 @@ def create_app(
                 )
             database = Database(settings.database_url)
             api_tennis_client = httpx.AsyncClient(
-                base_url=settings.api_tennis_base_url, timeout=15.0
+                base_url=settings.api_tennis_base_url, timeout=15.0, trust_env=False
             )
             provider_identity = PostgresIdentityRepository(database)
             directory = PostgresPlayerDirectoryRepository(database)
@@ -128,7 +128,7 @@ def create_app(
             if api_key is None:
                 raise ValueError("TENNIX_LIVETENNIS_API_KEY is required in live provider mode")
             live_client = httpx.AsyncClient(
-                base_url=settings.livetennis_base_url, timeout=10.0
+                base_url=settings.livetennis_base_url, timeout=10.0, trust_env=False
             )
             provider = LiveTennisProvider(
                 client=live_client,

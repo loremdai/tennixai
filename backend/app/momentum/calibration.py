@@ -285,7 +285,9 @@ async def _run(args: argparse.Namespace) -> None:
         api_key = settings.api_tennis_api_key
         if api_key is None:
             raise ValueError("TENNIX_API_TENNIS_API_KEY is required to calibrate from live data")
-        client = httpx.AsyncClient(base_url=settings.api_tennis_base_url, timeout=15.0)
+        client = httpx.AsyncClient(
+            base_url=settings.api_tennis_base_url, timeout=15.0, trust_env=False
+        )
         provider: TennisDataProvider = ApiTennisProvider(
             client=client,
             identities=MemoryIdentityRepository(),

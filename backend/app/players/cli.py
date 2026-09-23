@@ -31,7 +31,9 @@ async def _run_sync() -> int:
         print("directory sync unavailable: API-Tennis key not configured")
         return 2
     database = Database(settings.database_url)
-    client = httpx.AsyncClient(base_url=settings.api_tennis_base_url, timeout=20.0)
+    client = httpx.AsyncClient(
+        base_url=settings.api_tennis_base_url, timeout=20.0, trust_env=False
+    )
     try:
         provider = ApiTennisProvider(
             client=client,

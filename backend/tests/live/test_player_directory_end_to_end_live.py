@@ -76,7 +76,9 @@ async def live_directory():
 
     repository = PostgresPlayerDirectoryRepository(database)
     identities = PostgresIdentityRepository(database)
-    client = httpx.AsyncClient(base_url=settings.api_tennis_base_url, timeout=30.0)
+    client = httpx.AsyncClient(
+        base_url=settings.api_tennis_base_url, timeout=30.0, trust_env=False
+    )
     provider = ApiTennisProvider(
         client=client,
         identities=identities,

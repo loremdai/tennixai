@@ -43,7 +43,9 @@ async def test_websocket_feed_authenticates_and_delivers_a_live_envelope() -> No
     identities = MemoryIdentityRepository()
     now = lambda: datetime.now(timezone.utc)
 
-    async with httpx.AsyncClient(base_url=settings.api_tennis_base_url, timeout=20.0) as client:
+    async with httpx.AsyncClient(
+        base_url=settings.api_tennis_base_url, timeout=20.0, trust_env=False
+    ) as client:
         rest = ApiTennisProvider(
             client=client, identities=identities, api_key=api_key, now=now
         )
@@ -55,7 +57,7 @@ async def test_websocket_feed_authenticates_and_delivers_a_live_envelope() -> No
     # from an unfiltered connection.
     probe_url = f"{settings.api_tennis_ws_url}?APIkey={api_key}&timezone=GMT"
     try:
-        async with websockets.connect(probe_url) as probe:
+        async with websockets.connect(probe_url, proxy=None) as probe:
             raw = await asyncio.wait_for(probe.recv(), timeout=60)
     except asyncio.TimeoutError:
         pytest.skip("WebSocket authenticated but no batch arrived within 60s")

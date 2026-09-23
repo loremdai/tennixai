@@ -32,7 +32,7 @@ async def test_public_market_websocket_delivers_reducible_events() -> None:
     today = datetime.now(UTC).date().isoformat()
 
     async with httpx.AsyncClient(
-        base_url=settings.polymarket_gamma_base_url, timeout=30.0
+        base_url=settings.polymarket_gamma_base_url, timeout=30.0, trust_env=False
     ) as client:
         response = await client.get(
             "/events",
@@ -149,7 +149,7 @@ async def test_public_market_websocket_delivers_reducible_events() -> None:
 async def _discover_active_control_tokens(settings) -> tuple[str, ...]:
     try:
         async with httpx.AsyncClient(
-            base_url=settings.polymarket_gamma_base_url, timeout=20.0
+            base_url=settings.polymarket_gamma_base_url, timeout=20.0, trust_env=False
         ) as client:
             response = await client.get(
                 "/events",

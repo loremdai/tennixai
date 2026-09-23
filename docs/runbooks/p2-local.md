@@ -19,8 +19,7 @@ cd backend && uv run alembic upgrade head
 
 ```bash
 cd backend
-env -u NO_PROXY -u no_proxy \
-  TENNIX_PROVIDER_MODE=replay \
+TENNIX_PROVIDER_MODE=replay \
   TENNIX_LLM_MODE=fake \
   TENNIX_REPLAY_SPEED=1 \
   TENNIX_REPLAY_IDENTITY_NAMESPACE=p2-local-$(date +%s) \
@@ -37,7 +36,7 @@ TENNIX_BACKEND_URL=http://127.0.0.1:8000 pnpm dev --hostname 127.0.0.1 --port 31
 
 浏览器只访问 `http://127.0.0.1:3100`。根目录 `.env` 仍是唯一人工配置入口；不要创建 `backend/.env`、`frontend/.env` 或 `frontend/.env.local`。本地 compose Redis 配置为 16 个库（0–15），不要使用 16 及以上的数据库编号。
 
-`NO_PROXY`/`no_proxy` 若含有形如 `:1` 的坏值，会让 OpenAI/httpx 初始化失败；本地命令使用上面的 `env -u`，不要把修复后的环境值写入代码或日志。
+项目自建的 HTTP 与 WebSocket 客户端不会读取宿主的 `HTTP(S)_PROXY`、`NO_PROXY` 或 `no_proxy`；不需要也不应为了运行 TennixAI 删除这些环境变量。若未来必须通过企业代理访问上游，应单独增加显式、可测试的项目配置，而不是依赖宿主环境隐式注入。
 
 ## 2. Replay Playwright 验收
 
@@ -71,26 +70,26 @@ pnpm exec playwright test p2.visual.spec.ts --update-snapshots --workers=1
 ## 3. 确定性全量门
 
 ```bash
-cd backend && env -u NO_PROXY -u no_proxy uv run pytest -m "not api_tennis_live and not realtime_live and not llm_live and not end_to_end_live and not provider_live" -q
+cd backend && uv run pytest -m "not api_tennis_live and not realtime_live and not llm_live and not end_to_end_live and not provider_live" -q
 cd frontend && pnpm test && pnpm typecheck && pnpm build && pnpm test:e2e
 ```
 
 Replay 专项后端门：
 
 ```bash
-cd backend && env -u NO_PROXY -u no_proxy uv run pytest tests/test_replay_provider.py tests/integration/test_realtime_recovery.py tests/test_realtime_worker.py tests/test_match_stream_api.py -q
+cd backend && uv run pytest tests/test_replay_provider.py tests/integration/test_realtime_recovery.py tests/test_realtime_worker.py tests/test_match_stream_api.py -q
 ```
 
 ## 4. Opt-in 真实门
 
 ```bash
-cd backend && env -u NO_PROXY -u no_proxy TENNIX_RUN_API_TENNIS_LIVE=1 \
+cd backend && TENNIX_RUN_API_TENNIS_LIVE=1 \
   uv run pytest -m api_tennis_live tests/live/test_api_tennis_live.py -q
-cd backend && env -u NO_PROXY -u no_proxy TENNIX_RUN_API_TENNIS_LIVE=1 \
+cd backend && TENNIX_RUN_API_TENNIS_LIVE=1 \
   uv run pytest -m realtime_live tests/live/test_api_tennis_websocket_live.py -q
-cd backend && env -u NO_PROXY -u no_proxy TENNIX_RUN_LLM_LIVE=1 uv run pytest -m llm_live
-cd backend && env -u NO_PROXY -u no_proxy uv run pytest -m provider_live
-cd backend && env -u NO_PROXY -u no_proxy uv run pytest -m end_to_end_live
+cd backend && TENNIX_RUN_LLM_LIVE=1 uv run pytest -m llm_live
+cd backend && uv run pytest -m provider_live
+cd backend && uv run pytest -m end_to_end_live
 cd frontend && TENNIX_E2E_REAL_LLM=1 pnpm exec playwright test llm-live.spec.ts
 cd frontend && TENNIX_E2E_REAL_PROVIDER=1 TENNIX_E2E_REAL_LLM=1 pnpm exec playwright test end-to-end-live.spec.ts
 ```

@@ -24,6 +24,7 @@ def _build_provider() -> LiveTennisProvider:
     client = httpx.AsyncClient(
         base_url=settings.livetennis_base_url,
         timeout=10.0,
+        trust_env=False,
     )
     return LiveTennisProvider(
         client=client,

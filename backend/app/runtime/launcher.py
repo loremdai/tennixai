@@ -73,7 +73,6 @@ STATUS_SOURCE_ROWS = {
 LOG_TAIL_LINES = 400
 COMMAND_TIMEOUT_SECONDS = 600.0
 STOP_POLL_SECONDS = 0.25
-STRIPPED_PROXY_VARS = ("NO_PROXY", "no_proxy")
 
 
 @dataclass
@@ -780,11 +779,7 @@ class RuntimeLauncher:
         runtime_role: str | None,
         extra_env: dict[str, str] | None,
     ) -> dict[str, str]:
-        env = {
-            key: value
-            for key, value in os.environ.items()
-            if key not in STRIPPED_PROXY_VARS
-        }
+        env = dict(os.environ)
         if runtime_role is not None:
             env.update(child_environment(settings, role=runtime_role))
         if extra_env:
@@ -1173,7 +1168,7 @@ async def probe_persisted_health(live: LocalRuntimeSettings) -> RuntimeHealth | 
 
 async def probe_http_health(url: str) -> bool:
     try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
+        async with httpx.AsyncClient(timeout=2.0, trust_env=False) as client:
             response = await client.get(url)
             return response.status_code == 200
     except Exception:  # noqa: BLE001 - connection refused keeps the wait loop going
@@ -1209,7 +1204,9 @@ async def run_runtime_bootstrap(
         return datetime.now(UTC)
 
     database = Database(live.database_url)
-    client = httpx.AsyncClient(base_url=settings.api_tennis_base_url, timeout=15.0)
+    client = httpx.AsyncClient(
+        base_url=settings.api_tennis_base_url, timeout=15.0, trust_env=False
+    )
     try:
         identities = PostgresIdentityRepository(database)
         directory = PostgresPlayerDirectoryRepository(database)

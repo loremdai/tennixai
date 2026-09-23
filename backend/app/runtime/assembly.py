@@ -127,7 +127,9 @@ def build_local_runtime_assembly(
 
     database = Database(live.database_url)
     redis_client = aioredis.from_url(live.redis_url, decode_responses=True)
-    api_client = httpx.AsyncClient(base_url=settings.api_tennis_base_url, timeout=15.0)
+    api_client = httpx.AsyncClient(
+        base_url=settings.api_tennis_base_url, timeout=15.0, trust_env=False
+    )
     identities = PostgresIdentityRepository(database)
     directory = PostgresPlayerDirectoryRepository(database)
     provider = ApiTennisProvider(
@@ -297,7 +299,9 @@ def build_local_runtime_daemon(
     clock = now or (lambda: datetime.now(UTC))
     database = Database(live.database_url)
     redis_client = aioredis.from_url(live.redis_url, decode_responses=True)
-    api_client = httpx.AsyncClient(base_url=settings.api_tennis_base_url, timeout=15.0)
+    api_client = httpx.AsyncClient(
+        base_url=settings.api_tennis_base_url, timeout=15.0, trust_env=False
+    )
 
     identities = PostgresIdentityRepository(database)
     directory_repo = PostgresPlayerDirectoryRepository(database)

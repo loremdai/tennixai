@@ -108,10 +108,10 @@ class PolymarketProvider:
         now_fn: Callable[[], datetime] | None = None,
     ) -> None:
         self._gamma = httpx.AsyncClient(
-            base_url=gamma_base_url, transport=transport, timeout=timeout
+            base_url=gamma_base_url, transport=transport, timeout=timeout, trust_env=False
         )
         self._clob = httpx.AsyncClient(
-            base_url=clob_base_url, transport=transport, timeout=timeout
+            base_url=clob_base_url, transport=transport, timeout=timeout, trust_env=False
         )
         self._resolver = resolver
         self._registrar = registrar

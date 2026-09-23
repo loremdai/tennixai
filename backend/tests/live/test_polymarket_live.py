@@ -53,7 +53,7 @@ async def test_polymarket_public_readonly_discovery_and_metadata() -> None:
     today = datetime.now(UTC).date().isoformat()
 
     async with httpx.AsyncClient(
-        base_url=settings.polymarket_gamma_base_url, timeout=30.0
+        base_url=settings.polymarket_gamma_base_url, timeout=30.0, trust_env=False
     ) as client:
         response = await client.get(
             "/events",

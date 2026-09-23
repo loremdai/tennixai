@@ -47,6 +47,7 @@ async def test_end_to_end_live_question_returns_structured_or_honest_empty() -> 
     client = httpx.AsyncClient(
         base_url=settings.livetennis_base_url,
         timeout=10.0,
+        trust_env=False,
     )
     try:
         provider = LiveTennisProvider(

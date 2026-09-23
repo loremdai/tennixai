@@ -492,7 +492,9 @@ def test_init_bootstrap_failure_exits_nonzero_without_marker(launcher):
 def test_up_spawns_tokenized_children_in_order_and_writes_state(
     launcher, monkeypatch: pytest.MonkeyPatch
 ):
-    monkeypatch.setenv("NO_PROXY", "127.0.0.1")
+    no_proxy = "127.0.0.1,localhost,::1,127.0.0.0/8,::1/128"
+    monkeypatch.setenv("NO_PROXY", no_proxy)
+    monkeypatch.setenv("no_proxy", no_proxy)
     env_before = dict(os.environ)
 
     assert launcher.up() == 0
@@ -506,8 +508,8 @@ def test_up_spawns_tokenized_children_in_order_and_writes_state(
         assert token
         assert role in {"runtime", "api", "frontend"}
         assert "--token" in call.argv and token in call.argv
-        assert "NO_PROXY" not in call.env
-        assert "no_proxy" not in call.env
+        assert call.env["NO_PROXY"] == no_proxy
+        assert call.env["no_proxy"] == no_proxy
 
     token, role, inner = parse_child_args(runtime_call.argv[3:])
     assert role == "runtime"

@@ -12,6 +12,8 @@ import re
 from collections.abc import AsyncIterator
 from typing import Any, Protocol
 
+import httpx
+
 from app.chat.models import ModelTurn, ToolCall
 from app.errors import AppError
 
@@ -276,7 +278,12 @@ class OpenAICompatibleChatModel:
         from openai import AsyncOpenAI
 
         self._client = AsyncOpenAI(
-            api_key=api_key, base_url=base_url, timeout=timeout_seconds
+            api_key=api_key,
+            base_url=base_url,
+            timeout=timeout_seconds,
+            http_client=httpx.AsyncClient(
+                timeout=timeout_seconds, trust_env=False
+            ),
         )
         self._model = model
         self._timeout_seconds = timeout_seconds

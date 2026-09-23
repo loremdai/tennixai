@@ -115,4 +115,4 @@ TENNIX_E2E_LOCAL_RUNTIME_URL=http://127.0.0.1:3100 \
 | 数据库连不上 | 确认 compose 的 postgres 在跑且已执行过 `./scripts/tennix-live init` |
 | `up refused: LOCAL_SCHEMA_BEHIND` / `LOCAL_NOT_INITIALIZED` | 库或 launcher 状态落后于已初始化 schema：重跑 `init`（含上面的 LLM 补名，见 §1）。中断过 `init` 时状态文件可能被重置，`status` 会同时显示两者 |
 
-回放（replay）流程、专用 live 测试门与 `NO_PROXY` 注意事项见 [p2-local.md](./p2-local.md)。
+回放（replay）流程与专用 live 测试门见 [p2-local.md](./p2-local.md)。

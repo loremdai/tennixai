@@ -36,7 +36,9 @@ def _require_enabled_key() -> tuple[Settings, str]:
 async def test_api_tennis_rest_capability_and_canonical_shape() -> None:
     settings, api_key = _require_enabled_key()
 
-    client = httpx.AsyncClient(base_url=settings.api_tennis_base_url, timeout=20.0)
+    client = httpx.AsyncClient(
+        base_url=settings.api_tennis_base_url, timeout=20.0, trust_env=False
+    )
     provider = ApiTennisProvider(
         client=client,
         identities=MemoryIdentityRepository(),
@@ -95,7 +97,9 @@ async def test_api_tennis_rest_capability_and_canonical_shape() -> None:
 async def test_api_tennis_standings_authenticate_and_map_canonical_entries() -> None:
     settings, api_key = _require_enabled_key()
 
-    client = httpx.AsyncClient(base_url=settings.api_tennis_base_url, timeout=20.0)
+    client = httpx.AsyncClient(
+        base_url=settings.api_tennis_base_url, timeout=20.0, trust_env=False
+    )
     provider = ApiTennisProvider(
         client=client,
         identities=MemoryIdentityRepository(),

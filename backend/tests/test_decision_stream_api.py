@@ -71,7 +71,9 @@ async def env():
     while not server.started:
         await asyncio.sleep(0.01)
     try:
-        async with AsyncClient(base_url="http://127.0.0.1:8125") as client:
+        async with AsyncClient(
+            base_url="http://127.0.0.1:8125", trust_env=False
+        ) as client:
             yield client, app
     finally:
         server.should_exit = True

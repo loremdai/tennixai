@@ -12,6 +12,7 @@ import re
 from datetime import date
 from typing import Protocol
 
+import httpx
 from pydantic import Field, ValidationError
 
 from app.domain import FrozenModel, Gender
@@ -104,7 +105,12 @@ class OpenAICompatibleTranslator:
         from openai import AsyncOpenAI
 
         self._client = AsyncOpenAI(
-            api_key=api_key, base_url=base_url, timeout=timeout_seconds
+            api_key=api_key,
+            base_url=base_url,
+            timeout=timeout_seconds,
+            http_client=httpx.AsyncClient(
+                timeout=timeout_seconds, trust_env=False
+            ),
         )
         self._model = model
         self._timeout_seconds = timeout_seconds

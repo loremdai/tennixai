@@ -403,7 +403,9 @@ def build_verify_dependencies(settings: Any) -> VerifyDependencies:
         return datetime.now(UTC)
 
     database = Database(live.database_url)
-    api_client = httpx.AsyncClient(base_url=settings.api_tennis_base_url, timeout=15.0)
+    api_client = httpx.AsyncClient(
+        base_url=settings.api_tennis_base_url, timeout=15.0, trust_env=False
+    )
     identities = PostgresIdentityRepository(database)
     directory = PostgresPlayerDirectoryRepository(database)
     tennis = ApiTennisProvider(
