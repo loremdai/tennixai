@@ -2,20 +2,20 @@
 
 > 这是给项目参与者快速接手的状态摘要。阶段计划与长期证据见 [ROADMAP.md](./ROADMAP.md)，产品稳定约束见 [PROJECT.md](./PROJECT.md)。
 
-**最后更新：** 2026-09-23 20:23 CST
+**最后更新：** 2026-09-23 20:33 CST
 
-**当前任务：** T91 — Diagnose and Restore Polymarket Quote Refresh
+**当前任务：** 无（最近完成：T91 — Diagnose and Restore Polymarket Quote Refresh）
 
-**任务状态：** `in_progress`（实现与验收完成；最终提交、推送和状态关闭待完成）
+**任务状态：** `done`
 
-**执行者 / ADE：** Codex；**分支：** `main`
-**起始提交：** `5ee62ed`
+**执行者 / ADE：** Codex；**分支：** `main`；**起始提交：** `5ee62ed`
+**完成提交：** `784ccf8`（已推送至 `origin/main`）
 
-## 当前进展
+## 最近完成
 
 完成了 Gamma 完整目录、市场安全退役、未映射/双打真实报价展示、REST 快照轮转、独立只读行情 WebSocket、报价变化 SSE，以及 `/markets` 分页和 Load more。用户选定的边界保持：所有活跃网球胜者市场展示供应商真实名称/报价；未严格映射的场次不进入模型、机会或 Paper。机会页在模型未晋升时仍诚实为空。
 
-最终实现与验收证据见 [T91 实施计划](docs/superpowers/plans/2026-09-23-tennixai-polymarket-quote-refresh-implementation.md)。剩余工作仅为最终 diff 检查、提交并推送，再将 T91 标记为 `done`。
+完整实现与验收证据见 [T91 实施计划](docs/superpowers/plans/2026-09-23-tennixai-polymarket-quote-refresh-implementation.md)。
 
 ## 已验证结果
 
@@ -34,4 +34,10 @@
 
 ## 下一步
 
-完成 T91 提交与推送后，等待用户安排下一项工作。模型晋升证据链需要单独设计和授权；自动下单继续 `deferred`。
+等待用户安排下一项工作。模型晋升证据链需单独设计和授权；自动下单继续 `deferred`。
+
+## 最近变更
+
+| 日期 | 提交 | 事实 |
+|---|---|---|
+| 2026-09-23 | `784ccf8` | 完成并推送 T91：全目录真实报价与刷新，未映射/双打仅展示，模型与 Paper 边界保持不变 |
