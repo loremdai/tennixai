@@ -475,6 +475,24 @@ def test_empty_statistics_update_retains_last_values_as_stale() -> None:
     assert statistics_quality.status is CapabilityStatus.STALE
     assert statistics_quality.observed_at == observed_at
 
+    repeated = reduce_live_snapshot(
+        reduction.snapshot,
+        supplier_snapshot(
+            match=next_match,
+            quality=[
+                DataQuality(
+                    capability="statistics",
+                    status=CapabilityStatus.UNAVAILABLE,
+                    provider="api_tennis",
+                    reason="not_reported",
+                    observed_at=observed_at + timedelta(seconds=10),
+                )
+            ],
+            as_of=observed_at + timedelta(seconds=10),
+        ),
+    )
+    assert repeated.changed is False
+
 
 def test_sparse_statistics_update_refreshes_present_metric_only() -> None:
     previous = reduce_live_snapshot(
@@ -525,6 +543,73 @@ def test_sparse_statistics_update_refreshes_present_metric_only() -> None:
         item for item in reduction.snapshot.quality if item.capability == "statistics"
     )
     assert statistics_quality.status is CapabilityStatus.PARTIAL
+
+
+def test_unchanged_fresh_metric_advances_its_observation_time() -> None:
+    previous = reduce_live_snapshot(
+        None,
+        supplier_snapshot(
+            statistics=[
+                statistic(StatisticName.ACES, 3, 1),
+                statistic(StatisticName.DOUBLE_FAULTS, 2, 1),
+            ],
+            quality=[
+                DataQuality(
+                    capability="statistics",
+                    status=CapabilityStatus.AVAILABLE,
+                    provider="api_tennis",
+                    observed_at=NOW,
+                )
+            ],
+        ),
+    ).snapshot
+    first_observed_at = NOW + timedelta(seconds=10)
+    first_update = reduce_live_snapshot(
+        previous,
+        supplier_snapshot(
+            statistics=[
+                statistic(StatisticName.ACES, 3, 1).model_copy(
+                    update={"as_of": first_observed_at}
+                )
+            ],
+            quality=[
+                DataQuality(
+                    capability="statistics",
+                    status=CapabilityStatus.AVAILABLE,
+                    provider="api_tennis",
+                    observed_at=first_observed_at,
+                )
+            ],
+            as_of=first_observed_at,
+        ),
+    )
+    second_observed_at = NOW + timedelta(seconds=20)
+
+    refreshed = reduce_live_snapshot(
+        first_update.snapshot,
+        supplier_snapshot(
+            statistics=[
+                statistic(StatisticName.ACES, 3, 1).model_copy(
+                    update={"as_of": second_observed_at}
+                )
+            ],
+            quality=[
+                DataQuality(
+                    capability="statistics",
+                    status=CapabilityStatus.AVAILABLE,
+                    provider="api_tennis",
+                    observed_at=second_observed_at,
+                )
+            ],
+            as_of=second_observed_at,
+        ),
+    )
+
+    assert refreshed.changed is True
+    assert ReductionChange.STATISTICS_UPDATED in refreshed.events
+    by_name = {item.name: item for item in refreshed.snapshot.statistics}
+    assert by_name[StatisticName.ACES].as_of == second_observed_at
+    assert by_name[StatisticName.DOUBLE_FAULTS].availability is CapabilityStatus.STALE
 
 
 def test_terminal_status_advances_version_with_connection_updated() -> None:

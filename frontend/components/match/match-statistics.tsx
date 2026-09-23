@@ -21,6 +21,7 @@ type StatisticGroupView = {
     p2: number | null
     partial: boolean
     stale: boolean
+    asOf: string
   }>
   missing: string[]
 }
@@ -66,6 +67,7 @@ export function MatchStatisticsCard({
       p2: stat.player2_value,
       partial: stat.availability === 'partial',
       stale: stat.availability === 'stale',
+      asOf: stat.as_of,
     })
     byGroup.set(meta.group, view)
   }
@@ -105,10 +107,16 @@ export function MatchStatisticsCard({
                   <span className="text-right font-mono text-sm font-medium tabular-nums">
                     {formatStatValue(row.p1, row.unit)}
                   </span>
-                  <span className="flex items-center gap-2 text-center text-xs text-muted-foreground sm:text-sm">
-                    {formatPeriod(row.period)} · {row.label}
-                    {row.partial ? <Badge variant="outline">部分提供</Badge> : null}
-                    {row.stale ? <Badge variant="outline">数据较旧</Badge> : null}
+                  <span className="flex min-w-0 flex-col items-center gap-1 text-center text-xs text-muted-foreground sm:text-sm">
+                    <span className="flex flex-wrap items-center justify-center gap-2">
+                      {formatPeriod(row.period)} · {row.label}
+                      {row.partial ? <Badge variant="outline">部分提供</Badge> : null}
+                    </span>
+                    {row.stale ? (
+                      <span className="text-[11px] sm:text-xs">
+                        数据较旧 · {formatAsOf(row.asOf) ?? '观测时间未知'}
+                      </span>
+                    ) : null}
                   </span>
                   <span className="font-mono text-sm font-medium tabular-nums">
                     {row.p2 === null ? '官方未返回' : formatStatValue(row.p2, row.unit)}
@@ -148,7 +156,7 @@ export function MatchStatisticsCard({
 
       <p className="text-xs text-muted-foreground">
         {formattedAsOf
-          ? `统计数据截至 ${formattedAsOf}`
+          ? `最近统计观测：${formattedAsOf}；各项时间可能不同`
           : '统计时间官方未返回'}{' '}
         · 缺失能力保持缺失，不猜测
       </p>

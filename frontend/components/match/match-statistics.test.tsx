@@ -166,7 +166,7 @@ describe('MatchStatisticsCard', () => {
       />,
     )
 
-    expect(screen.getByText('数据较旧')).toBeVisible()
-    expect(screen.getByText(/统计数据截至.*19:00/)).toBeVisible()
+    expect(screen.getByText('数据较旧 · 9月9日 18:00')).toBeVisible()
+    expect(screen.getByText(/最近统计观测：.*19:00；各项时间可能不同/)).toBeVisible()
   })
 })

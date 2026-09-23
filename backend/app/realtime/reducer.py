@@ -174,6 +174,7 @@ def _statistics_fingerprint(snapshot: MatchSnapshot) -> tuple:
                 stat.player2_value,
                 stat.availability,
                 stat.unit,
+                stat.as_of,
             )
             for stat in snapshot.statistics
         )
