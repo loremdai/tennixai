@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-24 04:07 CST
+**最后更新：** 2026-09-24 04:13 CST
 
 **总体状态：** `in_progress`（P4 持续打磨；T93 的稀疏统计和 T94 的排名权威性修复均已完成。P4.5 继续审计其余实时比赛字段；T94 运行时界面复验需另行授权重启。此前用户批准的 B 边界保持：所有活跃网球胜者市场展示供应商真实名称/报价，未映射/双打不进入模型或 Paper。模型未晋升时机会页继续诚实为空；模型晋升另行排期）
 
 **当前里程碑：** P3 已关闭；P4.0–P4.4 已完成（T72–T92）；P4.5 实时比赛数据字段完整性审计进行中（T93、T94 已完成）。
 
-**当前阶段：** 当前没有已领取的主任务；T94 已关闭，P4.5 其他实时字段审计待后续领取。唯一交接见 [CURRENT.md](./CURRENT.md)。T93 — Preserve Live Statistics Across Sparse WebSocket Updates 已完成（`a28b971`+`fa00f46`）；T94 — Keep Match Rankings Consistent in REST and Realtime Snapshots 已完成（`bbb7d4a`、`d302316`、`93e1243`）：REST 与实时快照均严格使用最新 standings，缺失排名置空；REST 修正同步发布 Redis/SSE，目录暂时不可用时 worker 保留 frame 并重试。最终后端 `1336 passed, 12 skipped, 25 deselected`，PostgreSQL player-directory `9 passed`，Ruff 与 diff 检查通过。共享服务没有重启，界面尚未做运行时复验，等待用户授权；P4.5 其余字段审计继续。模型未晋升时机会页仍为空；模型晋升证据链另行排期；自动下单继续 `deferred`。
+**当前阶段：** T95 — Audit Match Data Fields End-to-End `in_progress`；唯一交接见 [CURRENT.md](./CURRENT.md)。T93 — Preserve Live Statistics Across Sparse WebSocket Updates 已完成（`a28b971`+`fa00f46`）；T94 — Keep Match Rankings Consistent in REST and Realtime Snapshots 已完成（`bbb7d4a`、`d302316`、`93e1243`）：REST 与实时快照均严格使用最新 standings，缺失排名置空；REST 修正同步发布 Redis/SSE，目录暂时不可用时 worker 保留 frame 并重试。最终后端 `1336 passed, 12 skipped, 25 deselected`，PostgreSQL player-directory `9 passed`，Ruff 与 diff 检查通过。共享服务未重启，T94 界面复验等待用户授权。T95 将逐项梳理比赛字段从官方供应商语义到页面显示的链路，修复经证据确认的问题；P4.5 不会在字段覆盖尚未核清时关闭。模型未晋升时机会页仍为空；模型晋升证据链另行排期；自动下单继续 `deferred`。
 
 ## 状态说明
 
@@ -150,7 +150,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | P4.2 — Launcher Reliability | `done` | 让根目录 `./scripts/tennix-live up` 不依赖当前 shell 解析到的 pnpm 版本 | T82 已完成（`2cea490`）：TDD 先红后绿；`up` 直接执行 `frontend/node_modules/.bin/next`，缺失时在其他子进程启动前报 `LOCAL_FRONTEND_MISSING`；真实无环境覆盖 `up` exit 0，API health 200、前端 HTTP 200，进程树无 pnpm；随后 `down` exit 0 且数据保留 |
 | P4.3 — Market Data Truthfulness & Coverage | `done` | 修复市场—比赛 read model 脱节，建立全市场可信报价覆盖与实时决策双通道，并让 Markets/Opportunities 如实表达数据与模型状态 | T83 规格经用户 2026-09-22 书面确认；T84–T89 全部 `done` 并逐项提交（2026-09-23）。交付：active-link 唯一 read truth、reversible `0006` latest-quote projection、有界 120s 批量快照覆盖车道（`POST /books`，只读、零凭据）、七个显式 quote 状态、显式 `model_availability`/真实 `decision_action`、按真实原因解释的机会空态、覆盖率健康与 runbook。模型晋升、自动下单和虚构机会均不属于本阶段，均未触碰 |
 | P4.4 — Host Environment Resilience | `done` | 消除项目 HTTP 客户端对宿主 `HTTP(S)_PROXY` / `NO_PROXY` 环境的非确定性继承，避免 IPv6 loopback 排除项导致应用与测试在导入阶段失败 | T90（`b3ef97d`）完成：所有项目自建 HTTPX 客户端显式 `trust_env=False`、WebSocket 显式 `proxy=None`；launcher 保留宿主环境但客户端不再隐式读取代理配置。回归在含 `::1` 的环境中通过，确定性后端 `1200 passed, 114 deselected`，无 API/LLM/交易调用，根 `.env` 未改 |
-| P4.5 — Live Match Data Integrity | `in_progress` | 逐项核对实时比赛数据从供应商事件、canonical reducer、API 到 UI 的字段与时间语义，修复已验证的数据丢失或误标 | T93（稀疏统计）与 T94（排名权威性）已完成；其余实时字段审计待后续领取。T94 生产重启验证仍需用户同意 |
+| P4.5 — Live Match Data Integrity | `in_progress` | 逐项核对实时比赛数据从供应商事件、canonical reducer、API 到 UI 的字段与时间语义，修复已验证的数据丢失或误标 | T93（稀疏统计）、T94（排名权威性）已完成；T95 正在建立全字段来源矩阵并逐项核验，确认 bug 必须修复后再关闭。T94 生产重启验证仍需用户同意 |
 
 > **后验核验记录（2026-09-18）：** T80 的 `110 passed / 44 skipped / 0 failed` 是当时真实通过的历史证据。控制者随后在无影响路径产品代码变更的 `2270049` 上两次复跑当前完整 Playwright，均得到 `109 passed / 44 skipped / 1 failed`；唯一失败为 mobile `prototype.visual` 的 `home-answer`，265 像素差异。该用例单独以 `--workers=1 --repeat-each=10` 则 10/10 通过，故 T81 以两条顺序 CLI lane 消除跨文件 worker 并发，而非改动视觉真相。
 
@@ -183,6 +183,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | T92 | P4.4 | Audit and Repair Player Data Field Integrity | `done` | `0621c18` | 领取 `3f7f121`（起始 `08c4c1a`）。根因：`get_players.stats[].rank` 是季节/单双打统计，不是当前单打世界排名；目录缓存又造成列表嵌套 rank、搜索和 profile 不一致，比赛写入还可覆盖规范球员字段。排名列表、搜索、profile 和比赛读模型现统一以每个 tour 的最新 standings 快照为准；运动方向由前后快照计算，供应商字段无文档语义时不直接采用；空排名同步不替换最后一次成功快照。空白赛季统计保持未知，profile 映射展示积分、tour、变动与更新时间。验证：确定性 backend `1237 passed`；PostgreSQL player directory `9 passed`、runtime catalog `13 passed`；前端 Vitest `415 passed`、TypeScript `tsc --noEmit` 通过；变更文件 Ruff 与 `git diff --check` 通过。全仓 Ruff 仍有 27 条历史问题，均在本次未改文件。生产 build/Playwright 未运行：共享 Next 服务在运行且 `frontend/next-env.d.ts` 为用户未跟踪文件；为保护现场未触碰 `.next`、未重启服务。实现细节和偏差见 T92 计划 |
 | T93 | P4.5 | Preserve Live Statistics Across Sparse WebSocket Updates | `done` | `a28b971` + `fa00f46` | 领取 `ec60ad8`（起始 `86a6812`）。按 `(name, period)` 合并：新行更新对应指标，缺失旧行保留原值/时间并标 stale；全旧时 capability=`stale`，新旧并存时=`partial`。独立审查后补齐每个旧指标自己的时间显示，并让数值未变的新观测更新时间戳且触发归约更新；重复空帧仍为 no-op。最终验证：focused reducer/provider `71 passed`；全量确定性 backend `1241 passed/127 deselected`；前端统计卡 `7 passed`、全 Vitest `416 passed`、`tsc --noEmit` 通过；Ruff lint、`git diff --check` 通过。Ruff format 对两个旧 Python 文件仍有历史 formatter 差异，仅改动区保持格式；build/Playwright 未触碰共享 `.next`，服务未重启、`.env` 未动。一个 custom-provider 缺质量元数据的边缘情况 deferred。计划与完整审查记录见 [T93](./docs/superpowers/plans/2026-09-24-tennixai-t93-live-statistics-preservation.md) |
 | T94 | P4.5 | Keep Match Rankings Consistent in REST and Realtime Snapshots | `done` | `bbb7d4a`、`d302316`、`93e1243` | 领取前现场复现：Martin Damm 比赛/资料接口 rank=741；本地 standings rank=106（`as_of=2026-09-23T13:32:20Z`），ATP 官方排名页同为 106；搜索 rank=null。REST hydration 与 reducer 现在严格服从 standings，缺失为 `null`；realtime worker 按内部 player ID 投影相同权威，旧 rank 不会在恢复或稀疏 frame 中重现。独立审查后修复 REST 排名纠正未发布热快照/SSE、目录读取失败可能丢 frame 两项：现发布热快照并 rebasing，临时目录异常保留 frame、1 秒后重试。最终全后端 `1336 passed, 12 skipped, 25 deselected`；PostgreSQL player-directory `9 passed`；改动文件 Ruff 和 `git diff --check` 通过。无 provider/API/UI/schema/config 变更，未重启共享服务；运行时浏览器验证待用户授权。领取 `e85226f`、补充 `21fad96`。计划与审查边界见 [T94](./docs/superpowers/plans/2026-09-24-tennixai-t94-realtime-ranking-authority.md) |
+| T95 | P4.5 | Audit Match Data Fields End-to-End | `in_progress` | — | 领取起点 `38723c9`。端到端核验 API-Tennis 源字段与官方语义、provider mapping、canonical reducer/存储、REST/SSE 公共 DTO 和前端视图，覆盖比赛时间/状态、赛事/轮次/场地/赛制、球员字段、比分/发球方、PBP/统计/momentum 与 freshness。先做全字段矩阵，再逐项查证并修复已确认缺陷；不重启共享服务、不触碰 `.env`。实施计划：[T95](./docs/superpowers/plans/2026-09-24-tennixai-t95-match-field-integrity-audit.md) |
 
 ## P4.1 Completion Gate 核验摘要（2026-09-18，逐条实际核验）
 

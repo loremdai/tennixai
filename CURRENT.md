@@ -2,15 +2,23 @@
 
 > 快速了解现在做到哪里、最近做完什么、接下来由谁接手。长期路线与阶段证据见 [ROADMAP.md](./ROADMAP.md)，产品定位和稳定架构见 [PROJECT.md](./PROJECT.md)。
 
-**最后更新：** 2026-09-24 04:07 CST
+**最后更新：** 2026-09-24 04:13 CST
 
-**当前主任务：** 无。T94 已完成；P4.5 实时数据审计仍在进行，下一项尚未领取。
+**当前主任务：** T95 — Audit Match Data Fields End-to-End（`in_progress`）。逐项查清比赛相关字段从 API-Tennis 到 canonical/数据库/API/SSE/页面的来源、语义、缺失与时间行为；确认的 bug 要修复并验证。保持服务不重启。
 
-**最近任务：** T94 — Keep Match Rankings Consistent in REST and Realtime Snapshots (`done`)
+**最近任务：** T95 — Audit Match Data Fields End-to-End (`in_progress`)
 
-**执行者 / 分支：** Codex / `main`；T94 起始提交 `2215951`；领取提交 `e85226f`；实现提交 `bbb7d4a`、`d302316`、`93e1243`。此前 T93 已完成并推送（实现 `a28b971`、审查修复 `fa00f46`）；共享运行服务未重启，因此尚未加载 T92/T94 修复。
+**执行者 / 分支：** Codex / `main`；T95 起始提交 `38723c9`；领取提交待记录。T94 已完成（实现 `bbb7d4a`、`d302316`、`93e1243`）；共享运行服务未重启，因此尚未加载 T92/T94 修复。
 
-**实施计划：** [T94 实施计划](docs/superpowers/plans/2026-09-24-tennixai-t94-realtime-ranking-authority.md)。
+**实施计划：** [T95 端到端字段审计计划](docs/superpowers/plans/2026-09-24-tennixai-t95-match-field-integrity-audit.md)（正在建立）。
+
+## T95 范围与交接
+
+- 目标：不预设其余字段没有问题；建立 canonical 字段清单，逐一追踪 API-Tennis 官方语义与原始值、provider mapping、reducer/持久化、REST/SSE DTO、前端显示及 `as_of`/freshness。重点覆盖比赛状态/时间、赛事与轮次、场地/赛制、球员身份/国家/排名、比分/发球方、PBP、22 项统计和 momentum。
+- 按端到端数据流分批验收，不以“测试全绿”替代真实字段覆盖；有官方文档不清楚之处先核对官方文档，有值不一致之处记录样本、预期和证据。
+- 修复范围限于已证实的 bug；不要加入轮询、供应商字段外泄、虚构值或新的架构/产品能力。
+- 保留当前运行栈及根目录 `.env`，不读取/输出凭据；不触碰 `.next` 与已知用户未跟踪文件。
+- **当前状态：** T95 刚领取；下一步建立字段来源矩阵并识别未被现有测试证明的映射，再对官方文档未覆盖项做有界核验。
 
 ## T94 调查结论与验收
 
