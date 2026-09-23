@@ -36,8 +36,14 @@ Keep the latest real match-statistics values when API-Tennis sends a live WebSoc
 
 ## Implementation result (2026-09-24)
 
-- The reducer now merges by `(name, period)`: incoming rows replace matching rows, omitted prior rows retain their values and observation times but become stale. Aggregate quality becomes `stale` when all retained rows are old and `partial` when fresh and retained rows coexist.
-- The match statistics card derives its timestamp from the newest statistic row and labels stale rows `数据较旧`; the enclosing match timestamp is no longer passed as if it were a statistics timestamp.
-- Verification: focused backend reducer/provider tests `70 passed`; focused frontend statistics tests `7 passed`; the full deterministic backend suite `1240 passed, 127 deselected`; frontend Vitest `416 passed`; TypeScript `tsc --noEmit` passed; changed-file Ruff lint and `git diff --check` passed.
+- The reducer now merges by `(name, period)`: incoming rows replace matching rows, omitted prior rows retain their values and observation times but become stale. Aggregate quality becomes `stale` when all retained rows are old and `partial` when fresh and retained rows coexist. A fresh observation advances the row timestamp and reduction even when numeric values are unchanged; repeated omitted frames remain a no-op.
+- The match statistics card derives its footer from the newest statistic row, labels stale rows with their own formatted observation time, and notes that per-row times can differ. The enclosing match timestamp is no longer passed as if it were a statistics timestamp.
+- Verification after final-review fixes: focused backend reducer/provider tests `71 passed`; focused frontend statistics tests `7 passed`; the full deterministic backend suite `1241 passed, 127 deselected`; frontend Vitest `416 passed`; TypeScript `tsc --noEmit` passed; changed-file Ruff lint and `git diff --check` passed.
 - Ruff format check still reports pre-existing formatting differences in the two touched Python files. Comparing formatter output for their pre-task `HEAD` versions shows those differences are in untouched legacy sections; no whole-file reformat was applied.
 - Production build and Playwright were not run because the shared local runtime is active and its `.next` output/user-owned `frontend/next-env.d.ts` must be preserved. Services were not restarted and root `.env` was not read or modified.
+
+### Final review record
+
+- `Final: fixed stale-row timestamp visibility` — frontend regression assertion failed before the row displayed its own `as_of`, then passed after the timestamp was rendered beside the stale label; full suite `416/416` passed.
+- `Final: fixed unchanged-value observation loss` — `test_unchanged_fresh_metric_advances_its_observation_time` failed before `as_of` participated in the reducer fingerprint, then passed after the fix; full deterministic backend suite `1241/1241` passed. The empty-frame regression also confirms repeated omissions remain a no-op.
+- `Final: minor (deferred): snapshots lacking statistics quality metadata do not synthesize an aggregate quality row, and row-level stale states are not used to derive aggregate status. The API-Tennis adapter currently emits statistics quality for every snapshot; defer general custom-provider hardening to a broader provider-contract audit.`
