@@ -2,19 +2,25 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-23 11:05 CST
+**最后更新：** 2026-09-23 13:40 CST
 
-**当前任务：** 无（当前没有 active 任务）
+**当前任务：** T91 — Diagnose and Restore Polymarket Quote Refresh
 
-**任务状态：** `idle`
+**任务状态：** `in_progress`
 
-**最近完成：** T90 — Make Project HTTP Clients Independent of Malformed Host Proxy Exclusions（Codex）
+**执行者 / ADE：** Codex
 
 **分支：** `main`
 
-**起始提交：** `78b14ab`；领取提交：`a61dcd2`；实现提交：`b3ef97d`
+**起始提交：** `5ee62ed`
 
-**完成证据：** 宿主 `NO_PROXY` / `no_proxy` 的 `::1` 触发 HTTPX 默认代理环境解析错误；不是根 `.env` API 地址问题。项目 HTTPX 客户端已显式不读取代理环境，WebSocket 显式禁用隐式代理，launcher 不再过滤环境变量。环境回归 `5 passed`；runtime launcher + 环境回归 `66 passed`；确定性后端 `1200 passed, 114 deselected`；真实配置下 `import app.main` 成功；受影响生产模块及新回归测试 Ruff 通过、diff 检查通过。未调用真实 API/LLM、未启动运行栈，根 `.env` 未修改。
+**当前动作：** API‑Tennis REST 真实认证通过。Gamma、CLOB、Polymarket market WebSocket 均被当前网络导向同一张 `rpz10-landing` 自签名证书；API‑Tennis 证书有效。当前 live-local coverage 为 `candidate=185 / attempted=0 / batch_failures=4 / stale=185`。代码另有健康状态误报：快照批次全部失败时 `market_snapshot` 仍为 `ok`。先修正失败状态报告并验证，再等待 Polymarket 域名可从此运行环境正常访问后完成真实报价恢复验收。不得信任或绕过拦截证书。
+
+## T91 已确认事实
+
+- 域名证书检查：`gamma-api.polymarket.com`、`clob.polymarket.com`、`ws-subscriptions-clob.polymarket.com` 均返回自签名 `CN=rpz10-landing`；`api.api-tennis.com` 返回有效 Let’s Encrypt 证书。
+- HTTPX 直接访问 Polymarket 因该证书链失败；开启环境代理解析则先被宿主 `NO_PROXY` 的 `::1` 配置以 `Invalid port: ':1'` 拒绝（T90 已修复应用避开隐式代理环境）。
+- 实时健康端点连续记录 market discovery `PROVIDER_UNAVAILABLE`、快照 4 个批次失败；`/markets/opportunities` 仍诚实返回 `ELIGIBLE_UNPROMOTED`。Polymarket 网络放行前无法证明真实报价能刷新。
 
 ## T89 完成证据（2026-09-23，全部实际运行）
 
@@ -42,6 +48,7 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
+| 2026-09-23 | 本更新 | 领取 T91：Codex / `main` / 起始 `5ee62ed`；已确认 Polymarket 域名 TLS 拦截与快照健康误报 |
 | 2026-09-23 | `b3ef97d` | T90 修复 HTTP/WS 客户端隐式继承宿主代理环境；确定性后端 1200 passed，根 `.env` 未改 |
 | 2026-09-23 | `a61dcd2` | 领取 T90 |
 | 2026-09-23 | `e9426d5` | runbook 明确 `init` 的中文名 LLM 补全（迁移也无法跳过）与 `LOCAL_SCHEMA_BEHIND` 排障行 |
