@@ -2,13 +2,13 @@
 
 > 快速了解现在做到哪里、最近做完什么、接下来由谁接手。长期路线与阶段证据见 [ROADMAP.md](./ROADMAP.md)，产品定位和稳定架构见 [PROJECT.md](./PROJECT.md)。
 
-**最后更新：** 2026-09-24 03:24 CST
+**最后更新：** 2026-09-24 03:30 CST
 
 **当前主任务：** T94 — Keep Match Rankings Consistent in REST and Realtime Snapshots（`in_progress`）。修复 REST/实时快照仍可能保留旧球员排名的问题；不重启共享服务。
 
 **最近任务：** T94 — Keep Match Rankings Consistent in REST and Realtime Snapshots (`in_progress`)
 
-**执行者 / 分支：** Codex / `main`；起始提交 `2215951`；领取提交 `e85226f`；T94 Task 1 实现 `bbb7d4a`。此前 T93 已完成并推送（实现 `a28b971`、审查修复 `fa00f46`）；T92 排名映射修复已在 `0621c18` 完成，但运行中服务尚未加载。
+**执行者 / 分支：** Codex / `main`；起始提交 `2215951`；领取提交 `e85226f`；T94 实现 `bbb7d4a`、`d302316`。此前 T93 已完成并推送（实现 `a28b971`、审查修复 `fa00f46`）；T92 排名映射修复已在 `0621c18` 完成，但运行中服务尚未加载。
 
 **实施计划：** [T94 实施计划](docs/superpowers/plans/2026-09-24-tennixai-t94-realtime-ranking-authority.md)。
 
@@ -18,7 +18,8 @@
 - 新发现的代码路径：`RealtimeWorker` 从 PostgreSQL 恢复旧快照；API-Tennis 新资料不含当前排名；`reduce_live_snapshot` 默认会把 incoming `None` 解释为字段缺失并保留旧非空排名，再经 Redis/SSE 发布。T92 未覆盖这条实时恢复路径。
 - 目标：REST 与实时发布都只以最新 standings snapshot 为排名依据；缺少当前记录时必须输出 `null`，同时继续保留稀疏 feed 中完整姓名/国家。通过单元/worker 回归证明后完成；生产构建与运行时浏览器验证需另行获准重启共享服务。
 - Task 1 已完成代码与 RED→GREEN：比赛详情中目录缺失球员曾错误回退显示供应商旧 rank `40`；现在目录已配置时缺少最新 standings 就返回 `null`。Reducer 新增显式权威模式，rank `106/null` 能替换旧 `741/999`；默认稀疏更新行为不变。验证：`tests/test_live_reducer.py tests/test_player_profile_service.py` 为 `47 passed`。
-- **状态：** 领取记录 `e85226f`、补充记录 `21fad96` 已推送；Task 1 实现 `bbb7d4a` 已提交。下一步完成 Task 2 worker standings 投影与测试；完整 suite 和生产运行时复验尚未完成。
+- Task 2 已完成：`RealtimeWorker` 在每次实时更新前按内部球员 ID 投影最新 standings，排名缺失时清空旧值；`main.py` 与 runtime assembly 都传入现有目录 repo。旧快照和后续稀疏 frame 的存储/SSE 回归均通过，worker suite `10 passed`，Ruff lint 通过。
+- **状态：** 领取记录 `e85226f`、补充记录 `21fad96` 已推送；实现 `bbb7d4a`、`d302316` 已提交。下一步跑全量 deterministic backend、可用的隔离 PostgreSQL 回归与最终 diff review；运行中服务复验仍需重启授权。
 
 ## 最近完成：T93
 
