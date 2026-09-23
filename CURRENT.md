@@ -2,19 +2,19 @@
 
 > 本文件只保留当前交接和最近必要记录；长期历史以 `ROADMAP.md` 与 Git 历史为准。
 
-**最后更新：** 2026-09-23 03:45 CST
+**最后更新：** 2026-09-23 04:20 CST
 
-**当前任务：** 无（P4.3「市场数据可信度与覆盖」已关闭，无 active 主任务）
+**当前任务：** T90 — Make Project HTTP Clients Independent of Malformed Host Proxy Exclusions
 
-**任务状态：** 无 active；等待用户排期下一个主任务
+**任务状态：** `in_progress`
 
-**执行者 / ADE：** Claude Code（Opus 5）— 上一任务 T89
+**执行者 / ADE：** Codex（GPT-5）
 
 **分支：** `main`
 
-**起始提交：** —
+**起始提交：** `78b14ab`
 
-**当前动作：** P4.3 的 T83–T89 已全部完成、逐项提交并推送。本机栈当前为 `down`（`./scripts/tennix-live status` → `stack: partial`，database/redis 容器 healthy 保留）；自动下单继续 `deferred`，模型晋升证据链需用户单独排期。
+**当前动作：** 以 TDD 修复宿主代理环境污染：已证实根 `.env` 的 API 基址合法；导入失败来自宿主 `NO_PROXY` / `no_proxy` 中的 IPv6 `::1` 被 HTTPX 默认环境代理解析为非法端口。先写出不依赖用户 `.env`、不发网络请求的回归证明，再让所有项目自建 outbound HTTP/LLM client 显式不继承宿主代理环境；不改根 `.env`，不启动 stack，不调用真实 API/LLM，不触及 paper-only 或自动下单边界。
 
 ## T89 完成证据（2026-09-23，全部实际运行）
 
