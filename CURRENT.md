@@ -2,13 +2,22 @@
 
 > 快速了解现在做到哪里、最近做完什么、接下来由谁接手。长期路线与阶段证据见 [ROADMAP.md](./ROADMAP.md)，产品定位和稳定架构见 [PROJECT.md](./PROJECT.md)。
 
-**最后更新：** 2026-09-24 02:40 CST
+**最后更新：** 2026-09-24 03:16 CST
 
-**当前主任务：** 无。T93 已完成（实现提交 `a28b971`、审查修复 `fa00f46`）；接下来需经用户同意重启本地服务，验证 T92 排名修复，再继续 P4.5 字段审计。
+**当前主任务：** T94 — Keep Match Rankings Consistent in REST and Realtime Snapshots（`in_progress`）。修复 REST/实时快照仍可能保留旧球员排名的问题；不重启共享服务。
 
-**最近任务：** T93 — Preserve Live Statistics Across Sparse WebSocket Updates (`done`)
+**最近任务：** T94 — Keep Match Rankings Consistent in REST and Realtime Snapshots (`in_progress`)
 
-**执行者 / 分支：** Codex / `main`；起始提交 `86a6812`；领取提交 `ec60ad8`；实现提交 `a28b971`、审查修复 `fa00f46`。此前 T92 已完成并推送（实现 `0621c18`，总控 `86a6812`）。
+**执行者 / 分支：** Codex / `main`；起始提交 `2215951`；领取提交待记录。此前 T93 已完成并推送（实现 `a28b971`、审查修复 `fa00f46`）；T92 排名映射修复已在 `0621c18` 完成，但运行中服务尚未加载。
+
+**实施计划：** [T94 实施计划](docs/superpowers/plans/2026-09-24-tennixai-t94-realtime-ranking-authority.md)。
+
+## T94 调查结论与验收
+
+- 现场复现：比赛详情/球员资料仍返回 Martin Damm `741`，排名快照为 `106`（快照时间 `2026-09-23T13:32:20Z`），ATP 官方排名页也列为 `106`；搜索结果排名为 `null`。T92 修复已提交，但共享 backend 尚未重启。
+- 新发现的代码路径：`RealtimeWorker` 从 PostgreSQL 恢复旧快照；API-Tennis 新资料不含当前排名；`reduce_live_snapshot` 默认会把 incoming `None` 解释为字段缺失并保留旧非空排名，再经 Redis/SSE 发布。T92 未覆盖这条实时恢复路径。
+- 目标：REST 与实时发布都只以最新 standings snapshot 为排名依据；缺少当前记录时必须输出 `null`，同时继续保留稀疏 feed 中完整姓名/国家。通过单元/worker 回归证明后完成；生产构建与运行时浏览器验证需另行获准重启共享服务。
+- **状态：** 领取记录尚未提交；无产品代码修改。
 
 ## 最近完成：T93
 
