@@ -49,8 +49,8 @@ export type PlayerProfilePreview = PlayerDirectoryEntry & {
 }
 
 export type SurfaceRecordPreview = {
-  won: number
-  lost: number
+  won: number | null
+  lost: number | null
 }
 
 export type PlayerSeasonSummaryPreview = {

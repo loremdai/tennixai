@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import and_, case, delete, func, not_, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,6 +38,7 @@ from app.domain import (
     Tournament,
 )
 from app.persistence.database import Database
+from app.persistence.player_directory import _latest_ranking_rows
 from app.persistence.models import (
     MatchExternalIdRow,
     MatchRow,
@@ -45,6 +46,7 @@ from app.persistence.models import (
     MatchStatisticRow,
     MomentumObservationRow,
     PlayerExternalIdRow,
+    PlayerRankingRow,
     PlayerRow,
     PointEventRevisionRow,
     PointEventRow,
@@ -67,6 +69,40 @@ def raw_retention_cutoff(now: datetime, *, retention_days: int) -> datetime:
     if retention_days < 1:
         raise ValueError("retention_days must be at least 1")
     return now - timedelta(days=retention_days)
+
+
+def _is_initial_abbreviation(value):
+    return value.op("~*")(r"(^|[[:space:]])[[:alpha:]]\.")
+
+
+def _player_conflict_updates(statement, *, observed_at: datetime | None = None) -> dict:
+    incoming_name = statement.excluded.name
+    name = case(
+        (or_(PlayerRow.name.is_(None), PlayerRow.name == ""), incoming_name),
+        (
+            and_(
+                _is_initial_abbreviation(PlayerRow.name),
+                not_(_is_initial_abbreviation(incoming_name)),
+            ),
+            incoming_name,
+        ),
+        else_=PlayerRow.name,
+    )
+    values = {
+        "name": name,
+        "localized_name": func.coalesce(
+            statement.excluded.localized_name, PlayerRow.localized_name
+        ),
+        "country_code": func.coalesce(
+            PlayerRow.country_code, statement.excluded.country_code
+        ),
+        # Current ranking is owned only by the standings snapshot.
+        "ranking": PlayerRow.ranking,
+        "updated_at": observed_at if observed_at is not None else func.now(),
+    }
+    if observed_at is not None:
+        values["last_seen_at"] = observed_at
+    return values
 
 
 class PostgresIdentityRepository:
@@ -186,6 +222,9 @@ class MatchSnapshotRepository:
             for player_id in (match_row.player1_id, match_row.player2_id):
                 if player_id is not None:
                     player_rows[player_id] = await session.get(PlayerRow, player_id)
+            current_rankings = await _latest_ranking_rows(
+                session, {player_id for player_id in player_rows if player_id}
+            )
             tournament_row = (
                 await session.get(TournamentRow, match_row.tournament_id)
                 if match_row.tournament_id is not None
@@ -235,7 +274,11 @@ class MatchSnapshotRepository:
                 name=(row.name if row and row.name else "Unknown player"),
                 localized_name=row.localized_name if row else None,
                 country_code=row.country_code if row else None,
-                ranking=row.ranking if row else None,
+                ranking=(
+                    current_rankings[player_id].rank
+                    if player_id in current_rankings
+                    else None
+                ),
             )
 
         match = Match(
@@ -352,18 +395,14 @@ class MatchSnapshotRepository:
                     player_statement = pg_insert(PlayerRow).values(
                         id=player.id,
                         name=player.name,
+                        localized_name=player.localized_name,
                         country_code=player.country_code,
-                        ranking=player.ranking,
+                        ranking=None,
                     )
                     await session.execute(
                         player_statement.on_conflict_do_update(
                             index_elements=["id"],
-                            set_={
-                                "name": player_statement.excluded.name,
-                                "country_code": player_statement.excluded.country_code,
-                                "ranking": player_statement.excluded.ranking,
-                                "updated_at": func.now(),
-                            },
+                            set_=_player_conflict_updates(player_statement),
                         )
                     )
                 tournament = match.tournament
@@ -766,20 +805,15 @@ class MatchCatalogRepository:
                 name=player.name,
                 localized_name=player.localized_name,
                 country_code=player.country_code,
-                ranking=player.ranking,
+                ranking=None,
                 last_seen_at=observed_at,
             )
             await session.execute(
                 player_statement.on_conflict_do_update(
                     index_elements=["id"],
-                    set_={
-                        "name": player_statement.excluded.name,
-                        "localized_name": player_statement.excluded.localized_name,
-                        "country_code": player_statement.excluded.country_code,
-                        "ranking": player_statement.excluded.ranking,
-                        "last_seen_at": player_statement.excluded.last_seen_at,
-                        "updated_at": observed_at,
-                    },
+                    set_=_player_conflict_updates(
+                        player_statement, observed_at=observed_at
+                    ),
                 )
             )
         tournament = match.tournament
@@ -877,6 +911,7 @@ class MatchCatalogRepository:
             row.tournament_id for row in rows if row.tournament_id is not None
         }
         player_rows: dict[str, PlayerRow] = {}
+        current_rankings = {}
         if player_ids:
             player_rows = {
                 row.id: row
@@ -886,6 +921,7 @@ class MatchCatalogRepository:
                     )
                 ).scalars()
             }
+            current_rankings = await _latest_ranking_rows(session, player_ids)
         tournament_rows: dict[str, TournamentRow] = {}
         if tournament_ids:
             tournament_rows = {
@@ -898,13 +934,17 @@ class MatchCatalogRepository:
                     )
                 ).scalars()
             }
-        return [self._to_match(row, player_rows, tournament_rows) for row in rows]
+        return [
+            self._to_match(row, player_rows, tournament_rows, current_rankings)
+            for row in rows
+        ]
 
     @staticmethod
     def _to_match(
         row: MatchRow,
         player_rows: dict[str, PlayerRow],
         tournament_rows: dict[str, TournamentRow],
+        current_rankings: dict[str, PlayerRankingRow],
     ) -> Match:
         def player_or_placeholder(player_id: str | None) -> Player:
             player_row = player_rows.get(player_id) if player_id else None
@@ -917,7 +957,11 @@ class MatchCatalogRepository:
                 ),
                 localized_name=player_row.localized_name if player_row else None,
                 country_code=player_row.country_code if player_row else None,
-                ranking=player_row.ranking if player_row else None,
+                ranking=(
+                    current_rankings[player_id].rank
+                    if player_id in current_rankings
+                    else None
+                ),
             )
 
         tournament_row = (

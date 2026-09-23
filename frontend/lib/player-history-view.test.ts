@@ -98,6 +98,11 @@ describe('seasonWinRate', () => {
   it('stays unknown for a zero-match denominator', () => {
     expect(seasonWinRate(record({ matches_won: 0, matches_lost: 0 }))).toBeNull()
   })
+
+  it('stays unknown if either win/loss count is missing', () => {
+    expect(seasonWinRate(record({ matches_won: null }))).toBeNull()
+    expect(seasonWinRate(record({ matches_lost: null }))).toBeNull()
+  })
 })
 
 describe('seasonSurfaceEntries', () => {
@@ -107,5 +112,12 @@ describe('seasonSurfaceEntries', () => {
       { label: '草地', text: '10-2' },
     ])
     expect(seasonSurfaceEntries(record({ hard: null, grass: null }))).toEqual([])
+  })
+
+  it('keeps a partial surface record without inventing the missing side', () => {
+    expect(seasonSurfaceEntries(record({ hard: { won: null, lost: 3 } }))).toContainEqual({
+      label: '硬地',
+      text: '—-3',
+    })
   })
 })

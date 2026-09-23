@@ -34,6 +34,7 @@ export function historyEmptyCopy(history: PlayerHistoryContextDto): string {
 
 /** Win rate only from supplied wins/losses; null denominator stays unknown. */
 export function seasonWinRate(record: PlayerSeasonRecordDto): string | null {
+  if (record.matches_won === null || record.matches_lost === null) return null
   const total = record.matches_won + record.matches_lost
   if (total <= 0) return null
   return `${Math.round((record.matches_won / total) * 100)}%`
@@ -43,8 +44,9 @@ export function seasonSurfaceEntries(
   record: PlayerSeasonRecordDto,
 ): Array<{ label: string; text: string }> {
   const entries: Array<{ label: string; text: string }> = []
-  if (record.hard) entries.push({ label: '硬地', text: `${record.hard.won}-${record.hard.lost}` })
-  if (record.clay) entries.push({ label: '红土', text: `${record.clay.won}-${record.clay.lost}` })
-  if (record.grass) entries.push({ label: '草地', text: `${record.grass.won}-${record.grass.lost}` })
+  const format = (value: number | null) => value === null ? '—' : String(value)
+  if (record.hard) entries.push({ label: '硬地', text: `${format(record.hard.won)}-${format(record.hard.lost)}` })
+  if (record.clay) entries.push({ label: '红土', text: `${format(record.clay.won)}-${format(record.clay.lost)}` })
+  if (record.grass) entries.push({ label: '草地', text: `${format(record.grass.won)}-${format(record.grass.lost)}` })
   return entries
 }

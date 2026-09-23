@@ -20,6 +20,19 @@ class RankingMovement(StrEnum):
     UNKNOWN = "unknown"
 
 
+def movement_from_rank_change(
+    previous_rank: int | None, current_rank: int
+) -> RankingMovement:
+    """Compare two ordinal ranks; lower numbers mean a better position."""
+    if previous_rank is None:
+        return RankingMovement.UNKNOWN
+    if current_rank < previous_rank:
+        return RankingMovement.UP
+    if current_rank > previous_rank:
+        return RankingMovement.DOWN
+    return RankingMovement.SAME
+
+
 class PlayerAliasKind(StrEnum):
     PREFERRED = "preferred"
     FULL = "full"
@@ -114,15 +127,15 @@ class ResultOutcome(StrEnum):
 
 
 class SurfaceRecord(FrozenModel):
-    won: int = Field(ge=0)
-    lost: int = Field(ge=0)
+    won: int | None = Field(default=None, ge=0)
+    lost: int | None = Field(default=None, ge=0)
 
 
 class PlayerSeasonRecord(FrozenModel):
     season: int
-    matches_won: int = Field(ge=0)
-    matches_lost: int = Field(ge=0)
-    titles: int = Field(ge=0)
+    matches_won: int | None = Field(default=None, ge=0)
+    matches_lost: int | None = Field(default=None, ge=0)
+    titles: int | None = Field(default=None, ge=0)
     hard: SurfaceRecord | None = None
     clay: SurfaceRecord | None = None
     grass: SurfaceRecord | None = None
@@ -137,6 +150,7 @@ class PlayerProfileData(FrozenModel):
 
 class PlayerProfileView(FrozenModel):
     profile: PlayerProfileData
+    ranking: RankingEntry | None = None
     selected_season: int
     season_record: PlayerSeasonRecord | None = None
     current_match: Match | None = None

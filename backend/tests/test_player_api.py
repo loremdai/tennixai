@@ -42,6 +42,16 @@ async def test_rankings_rejects_bad_tour_page_and_page_size(client: AsyncClient)
 
 
 @pytest.mark.asyncio
+async def test_rankings_accepts_the_fixed_page_size_when_explicit(client: AsyncClient) -> None:
+    response = await client.get(
+        "/api/v1/players/rankings", params={"page_size": 50}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["page_size"] == 50
+
+
+@pytest.mark.asyncio
 async def test_rankings_wta_and_country_filter(client: AsyncClient) -> None:
     wta = await client.get("/api/v1/players/rankings", params={"tour": "WTA"})
     names = [entry["player"]["name"] for entry in wta.json()["data"]["entries"]]

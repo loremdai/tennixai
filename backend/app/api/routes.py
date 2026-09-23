@@ -72,7 +72,7 @@ async def runtime_health(request: Request) -> RuntimeHealthResponse:
 async def player_rankings(
     tour: Tour = Query(default=Tour.ATP),
     page: int = Query(default=1, ge=1),
-    page_size: Literal[50] = Query(default=50),
+    page_size: int = Query(default=50, ge=50, le=50),
     country: str | None = Query(default=None),
     service: TennisService = Depends(get_service),
 ) -> RankingPageResponse:

@@ -23,13 +23,13 @@ function SeasonRecordSummary({ record }: { record: PlayerSeasonRecordDto }) {
           <div>
             <dt className="text-muted-foreground">胜场</dt>
             <dd className="mt-1 font-mono text-lg font-semibold text-primary tabular-nums">
-              {record.matches_won}
+              {record.matches_won ?? '暂无'}
             </dd>
           </div>
           <div>
             <dt className="text-muted-foreground">负场</dt>
             <dd className="mt-1 font-mono text-lg font-semibold tabular-nums">
-              {record.matches_lost}
+              {record.matches_lost ?? '暂无'}
             </dd>
           </div>
           <div>
@@ -40,7 +40,7 @@ function SeasonRecordSummary({ record }: { record: PlayerSeasonRecordDto }) {
           </div>
           <div>
             <dt className="text-muted-foreground">冠军</dt>
-            <dd className="mt-1 font-mono text-lg font-semibold tabular-nums">{record.titles}</dd>
+          <dd className="mt-1 font-mono text-lg font-semibold tabular-nums">{record.titles ?? '暂无'}</dd>
           </div>
         </dl>
         {surfaces.length > 0 ? (

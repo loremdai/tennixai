@@ -7,7 +7,7 @@ all-or-nothing localized-name batches. Vendor payloads never land here.
 
 from datetime import date
 
-from sqlalchemy import case, delete, func, select, update
+from sqlalchemy import and_, case, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +26,7 @@ from app.players.models import (
     RankingEntry,
     RankingMovement,
     Tour,
+    movement_from_rank_change,
 )
 from app.players.repository import ALIAS_KIND_PRIORITY
 
@@ -57,6 +58,49 @@ def _ranking_entry(row: PlayerRankingRow, player: Player) -> RankingEntry:
     )
 
 
+async def _latest_ranking_rows(
+    session: AsyncSession, player_ids: set[str]
+) -> dict[str, PlayerRankingRow]:
+    """Return entries from each tour's latest snapshot, never old cached ranks."""
+    if not player_ids:
+        return {}
+    latest_by_tour = (
+        select(
+            PlayerRankingRow.tour.label("tour"),
+            func.max(PlayerRankingRow.ranking_date).label("ranking_date"),
+        )
+        .group_by(PlayerRankingRow.tour)
+        .subquery()
+    )
+    rows = (
+        await session.execute(
+            select(PlayerRankingRow)
+            .join(
+                latest_by_tour,
+                and_(
+                    PlayerRankingRow.tour == latest_by_tour.c.tour,
+                    PlayerRankingRow.ranking_date == latest_by_tour.c.ranking_date,
+                ),
+            )
+            .where(PlayerRankingRow.player_id.in_(player_ids))
+        )
+    ).scalars().all()
+    latest: dict[str, PlayerRankingRow] = {}
+    for row in rows:
+        previous = latest.get(row.player_id)
+        if previous is None or (
+            row.ranking_date,
+            row.fetched_at,
+            row.tour,
+        ) > (
+            previous.ranking_date,
+            previous.fetched_at,
+            previous.tour,
+        ):
+            latest[row.player_id] = row
+    return latest
+
+
 class PostgresPlayerDirectoryRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
@@ -64,6 +108,77 @@ class PostgresPlayerDirectoryRepository:
     async def save_ranking_snapshot(self, entries: tuple[RankingEntry, ...]) -> None:
         async with self._database.session() as session:
             async with session.begin():
+                previous_ids_by_tour: dict[str, set[str]] = {}
+                incoming_by_tour: dict[str, list[RankingEntry]] = {}
+                snapshots: dict[tuple[str, date], list[RankingEntry]] = {}
+                for entry in entries:
+                    incoming_by_tour.setdefault(entry.tour.value, []).append(entry)
+                    snapshots.setdefault(
+                        (entry.tour.value, entry.ranking_date), []
+                    ).append(entry)
+                previous_ranks_by_snapshot: dict[
+                    tuple[str, date], dict[str, int]
+                ] = {}
+                for (tour_value, ranking_date), _ in snapshots.items():
+                    previous_date = (
+                        await session.execute(
+                            select(func.max(PlayerRankingRow.ranking_date)).where(
+                                PlayerRankingRow.tour == tour_value,
+                                PlayerRankingRow.ranking_date < ranking_date,
+                            )
+                        )
+                    ).scalar()
+                    previous_rows = (
+                        (
+                            await session.execute(
+                                select(
+                                    PlayerRankingRow.player_id,
+                                    PlayerRankingRow.rank,
+                                ).where(
+                                    PlayerRankingRow.tour == tour_value,
+                                    PlayerRankingRow.ranking_date == previous_date,
+                                )
+                            )
+                        ).all()
+                        if previous_date is not None
+                        else ()
+                    )
+                    previous_ranks_by_snapshot[(tour_value, ranking_date)] = dict(
+                        previous_rows
+                    )
+                entries = tuple(
+                    entry.model_copy(
+                        update={
+                            "movement": movement_from_rank_change(
+                                previous_ranks_by_snapshot[
+                                    (entry.tour.value, entry.ranking_date)
+                                ].get(entry.player.id),
+                                entry.rank,
+                            )
+                        }
+                    )
+                    for entry in entries
+                )
+                for tour_value, tour_entries in incoming_by_tour.items():
+                    previous_date = (
+                        await session.execute(
+                            select(func.max(PlayerRankingRow.ranking_date)).where(
+                                PlayerRankingRow.tour == tour_value
+                            )
+                        )
+                    ).scalar()
+                    next_date = max(item.ranking_date for item in tour_entries)
+                    if previous_date is not None and next_date >= previous_date:
+                        previous_ids_by_tour[tour_value] = set(
+                            (
+                                await session.execute(
+                                    select(PlayerRankingRow.player_id).where(
+                                        PlayerRankingRow.tour == tour_value,
+                                        PlayerRankingRow.ranking_date == previous_date,
+                                    )
+                                )
+                            ).scalars().all()
+                        )
                 for entry in entries:
                     values = {
                         "id": entry.player.id,
@@ -96,6 +211,23 @@ class PostgresPlayerDirectoryRepository:
                             PlayerRankingRow.ranking_date == ranking_date,
                         )
                     )
+                for tour_value, previous_ids in previous_ids_by_tour.items():
+                    latest_date = max(
+                        item.ranking_date
+                        for item in incoming_by_tour[tour_value]
+                    )
+                    current_ids = {
+                        item.player.id
+                        for item in incoming_by_tour[tour_value]
+                        if item.ranking_date == latest_date
+                    }
+                    stale_ids = previous_ids - current_ids
+                    if stale_ids:
+                        await session.execute(
+                            update(PlayerRow)
+                            .where(PlayerRow.id.in_(stale_ids))
+                            .values(ranking=None)
+                        )
                 # Supplier standings can report tied ranks; the snapshot keeps
                 # one row per rank (first player in (rank, id) order) while
                 # every tied player remains in the directory via the upserts.
@@ -186,7 +318,52 @@ class PostgresPlayerDirectoryRepository:
     async def get_player(self, player_id: str) -> DirectoryPlayer | None:
         async with self._database.session() as session:
             row = await session.get(PlayerRow, player_id)
-        return _directory_player(row) if row else None
+            current = await _latest_ranking_rows(session, {player_id})
+        if row is None:
+            return None
+        player = _directory_player(row)
+        latest = current.get(player_id)
+        return player.model_copy(
+            update={
+                "player": player.player.model_copy(
+                    update={"ranking": latest.rank if latest else None}
+                )
+            }
+        )
+
+    async def get_current_ranking(self, player_id: str) -> RankingEntry | None:
+        return (await self.get_current_rankings((player_id,))).get(player_id)
+
+    async def get_current_rankings(
+        self, player_ids: tuple[str, ...]
+    ) -> dict[str, RankingEntry]:
+        requested = set(player_ids)
+        if not requested:
+            return {}
+        async with self._database.session() as session:
+            player_rows = {
+                row.id: row
+                for row in (
+                    await session.execute(
+                        select(PlayerRow).where(PlayerRow.id.in_(requested))
+                    )
+                ).scalars()
+            }
+            latest = await _latest_ranking_rows(session, requested)
+        results: dict[str, RankingEntry] = {}
+        for player_id, rank_row in latest.items():
+            player_row = player_rows.get(player_id)
+            if player_row is None:
+                continue
+            player = Player(
+                id=player_row.id,
+                name=player_row.name or "Unknown player",
+                localized_name=player_row.localized_name,
+                country_code=player_row.country_code,
+                ranking=rank_row.rank,
+            )
+            results[player_id] = _ranking_entry(rank_row, player)
+        return results
 
     async def get_rankings(
         self,
@@ -239,7 +416,7 @@ class PostgresPlayerDirectoryRepository:
                     name=player_row.name or "Unknown player",
                     localized_name=player_row.localized_name,
                     country_code=player_row.country_code,
-                    ranking=player_row.ranking,
+                    ranking=ranking_row.rank,
                 ),
             )
             for ranking_row, player_row in rows
@@ -259,31 +436,50 @@ class PostgresPlayerDirectoryRepository:
                     )
                     .order_by(
                         priority_case,
-                        PlayerRow.ranking.is_(None),
-                        PlayerRow.ranking.asc(),
                         PlayerRow.id,
                     )
-                    .limit(limit)
                 )
             ).all()
-        return tuple(
-            AliasMatch(
-                player=_directory_player(player_row),
-                alias=PlayerAlias(
-                    player_id=alias_row.player_id,
-                    locale=alias_row.locale,
-                    alias=alias_row.alias,
-                    normalized_alias=alias_row.normalized_alias,
-                    kind=PlayerAliasKind(alias_row.kind),
-                    source=PlayerAliasSource(alias_row.source),
-                    source_ref=alias_row.source_ref,
-                    model=alias_row.model,
-                    prompt_version=alias_row.prompt_version,
-                ),
-                current_rank=player_row.ranking,
+            current = await _latest_ranking_rows(
+                session, {player_row.id for _, player_row in rows}
             )
-            for alias_row, player_row in rows
+        matches: list[AliasMatch] = []
+        for alias_row, player_row in rows:
+            latest = current.get(player_row.id)
+            directory_player = _directory_player(player_row)
+            directory_player = directory_player.model_copy(
+                update={
+                    "player": directory_player.player.model_copy(
+                        update={"ranking": latest.rank if latest else None}
+                    )
+                }
+            )
+            matches.append(
+                AliasMatch(
+                    player=directory_player,
+                    alias=PlayerAlias(
+                        player_id=alias_row.player_id,
+                        locale=alias_row.locale,
+                        alias=alias_row.alias,
+                        normalized_alias=alias_row.normalized_alias,
+                        kind=PlayerAliasKind(alias_row.kind),
+                        source=PlayerAliasSource(alias_row.source),
+                        source_ref=alias_row.source_ref,
+                        model=alias_row.model,
+                        prompt_version=alias_row.prompt_version,
+                    ),
+                    current_rank=latest.rank if latest else None,
+                )
+            )
+        matches.sort(
+            key=lambda match: (
+                ALIAS_KIND_PRIORITY[match.alias.kind.value],
+                match.current_rank is None,
+                match.current_rank if match.current_rank is not None else 0,
+                match.player.player.id,
+            )
         )
+        return tuple(matches[:limit])
 
     async def list_players_missing_localized_name(
         self, *, limit: int

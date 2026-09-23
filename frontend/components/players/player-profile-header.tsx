@@ -81,12 +81,12 @@ export function PlayerProfileHeader({ profile }: { profile: PlayerProfilePreview
             <p className="mt-2 font-mono text-2xl font-semibold tabular-nums">{profile.points?.toLocaleString('en-US') ?? '暂无'}</p>
           </div>
           <div className="rounded-xl bg-muted/55 p-4">
-            <p className="text-xs text-muted-foreground">本周变动</p>
+            <p className="text-xs text-muted-foreground">较上次快照</p>
             <div className="mt-2 min-h-8"><MovementValue movement={profile.movement} unavailable={profile.rank === null} /></div>
           </div>
         </div>
 
-        <p className="font-mono text-xs text-muted-foreground">排名快照：{profile.rankUpdatedAt ?? '暂无'}</p>
+        <p className="font-mono text-xs text-muted-foreground">数据更新时间：{profile.rankUpdatedAt ?? '暂无'}</p>
       </CardContent>
     </Card>
   )

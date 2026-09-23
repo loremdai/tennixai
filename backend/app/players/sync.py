@@ -68,6 +68,11 @@ class PlayerDirectorySync:
                 # with an empty one and never prune after a partial sync.
                 failed += 1
                 continue
+            if not entries:
+                # ATP/WTA standings cannot be treated as a successful empty
+                # refresh: doing so would leave stale rows looking current.
+                failed += 1
+                continue
             for entry in entries:
                 existing = await self._repository.get_player(entry.player.id)
                 if existing is None:

@@ -27,17 +27,22 @@ from app.domain import (
     Discipline,
     Gender,
     Match,
+    MatchSnapshot,
     MatchStatus,
     Player,
     Tournament,
 )
 from app.persistence.database import Database
 from app.persistence.models import MarketRow, MatchRow, PlayerRow, RawProviderEventRow
+from app.persistence.player_directory import PostgresPlayerDirectoryRepository
 from app.persistence.repositories import (
     CATALOG_FRESHNESS_PROVIDER,
     MatchCatalogRepository,
+    MatchSnapshotRepository,
     RuntimeStateRepository,
 )
+from app.realtime.reducer import reduce_live_snapshot
+from app.players.models import LocalizedNameUpdate, RankingEntry, RankingMovement, Tour
 from app.runtime.models import (
     RuntimeHealth,
     RuntimeInitRecord,
@@ -175,6 +180,17 @@ def upcoming_match() -> Match:
     )
 
 
+def _without_standings_ranks(match: Match) -> Match:
+    return match.model_copy(
+        update={
+            "players": tuple(
+                player.model_copy(update={"ranking": None})
+                for player in match.players
+            )
+        }
+    )
+
+
 def _health(generated_at: datetime = NOW) -> RuntimeHealth:
     return RuntimeHealth(
         generated_at=generated_at,
@@ -194,15 +210,16 @@ async def test_catalog_round_trips_scheduled_match_without_live_snapshot(
     catalog = MatchCatalogRepository(database)
     inserted = await catalog.upsert_matches([upcoming_match], observed_at=NOW)
     assert inserted == {upcoming_match.players[0].id, upcoming_match.players[1].id}
+    expected = _without_standings_ranks(upcoming_match)
     # The scratch database persists across tests within a session, so the
-    # round-trip is scoped to this match's player; the assertion is the
-    # brief's exact-equality contract.
+    # round-trip is scoped to this match's player. Match-feed ranks are not a
+    # substitute for the authoritative standings snapshot.
     listed = await catalog.list_matches(
         MatchStatus.SCHEDULED, player_id=upcoming_match.players[0].id
     )
-    assert listed == [upcoming_match]
+    assert listed == [expected]
     assert listed[0].live_state is None
-    assert await catalog.get_match(upcoming_match.id) == upcoming_match
+    assert await catalog.get_match(upcoming_match.id) == expected
 
 
 async def test_live_match_round_trips_with_internal_ids_only(
@@ -214,14 +231,15 @@ async def test_live_match_round_trips_with_internal_ids_only(
     )
     await catalog.upsert_matches([live], observed_at=NOW)
 
+    expected = _without_standings_ranks(live)
     stored = await catalog.get_match(live.id)
-    assert stored == live
+    assert stored == expected
     assert stored is not None and stored.live_state is None
     assert stored.id.startswith("mat_")
     assert all(player.id.startswith("ply_") for player in stored.players)
     assert stored.tournament.id.startswith("trn_")
     listed = await catalog.list_matches(MatchStatus.LIVE, player_id=live.players[1].id)
-    assert listed == [live]
+    assert listed == [expected]
 
 
 async def test_reupsert_reports_no_new_players(
@@ -268,6 +286,138 @@ async def test_partial_reupsert_preserves_populated_catalog_fields(
     assert stored.surface == "hard"
     assert stored.indoor is False
     assert stored.format == "best_of_3"
+
+
+async def test_abbreviated_match_feed_does_not_overwrite_canonical_player_facts(
+    database: Database,
+) -> None:
+    catalog = MatchCatalogRepository(database)
+    directory = PostgresPlayerDirectoryRepository(database)
+    full = _make_match(
+        status=MatchStatus.SCHEDULED, scheduled_at=NOW + timedelta(hours=3)
+    )
+    original = full.players[0]
+    canonical = original.model_copy(
+        update={
+            "name": "Alycia Parks",
+            "localized_name": "阿莉希娅·帕克斯",
+            "country_code": "usa",
+            "ranking": 70,
+        }
+    )
+    await catalog.upsert_matches([full], observed_at=NOW)
+    await directory.save_ranking_snapshot(
+        (
+            RankingEntry(
+                player=canonical,
+                tour=Tour.WTA,
+                rank=70,
+                points=957,
+                movement=RankingMovement.DOWN,
+                ranking_date=NOW.date(),
+                fetched_at=NOW,
+            ),
+        )
+    )
+    await directory.save_localized_names(
+        (
+            LocalizedNameUpdate(
+                player_id=original.id, localized_name="阿莉希娅·帕克斯"
+            ),
+        )
+    )
+
+    abbreviated = full.model_copy(
+        update={
+            "players": (
+                original.model_copy(
+                    update={
+                        "name": "A. Parks",
+                        "localized_name": None,
+                        "country_code": None,
+                        "ranking": None,
+                    }
+                ),
+                full.players[1],
+            )
+        }
+    )
+    await catalog.upsert_matches(
+        [abbreviated], observed_at=NOW + timedelta(minutes=2)
+    )
+
+    stored = await catalog.get_match(full.id)
+
+    assert stored is not None
+    assert stored.players[0].name == "Alycia Parks"
+    assert stored.players[0].localized_name == "阿莉希娅·帕克斯"
+    assert stored.players[0].country_code == "usa"
+    assert stored.players[0].ranking == 70
+
+
+async def test_live_snapshot_write_keeps_standings_owned_player_facts(
+    database: Database,
+) -> None:
+    directory = PostgresPlayerDirectoryRepository(database)
+    full = _make_match(
+        status=MatchStatus.LIVE, scheduled_at=NOW + timedelta(hours=3)
+    )
+    canonical = full.players[0].model_copy(
+        update={
+            "name": "Alycia Parks",
+            "localized_name": "阿莉希娅·帕克斯",
+            "country_code": "usa",
+            "ranking": 70,
+        }
+    )
+    await directory.save_ranking_snapshot(
+        (
+            RankingEntry(
+                player=canonical,
+                tour=Tour.WTA,
+                rank=70,
+                points=957,
+                movement=RankingMovement.DOWN,
+                ranking_date=NOW.date(),
+                fetched_at=NOW,
+            ),
+        )
+    )
+    await directory.save_localized_names(
+        (
+            LocalizedNameUpdate(
+                player_id=full.players[0].id,
+                localized_name="阿莉希娅·帕克斯",
+            ),
+        )
+    )
+    abbreviated = full.model_copy(
+        update={
+            "players": (
+                full.players[0].model_copy(
+                    update={
+                        "name": "A. Parks",
+                        "localized_name": None,
+                        "country_code": None,
+                        "ranking": None,
+                    }
+                ),
+                full.players[1],
+            )
+        }
+    )
+    candidate = MatchSnapshot(match=abbreviated, state_version=0, as_of=NOW)
+    reduction = reduce_live_snapshot(None, candidate)
+    snapshots = MatchSnapshotRepository(database)
+
+    await snapshots.save_reduction(reduction)
+    stored = await snapshots.load_snapshot(full.id)
+
+    assert stored is not None
+    assert stored.match.players[0].name == "Alycia Parks"
+    assert stored.match.players[0].localized_name == "阿莉希娅·帕克斯"
+    assert stored.match.players[0].country_code == "usa"
+    assert stored.match.players[0].ranking == 70
 
 
 async def test_none_fields_still_update_when_values_arrive(

@@ -13,7 +13,9 @@ function valueOrUnavailable(value: number | null, suffix = '') {
 }
 
 function recordOrUnavailable(record: SurfaceRecordPreview | null) {
-  return record === null ? '暂无' : `${record.won}–${record.lost}`
+  return record === null
+    ? '暂无'
+    : `${valueOrUnavailable(record.won)}–${valueOrUnavailable(record.lost)}`
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
@@ -26,7 +28,18 @@ function Metric({ label, value }: { label: string; value: string }) {
 }
 
 export function PlayerSeasonSummary({ summary }: { summary: PlayerSeasonSummaryPreview }) {
-  const hasData = summary.matches !== null
+  const hasData = [
+    summary.matches,
+    summary.wins,
+    summary.losses,
+    summary.titles,
+    summary.hard?.won,
+    summary.hard?.lost,
+    summary.clay?.won,
+    summary.clay?.lost,
+    summary.grass?.won,
+    summary.grass?.lost,
+  ].some((value) => value !== null && value !== undefined)
   return (
     <Card aria-labelledby="season-summary-title">
       <CardHeader>

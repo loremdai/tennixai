@@ -117,6 +117,28 @@ async def test_tour_failure_keeps_previous_snapshot_and_skips_prune() -> None:
     assert first.failed == 0
     assert repository.prune_calls == 1
 
+
+@pytest.mark.asyncio
+async def test_empty_standings_response_is_not_fresh_success() -> None:
+    repository = SpyRepository()
+    first = PlayerDirectorySync(
+        StubCatalog(atp=ATP, wta=WTA), repository, now=lambda: NOW
+    )
+    await first.sync_rankings()
+
+    empty = PlayerDirectorySync(
+        StubCatalog(atp=(), wta=()), repository, now=lambda: NOW
+    )
+    report = await empty.sync_rankings()
+
+    assert report.failed == 2
+    assert repository.prune_calls == 1
+    latest, total = await repository.get_rankings(
+        Tour.WTA, page=1, page_size=50, country_code=None
+    )
+    assert total == 1
+    assert latest[0].player.id == "ply_zheng"
+
     failing = PlayerDirectorySync(
         StubCatalog(atp=ATP, wta_error=AppError("provider_unavailable", "boom", 503)),
         repository,

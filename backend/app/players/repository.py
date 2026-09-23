@@ -18,6 +18,7 @@ from app.players.models import (
     RANKINGS_TOP_RANK,
     RankingEntry,
     Tour,
+    movement_from_rank_change,
 )
 
 # Resolver-friendly ordering: identity-grade aliases first, loose surnames last.
@@ -43,6 +44,14 @@ class PlayerDirectoryRepository(Protocol):
         raise NotImplementedError
 
     async def get_player(self, player_id: str) -> DirectoryPlayer | None:
+        raise NotImplementedError
+
+    async def get_current_ranking(self, player_id: str) -> RankingEntry | None:
+        raise NotImplementedError
+
+    async def get_current_rankings(
+        self, player_ids: tuple[str, ...]
+    ) -> dict[str, RankingEntry]:
         raise NotImplementedError
 
     async def get_rankings(
@@ -91,6 +100,7 @@ class MemoryPlayerDirectoryRepository:
         self._rankings: list[RankingEntry] = []
 
     async def save_ranking_snapshot(self, entries: tuple[RankingEntry, ...]) -> None:
+        entries = self._derive_snapshot_movement(entries)
         for entry in entries:
             existing = self._players.get(entry.player.id)
             localized = existing.player.localized_name if existing else None
@@ -121,6 +131,39 @@ class MemoryPlayerDirectoryRepository:
         for entry in sorted(entries, key=lambda item: (item.rank, item.player.id)):
             unique.setdefault((entry.tour, entry.ranking_date, entry.rank), entry)
         self._rankings.extend(unique.values())
+
+    def _derive_snapshot_movement(
+        self, entries: tuple[RankingEntry, ...]
+    ) -> tuple[RankingEntry, ...]:
+        groups: dict[tuple[Tour, date], list[RankingEntry]] = {}
+        for entry in entries:
+            groups.setdefault((entry.tour, entry.ranking_date), []).append(entry)
+        derived: list[RankingEntry] = []
+        for (tour, ranking_date), group in groups.items():
+            previous_rows = [
+                row
+                for row in self._rankings
+                if row.tour is tour and row.ranking_date < ranking_date
+            ]
+            previous_date = max(
+                (row.ranking_date for row in previous_rows), default=None
+            )
+            previous_ranks = {
+                row.player.id: row.rank
+                for row in previous_rows
+                if row.ranking_date == previous_date
+            }
+            derived.extend(
+                entry.model_copy(
+                    update={
+                        "movement": movement_from_rank_change(
+                            previous_ranks.get(entry.player.id), entry.rank
+                        )
+                    }
+                )
+                for entry in group
+            )
+        return tuple(derived)
 
     async def upsert_aliases(self, aliases: tuple[PlayerAlias, ...]) -> int:
         inserted = 0
@@ -164,7 +207,54 @@ class MemoryPlayerDirectoryRepository:
         return len(updates)
 
     async def get_player(self, player_id: str) -> DirectoryPlayer | None:
-        return self._players.get(player_id)
+        player = self._players.get(player_id)
+        if player is None:
+            return None
+        current = await self.get_current_ranking(player_id)
+        return player.model_copy(
+            update={
+                "player": player.player.model_copy(
+                    update={"ranking": current.rank if current else None}
+                )
+            }
+        )
+
+    async def get_current_ranking(self, player_id: str) -> RankingEntry | None:
+        return (await self.get_current_rankings((player_id,))).get(player_id)
+
+    async def get_current_rankings(
+        self, player_ids: tuple[str, ...]
+    ) -> dict[str, RankingEntry]:
+        requested = set(player_ids)
+        latest_by_tour = {tour: self._latest_date(tour) for tour in Tour}
+        current: dict[str, RankingEntry] = {}
+        for entry in self._rankings:
+            if (
+                entry.player.id not in requested
+                or entry.ranking_date != latest_by_tour[entry.tour]
+            ):
+                continue
+            previous = current.get(entry.player.id)
+            if previous is None or (
+                entry.ranking_date,
+                entry.fetched_at,
+                entry.tour.value,
+            ) > (
+                previous.ranking_date,
+                previous.fetched_at,
+                previous.tour.value,
+            ):
+                current[entry.player.id] = entry
+        return {
+            player_id: entry.model_copy(
+                update={
+                    "player": entry.player.model_copy(
+                        update={"ranking": entry.rank}
+                    )
+                }
+            )
+            for player_id, entry in current.items()
+        }
 
     async def get_rankings(
         self,
@@ -186,7 +276,15 @@ class MemoryPlayerDirectoryRepository:
             rows = [entry for entry in rows if entry.player.country_code == country_code]
         rows.sort(key=lambda entry: (entry.rank, entry.player.id))
         start = (max(1, page) - 1) * page_size
-        return tuple(rows[start : start + page_size]), len(rows)
+        page_rows = rows[start : start + page_size]
+        return tuple(
+            entry.model_copy(
+                update={
+                    "player": entry.player.model_copy(update={"ranking": entry.rank})
+                }
+            )
+            for entry in page_rows
+        ), len(rows)
 
     async def find_aliases(self, normalized_query: str, *, limit: int) -> tuple[AliasMatch, ...]:
         matches: list[AliasMatch] = []
@@ -196,11 +294,19 @@ class MemoryPlayerDirectoryRepository:
             directory_player = self._players.get(alias.player_id)
             if directory_player is None:
                 continue
+            current = await self.get_current_ranking(alias.player_id)
+            directory_player = directory_player.model_copy(
+                update={
+                    "player": directory_player.player.model_copy(
+                        update={"ranking": current.rank if current else None}
+                    )
+                }
+            )
             matches.append(
                 AliasMatch(
                     player=directory_player,
                     alias=alias,
-                    current_rank=directory_player.player.ranking,
+                    current_rank=current.rank if current else None,
                 )
             )
         matches.sort(

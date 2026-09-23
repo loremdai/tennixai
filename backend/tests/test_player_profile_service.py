@@ -70,6 +70,7 @@ class ProfileProvider:
         self.calls: Counter[str] = Counter()
         self.live: list[Match] = []
         self.upcoming: list[Match] = []
+        self.reported_profile_rank: int | None = None
         self._finished: tuple[Match, ...] = (
             tuple(
                 _finished_match(index, 2026, circuit, index % 3 != 2)
@@ -85,12 +86,38 @@ class ProfileProvider:
         player = {SINNER.id: SINNER, ZHENG.id: ZHENG}.get(player_id)
         if player is None:
             raise AppError("not_found", "Player not found", 404)
+        if self.reported_profile_rank is not None and player_id == ZHENG.id:
+            player = player.model_copy(update={"ranking": self.reported_profile_rank})
         return PlayerProfileData(
             player=player,
             birth_date=date(2000, 1, 1),
             image_url=None,
             seasons=_seasons(),
         )
+
+    async def get_player(self, player_id: str) -> Player:
+        self.calls["player"] += 1
+        player = {SINNER.id: SINNER, ZHENG.id: ZHENG, OPPONENT.id: OPPONENT}.get(
+            player_id
+        )
+        if player is None:
+            raise AppError("not_found", "Player not found", 404)
+        if self.reported_profile_rank is not None and player_id == ZHENG.id:
+            player = player.model_copy(update={"ranking": self.reported_profile_rank})
+        return player
+
+    async def get_match(self, match_id: str) -> Match:
+        match = _finished_match(0, 2026, "wta", True)
+        match = match.model_copy(
+            update={
+                "id": match_id,
+                "players": (
+                    ZHENG.model_copy(update={"ranking": 72}),
+                    OPPONENT,
+                ),
+            }
+        )
+        return match
 
     async def get_player_results_for_period(
         self, player_id: str, *, start: date, end: date
@@ -126,6 +153,19 @@ def build_service(provider: ProfileProvider, directory: MemoryPlayerDirectoryRep
 @pytest.fixture()
 async def seeded_directory() -> MemoryPlayerDirectoryRepository:
     directory = MemoryPlayerDirectoryRepository()
+    previous = NOW_UTC - timedelta(days=7)
+    await directory.save_ranking_snapshot(
+        (
+            RankingEntry(
+                player=SINNER, tour=Tour.ATP, rank=2, points=100,
+                movement=RankingMovement.UNKNOWN, ranking_date=previous.date(), fetched_at=previous,
+            ),
+            RankingEntry(
+                player=ZHENG, tour=Tour.WTA, rank=6, points=90,
+                movement=RankingMovement.UNKNOWN, ranking_date=previous.date(), fetched_at=previous,
+            ),
+        )
+    )
     await directory.save_ranking_snapshot(
         (
             RankingEntry(
@@ -172,6 +212,37 @@ async def test_profile_view_selects_season_and_current_match_none(
     # profile fetch is cached for one hour
     await service.get_player_profile_view(ZHENG.id, season=2025)
     assert provider.calls["profile"] == 1
+
+
+@pytest.mark.asyncio
+async def test_profile_current_rank_comes_from_latest_directory_snapshot(
+    seeded_directory,
+) -> None:
+    provider = ProfileProvider()
+    provider.reported_profile_rank = 72
+    service = build_service(provider, seeded_directory)
+
+    view = await service.get_player_profile_view(ZHENG.id, season=2026)
+
+    assert view.profile.player.ranking == 5
+    assert view.ranking is not None
+    assert view.ranking.rank == 5
+    assert view.ranking.points == 90
+    assert view.ranking.movement is RankingMovement.UP
+
+
+@pytest.mark.asyncio
+async def test_match_current_rank_comes_from_directory_not_provider_profile(
+    seeded_directory,
+) -> None:
+    provider = ProfileProvider()
+    provider.reported_profile_rank = 72
+    service = build_service(provider, seeded_directory)
+
+    match = await service.get_match("mat_rank_source")
+
+    assert match.players[0].ranking == 5
+    assert match.players[1].ranking == 40
 
 
 @pytest.mark.asyncio

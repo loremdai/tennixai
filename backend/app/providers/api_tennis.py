@@ -115,7 +115,10 @@ COUNTRY_CODES = {
     "argentina": "arg",
     "australia": "aus",
     "austria": "aut",
+    "andorra": "and",
+    "armenia": "arm",
     "belarus": "blr",
+    "bosnia and herzegovina": "bih",
     "belgium": "bel",
     "brazil": "bra",
     "bulgaria": "bgr",
@@ -147,11 +150,13 @@ COUNTRY_CODES = {
     "luxembourg": "lux",
     "malaysia": "mys",
     "mexico": "mex",
+    "monaco": "mco",
     "morocco": "mar",
     "netherlands": "nld",
     "new zealand": "nzl",
     "norway": "nor",
     "poland": "pol",
+    "peru": "per",
     "portugal": "prt",
     "romania": "rou",
     "russia": "rus",
@@ -205,22 +210,6 @@ def normalize_surface(raw: str | None) -> str | None:
 def country_code_from_name(country: str | None) -> str | None:
     normalized = " ".join((country or "").strip().casefold().split())
     return COUNTRY_CODES.get(normalized)
-
-
-def map_ranking_movement(raw: str | None) -> RankingMovement:
-    """Vendor standings movement is a loose string; anything we cannot read
-    with certainty stays UNKNOWN instead of being guessed."""
-    text = (raw or "").strip()
-    if not text:
-        return RankingMovement.UNKNOWN
-    lowered = text.casefold()
-    if lowered in {"same", "=", "0", "no change", "nc"}:
-        return RankingMovement.SAME
-    if lowered in {"up", "new"} or lowered.startswith(("+", "↑")):
-        return RankingMovement.UP
-    if lowered in {"down"} or lowered.startswith(("-", "↓")):
-        return RankingMovement.DOWN
-    return RankingMovement.UNKNOWN
 
 
 def parse_positive_int(raw: int | str | None) -> int | None:
@@ -863,7 +852,10 @@ class ApiTennisProvider:
                     tour=tour,
                     rank=rank,
                     points=points,
-                    movement=map_ranking_movement(dto.movement),
+                    # Vendor docs omit the movement comparison interval, and
+                    # a live sample conflicts with the official rank history.
+                    # The repository derives it from consecutive snapshots.
+                    movement=RankingMovement.UNKNOWN,
                     ranking_date=now.date(),
                     fetched_at=now,
                 )
@@ -888,7 +880,9 @@ class ApiTennisProvider:
             name=(dto.player_full_name or dto.player_name or "").strip()
             or "Unknown player",
             country_code=country_code_from_name(dto.player_country),
-            ranking=_latest_ranking(dto),
+            # `get_players.stats[].rank` is season- and discipline-specific;
+            # it is not the current singles world ranking.
+            ranking=None,
         )
 
     async def get_player_profile(self, player_id: str) -> PlayerProfileData:
@@ -909,7 +903,7 @@ class ApiTennisProvider:
                 name=(dto.player_full_name or dto.player_name or "").strip()
                 or "Unknown player",
                 country_code=country_code_from_name(dto.player_country),
-                ranking=_latest_ranking(dto),
+                ranking=None,
             ),
             birth_date=parse_birthday(dto.player_bday),
             image_url=(dto.player_logo or "").strip() or None,
@@ -1065,19 +1059,6 @@ class ApiTennisProvider:
         return match.live_state
 
 
-def _latest_ranking(dto: PlayerDto) -> int | None:
-    numeric_seasons = [
-        stat for stat in dto.stats if (stat.season or "").strip().isdigit()
-    ]
-    if not numeric_seasons:
-        return None
-    latest = max(stat.season.strip() for stat in numeric_seasons)
-    for stat in numeric_seasons:
-        if stat.season.strip() == latest and (stat.rank or "").strip().isdigit():
-            return int(stat.rank.strip())
-    return None
-
-
 def parse_birthday(raw: str | None) -> date | None:
     """Vendor birthdays arrive as DD.MM.YYYY; anything else stays unavailable."""
     text = (raw or "").strip()
@@ -1089,17 +1070,17 @@ def parse_birthday(raw: str | None) -> date | None:
         return None
 
 
-def _parse_count(raw: str | None) -> int:
+def _parse_count(raw: str | None) -> int | None:
     text = (raw or "").strip()
-    return int(text) if text.isdigit() else 0
+    return int(text) if text.isdigit() else None
 
 
 def _parse_surface(raw_won: str | None, raw_lost: str | None) -> SurfaceRecord | None:
-    won = (raw_won or "").strip()
-    lost = (raw_lost or "").strip()
-    if not won and not lost:
+    won = _parse_count(raw_won)
+    lost = _parse_count(raw_lost)
+    if won is None and lost is None:
         return None
-    return SurfaceRecord(won=_parse_count(won), lost=_parse_count(lost))
+    return SurfaceRecord(won=won, lost=lost)
 
 
 def map_season_stats(stats: list[PlayerSeasonStatDto]) -> tuple[PlayerSeasonRecord, ...]:

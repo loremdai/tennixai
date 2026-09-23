@@ -340,13 +340,13 @@ export type PlayerSearchResolutionDto = {
   candidates: PlayerSearchCandidateDto[]
 }
 
-export type SurfaceRecordDto = { won: number; lost: number }
+export type SurfaceRecordDto = { won: number | null; lost: number | null }
 
 export type PlayerSeasonRecordDto = {
   season: number
-  matches_won: number
-  matches_lost: number
-  titles: number
+  matches_won: number | null
+  matches_lost: number | null
+  titles: number | null
   hard: SurfaceRecordDto | null
   clay: SurfaceRecordDto | null
   grass: SurfaceRecordDto | null
@@ -361,6 +361,7 @@ export type PlayerProfileDataDto = {
 
 export type PlayerProfileViewDto = {
   profile: PlayerProfileDataDto
+  ranking: RankingEntryDto | null
   selected_season: number
   season_record: PlayerSeasonRecordDto | null
   current_match: MatchDto | null

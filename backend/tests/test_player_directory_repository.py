@@ -1,13 +1,12 @@
 """PlayerDirectoryRepository contract tests (deterministic memory implementation)."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from app.domain import Gender, Player
 from app.errors import AppError
 from app.players.models import (
-    DirectoryPlayer,
     LocalizedNameUpdate,
     PlayerAlias,
     PlayerAliasKind,
@@ -186,6 +185,100 @@ async def test_find_aliases_orders_by_kind_then_rank_then_id(
         "ply_r7",
         "ply_r50",
     ]
+
+
+@pytest.mark.asyncio
+async def test_alias_search_drops_rank_when_player_is_absent_from_latest_snapshot(
+    repository: MemoryPlayerDirectoryRepository,
+) -> None:
+    older = NOW.replace(day=5)
+    await repository.save_ranking_snapshot(
+        (entry("ply_old", "Older Player", Tour.WTA, 72, fetched=older),)
+    )
+    await repository.upsert_aliases((alias("ply_old", "older player"),))
+    await repository.save_ranking_snapshot(
+        (entry("ply_current", "Current Player", Tour.WTA, 1, fetched=NOW),)
+    )
+
+    matches = await repository.find_aliases("older player", limit=10)
+
+    assert len(matches) == 1
+    assert matches[0].current_rank is None
+    assert matches[0].player.player.ranking is None
+
+
+@pytest.mark.asyncio
+async def test_rankings_page_nested_player_rank_matches_snapshot_rank(
+    repository: MemoryPlayerDirectoryRepository,
+) -> None:
+    stale_entry = entry("ply_snapshot", "Snapshot Player", Tour.WTA, 70)
+    stale_player = stale_entry.player.model_copy(update={"ranking": 72})
+    await repository.save_ranking_snapshot(
+        (stale_entry.model_copy(update={"player": stale_player}),)
+    )
+
+    page, total = await repository.get_rankings(
+        Tour.WTA, page=1, page_size=50, country_code=None
+    )
+
+    assert total == 1
+    assert page[0].rank == 70
+    assert page[0].player.ranking == 70
+
+
+@pytest.mark.asyncio
+async def test_get_current_ranking_ignores_a_player_omitted_from_latest_snapshot(
+    repository: MemoryPlayerDirectoryRepository,
+) -> None:
+    older = entry("ply_old", "Older Player", Tour.WTA, 72)
+    newer_other = entry("ply_new", "Newer Player", Tour.WTA, 1).model_copy(
+        update={"ranking_date": NOW.date() + timedelta(days=1)}
+    )
+    await repository.save_ranking_snapshot((older, newer_other))
+
+    current = await repository.get_current_ranking("ply_old")
+
+    assert current is None
+
+
+@pytest.mark.asyncio
+async def test_snapshot_movement_is_derived_from_previous_ordinal_rank(
+    repository: MemoryPlayerDirectoryRepository,
+) -> None:
+    previous = NOW - timedelta(days=7)
+    await repository.save_ranking_snapshot(
+        (
+            entry("ply_up", "Up Player", Tour.WTA, 72, fetched=previous),
+            entry("ply_down", "Down Player", Tour.WTA, 20, fetched=previous),
+            entry("ply_same", "Same Player", Tour.WTA, 40, fetched=previous),
+        )
+    )
+    await repository.save_ranking_snapshot(
+        (
+            entry("ply_up", "Up Player", Tour.WTA, 70).model_copy(
+                update={"movement": RankingMovement.DOWN}
+            ),
+            entry("ply_down", "Down Player", Tour.WTA, 22).model_copy(
+                update={"movement": RankingMovement.UP}
+            ),
+            entry("ply_same", "Same Player", Tour.WTA, 40),
+            entry("ply_new", "New Player", Tour.WTA, 100),
+        )
+    )
+
+    movement_by_player = {
+        item.player.id: item.movement
+        for item in (await repository.get_rankings(
+            Tour.WTA, page=1, page_size=50, country_code=None
+        ))[0]
+    }
+
+    assert movement_by_player == {
+        "ply_up": RankingMovement.UP,
+        "ply_down": RankingMovement.DOWN,
+        "ply_same": RankingMovement.SAME,
+        "ply_new": RankingMovement.UNKNOWN,
+    }
 
 
 @pytest.mark.asyncio

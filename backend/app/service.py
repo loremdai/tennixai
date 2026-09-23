@@ -369,11 +369,25 @@ class TennisService:
         if not current_year - 4 <= selected <= current_year:
             raise AppError("invalid_request", "Season outside the five-season window", 422)
         directory_player = None
+        current_ranking = None
         if self._directory is not None:
             directory_player = await self._directory.get_player(player_id)
             if directory_player is None:
                 raise AppError("not_found", "Player not found", 404)
+            current_ranking = await self._directory.get_current_ranking(player_id)
         profile = await self._load_profile(player_id)
+        if directory_player is not None:
+            profile = profile.model_copy(
+                update={
+                    "player": directory_player.player.model_copy(
+                        update={
+                            "ranking": (
+                                current_ranking.rank if current_ranking else None
+                            )
+                        }
+                    )
+                }
+            )
         # The product window is the current season plus the four prior ones;
         # supplier payloads can carry longer histories, and the view never
         # exposes seasons outside the selectable window.
@@ -397,6 +411,7 @@ class TennisService:
                 current_match = upcoming[0]
         return PlayerProfileView(
             profile=profile,
+            ranking=current_ranking,
             selected_season=selected,
             season_record=season_record,
             current_match=current_match,
@@ -684,13 +699,18 @@ class TennisService:
         if match is None:
             raise AppError("not_found", "Match not found", 404)
         if not outcome.is_stale:
-            return match
-        return match.model_copy(update={
-            "freshness": match.freshness.model_copy(update={
-                "is_stale": True,
-                "age_seconds": outcome.age_seconds,
-            }),
-        })
+            return (await self._hydrate_matches_players([match]))[0]
+        stale_match = match.model_copy(
+            update={
+                "freshness": match.freshness.model_copy(
+                    update={
+                        "is_stale": True,
+                        "age_seconds": outcome.age_seconds,
+                    }
+                ),
+            }
+        )
+        return (await self._hydrate_matches_players([stale_match]))[0]
 
     async def get_match_intelligence(
         self, match_id: str, topic: IntelligenceTopic | str
@@ -917,6 +937,14 @@ class TennisService:
         return cast(Player | None, outcome.value)
 
     async def _hydrate_matches_players(self, matches: list[Match]) -> list[Match]:
+        player_ids = tuple(
+            dict.fromkeys(player.id for match in matches for player in match.players)
+        )
+        current_rankings = (
+            await self._directory.get_current_rankings(player_ids)
+            if self._directory is not None
+            else {}
+        )
         pending: dict[str, Player] = {}
         for match in matches:
             for player in match.players:
@@ -934,7 +962,7 @@ class TennisService:
             for player_id, profile in zip(pending, profiles)
             if profile is not None
         }
-        if not profile_by_id:
+        if not profile_by_id and not current_rankings:
             return matches
 
         hydrated: list[Match] = []
@@ -943,21 +971,47 @@ class TennisService:
                 player.model_copy(
                     update={
                         "name": (
-                            profile_by_id[player.id].name
-                            if profile_by_id[player.id].name != "Unknown player"
-                            else player.name
+                            current_rankings[player.id].player.name
+                            if player.id in current_rankings
+                            else (
+                                profile_by_id[player.id].name
+                                if player.id in profile_by_id
+                                and profile_by_id[player.id].name != "Unknown player"
+                                else player.name
+                            )
                         ),
                         "country_code": (
-                            profile_by_id[player.id].country_code or player.country_code
+                            current_rankings[player.id].player.country_code
+                            if player.id in current_rankings
+                            and current_rankings[player.id].player.country_code is not None
+                            else (
+                                profile_by_id[player.id].country_code or player.country_code
+                                if player.id in profile_by_id
+                                else player.country_code
+                            )
+                        ),
+                        "localized_name": (
+                            current_rankings[player.id].player.localized_name
+                            if player.id in current_rankings
+                            else player.localized_name
                         ),
                         "ranking": (
-                            profile_by_id[player.id].ranking
-                            if profile_by_id[player.id].ranking is not None
-                            else player.ranking
+                            current_rankings[player.id].rank
+                            if player.id in current_rankings
+                            else (
+                                profile_by_id[player.id].ranking
+                                if player.id in profile_by_id
+                                and profile_by_id[player.id].ranking is not None
+                                else player.ranking
+                            )
                         ),
                     }
                 )
-                if player.id in profile_by_id
+                if (
+                    player.id in profile_by_id
+                    or player.id in current_rankings
+                    or self._directory is not None
+                )
                 else player
                 for player in match.players
             )

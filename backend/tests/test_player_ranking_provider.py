@@ -11,6 +11,8 @@ from app.errors import AppError
 from app.identity import MemoryIdentityRepository
 from app.players.models import RankingMovement, Tour
 from app.providers.api_tennis import ApiTennisProvider
+from app.providers.api_tennis import map_season_stats
+from app.providers.api_tennis_dtos import PlayerSeasonStatDto
 from app.providers.fake import FakeTennisProvider
 
 FIXTURES = Path(__file__).parent / "fixtures" / "api_tennis"
@@ -78,19 +80,11 @@ async def test_get_rankings_maps_standings_to_internal_entries() -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_rankings_maps_movement_and_falls_back_to_unknown() -> None:
+async def test_get_rankings_does_not_trust_undocumented_vendor_movement() -> None:
     provider = make_provider([])
 
     entries = await provider.get_rankings(Tour.ATP)
-    movements = {entry.rank: entry.movement for entry in entries}
-
-    assert movements == {
-        1: RankingMovement.SAME,
-        2: RankingMovement.UP,
-        3: RankingMovement.DOWN,
-        4: RankingMovement.UNKNOWN,
-        200: RankingMovement.DOWN,
-    }
+    assert {entry.movement for entry in entries} == {RankingMovement.UNKNOWN}
 
 
 @pytest.mark.asyncio
@@ -128,7 +122,25 @@ async def test_get_rankings_wta_parameter_and_china_mapping() -> None:
     zheng = entries[1]
     assert zheng.player.name == "Qinwen Zheng"
     assert zheng.player.country_code == "chn"
-    assert zheng.movement is RankingMovement.UP
+    assert zheng.movement is RankingMovement.UNKNOWN
+
+
+@pytest.mark.parametrize(
+    ("country", "expected"),
+    [
+        ("Peru", "per"),
+        ("Bosnia and Herzegovina", "bih"),
+        ("Armenia", "arm"),
+        ("Andorra", "and"),
+        ("Monaco", "mco"),
+    ],
+)
+def test_current_ranking_countries_map_to_iso_alpha3(
+    country: str, expected: str
+) -> None:
+    from app.providers.api_tennis import country_code_from_name
+
+    assert country_code_from_name(country) == expected
 
 
 @pytest.mark.asyncio
@@ -162,6 +174,78 @@ async def test_get_rankings_translates_vendor_failures() -> None:
     with pytest.raises(AppError) as failure:
         await provider.get_rankings(Tour.WTA)
     assert failure.value.code == "rate_limited"
+
+
+@pytest.mark.asyncio
+async def test_player_profile_does_not_treat_season_rank_as_current_world_rank() -> None:
+    identities = MemoryIdentityRepository()
+    player_id = await identities.get_or_create("player", "api_tennis", "1905")
+
+    def players_response(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["method"] == "get_players"
+        return httpx.Response(
+            200,
+            json={
+                "success": 1,
+                "result": [
+                    {
+                        "player_key": "1905",
+                        "player_name": "N. Djokovic",
+                        "player_full_name": "Novak Djokovic",
+                        "stats": [
+                            {"season": "2026", "type": "singles", "rank": "72"},
+                            {"season": "2026", "type": "doubles", "rank": "4"},
+                        ],
+                    }
+                ],
+            },
+        )
+
+    provider = ApiTennisProvider(
+        client=httpx.AsyncClient(
+            base_url=BASE_URL, transport=httpx.MockTransport(players_response)
+        ),
+        identities=identities,
+        api_key=API_KEY,
+        now=lambda: NOW,
+    )
+
+    player = await provider.get_player(player_id)
+    profile = await provider.get_player_profile(player_id)
+
+    assert player.name == "Novak Djokovic"
+    assert player.ranking is None
+    assert profile.player.ranking is None
+
+
+def test_season_stats_keep_blank_and_invalid_numbers_unavailable() -> None:
+    records = map_season_stats(
+        [
+            PlayerSeasonStatDto(
+                season="2026",
+                type="singles",
+                matches_won="",
+                matches_lost="12",
+                titles="n/a",
+                hard_won="",
+                hard_lost="3",
+                clay_won="2",
+                clay_lost="",
+            ),
+            PlayerSeasonStatDto(season="2026", type="doubles", rank="4"),
+        ]
+    )
+
+    assert len(records) == 1
+    assert records[0].matches_won is None
+    assert records[0].matches_lost == 12
+    assert records[0].titles is None
+    assert records[0].hard is not None
+    assert records[0].hard.won is None
+    assert records[0].hard.lost == 3
+    assert records[0].clay is not None
+    assert records[0].clay.won == 2
+    assert records[0].clay.lost is None
 
 
 @pytest.mark.asyncio

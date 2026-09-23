@@ -611,7 +611,7 @@ async def test_search_players_without_directory_is_typed_unsupported() -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_player_maps_profile_with_latest_season_ranking(provider) -> None:
+async def test_get_player_does_not_use_season_rank_as_current_ranking(provider) -> None:
     built, seen = provider
 
     cui = (await built.search_players("Cui"))[0]
@@ -623,7 +623,7 @@ async def test_get_player_maps_profile_with_latest_season_ranking(provider) -> N
     assert request.url.params["player_key"] == "1274"
     assert player.id == cui.id
     assert player.name == "Jie Cui"
-    assert player.ranking == 1222
+    assert player.ranking is None
     assert player.country_code == "chn"
 
     with pytest.raises(AppError) as error_info:

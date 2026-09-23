@@ -19,6 +19,7 @@ import {
   toSeasonSummary,
   viewTierToCircuitTier,
 } from '@/lib/player-view-models'
+import { countryPresentation } from '@/lib/view-models'
 
 const NOW = new Date('2026-09-08T10:00:00Z')
 
@@ -96,6 +97,7 @@ function profileViewFixture(overrides: Partial<PlayerProfileViewDto> = {}): Play
       seasons: [seasonRecordFixture()],
     },
     selected_season: 2026,
+    ranking: null,
     season_record: seasonRecordFixture(),
     current_match: null,
     ...overrides,
@@ -103,6 +105,14 @@ function profileViewFixture(overrides: Partial<PlayerProfileViewDto> = {}): Play
 }
 
 describe('toDirectoryEntry', () => {
+  it('labels all countries observed missing from the live ranking payload', () => {
+    expect(countryPresentation('per')).toMatchObject({ countryCode: 'PER', countryName: '秘鲁' })
+    expect(countryPresentation('bih')).toMatchObject({ countryCode: 'BIH', countryName: '波黑' })
+    expect(countryPresentation('arm')).toMatchObject({ countryCode: 'ARM', countryName: '亚美尼亚' })
+    expect(countryPresentation('and')).toMatchObject({ countryCode: 'AND', countryName: '安道尔' })
+    expect(countryPresentation('mco')).toMatchObject({ countryCode: 'MCO', countryName: '摩纳哥' })
+  })
+
   it('maps an English-primary name with optional Chinese secondary name', () => {
     const entry = toDirectoryEntry(rankingEntryFixture())
 
@@ -202,7 +212,7 @@ describe('toProfilePreview', () => {
       nameZh: '本·谢尔顿',
       countryCode: 'USA',
       countryName: '美国',
-      rank: 9,
+      rank: null,
       points: null,
       tour: null,
       avatarUrl: 'https://example.internal/ben.png',
@@ -220,6 +230,33 @@ describe('toProfilePreview', () => {
 
     expect(preview.birthDate).toBeNull()
     expect(preview.age).toBeNull()
+  })
+
+  it('maps current ranking fields from the latest ranking snapshot', () => {
+    const view = profileViewFixture({
+      ranking: {
+        player: {
+          id: 'ply_self', name: 'Ben Shelton', localized_name: '本·谢尔顿',
+          country_code: 'usa', ranking: 72,
+        },
+        tour: 'WTA',
+        rank: 70,
+        points: 957,
+        movement: 'down',
+        ranking_date: '2026-09-23',
+        fetched_at: '2026-09-23T13:32:27.862851Z',
+      },
+    })
+
+    const preview = toProfilePreview(view, NOW)
+
+    expect(preview).toMatchObject({
+      tour: 'WTA',
+      rank: 70,
+      points: 957,
+      movement: { direction: 'down', places: null },
+      rankUpdatedAt: '2026-09-23T13:32:27.862851Z',
+    })
   })
 })
 
@@ -243,6 +280,24 @@ describe('toSeasonSummary', () => {
 
     expect(summary.matches).toBe(0)
     expect(summary.winRate).toBeNull()
+  })
+
+  it('does not invent totals or surface values when provider fields are missing', () => {
+    const summary = toSeasonSummary(2026, seasonRecordFixture({
+      matches_won: null,
+      matches_lost: 12,
+      titles: null,
+      hard: { won: null, lost: 3 },
+    }))
+
+    expect(summary).toMatchObject({
+      matches: null,
+      wins: null,
+      losses: 12,
+      winRate: null,
+      titles: null,
+      hard: { won: null, lost: 3 },
+    })
   })
 
   it('maps a missing season record onto fully unavailable semantics', () => {

@@ -9,7 +9,7 @@ from datetime import date, datetime, timezone
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import select, text, update
 
 from app.config import Settings
 from app.domain import LiveMatchState, Player
@@ -181,6 +181,82 @@ async def test_rankings_page_bounded_to_top_200(database: Database) -> None:
     assert [item.rank for item in entries] == [200]
     # Outside-200 members remain directory players for search/resolution.
     assert await repository.get_player(f"ply_{namespace}_201") is not None
+
+
+@pytest.mark.asyncio
+async def test_postgres_rankings_player_uses_snapshot_rank_not_player_cache(
+    database: Database,
+) -> None:
+    repository = PostgresPlayerDirectoryRepository(database)
+    namespace = _namespace()
+    expected = _entry(namespace, 1, Tour.WTA, 70)
+    await repository.save_ranking_snapshot((expected,))
+
+    async with database.session() as session:
+        async with session.begin():
+            await session.execute(
+                update(PlayerRow)
+                .where(PlayerRow.id == expected.player.id)
+                .values(ranking=72)
+            )
+
+    entries, _ = await repository.get_rankings(
+        Tour.WTA, page=1, page_size=50, country_code=None
+    )
+    actual = next(item for item in entries if item.player.id == expected.player.id)
+
+    assert actual.rank == 70
+    assert actual.player.ranking == 70
+
+
+@pytest.mark.asyncio
+async def test_postgres_alias_search_drops_rank_after_latest_snapshot_omits_player(
+    database: Database,
+) -> None:
+    repository = PostgresPlayerDirectoryRepository(database)
+    namespace = _namespace()
+    old = _entry(namespace, 1, Tour.WTA, 72)
+    latest_other = _entry(namespace, 2, Tour.WTA, 1).model_copy(
+        update={
+            "ranking_date": TEST_RANKING_DATE.replace(day=6),
+            "fetched_at": FIXED_NOW.replace(day=13),
+        }
+    )
+    await repository.save_ranking_snapshot((old,))
+    await repository.upsert_aliases(
+        (_alias(old.player.id, f"{namespace} older", PlayerAliasKind.FULL),)
+    )
+    await repository.save_ranking_snapshot((latest_other,))
+
+    matches = await repository.find_aliases(f"{namespace} older", limit=5)
+
+    assert len(matches) == 1
+    assert matches[0].current_rank is None
+    assert matches[0].player.player.ranking is None
+
+
+@pytest.mark.asyncio
+async def test_postgres_movement_is_derived_from_previous_stored_snapshot(
+    database: Database,
+) -> None:
+    repository = PostgresPlayerDirectoryRepository(database)
+    namespace = _namespace()
+    old = _entry(namespace, 1, Tour.WTA, 72)
+    current = _entry(namespace, 1, Tour.WTA, 70).model_copy(
+        update={
+            "ranking_date": TEST_RANKING_DATE.replace(day=6),
+            "fetched_at": FIXED_NOW.replace(day=13),
+            "movement": RankingMovement.DOWN,
+        }
+    )
+    await repository.save_ranking_snapshot((old,))
+    await repository.save_ranking_snapshot((current,))
+
+    latest = await repository.get_current_ranking(current.player.id)
+
+    assert latest is not None
+    assert latest.rank == 70
+    assert latest.movement is RankingMovement.UP
 
 
 @pytest.mark.asyncio
