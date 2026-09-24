@@ -270,7 +270,7 @@ async function showAllMarkets(page: Page, rows: unknown[]) {
   MARKETS = marketsPayload(rows)
   await interceptP3(page)
   await page.goto('/markets?view=all')
-  await page.getByRole('heading', { name: '市场决策支持' }).waitFor()
+  await page.getByRole('heading', { name: '比赛市场' }).waitFor()
 }
 
 function minutesAgo(minutes: number): string {
@@ -310,7 +310,7 @@ test.describe('P3 production market quote states (T88)', () => {
 
     await expect(page.getByText('已加载 50 / 51 场')).toBeVisible()
     await page.getByRole('button', { name: '女子' }).click()
-    await expect(page.getByText('筛选后无市场')).toBeVisible()
+    await expect(page.getByText('没有符合条件的比赛')).toBeVisible()
     await page.getByRole('button', { name: '加载更多' }).click()
     await expect(page.getByRole('link', { name: '查看 Tail Player vs. Tail Opponent 市场' })).toBeVisible()
     await expect(page.getByText('已加载 51 / 51 场')).toBeVisible()
@@ -325,7 +325,7 @@ test.describe('P3 production market quote states (T88)', () => {
       }),
     ])
 
-    await expect(page.getByText(/快照报价 · 2 分前/)).toBeVisible()
+    await expect(page.getByText(/最近报价 · 2 分前/)).toBeVisible()
     await expect(page.getByText('57.0%')).toBeVisible() // player one ask
     await expect(page.getByText('45.0%')).toBeVisible() // player two ask
   })
@@ -345,8 +345,8 @@ test.describe('P3 production market quote states (T88)', () => {
     ])
 
     await expect(page.getByText(/部分报价 ·/)).toBeVisible()
-    await expect(page.getByText('暂无挂单')).toBeVisible()
-    await expect(page.getByText('最后可信报价已过期')).toBeVisible()
+    await expect(page.getByText('暂无可交易报价')).toBeVisible()
+    await expect(page.getByText(/上次有效报价 ·/)).toBeVisible()
     await expect(page.getByText('报价暂不可用')).toBeVisible()
     // The one-sided quote keeps its real ask instead of hiding both.
     await expect(page.getByText('60.0%')).toBeVisible()
@@ -365,9 +365,9 @@ test.describe('P3 production market quote states (T88)', () => {
 
     // The tier chip also carries this text, so scope the badge to the row.
     await expect(
-      page.getByRole('link', { name: '查看 E2E Alpha vs. E2E Beta 市场' }).getByText('Challenger'),
+      page.getByRole('link', { name: '查看 E2E Alpha vs. E2E Beta 市场' }).getByText('挑战赛'),
     ).toBeVisible()
-    await expect(page.getByText('快照报价 · 1 分前')).toBeVisible()
+    await expect(page.getByText('最近报价 · 1 分前')).toBeVisible()
     await expect(page.getByText(/未覆盖|不伪造模型值/)).toHaveCount(0)
   })
 
@@ -402,10 +402,10 @@ test.describe('P3 production market quote states (T88)', () => {
     await page.goto('/markets?view=opportunities')
 
     await expect(
-      page.getByRole('heading', { name: '模型尚未完成验证' }),
+      page.getByRole('heading', { name: '模型仍在验证中' }),
     ).toBeVisible()
     await expect(
-      page.getByText('模型尚未完成验证，当前不生成 BUY / WAIT；全部市场的真实报价仍可查看。'),
+      page.getByText('模型验证尚未完成，因此暂不提供比赛判断；你仍可查看所有市场的最新报价。'),
     ).toBeVisible()
     await expect(page.getByText('BUY', { exact: true })).toHaveCount(0)
     await expect(page.getByText('WAIT', { exact: true })).toHaveCount(0)
@@ -416,21 +416,44 @@ test.describe('P3 production market quote states (T88)', () => {
     await page.goto('/markets?view=opportunities')
 
     await expect(
-      page.getByRole('link', { name: /查看 E2E Alpha vs\. E2E Beta 的 buy 决策/ }),
+      page.getByRole('link', { name: /查看 E2E Alpha vs\. E2E Beta 的模拟买入机会决策/ }),
     ).toBeVisible()
   })
 })
 
 test.describe('P3 production mobile', () => {
+  test('exit_missed ledger rows remain distinct from an unfilled entry', async ({ page }) => {
+    await interceptP3(page)
+    await page.route('**/api/paper/positions', async (route) => {
+      const exitMissed = {
+        ...PAPER.open[0],
+        position_id: 'pos_exit_missed',
+        status: 'exit_missed',
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ open: [exitMissed], recent: [] }),
+      })
+    })
+    await page.goto('/markets?view=paper')
+
+    await expect(page.getByText('退出未成交', { exact: true })).toBeVisible()
+    await expect(page.getByText('模拟退出未成交，仍持有至结算')).toBeVisible()
+    await expect(page.getByText('入场未成交 · 不再重试')).toHaveCount(0)
+  })
+
   test('direct /markets load renders canonical opportunity rows', async ({ page }) => {
     await interceptP3(page)
     await page.goto('/markets')
 
-    await expect(page.getByRole('heading', { name: '市场决策支持' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '比赛市场' })).toBeVisible()
     await expect(page.getByText('E2E Alpha vs. E2E Beta')).toBeVisible()
     await expect(page.getByText('方向：E2E Alpha')).toBeVisible()
-    await expect(page.getByText('+7.0pp')).toBeVisible()
-    await expect(page.getByRole('link', { name: /查看 E2E Alpha vs\. E2E Beta 的 buy 决策/ })).toHaveAttribute(
+    await expect(page.getByText('+7.0 个百分点')).toBeVisible()
+    await expect(
+      page.getByRole('link', { name: /查看 E2E Alpha vs\. E2E Beta 的模拟买入机会决策/ }),
+    ).toHaveAttribute(
       'href',
       '/matches/mat_e2e_1',
     )
@@ -444,10 +467,10 @@ test.describe('P3 production mobile', () => {
     await expect(page.getByText('市场筛选')).toBeVisible()
     await expect(page.getByText('E2E Challenger Moneyline')).toBeVisible()
     // The low-tier row states its real quote state instead of a model label.
-    await expect(page.getByText('暂无挂单')).toBeVisible()
+    await expect(page.getByText('暂无可交易报价')).toBeVisible()
 
-    await page.getByRole('tab', { name: /^Paper/ }).click()
-    await expect(page.getByText('Paper 生命周期账本')).toBeVisible()
+    await page.getByRole('tab', { name: /^模拟记录/ }).click()
+    await expect(page.getByRole('heading', { name: '模拟记录', exact: true })).toBeVisible()
     await expect(page.getByText('2 条')).toBeVisible()
     await expect(page.getByText('+$1.40')).toBeVisible()
   })
@@ -458,7 +481,7 @@ test.describe('P3 production mobile', () => {
     await page.getByRole('tab', { name: /全部市场/ }).click()
     await expect(page.getByText('E2E Challenger Moneyline')).toBeVisible()
 
-    await page.getByRole('button', { name: 'Challenger', exact: true }).click()
+    await page.getByRole('button', { name: '挑战赛', exact: true }).click()
     await expect(page.getByText('E2E Challenger Moneyline')).toBeVisible()
     // The ATP row is filtered out of the list.
     await expect(page.locator('h3', { hasText: 'E2E Alpha vs. E2E Beta' })).toHaveCount(0)
@@ -483,7 +506,7 @@ test.describe('P3 production mobile', () => {
     await expect(page.getByText('E2E Alpha vs. E2E Beta')).toBeVisible()
 
     await page
-      .getByRole('link', { name: /查看 E2E Alpha vs\. E2E Beta 的 buy 决策/ })
+      .getByRole('link', { name: /查看 E2E Alpha vs\. E2E Beta 的模拟买入机会决策/ })
       .click()
     await page.waitForURL('/matches/mat_e2e_1')
   })
@@ -495,7 +518,7 @@ test.describe('P3 production mobile', () => {
 
     await page.reload()
     await expect(page.getByText('E2E Alpha vs. E2E Beta')).toBeVisible()
-    await expect(page.getByRole('heading', { name: '市场决策支持' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '比赛市场' })).toBeVisible()
   })
 
   test('keyboard users can traverse tabs and rows', async ({ page }) => {
@@ -523,7 +546,7 @@ test.describe('P3 production mobile', () => {
         quote: quote({ state: 'snapshot', source: 'snapshot', as_of: minutesAgo(2) }),
       }),
     ])
-    await expect(page.getByText(/快照报价 · 2 分前/)).toBeVisible()
+    await expect(page.getByText(/最近报价 · 2 分前/)).toBeVisible()
 
     OPPORTUNITIES = {
       data: [],
@@ -531,7 +554,7 @@ test.describe('P3 production mobile', () => {
     }
     await page.goto('/markets?view=opportunities')
     await expect(
-      page.getByRole('heading', { name: '模型尚未完成验证' }),
+      page.getByRole('heading', { name: '模型仍在验证中' }),
     ).toBeVisible()
 
     const overflow = await page.evaluate(
@@ -551,7 +574,7 @@ test.describe('P3 production mobile', () => {
     expect(overflow).toBeLessThanOrEqual(0)
 
     await page.getByRole('tab', { name: /全部市场/ }).click()
-    const chip = page.getByRole('button', { name: 'Challenger', exact: true })
+    const chip = page.getByRole('button', { name: '挑战赛', exact: true })
     const box = await chip.boundingBox()
     expect(box).not.toBeNull()
     expect(box!.height).toBeGreaterThanOrEqual(44)
@@ -566,7 +589,7 @@ test.describe('P3 disabled backend', () => {
     // No interception: the real e2e backend runs with P3 disabled and the
     // proxy passes the typed 503 through.
     await page.goto('/markets')
-    await expect(page.getByText('市场决策支持未启用')).toBeVisible({ timeout: 15_000 })
-    await expect(page.getByText(/p3_disabled/)).toBeVisible()
+    await expect(page.getByText('市场功能暂不可用')).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText('市场功能暂未开放；比赛和球员信息仍可正常使用。')).toBeVisible()
   })
 })

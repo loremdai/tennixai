@@ -76,7 +76,7 @@ test.describe('P3 live shadow read-only flows', () => {
     await scanPage(page)
 
     await page.goto('/markets')
-    for (const tab of ['机会', '全部', 'Paper']) {
+    for (const tab of ['机会', '全部市场', '模拟记录']) {
       await page.getByRole('tab', { name: new RegExp(tab) }).or(page.getByRole('button', { name: new RegExp(tab) })).first().click()
       await page.waitForTimeout(600)
       await scanPage(page)

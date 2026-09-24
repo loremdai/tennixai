@@ -243,7 +243,7 @@ class FakeChatModel:
                         return "已获取本场比赛的主题数据，并保留了可用性说明。"
                     return "已获取本场比赛的主题数据。"
                 if kind == "unsupported":
-                    return "P2 暂不支持大范围历史查询。"
+                    return "目前无法查询球员的全部历史赛果，可以试试查询最近的比赛或指定赛季。"
                 if kind == "player_history":
                     history = result.get("player_history") or {}
                     if history.get("season_record"):

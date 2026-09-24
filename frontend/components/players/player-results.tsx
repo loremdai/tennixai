@@ -41,13 +41,20 @@ import {
 } from '@/components/ui/dropdown-menu'
 
 const seasonOptions = [2026, 2025, 2024, 2023, 2022]
+const tierLabels: Record<CompetitionTier, string> = {
+  ATP: 'ATP',
+  WTA: 'WTA',
+  Challenger: '挑战赛',
+  ITF: 'ITF 巡回赛',
+  Other: '其他比赛',
+}
 const tierOptions: Array<{ value: 'ALL' | CompetitionTier; label: string }> = [
   { value: 'ALL', label: '全部级别' },
   { value: 'ATP', label: 'ATP' },
   { value: 'WTA', label: 'WTA' },
-  { value: 'Challenger', label: 'Challenger' },
-  { value: 'ITF', label: 'ITF' },
-  { value: 'Other', label: 'Other' },
+  { value: 'Challenger', label: tierLabels.Challenger },
+  { value: 'ITF', label: tierLabels.ITF },
+  { value: 'Other', label: tierLabels.Other },
 ]
 const outcomeOptions: Array<{ value: 'ALL' | MatchOutcome; label: string }> = [
   { value: 'ALL', label: '全部结果' },
@@ -218,6 +225,10 @@ export function PlayerResults({
   const start = (currentPage - 1) * pageSize
   const visibleResults = serverMode ? filteredResults : filteredResults.slice(start, start + pageSize)
   const showResults = historyState === 'ready' || historyState === 'partial' || historyState === 'stale'
+  const emptyServerFilter =
+    serverMode &&
+    historyState === 'empty' &&
+    (activeTier !== 'ALL' || activeOutcome !== 'ALL')
 
   function resetResultFilters() {
     changeTier('ALL')
@@ -271,21 +282,31 @@ export function PlayerResults({
         {historyState === 'partial' ? (
           <div className="flex items-start gap-2 rounded-xl bg-premium/10 p-3 text-sm leading-relaxed text-foreground ring-1 ring-premium/20">
             <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-premium" />
-            当前数据源只返回部分赛果；已显示可用记录。
+            部分比赛记录暂不可用，以下为目前能查到的赛果。
           </div>
         ) : null}
         {historyState === 'stale' ? (
           <div className="flex items-start gap-2 rounded-xl bg-premium/10 p-3 text-sm leading-relaxed text-foreground ring-1 ring-premium/20">
             <Clock3 aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-premium" />
-            正在显示最近一次成功快照；排名与赛果可能不是最新。
+            目前显示的是较早的数据，排名和赛果可能已有更新。
           </div>
         ) : null}
       </CardContent>
 
       <CardContent className="-mx-(--card-spacing) -mt-2">
         {historyState === 'loading' ? <LoadingResults /> : null}
-        {historyState === 'empty' ? (
-          <EmptyResults title="该赛季暂无赛果" description="当前赛季没有可展示的单打比赛记录。" />
+        {historyState === 'empty' && !emptyServerFilter ? (
+          <EmptyResults
+            title="暂无可显示的逐场赛果"
+            description="还没有找到符合条件的单打比赛记录；赛季统计可能仍可查看。"
+          />
+        ) : null}
+        {emptyServerFilter ? (
+          <EmptyResults
+            title="当前筛选暂无赛果"
+            description="换一个赛事级别或赛果后再试。"
+            action={<Button type="button" variant="outline" onClick={resetResultFilters}>清除赛果筛选</Button>}
+          />
         ) : null}
         {historyState === 'unavailable' ? (
           <EmptyResults title="历史数据暂不可用" description="该球员目前没有可用的历史赛果档案，请稍后再查看。" />
@@ -336,7 +357,7 @@ export function PlayerResults({
                           so glyph fallback and the visual baseline stay identical. */}
                       <p className="mt-0.5 truncate text-xs text-muted-foreground">
                         {(() => {
-                          const parts = [result.tournamentZh, result.round, result.surface, result.tier]
+                          const parts = [result.tournamentZh, result.round, result.surface, tierLabels[result.tier]]
                             .filter((part): part is string => Boolean(part))
                           return parts.map((part, index) => (
                             <Fragment key={index}>

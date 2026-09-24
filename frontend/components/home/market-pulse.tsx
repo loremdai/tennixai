@@ -27,7 +27,7 @@ function formatPercent(value: number): string {
 }
 
 function formatEdge(value: number): string {
-  return `${value > 0 ? '+' : ''}${value.toFixed(1)}pp`
+  return `${value > 0 ? '+' : ''}${value.toFixed(1)} 个百分点`
 }
 
 export function MarketPulse({ initialState }: { initialState: HomePulseState }) {
@@ -46,16 +46,16 @@ export function MarketPulse({ initialState }: { initialState: HomePulseState }) 
   return (
     <section id="market-pulse" className="home-reveal flex scroll-mt-24 flex-col gap-4" aria-labelledby="market-pulse-title">
       <P3PreviewControls
-        title="Home · P3 状态预览"
-        description="切换市场脉搏、开放仓位 stale 与 empty。"
+        title="首页市场展示演示"
+        description="切换不同状态，预览首页市场信息的展示方式。"
         fields={[
           {
             key: 'pulse',
-            label: '市场脉搏',
+            label: '页面状态',
             value: state,
             options: [
               { value: 'populated', label: '有机会' },
-              { value: 'stale', label: '开放仓位 · stale' },
+              { value: 'stale', label: '报价更新较慢' },
               { value: 'empty', label: '暂无机会' },
             ],
           },
@@ -69,7 +69,7 @@ export function MarketPulse({ initialState }: { initialState: HomePulseState }) 
             <Radar aria-hidden="true" className="size-4" />
             <CardTitle><h2 id="market-pulse-title">市场脉搏</h2></CardTitle>
           </div>
-          <p className="text-sm text-muted-foreground">开放 Paper position 优先，其次是直播 BUY 与最强 WAIT。</p>
+          <p className="text-sm text-muted-foreground">优先显示进行中的模拟记录，以及值得关注的比赛。</p>
           <CardAction className="flex items-center gap-2">
             <Badge data-tone="beta" variant="outline">BETA</Badge>
             <Link href="/markets?preview=p3" className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}>
@@ -83,7 +83,7 @@ export function MarketPulse({ initialState }: { initialState: HomePulseState }) 
           {state === 'stale' ? (
             <div role="status" className="mx-4 mb-3 flex items-start gap-2 rounded-lg border border-destructive/25 bg-destructive/8 p-3 text-sm text-destructive">
               <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-              开放仓位的 freshness 已超阈值；保留最后可信数字，但不提供可执行动作。
+              部分市场报价更新较慢，已暂停相关模拟操作；仍显示上次有效报价。
             </div>
           ) : null}
 
@@ -116,11 +116,11 @@ export function MarketPulse({ initialState }: { initialState: HomePulseState }) 
                     <p className="mt-1 truncate text-xs text-muted-foreground">{row.tournament}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">模型概率</p>
+                    <p className="text-xs text-muted-foreground">模型估算胜率</p>
                     <p className="mt-1 font-mono text-lg font-semibold tabular-nums">{formatPercent(row.modelProbability)}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">$10 可执行市场概率</p>
+                    <p className="text-xs text-muted-foreground">10 美元模拟买入价</p>
                     <p className="mt-1 font-mono text-lg font-semibold tabular-nums">{formatPercent(row.executableProbability)}</p>
                   </div>
                   <div className="flex flex-col items-start gap-1">
@@ -139,7 +139,7 @@ export function MarketPulse({ initialState }: { initialState: HomePulseState }) 
 
         <CardFooter className="items-start gap-3 text-xs leading-relaxed text-muted-foreground">
           <ShieldCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-primary" />
-          仅用于研究与 Paper 模拟，不构成财务建议；此处不提供真实交易。
+          仅用于比赛研究和模拟记录，不涉及真实资金。
         </CardFooter>
       </Card>
     </section>

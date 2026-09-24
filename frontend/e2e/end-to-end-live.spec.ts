@@ -8,8 +8,8 @@ test.skip(
 test('fully live smoke: trusted cards or honest empty, with model prose', async ({ page }) => {
   await page.goto('/')
 
-  await page.getByLabel('继续向 Tennix 提问').fill('现在有什么比赛？')
-  await page.getByLabel('继续向 Tennix 提问').press('Enter')
+  await page.getByLabel('向 Tennix 提问').fill('现在有什么比赛？')
+  await page.getByLabel('向 Tennix 提问').press('Enter')
 
   const article = page.locator('#assistant article')
   await expect(article).toBeVisible()

@@ -10,7 +10,7 @@ export type PaperRowData = {
   match: string
   tournament: string
   direction: string
-  state: 'entry_pending' | 'hold' | 'exit_pending' | 'exited' | 'missed' | 'settled'
+  state: 'entry_pending' | 'hold' | 'exit_pending' | 'exit_missed' | 'exited' | 'missed' | 'settled'
   cost: number
   shares: number
   averageEntry: number | null
@@ -31,7 +31,7 @@ export function PaperRow({ record }: { record: PaperRowData }) {
     <Link
       href={record.href}
       className="group rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      aria-label={`查看 ${record.match} Paper 生命周期`}
+      aria-label={`查看 ${record.match} 的模拟记录`}
     >
       <Card size="sm" className="transition-[transform,box-shadow] group-hover:-translate-y-0.5 group-hover:ring-primary/35">
         <CardContent className="grid min-h-28 grid-cols-2 items-center gap-4 py-1 md:grid-cols-[minmax(15rem,1.5fr)_minmax(8rem,0.7fr)_minmax(7rem,0.55fr)_minmax(8rem,0.65fr)_minmax(7rem,0.55fr)_auto_auto]">
@@ -40,11 +40,11 @@ export function PaperRow({ record }: { record: PaperRowData }) {
             <p className="mt-1 truncate text-sm text-muted-foreground">{record.tournament}</p>
             <p className="mt-2 text-xs font-medium text-primary">方向：{record.direction}</p>
           </div>
-          <dl><dt className="text-xs text-muted-foreground">入场成本 / 均价</dt><dd className="mt-1 font-mono font-semibold">{money(record.cost)} · {record.averageEntry === null ? '—' : `${(record.averageEntry * 100).toFixed(1)}%`}</dd></dl>
-          <dl><dt className="text-xs text-muted-foreground">份额</dt><dd className="mt-1 font-mono text-lg font-semibold tabular-nums">{record.shares.toFixed(2)}</dd></dl>
-          <dl><dt className="text-xs text-muted-foreground">当前可退出价值</dt><dd className="mt-1 font-mono text-lg font-semibold tabular-nums">{money(record.currentExitValue)}</dd></dl>
+          <dl><dt className="text-xs text-muted-foreground">模拟投入 / 买入均价</dt><dd className="mt-1 font-mono font-semibold">{money(record.cost)} · {record.averageEntry === null ? '—' : `${(record.averageEntry * 100).toFixed(1)}%`}</dd></dl>
+          <dl><dt className="text-xs text-muted-foreground">持有份额</dt><dd className="mt-1 font-mono text-lg font-semibold tabular-nums">{record.shares.toFixed(2)}</dd></dl>
+          <dl><dt className="text-xs text-muted-foreground">当前可退出金额</dt><dd className="mt-1 font-mono text-lg font-semibold tabular-nums">{money(record.currentExitValue)}</dd></dl>
           <dl>
-            <dt className="text-xs text-muted-foreground">净 P&L</dt>
+            <dt className="text-xs text-muted-foreground">模拟盈亏</dt>
             <dd className={cn(
               'mt-1 font-mono text-lg font-semibold tabular-nums',
               record.netPnl !== null && record.netPnl > 0 && 'text-primary',

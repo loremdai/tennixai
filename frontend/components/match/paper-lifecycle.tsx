@@ -38,20 +38,20 @@ export function PaperLifecycle({ decision }: { decision: DecisionPreview }) {
         <CardHeader className="border-b">
           <div className="flex flex-wrap items-center gap-2">
             <BookOpenCheck aria-hidden="true" className="size-4 text-primary" />
-            <CardTitle><h2 id="paper-lifecycle-title">Paper lifecycle</h2></CardTitle>
+            <CardTitle><h2 id="paper-lifecycle-title">模拟交易记录</h2></CardTitle>
             <DecisionStatusBadge state={decision.state} />
           </div>
-          <p className="text-sm text-muted-foreground">intent 一旦出现，missed、exit 与 settled 后仍永久保留完整时间线。</p>
+          <p className="text-sm text-muted-foreground">完整记录模拟买入、退出、未成交和结算情况。</p>
         </CardHeader>
 
         <CardContent className="flex flex-col gap-5">
           <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border sm:grid-cols-5">
-            <dl className="bg-card p-3"><dt className="text-xs text-muted-foreground">入场成本</dt><dd className="mt-1 font-mono text-lg font-semibold">${decision.paper.entryCost.toFixed(2)}</dd></dl>
-            <dl className="bg-card p-3"><dt className="text-xs text-muted-foreground">平均入场</dt><dd className="mt-1 font-mono text-lg font-semibold">{(decision.paper.averageEntry * 100).toFixed(1)}%</dd></dl>
-            <dl className="bg-card p-3"><dt className="text-xs text-muted-foreground">份额</dt><dd className="mt-1 font-mono text-lg font-semibold">{noPosition ? '—' : decision.paper.shares.toFixed(2)}</dd></dl>
-            <dl className="bg-card p-3"><dt className="text-xs text-muted-foreground">当前 / 最终价值</dt><dd className="mt-1 font-mono text-lg font-semibold">{noPosition ? '—' : `$${decision.paper.currentExitValue.toFixed(2)}`}</dd></dl>
+            <dl className="bg-card p-3"><dt className="text-xs text-muted-foreground">模拟投入</dt><dd className="mt-1 font-mono text-lg font-semibold">${decision.paper.entryCost.toFixed(2)}</dd></dl>
+            <dl className="bg-card p-3"><dt className="text-xs text-muted-foreground">模拟买入均价</dt><dd className="mt-1 font-mono text-lg font-semibold">{(decision.paper.averageEntry * 100).toFixed(1)}%</dd></dl>
+            <dl className="bg-card p-3"><dt className="text-xs text-muted-foreground">持有份数</dt><dd className="mt-1 font-mono text-lg font-semibold">{noPosition ? '—' : decision.paper.shares.toFixed(2)}</dd></dl>
+            <dl className="bg-card p-3"><dt className="text-xs text-muted-foreground">当前模拟卖出价值</dt><dd className="mt-1 font-mono text-lg font-semibold">{noPosition ? '—' : `$${decision.paper.currentExitValue.toFixed(2)}`}</dd></dl>
             <dl className="col-span-2 bg-card p-3 sm:col-span-1">
-              <dt className="text-xs text-muted-foreground">净 P&amp;L</dt>
+              <dt className="text-xs text-muted-foreground">模拟盈亏</dt>
               <dd className={cn(
                 'mt-1 font-mono text-lg font-semibold',
                 !noPosition && decision.paper.netPnl > 0 && 'text-primary',
@@ -60,7 +60,7 @@ export function PaperLifecycle({ decision }: { decision: DecisionPreview }) {
             </dl>
           </div>
 
-          <ol className="relative flex flex-col" aria-label="Paper 生命周期事件">
+          <ol className="relative flex flex-col" aria-label="模拟交易记录">
             {decision.paper.events.map((item, index) => {
               const Icon = eventIcon[item.status]
               return (

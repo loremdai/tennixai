@@ -87,12 +87,12 @@ describe('ProbabilityMarketChart', () => {
       <ProbabilityMarketChart sides={toChartSides(snapshot(), names)} trajectory={trajectory} overlay="none" />,
     )
     const sideTexts = screen
-      .getAllByText(/模型 /)
+      .getAllByText(/胜率 /)
       .map((element) => element.closest('p')?.textContent ?? element.textContent)
-    expect(sideTexts).toContain('模型 62.0% / ask 57.0%')
-    expect(sideTexts).toContain('模型 38.0% / ask 45.0%')
-    expect(screen.getByRole('note').textContent).toContain('研究方向 Alpha One')
-    expect(screen.getByRole('note').textContent).toContain('两侧报价独立，不强制互补')
+    expect(sideTexts).toContain('胜率 62.0% / 买入价 57.0%')
+    expect(sideTexts).toContain('胜率 38.0% / 买入价 45.0%')
+    expect(screen.getByRole('note').textContent).toContain('你关注的球员是 Alpha One')
+    expect(screen.getByRole('note').textContent).toContain('10 美元模拟买入价为 57.0%')
     expect(screen.getByText('当前选择')).toBeTruthy()
   })
 
@@ -101,10 +101,10 @@ describe('ProbabilityMarketChart', () => {
       <ProbabilityMarketChart sides={toChartSides(snapshot(), names)} trajectory={trajectory} overlay="none" />,
     )
     expect(
-      screen.getByText('模型概率与 $10 可执行市场概率轨迹数据'),
+      screen.getByRole('table', { name: '本次打开页面后的胜率与模拟买入价记录' }),
     ).toBeTruthy()
     const headers = screen.getAllByRole('columnheader').map((cell) => cell.textContent)
-    expect(headers).toEqual(['时间', '模型概率', '市场概率'])
+    expect(headers).toEqual(['时间', '模型估算胜率', '模拟买入价'])
   })
 
   it('renders missing samples as gaps, never interpolated values', () => {
@@ -112,24 +112,24 @@ describe('ProbabilityMarketChart', () => {
       <ProbabilityMarketChart sides={toChartSides(snapshot(), names)} trajectory={trajectory} overlay="gap" />,
     )
     const cells = screen.getAllByRole('cell').map((cell) => cell.textContent)
-    // Row 2 market sample is missing: the table says 数据缺口, not a number.
-    expect(cells).toContain('数据缺口')
-    expect(cells.filter((text) => text === '数据缺口')).toHaveLength(1)
-    expect(screen.getByText('断线不插值')).toBeTruthy()
+    // Row 2 market sample is missing: show a clear absence, never an invented value.
+    expect(cells).toContain('暂无数据')
+    expect(cells.filter((text) => text === '暂无数据')).toHaveLength(1)
+    expect(screen.getByText('比赛数据暂时中断')).toBeTruthy()
   })
 
   it('shows the honest accumulation state before any sample exists', () => {
     render(
       <ProbabilityMarketChart sides={toChartSides(snapshot(), names)} trajectory={[]} overlay="none" />,
     )
-    expect(screen.getByText(/轨迹样本积累中/)).toBeTruthy()
-    expect(screen.queryByText('数据缺口')).toBeNull()
+    expect(screen.getByText(/本次打开页面后才开始记录/)).toBeTruthy()
+    expect(screen.queryByText('暂无数据')).toBeNull()
   })
 
   it('never fabricates prices when the book is absent', () => {
     render(
       <ProbabilityMarketChart sides={toChartSides(snapshot({ outcome_levels: [] }), names)} trajectory={[]} overlay="none" />,
     )
-    expect(screen.getByText(/当前没有可核验的订单簿样本；不伪造价格/)).toBeTruthy()
+    expect(screen.getByText('暂无可用市场报价。')).toBeTruthy()
   })
 })

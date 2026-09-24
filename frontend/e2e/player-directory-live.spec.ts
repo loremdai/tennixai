@@ -161,8 +161,8 @@ test.describe('live directory - Home/Match chat journey', () => {
         .catch(() => {})
     })
     await page.goto('/')
-    await page.getByLabel('继续向 Tennix 提问').fill(question)
-    await page.getByLabel('继续向 Tennix 提问').press('Enter')
+    await page.getByLabel('向 Tennix 提问').fill(question)
+    await page.getByLabel('向 Tennix 提问').press('Enter')
     await waitForChatCompletion(page)
     await expect
       .poll(() => bodies.some((body) => body.includes('event: done')), { timeout: 30_000 })
@@ -244,8 +244,8 @@ test.describe('live directory - Home/Match chat journey', () => {
 
   test('ambiguous or unknown surname ends with candidates or clarification and done', async ({ page }) => {
     await page.goto('/')
-    await page.getByLabel('继续向 Tennix 提问').fill('Wang 最近战绩如何？')
-    await page.getByLabel('继续向 Tennix 提问').press('Enter')
+    await page.getByLabel('向 Tennix 提问').fill('Wang 最近战绩如何？')
+    await page.getByLabel('向 Tennix 提问').press('Enter')
     await waitForChatCompletion(page)
     // Both recoverable resolver outcomes are acceptable: an ambiguous
     // candidate list or an honest clarification asking for more detail.
@@ -260,8 +260,8 @@ test.describe('live directory - Home/Match chat journey', () => {
 
   test('match chat answers Shelton serve questions in match context', async ({ page }) => {
     await page.goto('/')
-    await page.getByLabel('继续向 Tennix 提问').fill('谢尔顿现在比分多少？')
-    await page.getByLabel('继续向 Tennix 提问').press('Enter')
+    await page.getByLabel('向 Tennix 提问').fill('谢尔顿现在比分多少？')
+    await page.getByLabel('向 Tennix 提问').press('Enter')
     await waitForChatCompletion(page)
 
     const card = page.getByRole('link', { name: /打开比赛：/ }).first()

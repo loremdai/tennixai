@@ -15,37 +15,36 @@ import type {
   TourTier,
 } from '@/components/p3/p3-preview-data'
 import { ProductHeader } from '@/components/match/match-header'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 
 const views: Array<{ value: MarketView; label: string; description: string }> = [
-  { value: 'opportunities', label: '机会', description: 'BUY 与 WAIT' },
-  { value: 'all', label: '全部市场', description: '覆盖与 market-only' },
-  { value: 'paper', label: 'Paper', description: '生命周期账本' },
+  { value: 'opportunities', label: '机会', description: '模型判断与关注理由' },
+  { value: 'all', label: '全部市场', description: '比赛与最新报价' },
+  { value: 'paper', label: '模拟记录', description: '仅供模拟，不涉及真实资金' },
 ]
 
 const stateOptions: Record<MarketView, Array<{ value: MarketsPreviewState; label: string }>> = {
   opportunities: [
-    { value: 'populated', label: 'BUY + WAIT' },
+    { value: 'populated', label: '有买入或观望信号' },
     { value: 'empty', label: '暂无机会' },
-    { value: 'partial_stale', label: '部分 stale' },
-    { value: 'error', label: '页面错误' },
+    { value: 'partial_stale', label: '部分报价更新较慢' },
+    { value: 'error', label: '暂时无法加载' },
   ],
   all: [
-    { value: 'populated', label: '完整覆盖' },
-    { value: 'partial_stale', label: '部分 stale' },
+    { value: 'populated', label: '有可展示的市场' },
+    { value: 'partial_stale', label: '部分报价更新较慢' },
     { value: 'filtered_empty', label: '筛选后为空' },
-    { value: 'supplier_empty', label: '供应商无市场' },
-    { value: 'error', label: '页面错误' },
+    { value: 'supplier_empty', label: '暂无市场报价' },
+    { value: 'error', label: '暂时无法加载' },
   ],
   paper: [
-    { value: 'open', label: 'pending / open' },
-    { value: 'terminal', label: 'exit / missed / settled' },
+    { value: 'open', label: '进行中的模拟记录' },
+    { value: 'terminal', label: '已结束的模拟记录' },
     { value: 'resolution_pending', label: '退出确认中' },
     { value: 'empty', label: '暂无记录' },
-    { value: 'error', label: '页面错误' },
+    { value: 'error', label: '暂时无法加载' },
   ],
 }
 
@@ -160,28 +159,26 @@ export function MarketsPage({
         <section className="flex flex-col gap-4 border-b pb-6 md:flex-row md:items-end md:justify-between" aria-labelledby="markets-title">
           <div className="max-w-3xl">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="font-mono text-xs font-semibold tracking-[0.18em] text-primary">DECISION SUPPORT</p>
-              <Badge data-tone="beta" variant="outline">BETA</Badge>
-              <Badge variant="secondary">PAPER ONLY</Badge>
+              <span className="rounded-full border px-2.5 py-1 text-xs text-muted-foreground">仅模拟</span>
             </div>
-            <h1 id="markets-title" className="mt-3 text-balance text-3xl font-semibold tracking-[-0.035em] sm:text-4xl">市场决策支持</h1>
+            <h1 id="markets-title" className="mt-3 text-balance text-3xl font-semibold tracking-[-0.035em] sm:text-4xl">比赛市场</h1>
             <p className="mt-3 max-w-2xl text-pretty text-sm leading-relaxed text-muted-foreground sm:text-base">
-              从机会进入单场证据页，再回到账本复盘；报价、模型与生命周期状态保持可核验且不混写。
+              查看市场报价和模型判断。所有记录都仅供模拟，不会触发真实交易。
             </p>
           </div>
           <div className="flex items-start gap-2 rounded-lg bg-muted/30 p-3 text-xs leading-relaxed text-muted-foreground md:max-w-xs">
             <ShieldCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-primary" />
-            Preview 使用固定 fixtures，不请求后端、不连接钱包、不执行真实交易。
+            这是演示数据，不会连接账户或进行真实交易。
           </div>
         </section>
 
         <P3PreviewControls
-          title="Markets · P3 状态预览"
-          description="URL 保存 tab、业务状态和叠加筛选。"
+          title="市场页面演示"
+          description="切换页面状态，预览不同数据情况下的展示效果。"
           fields={[
             {
               key: 'state',
-              label: '业务状态',
+            label: '页面状态',
               value: state,
               options: stateOptions[view],
             },
@@ -215,7 +212,7 @@ export function MarketsPage({
         {state === 'partial_stale' ? (
           <div role="status" className="flex items-start gap-2 rounded-xl border border-destructive/25 bg-destructive/8 p-4 text-sm text-destructive">
             <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-            部分市场已超过 freshness 阈值。其最后可信数字仍保留，但对应动作已撤销。
+            部分市场报价更新较慢。页面显示上次有效价格，并暂停相关判断。
           </div>
         ) : null}
 
@@ -233,7 +230,7 @@ export function MarketsPage({
                 </div>
                 <div>
                   <h2 className="font-semibold">市场页面加载失败</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">preview_error · 其他 Tennix 页面仍可继续使用。</p>
+                  <p className="mt-1 text-sm text-muted-foreground">暂时无法显示市场数据，请重试。</p>
                 </div>
                 <Button
                   variant="outline"
@@ -270,7 +267,7 @@ export function MarketsPage({
       <footer className="border-t">
         <div className="mx-auto flex max-w-7xl flex-col justify-between gap-2 px-4 py-5 text-sm text-muted-foreground sm:flex-row md:px-6">
           <span>Tennix · 比赛智能，逐分解释</span>
-          <span>仅用于研究与 Paper 模拟，不构成财务建议</span>
+          <span>仅供参考与模拟，不涉及真实资金</span>
         </div>
       </footer>
     </div>

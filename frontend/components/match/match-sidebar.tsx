@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ChatWarnings } from '@/components/chat-warnings'
 import { MarkdownAnswer } from '@/components/markdown-answer'
+import { userFacingApiError } from '@/lib/api/user-facing-errors'
 import {
   Card,
   CardAction,
@@ -29,7 +30,7 @@ import {
 } from '@/components/ui/input-group'
 import { chatProgressLabel, type ChatViewState } from '@/hooks/use-chat-stream'
 import { getChatAnswerLabel } from '@/lib/chat-answer'
-import { formatAsOf, type MatchViewModel } from '@/lib/view-models'
+import type { MatchViewModel } from '@/lib/view-models'
 
 import type { MatchStatus } from './match-data'
 import {
@@ -56,9 +57,9 @@ const productionPromptsByStatus: Record<MatchViewModel['visualStatus'], string[]
 
 const productionContextDescriptions: Record<MatchViewModel['visualStatus'], string> = {
   upcoming: '已锁定本场比赛的赛程与对阵',
-  live: '与 Tennix 结构化比分同步',
-  finished: '基于本场比赛的最终结构化数据',
-  unavailable: '比赛状态待确认',
+  live: '同步本场最新比分',
+  finished: '依据本场最终比分和赛况',
+  unavailable: '目前无法确认比赛状态',
 }
 
 export function AssistantPanel({
@@ -164,7 +165,7 @@ export function AssistantPanel({
 
                 <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
                   <CircleCheck aria-hidden="true" className="size-4" />
-                  已连接本场比赛上下文
+                  已带入本场比赛信息
                 </div>
               </article>
             ) : (
@@ -176,12 +177,11 @@ export function AssistantPanel({
                 <BrainCircuit aria-hidden="true" className="size-4" />
                 {getChatAnswerLabel(chat, 'match')}
               </div>
-              <MarkdownAnswer content={chat.text || (chat.error ? `查询失败（${chat.error.code}），请重试。` : '')} />
+              <MarkdownAnswer content={chat.text || (chat.error ? userFacingApiError(chat.error.code, 'assistant') : '')} />
               <ChatWarnings warnings={chat.warnings} />
               {answerIsOutdated ? (
                 <p className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200" role="status">
-                  比赛在回答期间更新；本回答固定基于提问时版本 {chat.answerContext?.state_version}
-                  {formatAsOf(chat.answerContext?.as_of ?? null) ? `（${formatAsOf(chat.answerContext?.as_of ?? null)}）` : ''}，当前为版本 {currentStateVersion}。
+                  比赛在回答期间更新；这份回答依据提问时的比分，可能未包含最新变化。
                 </p>
               ) : null}
               {chat.phase === 'loading' || chat.phase === 'streaming' ? (
@@ -274,7 +274,7 @@ export function KeyFactsCard({ match, preview }: { match: MatchViewModel; previe
             <div key={player.id} className="min-w-0">
               <p className="truncate text-sm text-muted-foreground">{player.shortName}</p>
               <p className="mt-1 font-mono text-lg font-semibold">
-                {player.ranking !== null ? `#${player.ranking}` : '官方未返回排名'}
+                {player.ranking !== null ? `#${player.ranking}` : '排名暂未提供'}
               </p>
             </div>
           ))}
@@ -292,7 +292,7 @@ export function KeyFactsCard({ match, preview }: { match: MatchViewModel; previe
               <KeyFact label="赛事" value={match.round} detail={match.tournament} />
               <KeyFact label="场地" value={match.indoorLabel} detail={match.surface} />
               <KeyFact label="赛制" value={match.format} detail={`开赛 ${match.scheduledTime}（${match.timezoneLabel}）`} />
-              <KeyFact label="数据新鲜度" value={match.isStale ? '较旧' : '最新'} detail={match.freshnessLabel} />
+              <KeyFact label="数据更新时间" value={match.isStale ? '可能延迟' : '最新'} detail={match.freshnessLabel} />
             </>
           )}
         </div>
@@ -305,28 +305,14 @@ function MarketCard() {
   return (
     <Card id="market-intelligence" data-tone="market">
       <CardHeader>
-        <CardTitle><h2>市场智能</h2></CardTitle>
-        <p className="text-sm text-muted-foreground">后续决策能力占位</p>
-        <CardAction><Badge variant="outline">P3 后可用</Badge></CardAction>
+        <CardTitle><h2>本场市场信息</h2></CardTitle>
+        <p className="text-sm text-muted-foreground">暂无可展示的市场报价</p>
+        <CardAction><Badge variant="outline">暂无数据</Badge></CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <dl className="grid grid-cols-3 gap-3 rounded-lg border border-dashed bg-muted/15 p-3">
-          <div>
-            <dt className="text-xs text-muted-foreground">模型概率</dt>
-            <dd className="mt-1 font-mono text-xl font-semibold">—</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-muted-foreground">市场概率</dt>
-            <dd className="mt-1 font-mono text-xl font-semibold">—</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-muted-foreground">优势</dt>
-            <dd className="mt-1 font-mono text-xl font-semibold">—</dd>
-          </div>
-        </dl>
         <div className="flex items-start gap-2 text-sm leading-relaxed text-muted-foreground">
           <CircleDot aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-          P3 将在此加入公允价、置信度与建议，不改变当前比赛页结构。
+          有真实报价时，我们会单独展示市场价格和模型估算胜率，不会混为一谈。
         </div>
       </CardContent>
     </Card>

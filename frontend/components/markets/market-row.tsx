@@ -45,7 +45,7 @@ function formatPercent(value: number | null): string {
 const phaseLabels: Record<MarketRowData['phase'], string> = {
   live: '直播',
   upcoming: '即将开始',
-  closed: '已收盘',
+  closed: '已结束',
 }
 
 export function MarketRow({ market }: { market: MarketRowData }) {
@@ -69,17 +69,17 @@ export function MarketRow({ market }: { market: MarketRowData }) {
 
         <dl className="grid grid-cols-2 gap-3 rounded-lg bg-muted/30 p-3">
           <div>
-            <dt className="truncate text-xs text-muted-foreground">{market.playerOne} ask</dt>
+            <dt className="truncate text-xs text-muted-foreground">{market.playerOne} 胜出报价</dt>
             <dd className="mt-1 font-mono text-lg font-semibold tabular-nums">{formatPercent(market.playerOneAsk)}</dd>
           </div>
           <div>
-            <dt className="truncate text-xs text-muted-foreground">{market.playerTwo} ask</dt>
+            <dt className="truncate text-xs text-muted-foreground">{market.playerTwo} 胜出报价</dt>
             <dd className="mt-1 font-mono text-lg font-semibold tabular-nums">{formatPercent(market.playerTwoAsk)}</dd>
           </div>
         </dl>
 
         <dl>
-          <dt className="text-xs text-muted-foreground">模型概率</dt>
+          <dt className="text-xs text-muted-foreground">模型估算胜率</dt>
           <dd className="mt-1 font-mono text-lg font-semibold tabular-nums">{formatPercent(market.modelProbability)}</dd>
           {market.modelAvailabilityLabel ? (
             <dd className="mt-1 text-xs text-muted-foreground">{market.modelAvailabilityLabel}</dd>
@@ -87,9 +87,9 @@ export function MarketRow({ market }: { market: MarketRowData }) {
         </dl>
 
         <dl className="grid grid-cols-2 gap-3">
-          <div><dt className="text-xs text-muted-foreground">spread</dt><dd className="mt-1 font-mono font-semibold">{formatPercent(market.spread)}</dd></div>
-          <div><dt className="text-xs text-muted-foreground">depth</dt><dd className="mt-1 font-mono font-semibold">{market.depth === null ? '—' : `$${market.depth}`}</dd></div>
-          <div className="col-span-2"><dt className="sr-only">新鲜度</dt><dd className={cn('text-xs text-muted-foreground', market.stale && 'text-destructive')}>{market.freshness}</dd></div>
+          <div><dt className="text-xs text-muted-foreground">买卖价差</dt><dd className="mt-1 font-mono font-semibold">{formatPercent(market.spread)}</dd></div>
+          <div><dt className="text-xs text-muted-foreground">可交易金额</dt><dd className="mt-1 font-mono font-semibold">{market.depth === null ? '—' : `$${market.depth.toLocaleString('en-US', { maximumFractionDigits: 2 })}`}</dd></div>
+          <div className="col-span-2"><dt className="sr-only">报价更新时间</dt><dd className={cn('text-xs text-muted-foreground', market.stale && 'text-destructive')}>{market.freshness}</dd></div>
         </dl>
 
         <div className="flex items-center justify-between gap-2 md:justify-end">
@@ -112,7 +112,7 @@ export function MarketRow({ market }: { market: MarketRowData }) {
     // Unmapped market-only rows are not navigable; the card stays visible
     // without inventing a destination.
     return (
-      <div className="group rounded-xl" aria-label={`${market.match} 市场（仅市场数据）`}>
+      <div className="group rounded-xl" aria-label={`${market.match} 市场报价`}>
         {card}
       </div>
     )

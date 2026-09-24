@@ -93,7 +93,7 @@ export function MatchStatisticsCard({
     <div className="flex flex-col gap-5">
       {known.length === 0 ? (
         <p className="rounded-lg bg-muted/25 p-4 text-sm text-muted-foreground">
-          供应商尚未返回本场技术统计；已返回的项目才会展示，缺失不会按 0 处理。
+          本场比赛暂未提供技术统计。
         </p>
       ) : (
         groups.map((view) => (
@@ -114,18 +114,18 @@ export function MatchStatisticsCard({
                     </span>
                     {row.stale ? (
                       <span className="text-[11px] sm:text-xs">
-                        数据较旧 · {formatAsOf(row.asOf) ?? '观测时间未知'}
+                        数据可能延迟 · {formatAsOf(row.asOf) ?? '更新时间暂不可用'}
                       </span>
                     ) : null}
                   </span>
                   <span className="font-mono text-sm font-medium tabular-nums">
-                    {row.p2 === null ? '官方未返回' : formatStatValue(row.p2, row.unit)}
+                    {row.p2 === null ? '暂未提供' : formatStatValue(row.p2, row.unit)}
                   </span>
                 </div>
               ))}
               {view.missing.map((label) => (
                 <p key={label} className="py-1.5 text-xs text-muted-foreground">
-                  {label}官方未返回
+                  {label}暂未提供
                 </p>
               ))}
             </div>
@@ -154,12 +154,9 @@ export function MatchStatisticsCard({
         </section>
       ) : null}
 
-      <p className="text-xs text-muted-foreground">
-        {formattedAsOf
-          ? `最近统计观测：${formattedAsOf}；各项时间可能不同`
-          : '统计时间官方未返回'}{' '}
-        · 缺失能力保持缺失，不猜测
-      </p>
+      {formattedAsOf ? (
+        <p className="text-xs text-muted-foreground">数据更新于 {formattedAsOf}</p>
+      ) : null}
     </div>
   )
 }

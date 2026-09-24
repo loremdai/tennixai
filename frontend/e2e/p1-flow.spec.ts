@@ -61,8 +61,8 @@ test.describe('P1 flow', () => {
     )
 
     await page.goto('/')
-    await page.getByLabel('继续向 Tennix 提问').fill('分析这场比赛的趋势')
-    await page.getByLabel('继续向 Tennix 提问').press('Enter')
+    await page.getByLabel('向 Tennix 提问').fill('分析这场比赛的趋势')
+    await page.getByLabel('向 Tennix 提问').press('Enter')
 
     await expect(page.getByText('最终结果已经整理。')).toBeVisible()
     await expect(page.getByRole('link', { name: '打开比赛：Sinner 对阵 Alcaraz' })).toBeVisible()
@@ -74,8 +74,8 @@ test.describe('P1 flow', () => {
 
   test('home question renders a structured card that opens the internal match page', async ({ page }) => {
     await page.goto('/')
-    await page.getByLabel('继续向 Tennix 提问').fill('Sinner 今晚几点比赛？')
-    await page.getByLabel('继续向 Tennix 提问').press('Enter')
+    await page.getByLabel('向 Tennix 提问').fill('Sinner 今晚几点比赛？')
+    await page.getByLabel('向 Tennix 提问').press('Enter')
 
     const card = page.getByRole('link', { name: /打开比赛：Sinner 对阵/ }).first()
     await expect(card).toBeVisible()
@@ -84,7 +84,7 @@ test.describe('P1 flow', () => {
 
     await card.click()
     await expect(page.getByRole('heading', { name: /Sinner/ }).first()).toBeVisible()
-    await expect(page.getByText('供应商尚未返回本场技术统计').first()).toBeVisible()
+    await expect(page.getByText('本场比赛暂未提供技术统计。').first()).toBeVisible()
   })
 
   test('keeps structured cards in the viewport after a long markdown answer', async ({ page }) => {
@@ -138,8 +138,8 @@ test.describe('P1 flow', () => {
     )
 
     await page.goto('/')
-    await page.getByLabel('继续向 Tennix 提问').fill('Sinner 下一场比赛是什么时候？')
-    await page.getByLabel('继续向 Tennix 提问').press('Enter')
+    await page.getByLabel('向 Tennix 提问').fill('Sinner 下一场比赛是什么时候？')
+    await page.getByLabel('向 Tennix 提问').press('Enter')
 
     const card = page.getByRole('link', { name: '打开比赛：Sinner 对阵 Alcaraz' })
     await expect(card).toBeVisible()
@@ -182,10 +182,10 @@ test.describe('P1 flow', () => {
 
   test('broad historical question returns typed unsupported without a card', async ({ page }) => {
     await page.goto('/')
-    await page.getByLabel('继续向 Tennix 提问').fill('Sinner 的全部历史战绩')
-    await page.getByLabel('继续向 Tennix 提问').press('Enter')
+    await page.getByLabel('向 Tennix 提问').fill('Sinner 的全部历史战绩')
+    await page.getByLabel('向 Tennix 提问').press('Enter')
 
-    await expect(page.getByText('P2 暂不支持大范围历史查询。')).toBeVisible()
+    await expect(page.getByText('目前无法查询球员的全部历史赛果，可以试试查询最近的比赛或指定赛季。')).toBeVisible()
     await expect(page.getByRole('link', { name: /打开比赛：/ }).first()).toBeHidden()
   })
 
@@ -206,7 +206,7 @@ test.describe('P1 flow', () => {
     })
 
     await page.goto('/')
-    await expect(page.getByText(/比赛数据加载失败（provider_unavailable）/)).toBeVisible()
+    await expect(page.getByText('比赛信息暂时无法加载，请稍后重试。')).toBeVisible()
     await expect(page.getByRole('button', { name: '重试加载比赛数据' })).toBeVisible()
   })
 })

@@ -36,19 +36,19 @@ export function PaperLifecycleLive({ paper }: { paper: PaperModel }) {
         <CardHeader className="border-b">
           <div className="flex flex-wrap items-center gap-2">
             <BookOpenCheck aria-hidden="true" className="size-4 text-primary" />
-            <CardTitle><h2 id="paper-lifecycle-title">Paper lifecycle</h2></CardTitle>
+            <CardTitle><h2 id="paper-lifecycle-title">模拟交易记录</h2></CardTitle>
             <DecisionStatusBadge state={paper.state} />
           </div>
-          <p className="text-sm text-muted-foreground">intent 一旦出现，missed、exit 与 settled 后仍永久保留完整时间线。</p>
+          <p className="text-sm text-muted-foreground">完整记录模拟买入、退出、未成交和结算情况。</p>
         </CardHeader>
 
         <CardContent className="flex flex-col gap-5">
           <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border sm:grid-cols-5">
-            <dl className="bg-card p-3"><dt className="text-xs text-muted-foreground">入场成本 / 均价</dt><dd className="mt-1 font-mono text-lg font-semibold">{`$${paper.entryCost.toFixed(2)}`} · {paper.averageEntry === null ? '—' : `${(paper.averageEntry * 100).toFixed(1)}%`}</dd></dl>
-            <dl className="bg-card p-3"><dt className="text-xs text-muted-foreground">份额</dt><dd className="mt-1 font-mono text-lg font-semibold">{noPosition ? '—' : paper.shares.toFixed(2)}</dd></dl>
-            <dl className="bg-card p-3"><dt className="text-xs text-muted-foreground">当前 / 最终价值</dt><dd className="mt-1 font-mono text-lg font-semibold">{noPosition || paper.currentExitValue === null ? '—' : `$${paper.currentExitValue.toFixed(2)}`}</dd></dl>
+            <dl className="bg-card p-3"><dt className="text-xs text-muted-foreground">模拟投入 / 买入均价</dt><dd className="mt-1 font-mono text-lg font-semibold">{`$${paper.entryCost.toFixed(2)}`} · {paper.averageEntry === null ? '—' : `${(paper.averageEntry * 100).toFixed(1)}%`}</dd></dl>
+            <dl className="bg-card p-3"><dt className="text-xs text-muted-foreground">持有份数</dt><dd className="mt-1 font-mono text-lg font-semibold">{noPosition ? '—' : paper.shares.toFixed(2)}</dd></dl>
+            <dl className="bg-card p-3"><dt className="text-xs text-muted-foreground">当前模拟卖出价值</dt><dd className="mt-1 font-mono text-lg font-semibold">{noPosition || paper.currentExitValue === null ? '—' : `$${paper.currentExitValue.toFixed(2)}`}</dd></dl>
             <dl className="col-span-2 bg-card p-3 sm:col-span-1">
-              <dt className="text-xs text-muted-foreground">净 P&amp;L</dt>
+              <dt className="text-xs text-muted-foreground">模拟盈亏</dt>
               <dd className={cn(
                 'mt-1 font-mono text-lg font-semibold',
                 !noPosition && paper.netPnl !== null && paper.netPnl > 0 && 'text-primary',
@@ -58,7 +58,7 @@ export function PaperLifecycleLive({ paper }: { paper: PaperModel }) {
             </dl>
           </div>
 
-          <ol className="relative flex flex-col" aria-label="Paper 生命周期事件">
+          <ol className="relative flex flex-col" aria-label="模拟交易记录">
             {paper.events.map((item, index) => {
               const Icon = eventIcon[item.status]
               return (

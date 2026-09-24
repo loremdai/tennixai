@@ -31,19 +31,19 @@ const states: Array<[string, (page: Page) => Promise<void>]> = [
       return route.continue()
     })
     await preparePage(page, '/')
-    await page.getByText(/比赛数据加载失败（provider_unavailable）/).waitFor()
+    await page.getByText('比赛信息暂时无法加载，请稍后重试。').waitFor()
   }],
   ['p1-match-live', async (page) => {
     await preparePage(page, '/')
     await page.getByRole('link', { name: '打开比赛', exact: true }).click()
     await page.locator('#match').waitFor()
-    await page.getByText('供应商尚未返回本场技术统计').first().waitFor()
+    await page.getByText('本场比赛暂未提供技术统计。').first().waitFor()
   }],
   ['p1-match-upcoming', async (page) => {
     await preparePage(page, '/?q=' + encodeURIComponent('Sinner 今晚几点比赛？'))
     await page.getByRole('link', { name: /打开比赛：Sinner 对阵 Alcaraz/ }).first().click()
     await page.locator('#match').waitFor()
-    await page.getByText('P2 数据暂不可用').first().waitFor()
+    await page.getByText('比赛开始后查看技术统计').first().waitFor()
   }],
   ['p1-preview-finished', async (page) => {
     await preparePage(page, '/match?status=finished')

@@ -280,7 +280,7 @@ describe('production match page', () => {
     render(<MatchPage matchId="mat_1" />)
 
     await screen.findByText('Jannik Sinner')
-    expect(screen.getAllByText('当前盘官方未返回')).toHaveLength(2)
+    expect(screen.getByText('盘数暂未提供')).toBeVisible()
     expect(screen.queryAllByText('第 2 盘')).toHaveLength(0)
     const liveTable = screen.getByRole('table', { name: '实时比赛比分' })
     expect(within(liveTable).getByRole('columnheader', { name: '2' })).not.toHaveClass('text-primary')
@@ -295,7 +295,7 @@ describe('production match page', () => {
 
     await screen.findByText('Jannik Sinner')
     expect(screen.queryAllByText('接发球')).toHaveLength(0)
-    expect(screen.getAllByText('发球方官方未返回')).toHaveLength(2)
+    expect(screen.getAllByText('发球方暂未提供')).toHaveLength(2)
   })
 
   it('does not invent a set label when a live snapshot has no set rows', async () => {
@@ -352,7 +352,17 @@ describe('production match page', () => {
     render(<MatchPage matchId="mat_1" />)
 
     await screen.findByText('Jannik Sinner')
-    expect(screen.getAllByText(/官方未返回|官方未提供/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/暂未提供|暂缺|暂无/).length).toBeGreaterThan(0)
+  })
+
+  it('does not describe an unconfirmed match as waiting to start', async () => {
+    nextMatch = makeMatch({ status: 'unknown', live_state: null })
+
+    render(<MatchPage matchId="mat_1" />)
+
+    expect(await screen.findAllByText('比赛信息待更新')).not.toHaveLength(0)
+    expect(screen.getByText('目前无法获取这场比赛的比分，请稍后再看。')).toBeVisible()
+    expect(screen.queryByText('比赛开始后，这里会显示每盘比分、当前局分和发球方。')).toBeNull()
   })
 
   it('shows the stale indicator', async () => {
@@ -361,7 +371,7 @@ describe('production match page', () => {
 
     render(<MatchPage matchId="mat_1" />)
 
-    expect(await screen.findAllByText(/数据较旧 · 180 秒未刷新/)).not.toHaveLength(0)
+    expect(await screen.findAllByText(/数据可能延迟 · 3 分钟前/)).not.toHaveLength(0)
   })
 
   it('refresh reloads the match exactly once more', async () => {
@@ -383,7 +393,10 @@ describe('production match page', () => {
 
     render(<MatchPage matchId="mat_missing" />)
 
-    expect(await screen.findByText(/比赛不存在/)).toBeVisible()
+    expect(await screen.findByText('未找到这场比赛')).toBeVisible()
+    expect(screen.getByText(/比赛可能已结束，或此链接已失效/)).toBeVisible()
+    expect(screen.getByRole('link', { name: '返回首页' })).toHaveAttribute('href', '/')
+    expect(screen.queryByText(/内部 ID|进程重启/)).toBeNull()
   })
 
   it('renders provider errors with retry', async () => {
@@ -393,7 +406,8 @@ describe('production match page', () => {
 
     render(<MatchPage matchId="mat_1" />)
 
-    expect(await screen.findByText(/provider_unavailable/)).toBeVisible()
+    expect(await screen.findByText('比赛详情暂时无法加载，请稍后重试。')).toBeVisible()
+    expect(screen.queryByText(/provider_unavailable/)).toBeNull()
     await userEvent.click(screen.getByRole('button', { name: '重试加载比赛' }))
 
     await waitFor(() => {
@@ -460,8 +474,9 @@ describe('production match page', () => {
     render(<MatchPage matchId="mat_1" />)
     await screen.findByText('Jannik Sinner')
 
-    expect(screen.getByText(/供应商尚未返回本场技术统计/)).toBeVisible()
-    expect(screen.getByText(/供应商尚未返回逐分数据/)).toBeVisible()
+    expect(screen.getByText(/本场比赛暂未提供技术统计/)).toBeVisible()
+    expect(screen.getByText(/本场比赛暂无逐分记录/)).toBeVisible()
+    expect(screen.queryByText(/供应商|P2 数据/)).toBeNull()
     expect(screen.queryByText('一发成功率')).toBeNull()
     expect(screen.queryByText(/Sinner \+14/)).toBeNull()
   })
@@ -563,8 +578,8 @@ describe('prototype preview route', () => {
     expect(await screen.findByText('Jannik Sinner')).toBeVisible()
     expect(screen.getByText('比赛状态预览')).toBeVisible()
     expect(screen.getByText('一发成功率')).toBeVisible()
-    expect(screen.getByText(/Sinner \+14/)).toBeVisible()
-    expect(screen.getByText('样例数据仅用于产品界面演示')).toBeVisible()
+    expect(screen.getByText(/Sinner 最近 7 个短回合中赢下 5 分/)).toBeVisible()
+    expect(screen.getByText('样例数据仅供参考，不代表实时比赛')).toBeVisible()
   })
 
   it('switches preview status without touching the backend', async () => {
@@ -659,6 +674,25 @@ describe('production decision workbench (T69)', () => {
     ).toBeTruthy()
   })
 
+  it('keeps the live decision page consumer-facing and collapses audit metadata', async () => {
+    const { container } = render(<MatchPage matchId="mat_1" />)
+
+    await screen.findByText('判断依据')
+    expect(screen.getByText('关注球员')).toBeVisible()
+    expect(screen.getByText('判断把握')).toBeVisible()
+    expect(screen.queryByText(/研究方向|模型状态|暂不在模型范围内/)).toBeNull()
+    expect(screen.getByText('影响本次判断的因素')).toBeVisible()
+    expect(screen.getByText('查看判断细节')).toBeVisible()
+    const evidence = container.querySelector('[aria-labelledby="decision-evidence-title"]')!
+    const details = evidence.querySelector('details')!
+    expect(details).not.toHaveAttribute('open')
+    expect(screen.queryByText('prematch-elo-v1')).toBeNull()
+    expect(container.textContent).not.toMatch(/P3 BETA|Decision Evidence|Paper lifecycle|hard gates|freshness|STALE|DATA GAP|FOK|P&L/i)
+    await userEvent.click(screen.getByText('查看判断细节'))
+    expect(screen.queryByText('prematch-elo-v1')).toBeNull()
+    expect(screen.getByText(/本次判断时间/)).toBeVisible()
+  })
+
   it('follows the frozen mobile DOM order inside the content grid', async () => {
     const { container } = render(<MatchPage matchId="mat_1" />)
 
@@ -671,11 +705,11 @@ describe('production decision workbench (T69)', () => {
       '比分与比赛进程',
       '关键事实',
       '比赛概览',
-      '概率—市场轨迹',
-      'Decision Evidence & Gates',
+      '胜率与市场价格走势',
+      '判断依据',
       '技术统计',
-      '逐分与动量',
-      'Paper lifecycle',
+      '得分走势与关键分',
+      '模拟交易记录',
       '本场比赛助手',
     ])
   })
@@ -683,21 +717,20 @@ describe('production decision workbench (T69)', () => {
   it('removes the legacy MarketCard and the duplicate AI insight card', async () => {
     render(<MatchPage matchId="mat_1" />)
 
-    await waitFor(() => expect(screen.getByText('概率—市场轨迹')).toBeTruthy())
-    expect(screen.queryByText('市场智能')).toBeNull()
-    expect(screen.queryByText('P3 后可用')).toBeNull()
+    await waitFor(() => expect(screen.getByText('胜率与市场价格走势')).toBeTruthy())
+    expect(screen.queryByRole('heading', { name: '本场市场信息' })).toBeNull()
     expect(screen.queryByText('本场比赛问题建议')).toBeNull()
   })
 
   it('preserves the P2 score, stats, PBP and assistant sections', async () => {
     render(<MatchPage matchId="mat_1" />)
 
-    await waitFor(() => expect(screen.getByText('概率—市场轨迹')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('胜率与市场价格走势')).toBeTruthy())
     for (const heading of [
       '比赛概览',
       '比分与比赛进程',
       '技术统计',
-      '逐分与动量',
+      '得分走势与关键分',
       '本场比赛助手',
       '关键事实',
     ]) {
@@ -729,11 +762,11 @@ describe('production decision workbench (T69)', () => {
     render(<MatchPage matchId="mat_1" />)
 
     await waitFor(() =>
-      expect(screen.getByText(/决策流已降级：保留最后可信决策快照/)).toBeTruthy(),
+      expect(screen.getByText(/判断暂时无法更新，仍显示最近一次结果/)).toBeTruthy(),
     )
-    expect(screen.getByText(/比赛实时流不受影响/)).toBeTruthy()
+    expect(screen.getByText(/比赛实时比分不受影响/)).toBeTruthy()
     // The last trusted workbench view stays rendered.
-    expect(screen.getByText('概率—市场轨迹')).toBeTruthy()
+    expect(screen.getByText('胜率与市场价格走势')).toBeTruthy()
   })
 
   it('keeps the P2 layout minus MarketCard without decision context', async () => {
@@ -742,7 +775,7 @@ describe('production decision workbench (T69)', () => {
 
     await waitFor(() => expect(screen.getByText('比赛概览')).toBeTruthy())
     expect(screen.queryByText('市场智能')).toBeNull()
-    expect(screen.queryByText('概率—市场轨迹')).toBeNull()
+    expect(screen.queryByText('胜率与市场价格走势')).toBeNull()
     expect(screen.getByText('本场比赛问题建议')).toBeTruthy()
   })
 })

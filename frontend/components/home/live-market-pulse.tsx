@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowRight, CircleAlert, Radar, ShieldCheck } from 'lucide-react'
 
-import { DecisionStatusBadge } from '@/components/p3/decision-status'
+import { DecisionStatusBadge, decisionStateLabels } from '@/components/p3/decision-status'
 import { Badge } from '@/components/ui/badge'
 import {
   Card,
@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
 import { ApiError, getMarketPulse } from '@/lib/api/client'
+import { userFacingApiError } from '@/lib/api/user-facing-errors'
 import { useMarketStream } from '@/hooks/use-market-stream'
 import { selectHomePulseRows, toPulseRow, type PulseRowModel } from '@/lib/p3-view-models'
 import { cn } from '@/lib/utils'
@@ -27,7 +28,7 @@ function formatPercent(value: number | null): string {
 
 function formatEdge(value: number | null): string {
   if (value === null) return '—'
-  return `${value > 0 ? '+' : ''}${value.toFixed(1)}pp`
+  return `${value > 0 ? '+' : ''}${value.toFixed(1)} 个百分点`
 }
 
 type PulseStatus = 'probing' | 'ready' | 'empty' | 'error' | 'disabled'
@@ -117,9 +118,8 @@ export function LiveMarketPulse({
             <Radar aria-hidden="true" className="size-4" />
             <CardTitle><h2 id="market-pulse-title">市场脉搏</h2></CardTitle>
           </div>
-          <p className="text-sm text-muted-foreground">开放 Paper position 优先，其次是直播 BUY 与最强 WAIT。</p>
+          <p className="text-sm text-muted-foreground">优先显示进行中的模拟记录，以及正在直播或即将开始的比赛。</p>
           <CardAction className="flex items-center gap-2">
-            <Badge data-tone="beta" variant="outline">BETA</Badge>
             <Link href="/markets" className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}>
               查看全部
               <ArrowRight data-icon="inline-end" aria-hidden="true" />
@@ -131,7 +131,8 @@ export function LiveMarketPulse({
           {status === 'error' ? (
             <div role="alert" className="mx-4 mb-3 flex items-start gap-2 rounded-lg border border-destructive/25 bg-destructive/8 p-3 text-sm text-destructive">
               <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-              市场脉搏刷新失败（{errorCode}）；其他 Tennix 信息不受影响。
+              <span>{userFacingApiError(errorCode, 'market')}</span>
+              <span>其他 Tennix 信息不受影响。</span>
               <button type="button" className="underline" onClick={() => void load()}>重试</button>
             </div>
           ) : null}
@@ -139,7 +140,7 @@ export function LiveMarketPulse({
           {anyStale ? (
             <div role="status" className="mx-4 mb-3 flex items-start gap-2 rounded-lg border border-destructive/25 bg-destructive/8 p-3 text-sm text-destructive">
               <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-              开放仓位的 freshness 已超阈值；保留最后可信数字，但不提供可执行动作。
+              部分市场报价更新较慢，已暂停相关模拟操作；仍显示上次有效报价。
             </div>
           ) : null}
 
@@ -149,9 +150,9 @@ export function LiveMarketPulse({
                 <Radar aria-hidden="true" className="size-5" />
               </div>
               <div>
-                <p className="font-medium">暂无符合门槛的市场机会</p>
+                <p className="font-medium">暂无值得关注的市场机会</p>
                 <p className="mt-1 max-w-md text-sm leading-relaxed text-muted-foreground">
-                  市场仍在监测中；没有机会时不会用弱信号填满列表。
+                  市场会持续更新；没有合适机会时，不会硬凑结果。
                 </p>
               </div>
             </div>
@@ -162,7 +163,7 @@ export function LiveMarketPulse({
                   key={row.id}
                   href={row.href}
                   className="group grid min-h-24 grid-cols-2 gap-3 px-4 py-4 outline-none transition-colors hover:bg-muted/35 focus-visible:bg-muted/35 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:grid-cols-[minmax(16rem,1.6fr)_minmax(6rem,0.55fr)_minmax(8rem,0.7fr)_auto_auto] sm:items-center"
-                  aria-label={`查看 ${row.match} 的 ${row.state} 决策`}
+                  aria-label={`查看 ${row.match} 的${decisionStateLabels[row.state]}判断`}
                 >
                   <div className="col-span-2 min-w-0 sm:col-span-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -172,11 +173,11 @@ export function LiveMarketPulse({
                     <p className="mt-1 truncate text-xs text-muted-foreground">{row.tournament}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">模型概率</p>
+                    <p className="text-xs text-muted-foreground">模型估算胜率</p>
                     <p className="mt-1 font-mono text-lg font-semibold tabular-nums">{formatPercent(row.modelProbability)}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">$10 可执行市场概率</p>
+                    <p className="text-xs text-muted-foreground">10 美元模拟买入价</p>
                     <p className="mt-1 font-mono text-lg font-semibold tabular-nums">{formatPercent(row.executableProbability)}</p>
                   </div>
                   <div className="flex flex-col items-start gap-1">
@@ -195,7 +196,7 @@ export function LiveMarketPulse({
 
         <CardFooter className="items-start gap-3 text-xs leading-relaxed text-muted-foreground">
           <ShieldCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-primary" />
-          仅用于研究与 Paper 模拟，不构成财务建议；此处不提供真实交易。
+          胜率由模型估算，价格来自实时市场；这里只记录模拟交易，不涉及真实资金。
         </CardFooter>
       </Card>
     </section>

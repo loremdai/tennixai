@@ -43,7 +43,7 @@ describe('MatchFiltersBar', () => {
     setup()
     expect(screen.getByRole('button', { name: /ATP/ })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: /WTA/ })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('button', { name: /Challenger/ })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: /挑战赛/ })).toHaveAttribute('aria-pressed', 'false')
     expect(screen.getByRole('button', { name: /单打/ })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: /双打/ })).toHaveAttribute('aria-pressed', 'false')
   })

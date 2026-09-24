@@ -65,9 +65,9 @@ describe('LiveMarketPulse', () => {
   it('renders zero candidates as the honest empty state', async () => {
     render(<LiveMarketPulse />)
     await waitFor(() =>
-      expect(screen.getByText('暂无符合门槛的市场机会')).toBeTruthy(),
+      expect(screen.getByText('暂无值得关注的市场机会')).toBeTruthy(),
     )
-    expect(screen.queryAllByRole('link', { name: /查看 .*决策/ })).toHaveLength(0)
+    expect(screen.queryAllByRole('link', { name: /查看 .*判断/ })).toHaveLength(0)
     // The /markets entry link stays available.
     expect(screen.getByRole('link', { name: /查看全部/ })).toHaveAttribute(
       'href',
@@ -110,9 +110,9 @@ describe('LiveMarketPulse', () => {
     render(<LiveMarketPulse />)
 
     await waitFor(() =>
-      expect(screen.getAllByRole('link', { name: /查看 .*决策/ })).toHaveLength(3),
+      expect(screen.getAllByRole('link', { name: /查看 .*判断/ })).toHaveLength(3),
     )
-    const rows = screen.getAllByRole('link', { name: /查看 .*决策/ })
+    const rows = screen.getAllByRole('link', { name: /查看 .*判断/ })
     // Reserved position row first, then the two live BUYs in server order.
     expect(rows[0].getAttribute('aria-label')).toContain('Position One vs. Position Two')
     expect(rows[1].getAttribute('aria-label')).toContain('Alpha One vs. Beta Two')
@@ -134,9 +134,9 @@ describe('LiveMarketPulse', () => {
     expect(onAvailability).toHaveBeenCalledWith(true)
     expect(screen.getByText('62.0%')).toBeTruthy()
     expect(screen.getByText('55.0%')).toBeTruthy()
-    expect(screen.getByText('+7.0pp')).toBeTruthy()
-    expect(screen.getByText('BUY')).toBeTruthy()
-    expect(screen.getByRole('link', { name: /查看 .*决策/ })).toHaveAttribute(
+    expect(screen.getByText('+7.0 个百分点')).toBeTruthy()
+    expect(screen.getByText('模拟买入机会')).toBeTruthy()
+    expect(screen.getByRole('link', { name: /查看 .*判断/ })).toHaveAttribute(
       'href',
       '/matches/mat_1',
     )
@@ -149,7 +149,7 @@ describe('LiveMarketPulse', () => {
     })
     const { container } = render(<LiveMarketPulse />)
 
-    await waitFor(() => expect(screen.getByText('FILLED / HOLD')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('模拟持有中')).toBeTruthy())
     expect(container.querySelector('.recharts-surface')).toBeNull()
     expect(screen.queryByText(/入场成本|份额|净 P&L/)).toBeNull()
   })
@@ -170,10 +170,10 @@ describe('LiveMarketPulse', () => {
 
     await waitFor(() =>
       expect(
-        screen.getByText(/开放仓位的 freshness 已超阈值；保留最后可信数字，但不提供可执行动作/),
+        screen.getByText(/部分市场报价更新较慢，已暂停相关模拟操作；仍显示上次有效报价/),
       ).toBeTruthy(),
     )
-    expect(screen.getAllByText(/最后可信 ·/).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText(/上次有效报价 ·/).length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('62.0%')).toBeTruthy()
   })
 
@@ -194,7 +194,8 @@ describe('LiveMarketPulse', () => {
     render(<LiveMarketPulse />)
 
     await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy())
-    expect(screen.getByText(/internal_error/)).toBeTruthy()
+    expect(screen.getByText('市场数据暂时无法加载，请稍后重试。')).toBeTruthy()
+    expect(screen.queryByText(/internal_error/)).toBeNull()
 
     getMarketPulseMock.mockResolvedValue({ data: [pulseRow()], has_open_position: false })
     await user.click(screen.getByRole('button', { name: '重试' }))

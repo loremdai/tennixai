@@ -9,9 +9,9 @@ export type PhaseFilter = MarketPhase | 'all'
 const tierOptions: Array<{ value: CircuitTier; label: string }> = [
   { value: 'atp', label: 'ATP' },
   { value: 'wta', label: 'WTA' },
-  { value: 'challenger', label: 'Challenger' },
-  { value: 'itf', label: 'ITF' },
-  { value: 'other', label: '其他' },
+  { value: 'challenger', label: '挑战赛' },
+  { value: 'itf', label: 'ITF 巡回赛' },
+  { value: 'other', label: '其他比赛' },
 ]
 
 const genderOptions: Array<{ value: GenderFilter; label: string }> = [
@@ -24,7 +24,7 @@ const phaseOptions: Array<{ value: PhaseFilter; label: string }> = [
   { value: 'all', label: '全部' },
   { value: 'prematch', label: '赛前' },
   { value: 'live', label: '直播' },
-  { value: 'closed', label: '已收盘' },
+  { value: 'closed', label: '已结束' },
 ]
 
 function FilterChip({
@@ -76,7 +76,7 @@ export function MarketFilters({
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="font-semibold">市场筛选</h2>
-            <p className="mt-1 text-sm text-muted-foreground">级别、组别与阶段可以叠加；筛选状态写入 URL。</p>
+            <p className="mt-1 text-sm text-muted-foreground">可同时按赛事级别、组别和比赛状态筛选。</p>
           </div>
           {hasFilters ? (
             <Button variant="ghost" size="sm" onClick={onReset}>

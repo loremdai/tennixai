@@ -34,7 +34,7 @@ from app.domain import Match
 from app.errors import AppError
 from app.intelligence import IntelligencePacket, IntelligenceTopic
 
-HISTORICAL_REPLY = "P2 暂不支持大范围历史查询。"
+HISTORICAL_REPLY = "目前无法查询球员的全部历史赛果，可以试试查询最近的比赛或指定赛季。"
 BROAD_HISTORY_NOTE = (
     "用户问题中还包含超出产品支持范围的全部历史/生涯战绩请求；"
     "回答时必须明确说明该部分暂不支持，只基于已核验事实回答受支持的部分。"

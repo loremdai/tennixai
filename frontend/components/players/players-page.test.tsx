@@ -41,7 +41,7 @@ function renderPage(overrides: Partial<PlayersFilters> = {}) {
 }
 
 async function searchFor(user: ReturnType<typeof userEvent.setup>, query: string) {
-  const input = screen.getByPlaceholderText(/搜索 Ben Shelton/)
+  const input = screen.getByPlaceholderText('输入英文名、中文名或常见简称')
   await user.click(input)
   await user.type(input, `${query}{Enter}`)
 }
@@ -59,7 +59,7 @@ function openMenu(name: string) {
 afterEach(cleanup)
 
 describe('PlayersPage rankings mode', () => {
-  it('renders the ATP Top 200 by default with official order and 50-row pagination', () => {
+  it('renders the ATP rankings by rank with 50-row pagination', () => {
     renderPage()
 
     expect(screen.getByRole('heading', { level: 2, name: 'ATP 单打世界排名' })).toBeVisible()
@@ -71,6 +71,18 @@ describe('PlayersPage rankings mode', () => {
     expect(screen.getByText('1–50 / 共 200 位')).toBeVisible()
     expect(screen.getByRole('button', { name: '上一页' })).toBeDisabled()
     expect(screen.getByRole('button', { name: '第 4 页' })).toBeVisible()
+  })
+
+  it('uses consumer copy and does not imply a fixed Top 200 result count', () => {
+    renderPage()
+
+    expect(screen.getByText('球员与世界排名')).toBeVisible()
+    expect(screen.getByText(/支持用英文名、中文名或常见简称搜索球员/)).toBeVisible()
+    expect(screen.queryByText('PLAYER DIRECTORY')).not.toBeInTheDocument()
+    expect(screen.queryByText('Top 200')).not.toBeInTheDocument()
+    expect(screen.queryByText(/官方前 200/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: '预览搜索示例' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Ben Shelton' })).not.toBeInTheDocument()
   })
 
   it('links each ranking row to the internal player profile route', () => {

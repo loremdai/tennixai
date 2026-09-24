@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { MatchDecisionPage } from './match-decision-page'
@@ -32,9 +32,9 @@ describe('P3 match decision preview', () => {
       document.getElementById('probability-market-title'),
       document.getElementById('decision-evidence-title'),
       screen.getByRole('heading', { name: '技术统计' }),
-      screen.getByRole('heading', { name: '逐分与动量' }),
+      screen.getByRole('heading', { name: '得分走势与关键分' }),
       document.getElementById('paper-lifecycle-title'),
-      screen.getByRole('heading', { name: '本场决策助手' }),
+      screen.getByRole('heading', { name: '本场判断助手' }),
     ]
 
     expect(sections.every((section) => section !== null)).toBe(true)
@@ -65,5 +65,46 @@ describe('P3 match decision preview', () => {
     )
 
     expect(screen.getAllByText(label).length).toBeGreaterThan(0)
+  })
+
+  it('offers supported, plain-language estimate range choices', () => {
+    render(
+      <MatchDecisionPage
+        initialStatus="live"
+        initialState="hold"
+        initialSelection="sinner"
+        initialOverlay="none"
+        initialAnalysis="expanded"
+        initialMethodology="closed"
+        initialConfidence="high"
+      />,
+    )
+
+    const range = screen.getByLabelText('估算范围') as HTMLSelectElement
+    expect(Array.from(range.options).map((option) => [option.value, option.textContent])).toEqual([
+      ['high', '较窄'],
+      ['medium', '一般'],
+      ['low', '较宽'],
+      ['empty', '数据不足'],
+      ['error', '暂不可用'],
+    ])
+    fireEvent.change(range, { target: { value: 'low' } })
+    expect(range.value).toBe('low')
+  })
+
+  it('does not expose internal stage or trading-system terminology', () => {
+    render(
+      <MatchDecisionPage
+        initialStatus="live"
+        initialState="hold"
+        initialSelection="sinner"
+        initialOverlay="none"
+        initialAnalysis="expanded"
+        initialMethodology="closed"
+        initialConfidence="high"
+      />,
+    )
+
+    expect(document.body.textContent).not.toMatch(/P3|PREVIEW|BUY|WAIT|Paper|hard gate|STALE|DATA GAP|FOK|P&L|freshness/)
   })
 })

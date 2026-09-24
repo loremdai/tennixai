@@ -17,7 +17,7 @@ export function FollowedPlayersSection() {
     <section id="players" className="flex scroll-mt-24 flex-col gap-4" aria-labelledby="players-title">
       <SectionHeading
         headingId="players-title"
-        eyebrow="YOUR WATCHLIST"
+        eyebrow="球员关注"
         title="关注球员"
         description="关注列表将在后续阶段接入。"
         action={<Badge variant="outline">后续阶段</Badge>}
@@ -33,7 +33,7 @@ export function FollowedPlayersSection() {
                 <h3 className="truncate text-sm">关注功能将在后续阶段接入</h3>
               </CardTitle>
               <p className="mt-1 text-xs text-muted-foreground">
-                P1 不提供球员关注与提醒；比赛事实均来自 Tennix 结构化数据。
+                目前还不能关注球员或接收提醒，之后开放时会在这里说明。
               </p>
             </div>
           </div>
@@ -48,20 +48,20 @@ export function RecentResultsCard() {
     <Card id="results" className="scroll-mt-24">
       <CardHeader>
         <CardTitle>
-          <h2>Recent Results</h2>
+          <h2>近期赛果</h2>
         </CardTitle>
         <p className="text-sm text-muted-foreground">历史赛果</p>
         <CardAction>
-          <Badge variant="outline">P1</Badge>
+          <Badge variant="outline">暂未提供</Badge>
         </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col">
         <article className="flex flex-col gap-3 py-1">
           <p className="text-sm leading-relaxed text-muted-foreground">
-            P1 暂不支持历史赛果
+            历史赛果暂不可查
           </p>
           <p className="text-xs leading-relaxed text-muted-foreground">
-            当前阶段只提供今日、今晚与正在进行的比赛信息；历史结果查询将返回明确的“暂不支持”。
+            这里目前只展示今天及即将开始的比赛。球员历史赛果可在个人主页查看。
           </p>
         </article>
       </CardContent>

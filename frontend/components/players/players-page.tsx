@@ -73,11 +73,6 @@ export function PlayersPage({
     applyFilters({ ...filters, query: '', page: 1 })
   }
 
-  function runQuickSearch(query: string, tour: TourKey) {
-    setSearchValue(query)
-    applyFilters({ ...filters, tour, query, page: 1 })
-  }
-
   function resetFilters() {
     const next = { tour: 'ATP' as const, countryCode: 'ALL', query: '', page: 1 }
     setSearchValue('')
@@ -86,7 +81,7 @@ export function PlayersPage({
 
   return (
     <PlayersDirectoryShell
-      headerNote="PREVIEW · 2026-09-11"
+      headerNote="演示数据"
       filters={filters}
       searchValue={searchValue}
       countries={countries}
@@ -95,7 +90,6 @@ export function PlayersPage({
       onCountryChange={selectCountry}
       onSubmitSearch={submitSearch}
       onClearSearch={clearSearch}
-      onQuickSearch={runQuickSearch}
       onReset={resetFilters}
     >
       {filters.query ? (

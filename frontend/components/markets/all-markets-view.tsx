@@ -16,10 +16,10 @@ import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 
 const tierOptions: Array<{ value: TourTier; label: string }> = [
-  { value: 'main', label: '主巡' },
-  { value: 'challenger', label: 'Challenger' },
-  { value: 'itf', label: 'ITF' },
-  { value: 'other', label: '其他' },
+  { value: 'main', label: 'ATP/WTA 主巡' },
+  { value: 'challenger', label: '挑战赛' },
+  { value: 'itf', label: 'ITF 巡回赛' },
+  { value: 'other', label: '其他比赛' },
 ]
 
 function formatPercent(value: number): string {
@@ -63,7 +63,7 @@ export function AllMarketsView({
   const available = state === 'supplier_empty' ? [] : marketListingFixtures.map((item, index) => ({
     ...item,
     stale: state === 'partial_stale' && index === 2 ? true : item.stale,
-    freshness: state === 'partial_stale' && index === 2 ? '最后可信 · 2 分 31 秒前' : item.freshness,
+    freshness: state === 'partial_stale' && index === 2 ? '上次有效报价 · 2 分 31 秒前' : item.freshness,
   }))
   const filtered = state === 'filtered_empty' ? [] : filterMarketListings(available, tiers, gender, phase)
   const hasFilters = tiers.length > 0 || gender !== 'all' || phase !== 'all'
@@ -74,7 +74,7 @@ export function AllMarketsView({
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 id="all-markets-title" className="font-semibold">市场筛选</h2>
-            <p className="mt-1 text-sm text-muted-foreground">级别、组别与阶段可以叠加；筛选状态写入 URL。</p>
+            <p className="mt-1 text-sm text-muted-foreground">可同时按赛事级别、组别和比赛状态筛选。</p>
           </div>
           {hasFilters ? (
             <Button variant="ghost" size="sm" onClick={onReset}>
@@ -131,11 +131,11 @@ export function AllMarketsView({
               {state === 'supplier_empty' ? <Landmark aria-hidden="true" className="size-5" /> : <FilterX aria-hidden="true" className="size-5" />}
             </div>
             <div>
-              <h3 className="font-semibold">{state === 'supplier_empty' ? '供应商暂无市场' : '筛选后无市场'}</h3>
+              <h3 className="font-semibold">{state === 'supplier_empty' ? '暂时没有市场报价' : '没有符合条件的比赛'}</h3>
               <p className="mt-1 max-w-md text-sm leading-relaxed text-muted-foreground">
                 {state === 'supplier_empty'
-                  ? '市场源当前没有返回可展示的报价；不会用缓存之外的数据填充。'
-                  : '尝试移除一个筛选条件，或重置为全部市场。'}
+                  ? '稍后再来看看，新的比赛和报价会持续更新。'
+                  : '试着减少筛选条件，或重置筛选后查看全部比赛。'}
               </p>
             </div>
             {state !== 'supplier_empty' ? <Button variant="outline" onClick={onReset}>重置筛选</Button> : null}
@@ -164,25 +164,25 @@ export function AllMarketsView({
 
                   <dl className="grid grid-cols-2 gap-3 rounded-lg bg-muted/30 p-3">
                     <div>
-                      <dt className="truncate text-xs text-muted-foreground">{market.playerOne} ask</dt>
+                      <dt className="truncate text-xs text-muted-foreground">{market.playerOne} 买入价</dt>
                       <dd className="mt-1 font-mono text-lg font-semibold tabular-nums">{formatPercent(market.playerOneAsk)}</dd>
                     </div>
                     <div>
-                      <dt className="truncate text-xs text-muted-foreground">{market.playerTwo} ask</dt>
+                      <dt className="truncate text-xs text-muted-foreground">{market.playerTwo} 买入价</dt>
                       <dd className="mt-1 font-mono text-lg font-semibold tabular-nums">{formatPercent(market.playerTwoAsk)}</dd>
                     </div>
                   </dl>
 
                   <dl>
-                    <dt className="text-xs text-muted-foreground">模型概率</dt>
+                    <dt className="text-xs text-muted-foreground">模型估算胜率</dt>
                     <dd className="mt-1 font-mono text-lg font-semibold tabular-nums">{market.modelProbability === null ? '—' : formatPercent(market.modelProbability)}</dd>
-                    <dd className="mt-1 text-xs text-muted-foreground">{market.covered ? '主巡覆盖' : '不伪造模型值'}</dd>
+                    <dd className="mt-1 text-xs text-muted-foreground">{market.covered ? '模型已提供估算' : '暂不提供胜率估算'}</dd>
                   </dl>
 
                   <dl className="grid grid-cols-2 gap-3">
-                    <div><dt className="text-xs text-muted-foreground">spread</dt><dd className="mt-1 font-mono font-semibold">{formatPercent(market.spread)}</dd></div>
-                    <div><dt className="text-xs text-muted-foreground">depth</dt><dd className="mt-1 font-mono font-semibold">${market.depth}</dd></div>
-                    <div className="col-span-2"><dt className="sr-only">新鲜度</dt><dd className={cn('text-xs text-muted-foreground', market.stale && 'text-destructive')}>{market.freshness}</dd></div>
+                    <div><dt className="text-xs text-muted-foreground">买卖价差</dt><dd className="mt-1 font-mono font-semibold">{formatPercent(market.spread)}</dd></div>
+                    <div><dt className="text-xs text-muted-foreground">可交易金额</dt><dd className="mt-1 font-mono font-semibold">${market.depth}</dd></div>
+                    <div className="col-span-2"><dt className="sr-only">报价更新时间</dt><dd className={cn('text-xs text-muted-foreground', market.stale && 'text-destructive')}>{market.freshness}</dd></div>
                   </dl>
 
                   <div className="flex items-center justify-between gap-2 md:justify-end">

@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState, useTransition } from 'react'
+import Link from 'next/link'
 import { Layers3 } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
@@ -9,6 +10,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useChatStream } from '@/hooks/use-chat-stream'
 import { useDecisionStream } from '@/hooks/use-decision-stream'
 import { useMatchStream } from '@/hooks/use-match-stream'
+import { userFacingApiError } from '@/lib/api/user-facing-errors'
 import type { MatchViewModel } from '@/lib/view-models'
 import { toMatchViewModel } from '@/lib/view-models'
 import {
@@ -245,19 +247,17 @@ export function MatchPage({ matchId, previewMatch, preview = false }: MatchPageP
           </>
         ) : loadState === 'loading' ? (
           <div className="match-reveal flex min-h-64 flex-col items-center justify-center gap-3 rounded-xl border border-dashed bg-muted/15 p-6 text-center">
-            <p className="text-sm font-medium">正在加载比赛…</p>
-            <p className="text-sm text-muted-foreground">数据来自 Tennix 结构化服务。</p>
+            <p className="text-sm font-medium">正在加载比赛信息…</p>
           </div>
         ) : loadState === 'notfound' ? (
           <div className="match-reveal flex min-h-64 flex-col items-center justify-center gap-3 rounded-xl border border-dashed bg-muted/15 p-6 text-center">
-            <p className="text-sm font-medium">比赛不存在或已失效</p>
-            <p className="text-sm text-muted-foreground">
-              进程重启后内部 ID 可能失效；请从首页重新进入比赛。
-            </p>
+            <p className="text-sm font-medium">未找到这场比赛</p>
+            <p className="text-sm text-muted-foreground">比赛可能已结束，或此链接已失效。你可以返回首页搜索。</p>
+            <Button render={<Link href="/" />} variant="outline">返回首页</Button>
           </div>
         ) : loadState === 'error' ? (
           <div className="match-reveal flex min-h-64 flex-col items-center justify-center gap-3 rounded-xl border border-dashed bg-muted/15 p-6 text-center">
-            <p className="text-sm font-medium">比赛数据加载失败（{loadErrorCode}）</p>
+            <p className="text-sm font-medium">{userFacingApiError(loadErrorCode, 'match')}</p>
             <Button variant="outline" onClick={() => void load()} aria-label="重试加载比赛">
               重试加载
             </Button>
@@ -266,15 +266,15 @@ export function MatchPage({ matchId, previewMatch, preview = false }: MatchPageP
           <>
             {stream.phase === 'reconnecting' || stream.connectionNotice === 'reconnecting' ? (
               <p role="status" className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-                实时连接恢复中，页面保留最后可信状态。
+                比分更新中，请稍候。
               </p>
             ) : stream.connectionNotice === 'restored' ? (
               <p role="status" className="rounded-lg border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-primary">
-                实时连接已恢复，状态已同步。
+                比分已更新。
               </p>
             ) : stream.phase === 'stale' ? (
               <p role="status" className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-                页面暂时离开直播，数据可能较旧；返回页面后将自动恢复。
+                比分可能暂时未更新；返回页面后会自动刷新。
               </p>
             ) : null}
             <div className="match-reveal">
@@ -293,7 +293,7 @@ export function MatchPage({ matchId, previewMatch, preview = false }: MatchPageP
                 </div>
                 {decisionStream.degraded ? (
                   <p role="status" className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-                    决策流已降级：保留最后可信决策快照，仅重新获取决策状态；比赛实时流不受影响。
+                    判断暂时无法更新，仍显示最近一次结果；比赛实时比分不受影响。
                   </p>
                 ) : null}
                 <div
@@ -383,7 +383,7 @@ export function MatchPage({ matchId, previewMatch, preview = false }: MatchPageP
         <div className="mx-auto flex max-w-7xl flex-col justify-between gap-2 px-4 py-5 text-sm text-muted-foreground sm:flex-row md:px-6">
           <span>Tennix · 比赛智能，逐分解释</span>
           <span>
-            {isPreview ? '样例数据仅用于产品界面演示' : '数据由 Tennix 服务提供 · 时间为北京时间'}
+            {isPreview ? '样例数据仅供参考，不代表实时比赛' : '比赛时间为北京时间'}
           </span>
         </div>
       </footer>

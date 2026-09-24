@@ -35,17 +35,17 @@ import {
 import { cn } from '@/lib/utils'
 
 const historyLabels: Record<PlayerHistoryState, string> = {
-  ready: '完整赛果',
-  empty: '空状态',
-  partial: '部分数据',
-  unavailable: '历史不可用',
+  ready: '有完整记录',
+  empty: '暂无记录',
+  partial: '部分记录',
+  unavailable: '暂不可用',
   loading: '加载中',
   error: '加载失败',
-  stale: '旧快照',
+  stale: '数据可能延迟',
 }
 
 const statusLabels: Record<ProfileStatusKey, string> = {
-  live: 'LIVE',
+  live: '直播',
   next: '下一场',
   none: '暂无比赛',
 }
@@ -106,12 +106,12 @@ export function PlayerProfilePage({
               <CardTitle>
                 <h2 id="profile-preview-controls-title" className="inline-flex items-center gap-2">
                   <FlaskConical aria-hidden="true" className="size-4 text-primary" />
-                  原型状态切换
+                  球员页面演示
                 </h2>
               </CardTitle>
-              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">仅切换确定性 preview 数据，不请求生产 API。</p>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">以下是页面示例，不代表球员的实时资料。</p>
             </div>
-            <CardAction><Badge variant="outline">PREVIEW</Badge></CardAction>
+            <CardAction><Badge variant="outline">演示内容</Badge></CardAction>
           </CardHeader>
           <CardContent className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex flex-wrap items-center gap-2" aria-label="球员资料状态">
@@ -146,13 +146,13 @@ export function PlayerProfilePage({
                 ))}
               </div>
               <DropdownMenu>
-                <DropdownMenuTrigger render={<Button variant="outline" size="sm" aria-label="切换历史赛果可用性" />}>
+                <DropdownMenuTrigger render={<Button variant="outline" size="sm" aria-label="切换赛果展示状态" />}>
                   {historyLabels[historyState]}
                   <ChevronDown data-icon="inline-end" aria-hidden="true" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="min-w-44">
                   <DropdownMenuGroup>
-                    <DropdownMenuLabel>历史赛果状态</DropdownMenuLabel>
+                    <DropdownMenuLabel>赛果展示状态</DropdownMenuLabel>
                     {(Object.keys(historyLabels) as PlayerHistoryState[]).map((state) => (
                       <DropdownMenuItem key={state} onClick={() => setHistoryState(state)}>
                         <span className="flex size-4 items-center justify-center">

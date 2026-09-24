@@ -292,7 +292,7 @@ export function toResultPreview(match: MatchDto, playerId: string, fallbackSeaso
 }
 
 function freshnessNote(match: MatchDto): string {
-  if (match.freshness.is_stale) return '数据较旧'
+  if (match.freshness.is_stale) return '数据可能延迟'
   const ageSeconds = match.freshness.age_seconds
   if (ageSeconds < 60) return '刚刚更新'
   return `${Math.max(1, Math.floor(ageSeconds / 60))} 分钟前更新`
@@ -384,6 +384,7 @@ export type RankingPageAvailability = RankingPageDto['availability']
 
 /** Header note for the production directory: the snapshot instant, truthfully. */
 export function rankingsSnapshotNote(asOf: string | null): string {
-  if (asOf === null) return '排名快照时间未知'
-  return `快照 · ${formatAsOf(asOf) ?? asOf}`
+  if (asOf === null) return '更新时间暂不可用'
+  const formatted = formatAsOf(asOf)
+  return formatted ? `更新于 ${formatted}（北京时间）` : '更新时间暂不可用'
 }

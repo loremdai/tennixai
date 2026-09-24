@@ -110,8 +110,8 @@ describe('DecisionSummaryLive', () => {
     return { model, ...view }
   }
 
-  it('renders server values verbatim for a BUY', () => {
-    const { model } = renderSnapshot(
+  it('presents a simulation opportunity in plain language without developer terms', () => {
+    const { model, container } = renderSnapshot(
       snapshot({
         action: 'buy',
         conservative_net_edge: '0.0700',
@@ -120,19 +120,21 @@ describe('DecisionSummaryLive', () => {
       }),
     )
     expect(model.actionAvailable).toBe(true)
-    expect(screen.getByText('BUY')).toBeTruthy()
-    expect(screen.getByText('62.0%')).toBeTruthy() // model probability
+    expect(screen.getAllByText('模拟买入机会')).toHaveLength(2)
+    expect(screen.getAllByText('62.0%').length).toBeGreaterThanOrEqual(1) // model probability
     expect(screen.getByText('52.5%')).toBeTruthy() // $10 executable average
-    expect(screen.getByText('+7.0pp')).toBeTruthy()
+    expect(screen.getByText('+7.0 个百分点')).toBeTruthy()
     expect(screen.getByText('Alpha One')).toBeTruthy()
-    expect(screen.getByText('$10 可执行 ask')).toBeTruthy()
+    expect(screen.getByText('10 美元模拟买入均价')).toBeTruthy()
+    expect(container.textContent).not.toMatch(/P3 BETA|Paper|hard gates|freshness|NO BET|BUY|WAIT|\bedge\b/i)
+    expect(screen.queryByText('$10 Paper EV')).toBeNull()
   })
 
   it('shows the wait cap and hides entry affordances after an intent exists', () => {
     const { model } = renderSnapshot(
       snapshot({ action: 'wait', max_acceptable_price: '0.5500' }),
     )
-    expect(screen.getByText(/最高可买 55.0%/)).toBeTruthy()
+    expect(screen.getByText(/重新评估参考价 55.0%/)).toBeTruthy()
     // WAIT offers a price ceiling, not an entry affordance.
     expect(model.actionAvailable).toBe(false)
 
@@ -156,21 +158,21 @@ describe('DecisionSummaryLive', () => {
     const buttons = screen.getAllByRole('button')
     expect(buttons).toHaveLength(1)
     expect(buttons[0]).toHaveTextContent('问这场比赛')
-    expect(screen.getByText('ENTRY PENDING')).toBeTruthy()
+    expect(screen.getByText('等待买入确认')).toBeTruthy()
   })
 
-  it('renders orthogonal STALE and GAP overlays with revoked-action copy', () => {
+  it('renders old quotes and missing updates in plain language', () => {
     renderSnapshot(
       snapshot({ action: 'hold', is_stale: true, lifecycle: ['entry_pending', 'filled'], position: position() }),
     )
-    expect(screen.getByText(/STALE：已超过 freshness 阈值/)).toBeTruthy()
-    expect(screen.getByText(/动作已撤销/)).toBeTruthy()
+    expect(screen.getByText(/市场报价更新较慢/)).toBeTruthy()
+    expect(screen.getByText(/已暂停新的模拟操作/)).toBeTruthy()
 
     cleanup()
     renderSnapshot(
       snapshot({ action: 'wait', has_gap: true, max_acceptable_price: '0.55' }),
     )
-    expect(screen.getByText(/DATA GAP：轨迹存在不可插值的数据缺口/)).toBeTruthy()
+    expect(screen.getAllByText(/比赛数据更新中断/).length).toBeGreaterThan(0)
   })
 
   it('keeps the state label as the single action source across all states', () => {
@@ -187,9 +189,8 @@ describe('DecisionSummaryLive', () => {
       snapshot({ action: 'buy', conservative_net_edge: '0.07', quote_average_price: '0.525', quote_side: 'entry' }),
     )
     const text = container.textContent ?? ''
-    expect(text).not.toMatch(/真实下单|已下注|真实买入|真实资金已|real[- ]money/i)
-    expect(text).toContain('不涉及真实资金')
-    expect(text).toContain('仅用于研究与 Paper 模拟')
+    expect(text).not.toMatch(/(?:已|已经|现在|正在)真实下单|已下注|真实买入|真实资金已|real[- ]money/i)
+    expect(text).toContain('仅记录模拟交易，不会真实下单')
   })
 
   it('renders honest em dashes when model data is absent', () => {
@@ -202,9 +203,18 @@ describe('DecisionSummaryLive', () => {
         target_player_id: null,
       }),
     )
-    expect(screen.getByText('MARKET ONLY')).toBeTruthy()
-    expect(screen.getByText('未覆盖，不伪造')).toBeTruthy()
+    expect(screen.getAllByText('仅显示市场报价').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('暂未提供胜率估算，仅显示市场报价').length).toBeGreaterThan(0)
     expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('does not expose an unknown internal reason code to users', () => {
+    const { model, container } = renderSnapshot(
+      snapshot({ reason_code: 'INTERNAL_SCORE_MISMATCH' }),
+    )
+
+    expect(model.reason).toBe('系统暂未提供更多判断原因')
+    expect(container.textContent).not.toContain('INTERNAL_SCORE_MISMATCH')
   })
 })
 

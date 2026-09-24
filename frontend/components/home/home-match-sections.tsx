@@ -12,7 +12,7 @@ import {
 
 import { SectionHeading } from '@/components/home/section-heading'
 import { PlayerCountry } from '@/components/player-country'
-import type { ProductPhase } from '@/components/match/match-data'
+import { userFacingApiError } from '@/lib/api/user-facing-errors'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -40,8 +40,9 @@ function SlateSectionError({
 }) {
   return (
     <div role="alert" className="flex flex-col items-start gap-3 rounded-xl border border-dashed bg-muted/15 p-5">
-      <p className="text-sm font-medium">{title}加载失败（{code ?? 'internal_error'}）</p>
-      <p className="text-sm text-muted-foreground">该部分暂时不可用，其他比赛信息仍可继续查看。</p>
+      <p className="text-sm font-medium">{title}</p>
+      <p className="text-sm text-muted-foreground">{userFacingApiError(code, 'schedule')}</p>
+      <p className="text-sm text-muted-foreground">其他比赛信息仍可继续查看。</p>
       <Button variant="outline" onClick={onRetry} aria-label={`重试加载${title}`}>
         <RefreshCw data-icon="inline-start" aria-hidden="true" />
         重试加载
@@ -96,7 +97,7 @@ function FeaturedScore({ match }: { match: MatchViewModel }) {
   return (
     <div className="flex flex-col gap-3 rounded-xl bg-background/45 p-4">
       <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-        <span>{setCount > 0 ? `第 ${setCount} 盘` : '官方未返回比分'}</span>
+        <span>{setCount > 0 ? `第 ${setCount} 盘` : '比分暂未提供'}</span>
         <span className="font-mono">{match.freshnessLabel}</span>
       </div>
       {score ? (
@@ -134,19 +135,17 @@ function FeaturedScore({ match }: { match: MatchViewModel }) {
       <p className="border-t pt-3 text-center text-xs text-muted-foreground">
         {match.serverPlayerId
           ? `${match.players.find((player) => player.id === match.serverPlayerId)?.shortName ?? ''} 发球`
-          : '官方未返回发球方'}
+          : '发球方暂未提供'}
       </p>
     </div>
   )
 }
 
 export function FeaturedMatchSection({
-  phase,
   match,
   state,
   onAsk,
 }: {
-  phase: ProductPhase
   match: MatchViewModel | null
   state: SlateState
   onAsk: () => void
@@ -158,11 +157,11 @@ export function FeaturedMatchSection({
           <div className="flex items-center gap-2 text-primary">
             <Star aria-hidden="true" className="size-4 fill-current" />
             <CardTitle>
-              <h2 id="featured-match-title">Featured Match</h2>
+              <h2 id="featured-match-title">焦点比赛</h2>
             </CardTitle>
           </div>
           <p className="text-sm text-muted-foreground">
-            {match ? `${match.tournament} · ${match.round} · ${match.surface}` : '由 Tennix 结构化数据驱动'}
+            {match ? `${match.tournament} · ${match.round} · ${match.surface}` : '当前暂无焦点赛事'}
           </p>
           <CardAction>
             {match?.visualStatus === 'live' ? (
@@ -173,7 +172,7 @@ export function FeaturedMatchSection({
             ) : match?.visualStatus === 'upcoming' ? (
               <Badge variant="outline" role="status">即将开始</Badge>
             ) : match ? (
-              <Badge variant="secondary" role="status">状态待确认</Badge>
+              <Badge variant="secondary" role="status">比赛状态待更新</Badge>
             ) : null}
           </CardAction>
         </CardHeader>
@@ -216,7 +215,7 @@ export function FeaturedMatchSection({
                     <span className="text-primary">
                       {match.serverPlayerId
                         ? `${match.players.find((player) => player.id === match.serverPlayerId)?.shortName ?? ''} 发球`
-                        : '官方未返回发球方'}
+                        : '发球方暂未提供'}
                     </span>
                   </>
                 ) : (
@@ -228,7 +227,6 @@ export function FeaturedMatchSection({
                     <span>{match.tournament} {match.round}</span>
                   </>
                 )}
-                {phase === 'p2' ? <Badge variant="outline">实时洞察已连接</Badge> : null}
               </div>
               <div className="flex w-full gap-2 sm:w-auto">
                 <Link
@@ -240,7 +238,7 @@ export function FeaturedMatchSection({
                 </Link>
                 <Button className="flex-1 sm:flex-none" onClick={onAsk}>
                   <Sparkles data-icon="inline-start" aria-hidden="true" />
-                  {match.visualStatus === 'live' ? '实时洞察' : '询问赛程'}
+                  询问这场比赛
                 </Button>
               </div>
             </CardFooter>
@@ -274,7 +272,7 @@ function CompactLiveCard({ match }: { match: HomeMatchViewModel }) {
           </CardTitle>
           <p className="text-xs text-muted-foreground">{match.round}</p>
           <CardAction>
-            <Badge variant="destructive">LIVE</Badge>
+              <Badge variant="destructive">直播</Badge>
           </CardAction>
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
@@ -299,7 +297,7 @@ function CompactLiveCard({ match }: { match: HomeMatchViewModel }) {
               ))}
           <div className="flex items-center justify-between gap-3 border-t pt-3 text-xs text-muted-foreground">
             <span>{match.freshnessLabel}</span>
-            <span>{match.isStale ? '数据较旧' : match.time}</span>
+            <span>{match.isStale ? '数据可能延迟' : match.time}</span>
           </div>
         </CardContent>
       </Card>
@@ -328,9 +326,9 @@ export function LiveNowSection({
     <section id="live" className="flex scroll-mt-24 flex-col gap-4" aria-labelledby="live-title">
       <SectionHeading
         headingId="live-title"
-        eyebrow="LIVE NOW"
+        eyebrow="实时赛况"
         title="正在直播"
-        description="比分、发球方与比赛状态来自 Tennix 结构化数据。"
+        description="查看实时比分、发球球员和比赛状态。"
         action={
           <span className="flex items-center gap-2">
             <Button
@@ -397,7 +395,7 @@ export function UpcomingSection({
     <section id="upcoming" className="flex scroll-mt-24 flex-col gap-4" aria-labelledby="upcoming-title">
       <SectionHeading
         headingId="upcoming-title"
-        eyebrow="TONIGHT"
+        eyebrow="即将开赛"
         title="今晚比赛"
         description="已换算为北京时间。"
         action={
@@ -469,10 +467,7 @@ export function SlateErrorPanel({
   return (
     <Card>
       <CardContent className="flex flex-col items-start gap-3 py-8">
-        <p className="text-sm font-medium">比赛数据加载失败（{code}）</p>
-        <p className="text-sm text-muted-foreground">
-          数据服务暂时不可用，请稍后重试；页面不会自动轮询。
-        </p>
+        <p className="text-sm font-medium">{userFacingApiError(code, 'schedule')}</p>
         <Button variant="outline" onClick={onRetry} aria-label="重试加载比赛数据">
           <RefreshCw data-icon="inline-start" aria-hidden="true" />
           重试加载

@@ -97,9 +97,9 @@ describe('toHomeMatch', () => {
       baseMatch({ round: null, surface: null, indoor: null, scheduled_at: null }),
     )
 
-    expect(view.round).toBe('官方未返回轮次')
-    expect(view.surface).toBe('官方未返回场地类型')
-    expect(view.time).toBe('官方未返回开赛时间')
+    expect(view.round).toBe('暂无轮次信息')
+    expect(view.surface).toBe('暂无场地信息')
+    expect(view.time).toBe('暂无开赛时间')
   })
 
   it('maps cancelled, postponed, and unknown to unavailable status', () => {
@@ -123,8 +123,8 @@ describe('toHomeMatch', () => {
     )
 
     expect(stale.isStale).toBe(true)
-    expect(stale.freshnessLabel).toContain('数据较旧')
-    expect(stale.freshnessLabel).toContain('240')
+    expect(stale.freshnessLabel).toContain('数据可能延迟')
+    expect(stale.freshnessLabel).toContain('4 分钟前')
   })
 })
 
@@ -160,12 +160,12 @@ describe('toMatchViewModel', () => {
       baseMatch({ round: null, surface: null, indoor: null, format: null, scheduled_at: null }),
     )
 
-    expect(view.round).toBe('官方未返回轮次')
-    expect(view.surface).toBe('官方未返回场地类型')
-    expect(view.indoorLabel).toBe('官方未返回室内外')
-    expect(view.format).toBe('官方未返回赛制')
-    expect(view.scheduledDate).toBe('官方未返回开赛日期')
-    expect(view.scheduledTime).toBe('官方未返回开赛时间')
+    expect(view.round).toBe('暂无轮次信息')
+    expect(view.surface).toBe('暂无场地信息')
+    expect(view.indoorLabel).toBe('室内外信息暂缺')
+    expect(view.format).toBe('暂无赛制信息')
+    expect(view.scheduledDate).toBe('暂无开赛日期')
+    expect(view.scheduledTime).toBe('暂无开赛时间')
   })
 
   it('maps format and indoor labels', () => {
@@ -185,10 +185,10 @@ describe('toMatchViewModel', () => {
       }),
     )
 
-    expect(view.players[0].countryCode).toBe('官方未提供国家代码')
-    expect(view.players[0].countryName).toBe('官方未提供国家名称')
+    expect(view.players[0].countryCode).toBe('国家代码暂缺')
+    expect(view.players[0].countryName).toBe('国家/地区暂缺')
     expect(view.players[0].flagUrl).toBeNull()
-    expect(view.players[1].countryCode).toBe('官方未提供国家代码')
+    expect(view.players[1].countryCode).toBe('国家代码暂缺')
   })
 
   it('preserves World as a displayable non-country affiliation', () => {
@@ -276,7 +276,7 @@ describe('statistics presentation mapping', () => {
     expect(formatStatValue(68, 'percent')).toBe('68%')
     expect(formatStatValue(181.5, 'km/h')).toBe('181.5 km/h')
     expect(formatStatValue(2410, 'm')).toBe('2410 m')
-    expect(formatStatValue(null, 'count')).toBe('官方未返回')
+    expect(formatStatValue(null, 'count')).toBe('暂未提供')
   })
 
   it('formats snapshot as_of in Beijing time and keeps missing values null', () => {

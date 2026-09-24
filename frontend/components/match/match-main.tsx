@@ -87,7 +87,7 @@ export function OverviewCard({ match, preview }: Pick<MainColumnProps, 'match' |
         ? '比赛进行中'
         : match.visualStatus === 'finished'
           ? '已完赛'
-          : '状态待确认'
+          : '比赛信息待更新'
 
   const items = preview
     ? [
@@ -116,7 +116,7 @@ export function OverviewCard({ match, preview }: Pick<MainColumnProps, 'match' |
         { icon: CircleDot, label: '环境', value: match.indoorLabel },
         { icon: Clock3, label: '赛制', value: match.format },
         { icon: match.visualStatus === 'finished' ? Trophy : Radio, label: '比赛状态', value: statusValue },
-        { icon: Activity, label: '数据新鲜度', value: match.freshnessLabel },
+        { icon: Activity, label: '数据更新时间', value: match.freshnessLabel },
       ]
 
   return (
@@ -246,19 +246,23 @@ export function ScoreProgressCard({ match, preview, highlight }: Pick<MainColumn
                   ? `第 ${previewMatchMeta.currentSet} 盘`
                   : match.currentSetNumber !== null
                     ? `第 ${match.currentSetNumber} 盘`
-                    : '当前盘官方未返回'
+                    : '盘数暂未提供'
                 : visualStatus === 'finished'
                   ? '已完赛'
-                  : '状态待确认'}
+                  : '比赛信息待更新'}
           </Badge>
         </CardAction>
       </CardHeader>
       <CardContent>
-        {visualStatus === 'upcoming' || visualStatus === 'unavailable' || !rows ? (
+        {visualStatus === 'upcoming' ? (
           <FutureModule
-            phase="P2"
-            title="实时比分将在开赛后自动出现"
-            description="无需切换页面；盘分、局分、发球方与抢七状态会在此模块内实时更新。"
+            title="比分暂未提供"
+            description="比赛开始后，这里会显示每盘比分、当前局分和发球方。"
+          />
+        ) : visualStatus === 'unavailable' || !rows ? (
+          <FutureModule
+            title="比分暂不可用"
+            description="目前无法获取这场比赛的比分，请稍后再看。"
           />
         ) : visualStatus === 'live' ? (
           <div className="flex flex-col gap-5">
@@ -274,9 +278,9 @@ export function ScoreProgressCard({ match, preview, highlight }: Pick<MainColumn
                 <p className="text-sm text-muted-foreground">{rows[0].shortName}</p>
               </div>
               <div className="flex flex-col items-center gap-1">
-                <Badge>发球局</Badge>
+                <Badge>实时比分</Badge>
                 <span className="text-sm text-muted-foreground">
-                  {preview ? '4–5 · 0 个破发点' : match.freshnessLabel}
+                  {preview ? '4–5 · 0 个破发点' : '当前局分'}
                 </span>
               </div>
               <div>
@@ -303,7 +307,7 @@ export function ScoreProgressCard({ match, preview, highlight }: Pick<MainColumn
                   最终比分 {rows[0].sets.map((games, index) => `${games ?? '-'}–${rows[1].sets[index] ?? '-'}`).join('、')}
                 </p>
               </div>
-              <Badge variant="secondary">{preview ? previewMatchMeta.finalDuration : match.freshnessLabel}</Badge>
+              <Badge variant="secondary">{preview ? previewMatchMeta.finalDuration : `结果 · ${match.freshnessLabel}`}</Badge>
             </div>
           </div>
         )}
@@ -356,15 +360,7 @@ export function StatsCard({ match, preview, highlight, snapshot }: Pick<MainColu
           {match.visualStatus === 'finished' ? '赛后技术表现对比' : '实时技术表现对比'}
         </p>
         <CardAction>
-          <Badge variant="outline">
-            {preview
-              ? match.visualStatus === 'finished'
-                ? 'P2 赛后'
-                : 'P2 预览'
-              : liveSnapshot
-                ? 'P2 实时'
-                : 'P2 数据暂不可用'}
-          </Badge>
+          {preview ? <Badge variant="outline">演示数据</Badge> : liveSnapshot ? <Badge variant="outline">实时数据</Badge> : null}
         </CardAction>
       </CardHeader>
       <CardContent>
@@ -376,9 +372,8 @@ export function StatsCard({ match, preview, highlight, snapshot }: Pick<MainColu
           />
         ) : match.visualStatus === 'upcoming' ? (
           <FutureModule
-            phase="P2"
-            title="技术统计等待实时数据"
-            description="开赛后将呈现发球、接发与破发效率的逐项对比。"
+            title="比赛开始后查看技术统计"
+            description="一发、接发和破发等数据会在这里展示。"
           />
         ) : preview ? (
           <div>
@@ -401,9 +396,8 @@ export function StatsCard({ match, preview, highlight, snapshot }: Pick<MainColu
           </div>
         ) : (
           <FutureModule
-            phase="P2"
-            title="P2 数据暂不可用"
-            description="技术统计属于 P2 实时比赛智能；P1 只提供赛程、比分、发球方等结构化事实。"
+            title="暂无技术统计"
+            description="本场比赛暂未提供统计数据。"
           />
         )}
       </CardContent>

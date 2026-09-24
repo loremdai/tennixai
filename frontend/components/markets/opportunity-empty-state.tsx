@@ -14,28 +14,28 @@ export const OPPORTUNITY_EMPTY_STATES: Record<
   { title: string; body: string; offersAllMarkets: boolean }
 > = {
   HAS_OPPORTUNITIES: {
-    title: '暂无符合门槛的机会',
-    body: '覆盖市场仍在监测中；下一次通过 hard gate 的 BUY 或 WAIT 会出现在这里。',
-    offersAllMarkets: false,
+    title: '暂时没有可关注的机会',
+    body: '目前没有比赛同时满足模型判断和报价条件。你可以先查看所有市场的最新报价。',
+    offersAllMarkets: true,
   },
   ELIGIBLE_UNPROMOTED: {
-    title: '模型尚未完成验证',
-    body: '模型尚未完成验证，当前不生成 BUY / WAIT；全部市场的真实报价仍可查看。',
+    title: '模型仍在验证中',
+    body: '模型验证尚未完成，因此暂不提供比赛判断；你仍可查看所有市场的最新报价。',
     offersAllMarkets: true,
   },
   NO_ELIGIBLE_ACTION: {
-    title: '当前没有机会',
-    body: '当前没有满足策略门的机会。',
+    title: '暂时没有可关注的机会',
+    body: '目前没有符合条件的比赛。',
     offersAllMarkets: true,
   },
   NO_COVERED_MARKET: {
-    title: '暂无可评估市场',
-    body: '当前没有可评估的主巡单打市场。',
+    title: '暂无可分析的比赛',
+    body: '目前没有纳入分析的单打比赛；其他比赛的市场报价仍可查看。',
     offersAllMarkets: true,
   },
   DECISION_GAP: {
-    title: '决策数据恢复中',
-    body: '决策数据正在恢复，暂不生成新机会。',
+    title: '比赛数据暂时中断',
+    body: '我们已暂停提供新的比赛判断，请稍后再试。',
     offersAllMarkets: true,
   },
 }
@@ -63,7 +63,7 @@ export function OpportunityEmptyState({
         </div>
         {copy.offersAllMarkets ? (
           <Button variant="outline" onClick={onViewAllMarkets}>
-            查看全部市场
+            查看所有比赛报价
           </Button>
         ) : null}
       </CardContent>

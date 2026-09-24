@@ -10,11 +10,11 @@ import {
   Sparkles,
 } from 'lucide-react'
 
-import { homeExampleQueries } from '@/components/home/home-data'
 import { MatchResultCard } from '@/components/home/home-match-result-card'
 import { HomePlayerHistory } from '@/components/home/home-player-history'
 import { ChatWarnings } from '@/components/chat-warnings'
 import { MarkdownAnswer } from '@/components/markdown-answer'
+import { userFacingApiError } from '@/lib/api/user-facing-errors'
 import { chatProgressLabel, type ChatViewState } from '@/hooks/use-chat-stream'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -64,7 +64,7 @@ function answerTitle(
   }
   // `没有符合条件的比赛` is reserved for current/live/upcoming discovery.
   if (chat.data) return '没有符合条件的比赛'
-  if (chat.error) return `查询失败（${chat.error.code}）`
+  if (chat.error) return '回答暂时无法生成'
   return '正在整理回答'
 }
 
@@ -78,7 +78,7 @@ function errorSummary(error: ChatViewState['error']): string {
         : '稍后'
     return `数据服务配额暂时用完，请在${retryLabel}重试。`
   }
-  return `查询失败（${error.code}），请重试。`
+  return userFacingApiError(error.code, 'assistant')
 }
 
 type HomeAssistantProps = {
@@ -87,7 +87,6 @@ type HomeAssistantProps = {
   busy: boolean
   onPromptChange: (value: string) => void
   onSubmit: (value: string) => void
-  onPromptSelect: (value: string) => void
 }
 
 export function HomeAssistant({
@@ -96,7 +95,6 @@ export function HomeAssistant({
   busy,
   onPromptChange,
   onSubmit,
-  onPromptSelect,
 }: HomeAssistantProps) {
   function submitPrompt(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault()
@@ -155,9 +153,9 @@ export function HomeAssistant({
     <Card id="assistant" data-tone="assistant" className="scroll-mt-24">
       <CardHeader>
         <CardTitle>
-          <h2>全局网球助手</h2>
+          <h2>网球问答</h2>
         </CardTitle>
-        <p className="text-sm text-muted-foreground">发现比赛、赛程与球员</p>
+        <p className="text-sm text-muted-foreground">关于比赛、赛程和球员的回答</p>
         <CardAction>
           <Badge variant="secondary">
             <Sparkles data-icon="inline-start" aria-hidden="true" />
@@ -167,14 +165,6 @@ export function HomeAssistant({
       </CardHeader>
 
       <CardContent className="flex flex-col gap-4">
-        <div className="flex flex-wrap gap-2" aria-label="示例问题">
-          {homeExampleQueries.map((item) => (
-            <Button key={item} variant="outline" size="sm" onClick={() => onPromptSelect(item)}>
-              {item}
-            </Button>
-          ))}
-        </div>
-
         <div aria-live="polite" className="flex flex-col gap-3">
           {hasAnswer ? (
             <>
@@ -185,7 +175,7 @@ export function HomeAssistant({
                     {getChatAnswerLabel(chat, 'global')}
                   </span>
                   {chat.error ? null : (
-                    <CheckCircle2 aria-label="结构化数据" className="size-4 text-muted-foreground" />
+                    <CheckCircle2 aria-label="包含比赛信息卡" className="size-4 text-muted-foreground" />
                   )}
                 </div>
                 <h3 className="mt-2 text-balance text-lg font-semibold">{answerTitle(chat, cards, historyItems)}</h3>
@@ -202,7 +192,7 @@ export function HomeAssistant({
                 <div
                   ref={structuredResultsRef}
                   className="scroll-mt-24 flex flex-col gap-3"
-                  aria-label="结构化比赛结果"
+                  aria-label="相关比赛信息"
                 >
                   {historyItems.length > 0 ? (
                     <HomePlayerHistory items={historyItems} onFollowUp={followUp} />

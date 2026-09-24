@@ -318,6 +318,6 @@ export const previewPromptsByStatus: Record<MatchStatus, string[]> = {
 
 export const previewContextDescriptions: Record<MatchStatus, string> = {
   upcoming: '已锁定本场赛程与对阵背景',
-  live: '与当前比分和技术统计同步',
+  live: '已带入当前比分和技术统计',
   finished: '基于最终比分与赛后数据',
 }

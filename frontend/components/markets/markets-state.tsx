@@ -18,10 +18,10 @@ import { OpportunityRow } from '@/components/markets/opportunity-row'
 import { OpportunityEmptyState } from '@/components/markets/opportunity-empty-state'
 import { PaperRow } from '@/components/markets/paper-row'
 import { ProductHeader } from '@/components/match/match-header'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { ApiError, getPaperPositions, listMarketOpportunities, listMarkets } from '@/lib/api/client'
+import { userFacingApiError } from '@/lib/api/user-facing-errors'
 import type { CircuitTier, OpportunityAvailabilityDto } from '@/lib/api/types'
 import { useMarketStream } from '@/hooks/use-market-stream'
 import {
@@ -65,11 +65,12 @@ export type PaperState = {
 
 const PAPER_PRIORITY: Record<PaperRowModel['state'], number> = {
   hold: 0,
-  exit_pending: 1,
-  entry_pending: 2,
-  exited: 3,
-  missed: 4,
-  settled: 5,
+  exit_missed: 1,
+  exit_pending: 2,
+  entry_pending: 3,
+  exited: 4,
+  missed: 5,
+  settled: 6,
 }
 
 function errorCodeOf(error: unknown): string {
@@ -319,8 +320,9 @@ function ErrorCard({ errorCode, onRetry }: { errorCode: string | null; onRetry: 
           <AlertTriangle aria-hidden="true" className="size-5" />
         </div>
         <div>
-          <h2 className="font-semibold">市场数据加载失败</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{errorCode ?? 'internal_error'} · 其他 Tennix 页面仍可继续使用。</p>
+          <h2 className="font-semibold">市场数据暂时不可用</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{userFacingApiError(errorCode, 'market')}</p>
+          <p className="mt-1 text-sm text-muted-foreground">其他 Tennix 页面仍可继续使用。</p>
         </div>
         <Button variant="outline" onClick={onRetry}>
           <RefreshCw data-icon="inline-start" aria-hidden="true" />
@@ -404,8 +406,8 @@ export function MarketsWorkspace({
         (phase === 'prematch' ? row.phase === 'upcoming' : row.phase === phase)),
   )
   const anyStale =
-    data.opportunities.rows.some((row) => row.stale) ||
-    filteredListings.some((row) => row.stale)
+    data.opportunities.rows.some((row) => row.stale || row.overlay === 'stale') ||
+    filteredListings.some((row) => row.stale || row.overlay === 'stale')
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -415,18 +417,16 @@ export function MarketsWorkspace({
         <section className="flex flex-col gap-4 border-b pb-6 md:flex-row md:items-end md:justify-between" aria-labelledby="markets-title">
           <div className="max-w-3xl">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="font-mono text-xs font-semibold tracking-[0.18em] text-primary">DECISION SUPPORT</p>
-              <Badge data-tone="beta" variant="outline">BETA</Badge>
-              <Badge variant="secondary">PAPER ONLY</Badge>
+              <span className="rounded-full border px-2.5 py-1 text-xs text-muted-foreground">仅模拟</span>
             </div>
-            <h1 id="markets-title" className="mt-3 text-balance text-3xl font-semibold tracking-[-0.035em] sm:text-4xl">市场决策支持</h1>
+            <h1 id="markets-title" className="mt-3 text-balance text-3xl font-semibold tracking-[-0.035em] sm:text-4xl">比赛市场</h1>
             <p className="mt-3 max-w-2xl text-pretty text-sm leading-relaxed text-muted-foreground sm:text-base">
-              从机会进入单场证据页，再回到账本复盘；报价、模型与生命周期状态保持可核验且不混写。
+              查看市场报价和模型判断。所有记录都仅供模拟，不会触发真实交易。
             </p>
           </div>
           <div className="flex items-start gap-2 rounded-lg bg-muted/30 p-3 text-xs leading-relaxed text-muted-foreground md:max-w-xs">
             <ShieldCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-primary" />
-            数据来自 Tennix 只读市场服务；仅用于研究与 Paper 模拟，不涉及真实资金。
+            这里显示市场提供的比赛报价；模型判断可能暂不可用。
           </div>
         </section>
 
@@ -439,9 +439,9 @@ export function MarketsWorkspace({
                 <ShieldCheck aria-hidden="true" className="size-5" />
               </div>
               <div>
-                <h2 className="font-semibold">市场决策支持未启用</h2>
+                <h2 className="font-semibold">市场功能暂不可用</h2>
                 <p className="mt-1 max-w-md text-sm leading-relaxed text-muted-foreground">
-                  p3_disabled · 当前部署未开启 P3 市场数据；比赛信息与助手不受影响。
+                  {userFacingApiError('p3_disabled', 'market')}
                 </p>
               </div>
             </CardContent>
@@ -451,7 +451,7 @@ export function MarketsWorkspace({
             {anyStale ? (
               <div role="status" className="flex items-start gap-2 rounded-xl border border-destructive/25 bg-destructive/8 p-4 text-sm text-destructive">
                 <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-                部分市场已超过 freshness 阈值。其最后可信数字仍保留，但对应动作已撤销。
+                部分报价更新较慢。页面展示上次有效价格，并暂停相关比赛判断。
               </div>
             ) : null}
 
@@ -475,15 +475,15 @@ export function MarketsWorkspace({
                   <section className="flex flex-col gap-3" aria-labelledby="opportunities-title">
                     <div className="flex items-end justify-between gap-3">
                       <div>
-                        <h2 id="opportunities-title" className="text-lg font-semibold">按决策优先级排序</h2>
-                        <p className="mt-1 text-sm text-muted-foreground">直播 BUY 优先，其次是即将开始的价格等待。</p>
+                        <h2 id="opportunities-title" className="text-lg font-semibold">值得关注的比赛</h2>
+                        <p className="mt-1 text-sm text-muted-foreground">正在进行的比赛优先，其次是即将开始的比赛。</p>
                       </div>
                       <span className="font-mono text-xs text-muted-foreground">{data.opportunities.rows.length} 条</span>
                     </div>
                     {data.opportunities.status === 'error' ? (
                       <div role="status" className="flex items-start gap-2 rounded-xl border border-destructive/25 bg-destructive/8 p-4 text-sm text-destructive">
                         <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-                        最新刷新失败（{data.opportunities.errorCode}）；以下为最后可信数据。
+                        {userFacingApiError(data.opportunities.errorCode, 'market')} 以下为上次成功获取的数据。
                       </div>
                     ) : null}
                     <div className="grid gap-3">
@@ -493,7 +493,7 @@ export function MarketsWorkspace({
                     </div>
                     <div className="flex items-start gap-2 rounded-lg bg-muted/25 p-3 text-xs leading-relaxed text-muted-foreground">
                       <ShieldCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-primary" />
-                      BUY 与 WAIT 是研究状态；整行只进入比赛证据页，不执行真实交易。
+                      这些判断仅供参考；查看比赛详情不会进行真实交易。
                     </div>
                   </section>
                 )
@@ -520,11 +520,11 @@ export function MarketsWorkspace({
                       <Card>
                         <CardContent className="flex min-h-64 flex-col items-center justify-center gap-3 text-center">
                           <div>
-                            <h3 className="font-semibold">{hasFilters ? '筛选后无市场' : '供应商暂无市场'}</h3>
+                            <h3 className="font-semibold">{hasFilters ? '没有符合条件的比赛' : '目前没有可显示的比赛报价'}</h3>
                             <p className="mt-1 max-w-md text-sm leading-relaxed text-muted-foreground">
                               {hasFilters
-                                ? '尝试移除一个筛选条件，或重置为全部市场。'
-                                : '市场源当前没有返回可展示的报价；不会用缓存之外的数据填充。'}
+                                ? '移除部分筛选条件，或重置筛选后再试。'
+                                : '暂时没有比赛报价，请稍后再来查看。'}
                             </p>
                           </div>
                           {hasFilters ? <Button variant="outline" onClick={resetFilters}>重置筛选</Button> : null}
@@ -544,7 +544,7 @@ export function MarketsWorkspace({
                         {data.listings.status === 'error' ? (
                           <div role="status" className="flex items-start gap-2 rounded-xl border border-destructive/25 bg-destructive/8 p-4 text-sm text-destructive">
                             <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-                            最新刷新失败（{data.listings.errorCode}）；以下为最后可信数据。
+                            {userFacingApiError(data.listings.errorCode, 'market')} 以下为上次成功获取的数据。
                           </div>
                         ) : null}
                         <div className="grid gap-3" aria-live="polite">
@@ -575,9 +575,9 @@ export function MarketsWorkspace({
                 <Card>
                   <CardContent className="flex min-h-72 flex-col items-center justify-center gap-3 text-center">
                     <div>
-                      <h2 className="font-semibold">暂无 Paper 记录</h2>
+                      <h2 className="font-semibold">暂无模拟记录</h2>
                       <p className="mt-1 max-w-md text-sm leading-relaxed text-muted-foreground">
-                        只有实际出现过 intent 的研究生命周期才会进入账本。
+                        符合条件的模拟记录会显示在这里；不涉及真实资金。
                       </p>
                     </div>
                   </CardContent>
@@ -586,8 +586,8 @@ export function MarketsWorkspace({
                 <section className="flex flex-col gap-3" aria-labelledby="paper-ledger-title">
                   <div className="flex items-end justify-between gap-3">
                     <div>
-                      <h2 id="paper-ledger-title" className="text-lg font-semibold">Paper 生命周期账本</h2>
-                      <p className="mt-1 text-sm text-muted-foreground">开放仓位优先；pending、missed 与结算记录均使用不同语义。</p>
+                      <h2 id="paper-ledger-title" className="text-lg font-semibold">模拟记录</h2>
+                      <p className="mt-1 text-sm text-muted-foreground">记录模拟投入、当前价值和盈亏变化。</p>
                     </div>
                     <span className="font-mono text-xs text-muted-foreground">
                       {data.paper.open.length + data.paper.recent.length} 条
@@ -600,7 +600,7 @@ export function MarketsWorkspace({
                   </div>
                   <div className="flex items-start gap-2 rounded-lg bg-muted/25 p-3 text-xs leading-relaxed text-muted-foreground">
                     <ShieldCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-primary" />
-                    账本只来自 PostgreSQL 权威记录；Paper 结果不代表真实收益。
+                    这些结果来自模拟，不代表真实收益。
                   </div>
                 </section>
               )}
@@ -612,7 +612,7 @@ export function MarketsWorkspace({
       <footer className="border-t">
         <div className="mx-auto flex max-w-7xl flex-col justify-between gap-2 px-4 py-5 text-sm text-muted-foreground sm:flex-row md:px-6">
           <span>Tennix · 比赛智能，逐分解释</span>
-          <span>仅用于研究与 Paper 模拟，不构成财务建议</span>
+          <span>仅供参考与模拟，不涉及真实资金</span>
         </div>
       </footer>
     </div>

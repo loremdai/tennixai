@@ -4,6 +4,7 @@ import { PlayerCountry } from '@/components/player-country'
 import type { PlayerProfilePreview, RankMovement } from '@/components/players/player-preview-data'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
+import { formatAsOf } from '@/lib/view-models'
 import {
   Card,
   CardContent,
@@ -37,6 +38,8 @@ function MovementValue({ movement, unavailable }: { movement: RankMovement; unav
 }
 
 export function PlayerProfileHeader({ profile }: { profile: PlayerProfilePreview }) {
+  const rankUpdatedAt = formatAsOf(profile.rankUpdatedAt)
+
   return (
     <Card aria-labelledby="player-profile-name" className="[--card-spacing:--spacing(6)]">
       <CardHeader className="border-b">
@@ -81,12 +84,12 @@ export function PlayerProfileHeader({ profile }: { profile: PlayerProfilePreview
             <p className="mt-2 font-mono text-2xl font-semibold tabular-nums">{profile.points?.toLocaleString('en-US') ?? '暂无'}</p>
           </div>
           <div className="rounded-xl bg-muted/55 p-4">
-            <p className="text-xs text-muted-foreground">较上次快照</p>
+            <p className="text-xs text-muted-foreground">排名变化</p>
             <div className="mt-2 min-h-8"><MovementValue movement={profile.movement} unavailable={profile.rank === null} /></div>
           </div>
         </div>
 
-        <p className="font-mono text-xs text-muted-foreground">数据更新时间：{profile.rankUpdatedAt ?? '暂无'}</p>
+        <p className="text-xs text-muted-foreground">排名更新于：{rankUpdatedAt ? `${rankUpdatedAt}（北京时间）` : '暂无'}</p>
       </CardContent>
     </Card>
   )

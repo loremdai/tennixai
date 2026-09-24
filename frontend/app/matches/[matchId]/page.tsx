@@ -4,7 +4,7 @@ import { MatchPage } from '@/components/match-page'
 
 export const metadata: Metadata = {
   title: '比赛智能 · Tennix',
-  description: '基于 Tennix 内部比赛 ID 的单场比赛事实、比分与上下文问答。',
+  description: '查看单场比赛的赛况、比分和比赛助手。',
 }
 
 type PageProps = {

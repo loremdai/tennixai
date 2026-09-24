@@ -8,7 +8,7 @@ import {
   ReferenceLine,
   XAxis,
 } from 'recharts'
-import { TrendingUp, Trophy } from 'lucide-react'
+import { Trophy } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -34,7 +34,7 @@ import { MatchPointsTimeline } from './match-points'
 
 const momentumConfig = {
   momentum: {
-    label: '近期控制指数',
+    label: '近期走势指数',
     color: 'var(--chart-1)',
   },
 } satisfies ChartConfig
@@ -84,7 +84,7 @@ function RecentControlPanel({
   if (!latest || chart.length === 0) {
     return (
       <p className="rounded-md bg-muted/25 px-3 py-2 text-xs text-muted-foreground">
-        近期控制指数尚未计算；需要供应商返回可判定逐分数据后才会展示最近 20 分走势。
+        暂时没有可用的逐分记录，比赛走势会在数据到达后显示。
       </p>
     )
   }
@@ -97,13 +97,13 @@ function RecentControlPanel({
         <div>
           <p className="text-sm font-medium">{leaderName(match, latest.leader_player_id)} {formatIndex(latest.value)}</p>
           <p className="text-xs text-muted-foreground">
-            最近 {chart.length} 分 · {asOf ? `更新于 ${asOf}` : '更新时间官方未返回'}
+            最近 {chart.length} 分 · {asOf ? `更新于 ${asOf}` : '更新时间暂不可用'}
           </p>
         </div>
-        {latest.is_provisional ? <Badge variant="outline">暂定走势</Badge> : <Badge variant="secondary">已校准</Badge>}
+        {latest.is_provisional ? <Badge variant="outline">样本较少</Badge> : <Badge variant="secondary">走势已更新</Badge>}
       </div>
 
-      <ChartContainer config={momentumConfig} className="h-44 w-full" aria-label="近期控制指数图表">
+      <ChartContainer config={momentumConfig} className="h-44 w-full" aria-label="近期比赛走势图表">
         <LineChart accessibilityLayer data={chart} margin={{ left: 8, right: 8, top: 12, bottom: 0 }}>
           <CartesianGrid vertical={false} strokeDasharray="3 6" />
           <XAxis
@@ -116,9 +116,9 @@ function RecentControlPanel({
             tickFormatter={(value: number) => `${value}`}
           />
           <ReferenceLine y={0} stroke="var(--border)" />
-          <ChartTooltip
-            content={<ChartTooltipContent hideLabel />}
-            formatter={(value) => [formatIndex(Number(value)), '控制指数']}
+            <ChartTooltip
+              content={<ChartTooltipContent hideLabel />}
+              formatter={(value) => [formatIndex(Number(value)), '走势指数']}
           />
           <Line
             type="monotone"
@@ -143,10 +143,10 @@ function RecentControlPanel({
       </ChartContainer>
 
       {latest.is_provisional ? (
-        <p className="text-xs text-muted-foreground">样本较少，当前为暂定走势；至少 6 个可确定分后再作为稳定参考。</p>
+        <p className="text-xs text-muted-foreground">样本较少，走势可能变化；更多得分记录到达后会更稳定。</p>
       ) : null}
 
-      <ol className="sr-only" aria-label="近期控制指数观测">
+              <ol className="sr-only" aria-label="近期比赛走势观测">
         {chart.map((item) => (
           <li key={item.sequence}>第 {item.sequence} 分：{formatIndex(item.value)}</li>
         ))}
@@ -186,24 +186,15 @@ export function MatchMomentumCard({
       )}
     >
       <CardHeader>
-        <CardTitle><h2>{visualStatus === 'finished' ? '比赛总结' : '逐分与动量'}</h2></CardTitle>
+        <CardTitle><h2>{visualStatus === 'finished' ? '比赛总结' : '得分走势与关键分'}</h2></CardTitle>
         <p className="text-sm text-muted-foreground">
-          {visualStatus === 'finished' ? '决胜盘的关键转折' : '最近 20 分的比赛控制指数'}
+          {visualStatus === 'finished' ? '关键分与比赛走势' : '查看近期得分走势与关键分'}
         </p>
         <CardAction>
           {preview ? (
-            visualStatus === 'upcoming' ? (
-              <Badge variant="outline">P2</Badge>
-            ) : visualStatus === 'live' ? (
-              <Badge variant="secondary">
-                <TrendingUp data-icon="inline-start" aria-hidden="true" />
-                Sinner +14
-              </Badge>
-            ) : (
-              <Badge variant="secondary">赛后</Badge>
-            )
+            <Badge variant="outline">演示数据</Badge>
           ) : (
-            <Badge variant="outline">{liveSnapshot ? 'P2 实时' : 'P2 数据暂不可用'}</Badge>
+            liveSnapshot ? <Badge variant="outline">实时数据</Badge> : null
           )}
         </CardAction>
       </CardHeader>
@@ -215,9 +206,8 @@ export function MatchMomentumCard({
           </div>
         ) : match.visualStatus === 'upcoming' ? (
           <FutureModule
-            phase="P2"
-            title="动量时间线将在直播中展开"
-            description="关键破发、盘点与连续得分会与比赛走势同步标注。"
+            title="逐分记录将在比赛开始后显示"
+            description="如有可用数据，这里会标出破发点、盘点和赛点。"
           />
         ) : preview ? (
           visualStatus === 'finished' ? (
@@ -252,7 +242,7 @@ export function MatchMomentumCard({
                   </LineChart>
                 </ChartContainer>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  Sinner 在最近 7 个短回合中赢下 5 分，比赛控制指数上升至 +14。
+                  Sinner 最近 7 个短回合中赢下 5 分，近期走势指数升至 +14。
                 </p>
               </div>
 
@@ -274,9 +264,8 @@ export function MatchMomentumCard({
           )
         ) : (
           <FutureModule
-            phase="P2"
-            title="P2 数据暂不可用"
-            description="逐分事件与动量指数属于 P2 实时比赛智能；P1 不提供该数据。"
+            title="暂无逐分与走势数据"
+            description="本场比赛暂未提供逐分记录，因此无法展示近期走势。"
           />
         )}
       </CardContent>

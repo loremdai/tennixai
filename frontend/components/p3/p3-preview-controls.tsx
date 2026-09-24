@@ -64,7 +64,7 @@ export function P3PreviewControls({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm font-semibold">{title}</p>
-            <Badge variant="outline">仅用于原型</Badge>
+            <Badge variant="outline">演示页面</Badge>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">{description}</p>
         </div>
@@ -75,7 +75,7 @@ export function P3PreviewControls({
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <p className="text-sm font-semibold">{title}</p>
-            <Badge variant="outline">PREVIEW</Badge>
+            <Badge variant="outline">演示</Badge>
           </div>
           <p className="mt-1 truncate text-xs text-muted-foreground">{description}</p>
         </div>

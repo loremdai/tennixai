@@ -23,7 +23,7 @@ export const DISCIPLINE_ORDER: Discipline[] = ['singles', 'doubles', 'team', 'un
 export const CIRCUIT_LABELS: Record<CircuitTier, string> = {
   atp: 'ATP',
   wta: 'WTA',
-  challenger: 'Challenger',
+  challenger: '挑战赛',
   itf: 'ITF',
   other: '其他',
 }

@@ -107,7 +107,7 @@ export function MatchPointsTimeline({
   if (points.length === 0) {
     return (
       <p className="rounded-lg bg-muted/25 p-4 text-sm text-muted-foreground">
-        供应商尚未返回逐分数据；开赛后逐分事件会在此按盘/局展开。
+        本场比赛暂无逐分记录；如有新数据，会显示在这里。
       </p>
     )
   }
@@ -123,7 +123,7 @@ export function MatchPointsTimeline({
           aria-label="数据已校准"
           className="rounded-md bg-secondary/60 px-3 py-1.5 text-xs text-muted-foreground"
         >
-          数据已校准：部分逐分记录被供应商修正，已按最新版本展示。
+          部分逐分记录已更新，当前显示最新记录。
         </p>
       ) : null}
 

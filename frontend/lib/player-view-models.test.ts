@@ -28,7 +28,15 @@ const NOW = new Date('2026-09-08T10:00:00Z')
 
 describe('rankingsSnapshotNote', () => {
   it('does not invent a snapshot time when the source has no ranking data', () => {
-    expect(rankingsSnapshotNote(null)).toBe('排名快照时间未知')
+    expect(rankingsSnapshotNote(null)).toBe('更新时间暂不可用')
+  })
+
+  it('labels the displayed ranking snapshot time as Beijing time', () => {
+    expect(rankingsSnapshotNote('2026-09-08T10:00:00Z')).toBe('更新于 9月8日 18:00（北京时间）')
+  })
+
+  it('does not expose an unparseable timestamp as if it were Beijing time', () => {
+    expect(rankingsSnapshotNote('not-a-timestamp')).toBe('更新时间暂不可用')
   })
 })
 
@@ -290,6 +298,14 @@ describe('toProfilePreview', () => {
       rankUpdatedAt: '2026-09-23T13:32:27.862851Z',
     })
   })
+
+  it('keeps the canonical ranking timestamp for the presentation layer to format', () => {
+    const view = profileViewFixture({
+      ranking: rankingEntryFixture({ fetched_at: '2026-09-23T13:32:27.862851Z' }),
+    })
+
+    expect(toProfilePreview(view, NOW).rankUpdatedAt).toBe('2026-09-23T13:32:27.862851Z')
+  })
 })
 
 describe('toSeasonSummary', () => {
@@ -524,7 +540,7 @@ describe('toCurrentStatus', () => {
     if (status.kind !== 'live') return
     expect(status.score).toBe('比分暂无')
     expect(status.detail).toBe('当前由 Casper Ruud 发球')
-    expect(status.freshness).toBe('数据较旧')
+    expect(status.freshness).toBe('数据可能延迟')
   })
 
   it('maps a scheduled match onto the next card in Beijing time', () => {

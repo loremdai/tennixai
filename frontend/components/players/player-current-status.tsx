@@ -50,7 +50,7 @@ export function PlayerCurrentStatus({
         </div>
         <Badge variant="outline" className={isLive ? 'border-live/30 bg-live/10 text-live' : 'border-primary/25 bg-primary/10 text-primary'}>
           {isLive ? (
-            <><CircleDot data-icon="inline-start" aria-hidden="true" />LIVE</>
+            <><CircleDot data-icon="inline-start" aria-hidden="true" />直播</>
           ) : (
             <><CalendarClock data-icon="inline-start" aria-hidden="true" />下一场</>
           )}

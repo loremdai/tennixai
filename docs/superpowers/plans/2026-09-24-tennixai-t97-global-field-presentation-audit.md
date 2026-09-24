@@ -5,6 +5,8 @@
 **Start HEAD:** `c84fa6d`  
 **Date:** 2026-09-24
 
+**Consumer-facing design brief:** [TennixAI Consumer-Facing Frontend Design](../specs/2026-09-24-tennixai-consumer-frontend-design.md). The user explicitly authorized Codex to design and implement this review directly because v0 is unavailable.
+
 ## Goal
 
 Use the browser to audit the whole user-facing product, not only the current T94 ranking check. Find fields that are missing, inaccessible, mislabeled, incorrectly formatted, clipped, stale without explanation, or shown with misleading fallbacks. Distinguish provider limitations from defects in mapping, API transport, view models, and UI. Fix only issues proven with a concrete example and add regression coverage.
@@ -24,7 +26,7 @@ Use the browser to audit the whole user-facing product, not only the current T94
 2. Run the existing deterministic UI tests and Playwright scenarios that can run without a real local runtime. Inspect the actual rendered pages in a browser at desktop and mobile sizes using known test fixtures; record which states/data each fixture represents.
 3. Attempt the real local-stack/browser check using the project's `tennix-live up` and approved non-LLM verification path. Do not run `init`, manually migrate, or alter `.env`; if the stack is uninitialized, record this as a distinct real-data blocker and continue only with the fixture-backed audit.
 4. For each suspected issue, save a sanitized example and trace it through provider mapping → canonical model → persistence/cache/reducer → REST/SSE → frontend view model → rendered field. Classify it as provider-unavailable/undocumented, data/mapping, transport/state, or presentation. Never turn unavailable data into guessed values.
-5. Fix confirmed in-scope defects with a regression test first; update the field matrix with source, semantics, consumer, and proof. Do not redesign the product or add provider calls/capabilities outside a verified fix.
+5. Fix confirmed in-scope data/presentation defects with a regression test first; update the field matrix with source, semantics, consumer, and proof. Apply the approved consumer-facing design brief across production UI. Do not add provider calls/capabilities or alter market/decision semantics.
 6. Run affected tests, full frontend unit/type checks, bounded Playwright/browser checks, formatting/lint for changed files, and `git diff --check`. Preserve user-owned untracked files and the existing `.next` directory.
 7. Update `CURRENT.md` and `ROADMAP.md` with verified findings, remaining provider/runtime limitations, commits, and actual test outcomes; commit and push the task results to `origin/main`.
 

@@ -58,14 +58,14 @@ export type MatchViewModel = {
   isStale: boolean
 }
 
-const OFFICIAL_MISSING_ROUND = '官方未返回轮次'
-const OFFICIAL_MISSING_SURFACE = '官方未返回场地类型'
-const OFFICIAL_MISSING_INDOOR = '官方未返回室内外'
-const OFFICIAL_MISSING_FORMAT = '官方未返回赛制'
-const OFFICIAL_MISSING_COUNTRY = '官方未提供国家代码'
-const OFFICIAL_MISSING_COUNTRY_NAME = '官方未提供国家名称'
-const OFFICIAL_MISSING_DATE = '官方未返回开赛日期'
-const OFFICIAL_MISSING_TIME = '官方未返回开赛时间'
+const OFFICIAL_MISSING_ROUND = '暂无轮次信息'
+const OFFICIAL_MISSING_SURFACE = '暂无场地信息'
+const OFFICIAL_MISSING_INDOOR = '室内外信息暂缺'
+const OFFICIAL_MISSING_FORMAT = '暂无赛制信息'
+const OFFICIAL_MISSING_COUNTRY = '国家代码暂缺'
+const OFFICIAL_MISSING_COUNTRY_NAME = '国家/地区暂缺'
+const OFFICIAL_MISSING_DATE = '暂无开赛日期'
+const OFFICIAL_MISSING_TIME = '暂无开赛时间'
 const FLAG_CDN_URL = 'https://flagcdn.com/w40'
 
 const timeFormatter = new Intl.DateTimeFormat('zh-CN', {
@@ -249,7 +249,13 @@ function toPlayerView(player: MatchDto['players'][number]): PlayerViewModel {
 
 function freshnessLabel(match: MatchDto): string {
   if (match.freshness.is_stale) {
-    return `数据较旧 · ${match.freshness.age_seconds} 秒未刷新`
+    const age = match.freshness.age_seconds
+    const elapsed = age < 60
+      ? `${age} 秒前`
+      : age < 3_600
+        ? `${Math.floor(age / 60)} 分钟前`
+        : `${Math.floor(age / 3_600)} 小时前`
+    return `数据可能延迟 · ${elapsed}`
   }
   return `更新于 ${formatTime(match.freshness.observed_at)}`
 }
@@ -356,7 +362,7 @@ export const STAT_META: Record<string, StatMeta> = {
 }
 
 export function formatStatValue(value: number | null, unit: string): string {
-  if (value === null) return '官方未返回'
+  if (value === null) return '暂未提供'
   if (unit === 'percent') return `${trimNumber(value)}%`
   if (unit === 'count') return trimNumber(value)
   return `${trimNumber(value)} ${unit}`

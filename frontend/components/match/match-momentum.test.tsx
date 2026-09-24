@@ -125,11 +125,11 @@ describe('MatchMomentumCard', () => {
     )
 
     expect(screen.getByText('Sinner +16')).toBeVisible()
-    expect(screen.getByText('最近 20 分的比赛控制指数')).toBeVisible()
+    expect(screen.getByText('查看近期得分走势与关键分')).toBeVisible()
     expect(screen.getByText(/更新于 9月8日 18:00/)).toBeVisible()
     expect(screen.getByText('关键分标记')).toBeVisible()
     expect(screen.getAllByText(/第 22 分/).length).toBeGreaterThan(0)
-    expect(screen.getByRole('list', { name: '近期控制指数观测' }).querySelectorAll('li')).toHaveLength(20)
+    expect(screen.getByRole('list', { name: '近期比赛走势观测' }).querySelectorAll('li')).toHaveLength(20)
   })
 
   it('uses the latest momentum observation time instead of the snapshot time', () => {
@@ -150,7 +150,7 @@ describe('MatchMomentumCard', () => {
     expect(screen.queryByText(/更新于 9月8日 19:00/)).toBeNull()
   })
 
-  it('labels a short sample as provisional and stays honest when no index exists', () => {
+  it('labels a short sample clearly and explains when no trend data is available', () => {
     render(
       <MatchMomentumCard
         match={match}
@@ -159,7 +159,7 @@ describe('MatchMomentumCard', () => {
         snapshot={snapshot(5)}
       />,
     )
-    expect(screen.getByText(/样本较少/)).toBeVisible()
+    expect(screen.getByText('样本较少')).toBeVisible()
 
     cleanup()
     render(
@@ -170,6 +170,6 @@ describe('MatchMomentumCard', () => {
         snapshot={{ ...snapshot(0), points: [] }}
       />,
     )
-    expect(screen.getByText(/近期控制指数尚未计算/)).toBeVisible()
+    expect(screen.getByText(/暂时没有可用的逐分记录/)).toBeVisible()
   })
 })

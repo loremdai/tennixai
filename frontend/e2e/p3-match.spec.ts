@@ -205,15 +205,15 @@ test.describe('P3 match workbench state families', () => {
     test(`direct refresh renders the ${state} family`, async ({ page }) => {
       await interceptWorkbench(page, state)
       await page.goto(`/matches/${MATCH_ID}`)
-      await expect(page.getByRole('heading', { name: '概率—市场轨迹' })).toBeVisible()
+      await expect(page.getByRole('heading', { name: '胜率与市场价格走势' })).toBeVisible()
 
       // Direct refresh keeps the identical state (snapshot-first from REST).
       await page.reload()
-      await expect(page.getByRole('heading', { name: '概率—市场轨迹' })).toBeVisible()
-      await expect(page.getByRole('heading', { name: 'Decision Evidence & Gates' })).toBeVisible()
+      await expect(page.getByRole('heading', { name: '胜率与市场价格走势' })).toBeVisible()
+      await expect(page.getByRole('heading', { name: '判断依据' })).toBeVisible()
       // States with a ledger position keep the permanent lifecycle timeline.
       const hasPosition = ['entry_pending', 'hold', 'sell', 'settled'].includes(state)
-      await expect(page.getByRole('heading', { name: 'Paper lifecycle' })).toHaveCount(hasPosition ? 1 : 0)
+      await expect(page.getByRole('heading', { name: '模拟交易记录' })).toHaveCount(hasPosition ? 1 : 0)
     })
   }
 
@@ -224,9 +224,9 @@ test.describe('P3 match workbench state families', () => {
     // Scoped to the summary section: the chart renders composite texts like
     // "模型 62.0% / ask 57.0%" and its sr-only table repeats raw percents.
     const summary = page.locator('section[aria-labelledby="decision-summary-title"]')
-    await expect(summary.getByText('BUY', { exact: true })).toBeVisible()
+    await expect(summary.getByRole('paragraph').getByText('模拟买入机会', { exact: true })).toBeVisible()
     await expect(summary.getByText('62.0%', { exact: true })).toBeVisible()
-    await expect(summary.getByText('+7.0pp', { exact: true })).toBeVisible()
+    await expect(summary.getByText('+7.0 个百分点', { exact: true })).toBeVisible()
     await expect(page.getByRole('button', { name: /问这场比赛/ })).toBeVisible()
     await expect(page.getByRole('button', { name: /BUY|下单|买入|真实交易/ })).toHaveCount(0)
   })
@@ -239,9 +239,9 @@ test.describe('P3 match workbench state families', () => {
     // label, so every assertion is scoped to its own section.
     const summary = page.locator('section[aria-labelledby="decision-summary-title"]')
     const lifecycle = page.locator('section[aria-labelledby="paper-lifecycle-title"]')
-    await expect(summary.getByText('ENTRY PENDING', { exact: true })).toBeVisible()
-    await expect(lifecycle.getByText('Paper entry intent 已记录')).toBeVisible()
-    await expect(lifecycle.getByText(/pending 不等于 filled|等待延迟窗口/).first()).toBeVisible()
+    await expect(summary.getByText('等待买入确认', { exact: true })).toBeVisible()
+    await expect(lifecycle.getByText('已提交模拟买入')).toBeVisible()
+    await expect(lifecycle.getByText('10 美元模拟订单，正在确认价格与可交易金额')).toBeVisible()
   })
 
   test('settled shows the terminal ledger state', async ({ page }) => {
@@ -250,9 +250,9 @@ test.describe('P3 match workbench state families', () => {
 
     const summary = page.locator('section[aria-labelledby="decision-summary-title"]')
     const lifecycle = page.locator('section[aria-labelledby="paper-lifecycle-title"]')
-    await expect(summary.getByText('SETTLED', { exact: true })).toBeVisible()
-    await expect(lifecycle.getByText('已按市场最终 resolution 结算')).toBeVisible()
-    await expect(lifecycle.getByText(/P&L|净 P/).first()).toBeVisible()
+    await expect(summary.getByText('已结算', { exact: true })).toBeVisible()
+    await expect(lifecycle.getByText('比赛结果已结算')).toBeVisible()
+    await expect(lifecycle.getByText('模拟盈亏')).toBeVisible()
   })
 })
 
@@ -264,7 +264,7 @@ test.describe('P3 workbench stream independence and a11y', () => {
     // degraded while the last trusted snapshot remains on screen.
     await page.goto(`/matches/${MATCH_ID}`)
 
-    await expect(page.getByText(/决策流已降级/)).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText(/判断暂时无法更新/)).toBeVisible({ timeout: 15_000 })
     // The sports view is untouched by the decision gap: the score section and
     // the last trusted match data stay rendered (both fake SSE streams close
     // after fulfil, so a P2 reconnect notice is legitimate and orthogonal).
@@ -275,7 +275,7 @@ test.describe('P3 workbench stream independence and a11y', () => {
   test('keyboard users reach the summary affordances and rows stay in tab order', async ({ page }) => {
     await interceptWorkbench(page, 'hold')
     await page.goto(`/matches/${MATCH_ID}`)
-    await expect(page.getByRole('heading', { name: '概率—市场轨迹' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '胜率与市场价格走势' })).toBeVisible()
 
     await page.getByRole('button', { name: /问这场比赛/ }).focus()
     await expect(page.getByRole('button', { name: /问这场比赛/ })).toBeFocused()
@@ -291,7 +291,7 @@ test.describe('P3 workbench stream independence and a11y', () => {
 
     await interceptWorkbench(page, 'hold')
     await page.goto(`/matches/${MATCH_ID}`)
-    await expect(page.getByRole('heading', { name: '概率—市场轨迹' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '胜率与市场价格走势' })).toBeVisible()
     await page.waitForTimeout(1500)
 
     expect(pageErrors).toEqual([])
@@ -305,7 +305,7 @@ test.describe('P3 workbench mobile', () => {
   test('no horizontal overflow at 390×844', async ({ page }) => {
     await interceptWorkbench(page, 'hold')
     await page.goto(`/matches/${MATCH_ID}`)
-    await expect(page.getByRole('heading', { name: '概率—市场轨迹' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '胜率与市场价格走势' })).toBeVisible()
 
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,

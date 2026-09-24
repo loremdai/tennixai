@@ -82,7 +82,7 @@ test.describe('player directory', () => {
     // Live match card beats next/none for the seeded live fixture.
     const statusCard = page.locator('[aria-labelledby="current-status-title"]')
     await expect(page.getByRole('heading', { name: '当前比赛状态' })).toBeVisible()
-    await expect(statusCard.getByText('LIVE')).toBeVisible()
+    await expect(statusCard.getByText('直播')).toBeVisible()
     await expect(statusCard.getByText('Casper Ruud')).toBeVisible()
     await expect(page.getByRole('link', { name: /查看 Jannik Sinner 的实时比赛/ })).toBeVisible()
 
@@ -116,10 +116,10 @@ test.describe('player directory', () => {
     await expect(page.getByText('1–5 / 共 5 场')).toBeVisible()
 
     await openMenu(page, '赛季：2025 赛季', '2022 赛季')
-    await expect(page.getByText('历史数据暂不可用')).toBeVisible()
+    await expect(page.getByText('暂无可显示的逐场赛果')).toBeVisible()
 
     await openMenu(page, '赛季：2022 赛季', '2026 赛季')
-    await openMenu(page, '赛事级别：全部级别', 'Challenger')
+    await openMenu(page, '赛事级别：全部级别', '挑战赛')
     await expect(page.getByText('1–2 / 共 2 场')).toBeVisible()
 
     await openMenu(page, '赛果：全部结果', '胜')

@@ -52,7 +52,7 @@ test.describe('P2 Home filters', () => {
     await expect(page.getByRole('button', { name: /ATP/ })).toHaveAttribute('aria-pressed', 'true')
     await expect(page.getByRole('button', { name: /WTA/ })).toHaveAttribute('aria-pressed', 'true')
     await expect(page.getByRole('button', { name: /单打/ })).toHaveAttribute('aria-pressed', 'true')
-    await expect(page.getByRole('button', { name: /Challenger/ })).toHaveAttribute('aria-pressed', 'false')
+    await expect(page.getByRole('button', { name: /挑战赛/ })).toHaveAttribute('aria-pressed', 'false')
 
     // The fake backend dataset is ATP men's singles and must be visible by default.
     await expect(page.getByText('ATP Finals').first()).toBeVisible()

@@ -33,18 +33,18 @@ const stateIcons: Record<DecisionState, LucideIcon> = {
 }
 
 const stateLabels: Record<DecisionState, string> = {
-  market_only: 'MARKET ONLY',
-  no_bet: 'NO BET',
-  wait: 'WAIT',
-  buy: 'BUY',
-  entry_pending: 'ENTRY PENDING',
-  missed: 'MISSED',
-  hold: 'FILLED / HOLD',
-  sell: 'SELL',
-  exit_pending: 'EXIT PENDING',
-  exited: 'EXITED',
-  exit_missed: 'EXIT MISSED',
-  settled: 'SETTLED',
+  market_only: '仅显示市场报价',
+  no_bet: '暂不参与',
+  wait: '等待更好价格',
+  buy: '模拟买入机会',
+  entry_pending: '等待买入确认',
+  missed: '未模拟买入',
+  hold: '模拟持有中',
+  sell: '模拟退出机会',
+  exit_pending: '等待退出确认',
+  exited: '已模拟退出',
+  exit_missed: '退出未成交',
+  settled: '已结算',
 }
 
 const stateTones: Record<DecisionState, DecisionTone> = {
@@ -90,12 +90,12 @@ export function DecisionStatusBadge({
       {overlay === 'stale' ? (
         <Badge variant="destructive">
           <Clock3 data-icon="inline-start" aria-hidden="true" />
-          STALE
+          报价更新较慢
         </Badge>
       ) : overlay === 'gap' ? (
         <Badge variant="destructive">
           <CircleDashed data-icon="inline-start" aria-hidden="true" />
-          DATA GAP
+          比赛数据更新中断
         </Badge>
       ) : null}
     </span>

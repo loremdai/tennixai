@@ -130,7 +130,7 @@ describe('formatFreshness', () => {
     expect(formatFreshness('2026-09-16T11:59:18Z', NOW)).toBe('42 秒前')
     expect(formatFreshness('2026-09-16T11:47:00Z', NOW)).toBe('13 分前')
     expect(formatFreshness('2026-09-16T09:00:00Z', NOW)).toBe('3 小时前')
-    expect(formatFreshness('2026-09-16T11:57:52Z', NOW, true)).toBe('最后可信 · 2 分前')
+    expect(formatFreshness('2026-09-16T11:57:52Z', NOW, true)).toBe('上次有效报价 · 2 分前')
     expect(formatFreshness(null, NOW)).toBe('时间未知')
   })
 })
@@ -165,7 +165,7 @@ describe('toOpportunityRow', () => {
     expect(row.selection).toBe('—')
     expect(row.match).toBe('— vs. —')
     expect(row.overlay).toBe('stale')
-    expect(row.freshness).toContain('最后可信')
+    expect(row.freshness).toContain('上次有效报价')
   })
 })
 
@@ -180,8 +180,33 @@ describe('toMarketRow', () => {
     expect(row.depth).toBeCloseTo(306)
     expect(row.decisionAction).toBe('buy')
     expect(row.quoteState).toBe('snapshot')
-    expect(row.quoteLabel).toBe('快照报价 · 1 分前')
+    expect(row.quoteLabel).toBe('最近报价 · 1 分前')
     expect(row.href).toBe('/matches/mat_1')
+  })
+
+  it('shows quote freshness, not market-catalog observation time', () => {
+    const row = toMarketRow(
+      summary({ as_of: '2026-09-16T11:50:00Z', is_stale: true }),
+      NOW,
+    )
+
+    expect(row.freshness).toBe('1 分前')
+    expect(row.stale).toBe(false)
+    expect(row.overlay).toBe('stale')
+  })
+
+  it('marks quote freshness as last trusted only when the quote itself is stale', () => {
+    const current = summary()
+    const row = toMarketRow(
+      summary({
+        is_stale: true,
+        quote: { ...current.quote, state: 'stale' },
+      }),
+      NOW,
+    )
+
+    expect(row.freshness).toBe('上次有效报价 · 1 分前')
+    expect(row.stale).toBe(true)
   })
 
   it('renders low-tier markets with real quotes and no negative model label', () => {
@@ -212,7 +237,7 @@ describe('toMarketRow', () => {
     expect(row.modelAvailability).toBe('out_of_scope')
     expect(row.modelAvailabilityLabel).toBeNull() // no "uncovered" label
     expect(row.decisionAction).toBeNull()
-    expect(row.quoteLabel).toBe('快照报价 · 1 分前')
+    expect(row.quoteLabel).toBe('最近报价 · 1 分前')
     expect(row.playerOneAsk).toBeCloseTo(0.57)
     expect(row.href).toBeNull() // unmapped rows are not navigable
     expect(row.match).toBe('Challenger Moneyline')
@@ -238,7 +263,7 @@ describe('toMarketRow', () => {
       NOW,
     )
     expect(row.decisionAction).toBeNull()
-    expect(row.modelAvailabilityLabel).toBe('模型未晋升 · 不产生 BUY/WAIT')
+    expect(row.modelAvailabilityLabel).toBe('模型仍在验证')
     expect(row.quoteState).toBe('unavailable')
     expect(row.quoteLabel).toBe('报价暂不可用')
     expect(row.playerOneAsk).toBeNull()
@@ -246,11 +271,11 @@ describe('toMarketRow', () => {
 
   it('labels every visible quote state, including a limited one', () => {
     const states = {
-      realtime: '实时盘口',
-      no_liquidity: '暂无挂单',
+      realtime: '实时更新',
+      no_liquidity: '暂无可交易报价',
       unavailable: '报价暂不可用',
-      stale: '最后可信报价已过期',
-      limited: '覆盖受限 · 等待下一轮',
+      stale: '上次有效报价',
+      limited: '报价暂不可用',
     } as const
     for (const [state, label] of Object.entries(states)) {
       const row = toMarketRow(
@@ -284,7 +309,7 @@ describe('toMarketRow', () => {
       NOW,
     )
     expect(row.phase).toBe('closed')
-    expect(row.reason).toBe('规则已变更 · 动作撤销')
+    expect(row.reason).toBe('评估标准更新，暂不提供判断')
   })
 })
 
@@ -294,7 +319,9 @@ describe('toPaperRow', () => {
     expect(toPaperRow(position({ status: 'entry_pending' }), null, NOW).state).toBe(
       'entry_pending',
     )
-    expect(toPaperRow(position({ status: 'exit_missed' }), null, NOW).state).toBe('missed')
+    const exitMissed = toPaperRow(position({ status: 'exit_missed' }), null, NOW)
+    expect(exitMissed.state).toBe('exit_missed')
+    expect(exitMissed.detail).toBe('模拟退出未成交，仍持有至结算')
     const row = toPaperRow(position(), 'Alpha One vs. Beta Two', NOW)
     expect(row.direction).toBe('Beta Two')
     expect(row.averageEntry).toBeCloseTo(0.525)

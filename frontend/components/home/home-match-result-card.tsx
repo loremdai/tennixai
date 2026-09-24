@@ -18,7 +18,7 @@ export const statusDetails = {
   upcoming: { label: '即将开始', variant: 'outline' as const },
   live: { label: '直播', variant: 'destructive' as const },
   finished: { label: '已完赛', variant: 'secondary' as const },
-  unavailable: { label: '状态待确认', variant: 'outline' as const },
+  unavailable: { label: '比赛信息待更新', variant: 'outline' as const },
 }
 
 export function MatchResultCard({
@@ -87,7 +87,7 @@ export function MatchResultCard({
             <dd className="mt-1 font-medium">{match.surface}</dd>
           </div>
           <div className="col-span-2">
-            <dt className="text-muted-foreground">数据新鲜度</dt>
+            <dt className="text-muted-foreground">数据更新时间</dt>
             <dd className="mt-1 flex items-center gap-1.5 font-medium">
               <CheckCircle2 aria-hidden="true" className="size-3.5 text-primary" />
               {match.freshnessLabel}

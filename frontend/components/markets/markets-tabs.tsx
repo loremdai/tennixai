@@ -9,9 +9,9 @@ export const MARKETS_TABS: Array<{
   label: string
   description: string
 }> = [
-  { value: 'opportunities', label: '机会', description: 'BUY 与 WAIT' },
-  { value: 'all', label: '全部市场', description: '覆盖与 market-only' },
-  { value: 'paper', label: 'Paper', description: '生命周期账本' },
+  { value: 'opportunities', label: '机会', description: '模型判断与关注理由' },
+  { value: 'all', label: '全部市场', description: '比赛与最新报价' },
+  { value: 'paper', label: '模拟记录', description: '仅供模拟，不涉及真实资金' },
 ]
 
 /** Production tablist with the approved v0 geometry (arrow-key roving). */

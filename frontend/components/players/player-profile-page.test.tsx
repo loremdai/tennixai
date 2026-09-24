@@ -52,13 +52,20 @@ describe('PlayerProfilePage header and current status', () => {
     expect(screen.getByText('5,200')).toBeVisible()
   })
 
+  it('shows the ranking update in Beijing time without exposing UTC', () => {
+    renderPage()
+
+    expect(screen.getByText('排名更新于：9月11日 17:00（北京时间）')).toBeVisible()
+    expect(screen.queryByText(/UTC/)).not.toBeInTheDocument()
+  })
+
   it('links the live match card to the internal match route', () => {
     renderPage()
 
     const link = screen.getByRole('link', { name: '查看 Ben Shelton 的实时比赛' })
     expect(link).toHaveAttribute('href', '/matches/mtch_live_plr_atp_ben_shelton')
-    // preview 状态切换按钮与 LIVE 徽章都含 “LIVE” 文案
-    expect(screen.getAllByText('LIVE').length).toBeGreaterThanOrEqual(2)
+    // preview 状态切换按钮与状态徽章都标为“直播”。
+    expect(screen.getAllByText('直播').length).toBeGreaterThanOrEqual(2)
   })
 
   it('links the next match card to the internal match route', async () => {
@@ -159,7 +166,7 @@ describe('PlayerProfilePage history results', () => {
     renderPage()
 
     openMenu('赛事级别：全部级别')
-    await user.click(screen.getByRole('menuitem', { name: 'ITF' }))
+    await user.click(screen.getByRole('menuitem', { name: 'ITF 巡回赛' }))
 
     const rows = within(resultsRegion()).getAllByRole('listitem')
     expect(rows).toHaveLength(2)
@@ -188,32 +195,32 @@ describe('PlayerProfilePage history results', () => {
     const user = userEvent.setup()
     renderPage()
 
-    openMenu('切换历史赛果可用性')
+    openMenu('切换赛果展示状态')
     await user.click(screen.getByRole('menuitem', { name: '加载中' }))
     expect(screen.getByText('正在加载历史赛果')).toBeVisible()
 
-    openMenu('切换历史赛果可用性')
-    await user.click(screen.getByRole('menuitem', { name: '空状态' }))
-    expect(screen.getByText('该赛季暂无赛果')).toBeVisible()
+    openMenu('切换赛果展示状态')
+    await user.click(screen.getByRole('menuitem', { name: '暂无记录' }))
+    expect(screen.getByText('暂无可显示的逐场赛果')).toBeVisible()
 
-    openMenu('切换历史赛果可用性')
-    await user.click(screen.getByRole('menuitem', { name: '部分数据' }))
-    expect(screen.getByText(/只返回部分赛果/)).toBeVisible()
+    openMenu('切换赛果展示状态')
+    await user.click(screen.getByRole('menuitem', { name: '部分记录' }))
+    expect(screen.getByText(/部分比赛记录暂不可用/)).toBeVisible()
     expect(screen.getByText('1–8 / 共 8 场')).toBeVisible()
 
-    openMenu('切换历史赛果可用性')
-    await user.click(screen.getByRole('menuitem', { name: '历史不可用' }))
+    openMenu('切换赛果展示状态')
+    await user.click(screen.getByRole('menuitem', { name: '暂不可用' }))
     expect(screen.getByText('历史数据暂不可用')).toBeVisible()
 
-    openMenu('切换历史赛果可用性')
+    openMenu('切换赛果展示状态')
     await user.click(screen.getByRole('menuitem', { name: '加载失败' }))
     expect(screen.getByRole('alert')).toBeVisible()
     await user.click(screen.getByRole('button', { name: '重试加载' }))
     expect(screen.getByText('1–20 / 共 27 场')).toBeVisible()
 
-    openMenu('切换历史赛果可用性')
-    await user.click(screen.getByRole('menuitem', { name: '旧快照' }))
-    expect(screen.getByText(/最近一次成功快照/)).toBeVisible()
+    openMenu('切换赛果展示状态')
+    await user.click(screen.getByRole('menuitem', { name: '数据可能延迟' }))
+    expect(screen.getByText(/目前显示的是较早的数据/)).toBeVisible()
     expect(screen.getByText('1–20 / 共 27 场')).toBeVisible()
   })
 

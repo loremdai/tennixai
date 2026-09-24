@@ -1,11 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useState, useTransition } from 'react'
-import { Layers3 } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
 
 import { HomeAssistant } from '@/components/home/home-assistant'
-import { HomeHero, HomeQuickActions } from '@/components/home/home-hero'
-import { MarketIntelligenceCard } from '@/components/home/home-intelligence'
+import { HomeHero } from '@/components/home/home-hero'
 import { LiveMarketPulse } from '@/components/home/live-market-pulse'
 import { MarketPulse } from '@/components/home/market-pulse'
 import {
@@ -16,25 +14,13 @@ import {
   type SlateState,
 } from '@/components/home/home-match-sections'
 import { MatchFiltersBar } from '@/components/home/match-filters'
-import {
-  FollowedPlayersSection,
-  RecentResultsCard,
-} from '@/components/home/home-player-sections'
-import {
-  phaseLabels,
-  type ProductPhase,
-} from '@/components/match/match-data'
 import { ProductHeader } from '@/components/match/match-header'
 import type { HomePulseState } from '@/components/p3/p3-preview-data'
-import { Badge } from '@/components/ui/badge'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useChatStream } from '@/hooks/use-chat-stream'
 import { getMatchCatalog } from '@/lib/api/client'
 import type { FacetCountsDto, MatchCatalogDto, MatchFiltersDto } from '@/lib/api/types'
 import { DEFAULT_MATCH_FILTERS } from '@/lib/match-filters'
 import { toHomeMatch, toMatchViewModel } from '@/lib/view-models'
-
-const phases = Object.keys(phaseLabels) as ProductPhase[]
 
 type HomePageProps = {
   initialQuestion?: string
@@ -110,23 +96,12 @@ export function HomePage({
   initialPulseState = 'populated',
   p3Enabled = false,
 }: HomePageProps) {
-  const [phase, setPhase] = useState<ProductPhase>(previewP3 ? 'p3' : 'p1')
-  const [previewEnabled, setPreviewEnabled] = useState(previewP3)
   const [prompt, setPrompt] = useState('')
-  const [isPending, startTransition] = useTransition()
-  const showP3Preview = previewEnabled && phase === 'p3'
+  const previewEnabled = previewP3
+  const showP3Preview = previewEnabled
 
   const chat = useChatStream('global')
   const busy = chat.state.phase === 'loading' || chat.state.phase === 'streaming'
-
-  // Production P3 probe: the live pulse replaces the placeholder card only
-  // when the backend confirms P3 is enabled; a typed 503 keeps the P1/P2
-  // Home visuals exactly as they are.
-  const [p3Pulse, setP3Pulse] = useState<'unknown' | 'active' | 'disabled'>('unknown')
-  const handlePulseAvailability = useCallback((active: boolean) => {
-    setP3Pulse(active ? 'active' : 'disabled')
-  }, [])
-  const productionMarketsHref = p3Pulse === 'active' ? '/markets' : '/#markets'
 
   const [filters, setFilters] = useState<MatchFiltersDto>(DEFAULT_MATCH_FILTERS)
   const [catalogs, setCatalogs] = useState<{
@@ -202,23 +177,6 @@ export function HomePage({
     [busy, chat, previewEnabled],
   )
 
-  function handlePhaseChange(values: string[]) {
-    const nextPhase = values.at(-1) as ProductPhase | undefined
-    if (!nextPhase || nextPhase === phase) return
-
-    startTransition(() => {
-      setPhase(nextPhase)
-      setPrompt('')
-      if (previewEnabled && nextPhase !== 'p3') {
-        setPreviewEnabled(false)
-        const url = new URL(window.location.href)
-        url.searchParams.delete('preview')
-        url.searchParams.delete('pulse')
-        window.history.replaceState(null, '', url)
-      }
-    })
-  }
-
   function focusAssistant() {
     document.getElementById('assistant')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     window.setTimeout(() => document.getElementById('home-question')?.focus(), 350)
@@ -255,80 +213,33 @@ export function HomePage({
       >
         跳至主要内容
       </a>
-      <ProductHeader active="home" marketsHref={showP3Preview ? '/markets?preview=p3' : productionMarketsHref} />
+      <ProductHeader active="home" marketsHref={showP3Preview ? '/markets?preview=p3' : '/markets'} />
 
       <main
         id="main-content"
         tabIndex={-1}
         className="mx-auto flex max-w-7xl scroll-mt-20 flex-col gap-4 px-4 py-5 md:px-6 md:py-7"
       >
-        <section
-          id="phase"
-          className="home-reveal flex scroll-mt-24 flex-col justify-between gap-3 rounded-xl border bg-card/65 p-3 sm:flex-row sm:items-center"
-          aria-labelledby="phase-title"
-        >
-          <div className="flex items-center gap-3">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-secondary text-primary">
-              <Layers3 aria-hidden="true" className="size-4" />
-            </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <p id="phase-title" className="text-sm font-semibold">产品演进预览</p>
-                <Badge variant="outline">稳定信息架构</Badge>
-              </div>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {phaseLabels[phase].title} · {phaseLabels[phase].description}
-              </p>
-            </div>
-          </div>
-
-          <ToggleGroup
-            value={[phase]}
-            onValueChange={handlePhaseChange}
-            variant="outline"
-            spacing={1}
-            aria-label="选择产品阶段"
-            aria-busy={isPending}
-            className="phase-switch w-full sm:w-fit"
-          >
-            {phases.map((item) => (
-              <ToggleGroupItem
-                key={item}
-                value={item}
-                className="flex-1 sm:flex-none"
-                aria-label={phaseLabels[item].title}
-              >
-                {phaseLabels[item].short}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
-        </section>
-
         <HomeHero
-          phase={phase}
+          showSearch={!busy && chat.state.phase === 'idle' && !previewEnabled}
           prompt={prompt}
           onPromptChange={setPrompt}
           onSubmit={showAnswer}
           onPromptSelect={showAnswer}
         />
 
-        <HomeQuickActions marketsHref={showP3Preview ? '/markets?preview=p3' : p3Pulse === 'active' ? '/markets' : '#markets'} />
+        {chat.state.phase !== 'idle' ? (
+          <HomeAssistant
+            prompt={prompt}
+            chat={chat.state}
+            busy={busy}
+            onPromptChange={setPrompt}
+            onSubmit={showAnswer}
+          />
+        ) : null}
 
-        <div className="home-reveal grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
-          <aside className="flex min-w-0 flex-col gap-4 lg:col-start-2 lg:row-start-1" aria-label="Tennix 智能侧栏">
-            <HomeAssistant
-              prompt={prompt}
-              chat={chat.state}
-              busy={busy}
-              onPromptChange={setPrompt}
-              onSubmit={showAnswer}
-              onPromptSelect={showAnswer}
-            />
-            <RecentResultsCard />
-            {showP3Preview || p3Pulse === 'active' ? null : <MarketIntelligenceCard phase={phase} />}
-          </aside>
-
-          <div className="flex min-w-0 flex-col gap-6 lg:col-start-1 lg:row-start-1">
+        <div className="home-reveal flex min-w-0 flex-col gap-6">
+          <div className="flex min-w-0 flex-col gap-6">
             {allSlateFailed ? (
               <SlateErrorPanel
                 code={slateErrorCodes.live ?? slateErrorCodes.upcoming ?? 'internal_error'}
@@ -342,7 +253,7 @@ export function HomePage({
                   onChange={setFilters}
                   onReset={() => setFilters(DEFAULT_MATCH_FILTERS)}
                 />
-                <FeaturedMatchSection phase={phase} match={featured} state={featuredState} onAsk={focusAssistant} />
+                <FeaturedMatchSection match={featured} state={featuredState} onAsk={focusAssistant} />
                 <LiveNowSection
                   matches={liveCards}
                   state={slateState.live}
@@ -361,21 +272,20 @@ export function HomePage({
                 />
               </>
             )}
-            <FollowedPlayersSection />
           </div>
         </div>
 
         {showP3Preview ? (
           <MarketPulse initialState={initialPulseState} />
         ) : p3Enabled ? (
-          <LiveMarketPulse onAvailability={handlePulseAvailability} />
+          <LiveMarketPulse />
         ) : null}
       </main>
 
       <footer className="border-t">
         <div className="mx-auto flex max-w-7xl flex-col justify-between gap-2 px-4 py-6 text-sm text-muted-foreground sm:flex-row md:px-6">
-          <span>Tennix · Tennis, data, intelligence.</span>
-          <span>{showP3Preview ? 'P3 固定预览数据 · 仅用于研究与 Paper 模拟' : '数据由 Tennix 服务提供 · 时间为北京时间'}</span>
+          <span>Tennix · 网球赛况与数据</span>
+          <span>{showP3Preview ? '示例内容，不代表实时行情' : '比赛时间均为北京时间'}</span>
         </div>
       </footer>
     </div>

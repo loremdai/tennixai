@@ -147,8 +147,8 @@ function watchErrors(page: Page) {
 }
 
 async function ask(page: Page, question: string) {
-  await page.getByLabel('继续向 Tennix 提问').fill(question)
-  await page.getByLabel('继续向 Tennix 提问').press('Enter')
+  await page.getByLabel('向 Tennix 提问').fill(question)
+  await page.getByLabel('向 Tennix 提问').press('Enter')
 }
 
 test.describe('Home history answer', () => {

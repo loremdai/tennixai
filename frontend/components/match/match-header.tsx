@@ -4,19 +4,8 @@ import type { FormEvent } from 'react'
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import {
-  Bell,
-  CircleDot,
-  HelpCircle,
-  LogOut,
-  Menu,
-  Search,
-  SlidersHorizontal,
-  UserRound,
-} from 'lucide-react'
+import { CircleDot, Menu, Search } from 'lucide-react'
 
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -24,7 +13,6 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
@@ -41,18 +29,17 @@ type ProductHeaderProps = {
   marketsHref?: string
 }
 
-const navItems: Array<{ key: ProductNavKey; label: string; href: string; beta?: boolean }> = [
+const navItems: Array<{ key: ProductNavKey; label: string; href: string }> = [
   { key: 'home', label: '首页', href: '/' },
   { key: 'live', label: '直播', href: '/#live' },
   { key: 'schedule', label: '赛程', href: '/#upcoming' },
   { key: 'players', label: '球员', href: '/players' },
-  { key: 'markets', label: '市场', href: '/#markets', beta: true },
+  { key: 'markets', label: '市场', href: '/markets' },
 ]
 
-export function ProductHeader({ active = 'home', marketsHref = '/#markets' }: ProductHeaderProps) {
+export function ProductHeader({ active = 'home', marketsHref = '/markets' }: ProductHeaderProps) {
   const router = useRouter()
   const [search, setSearch] = useState('')
-  const [hasNotification, setHasNotification] = useState(true)
   const resolvedNavItems = navItems.map((item) =>
     item.key === 'markets' ? { ...item, href: marketsHref } : item,
   )
@@ -95,90 +82,42 @@ export function ProductHeader({ active = 'home', marketsHref = '/#markets' }: Pr
               )}
             >
               {item.label}
-              {item.beta ? (
-                <span className="rounded-full bg-premium/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-premium">
-                  BETA
-                </span>
-              ) : null}
             </Link>
           ))}
         </nav>
 
-        <form onSubmit={submitSearch} className="mx-auto hidden w-full max-w-md md:block">
-          <label htmlFor="global-search" className="sr-only">
-            搜索球员、赛事或询问任何问题
-          </label>
-          <InputGroup className="h-9 rounded-xl bg-card/70">
-            <InputGroupInput
-              id="global-search"
-              name="global-search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="搜索球员、赛事或询问任何问题…"
-              autoComplete="off"
-            />
-            <InputGroupAddon align="inline-start">
-              <Search aria-hidden="true" />
-            </InputGroupAddon>
-          </InputGroup>
-          <button type="submit" className="sr-only">搜索</button>
-        </form>
+        {active !== 'home' ? (
+          <form onSubmit={submitSearch} className="mx-auto hidden w-full max-w-md md:block">
+            <label htmlFor="global-search" className="sr-only">
+              搜索球员、赛事或询问任何问题
+            </label>
+            <InputGroup className="h-9 rounded-xl bg-card/70">
+              <InputGroupInput
+                id="global-search"
+                name="global-search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="搜索球员、赛事或提问…"
+                autoComplete="off"
+              />
+              <InputGroupAddon align="inline-start">
+                <Search aria-hidden="true" />
+              </InputGroupAddon>
+            </InputGroup>
+            <button type="submit" className="sr-only">搜索</button>
+          </form>
+        ) : null}
 
         <div className="ml-auto flex shrink-0 items-center gap-1 md:ml-0">
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={hasNotification ? '查看 1 条新通知' : '查看通知'}
-            onClick={() => setHasNotification(false)}
-            className="relative hidden sm:inline-flex"
-          >
-            <Bell aria-hidden="true" />
-            {hasNotification ? (
-              <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-live ring-2 ring-background" aria-hidden="true" />
-            ) : null}
-          </Button>
-
-          <Button variant="ghost" size="icon" aria-label="打开显示设置" className="hidden sm:inline-flex">
-            <SlidersHorizontal aria-hidden="true" />
-          </Button>
-
-          <Link
-            href="/#assistant"
-            aria-label="搜索与询问"
-            className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'md:hidden')}
-          >
-            <Search aria-hidden="true" />
-          </Link>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={<Button variant="ghost" size="icon-lg" aria-label="打开用户菜单" />}
+          {active !== 'home' ? (
+            <Link
+              href="/#assistant"
+              aria-label="搜索与提问"
+              className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'md:hidden')}
             >
-              <Avatar size="sm">
-                <AvatarFallback>ET</AvatarFallback>
-              </Avatar>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-52">
-              <DropdownMenuGroup>
-                <DropdownMenuLabel>Etienne · 本地时间</DropdownMenuLabel>
-                <DropdownMenuItem onClick={() => router.push('/#players')}>
-                  <UserRound aria-hidden="true" />
-                  已关注 4 位球员
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => router.push('/#assistant')}>
-                  <HelpCircle aria-hidden="true" />
-                  询问 Tennix
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuGroup>
-                <DropdownMenuItem>
-                  <LogOut aria-hidden="true" />
-                  退出登录
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
+              <Search aria-hidden="true" />
+            </Link>
+          ) : null}
 
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -191,8 +130,7 @@ export function ProductHeader({ active = 'home', marketsHref = '/#markets' }: Pr
                 <DropdownMenuLabel>导航</DropdownMenuLabel>
                 {resolvedNavItems.map((item) => (
                   <DropdownMenuItem key={item.key} onClick={() => router.push(item.href)}>
-                    <span>{item.label}</span>
-                    {item.beta ? <Badge variant="outline">BETA</Badge> : null}
+                    {item.label}
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuGroup>

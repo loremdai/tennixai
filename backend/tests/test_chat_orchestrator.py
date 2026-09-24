@@ -598,7 +598,7 @@ async def test_broad_historical_query_emits_unsupported_without_model_or_provide
     assert [event.type for event in events] == ["data", "text_delta", "done"]
     assert events[0].payload["kind"] == "unsupported"
     assert events[0].payload["matches"] == []
-    assert events[1].payload["delta"] == "P2 暂不支持大范围历史查询。"
+    assert events[1].payload["delta"] == "目前无法查询球员的全部历史赛果，可以试试查询最近的比赛或指定赛季。"
     assert model.choose_calls == []
     assert sum(recording.calls.values()) == 0
 

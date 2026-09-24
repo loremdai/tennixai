@@ -408,7 +408,7 @@ function profileForEntry(entry: PlayerDirectoryEntry): PlayerProfilePreview {
   return {
     ...entry,
     ...details,
-    rankUpdatedAt: '2026-09-11 09:00 UTC',
+    rankUpdatedAt: '2026-09-11T09:00:00Z',
   }
 }
 

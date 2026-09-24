@@ -7,11 +7,9 @@ import type {
   RankMovement,
   TourKey,
 } from '@/components/players/player-preview-data'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Card,
-  CardAction,
   CardContent,
   CardFooter,
   CardHeader,
@@ -54,7 +52,7 @@ export function RankingsTable({
   pageSize,
   onPageChange,
   total,
-  dataSourceNote = '排名与积分为确定性预览数据',
+  dataSourceNote = '演示数据',
 }: {
   tour: TourKey
   players: PlayerDirectoryEntry[]
@@ -81,12 +79,9 @@ export function RankingsTable({
             <h2 id="rankings-title">{tour} 单打世界排名</h2>
           </CardTitle>
           <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-            官方前 200 · 每页 50 位{dataSourceNote ? ` · ${dataSourceNote}` : ''}
+            按排名排序 · 每页 50 位{dataSourceNote ? ` · ${dataSourceNote}` : ''}
           </p>
         </div>
-        <CardAction>
-          <Badge variant="outline">Top 200</Badge>
-        </CardAction>
       </CardHeader>
 
       <CardContent className="-mx-(--card-spacing)">
@@ -122,7 +117,7 @@ export function RankingsTable({
                     </div>
                     <div className="flex items-baseline justify-between gap-3 md:block md:text-right">
                       <span className="text-xs text-muted-foreground md:hidden">积分</span>
-                      <span className="font-mono font-semibold tabular-nums">{player.points?.toLocaleString('en-US')}</span>
+                      <span className="font-mono font-semibold tabular-nums">{player.points?.toLocaleString('en-US') ?? '暂无'}</span>
                     </div>
                     <ChevronRight aria-hidden="true" className="hidden size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground md:block" />
                   </Link>

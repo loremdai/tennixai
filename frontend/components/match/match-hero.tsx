@@ -78,7 +78,7 @@ function PlayerSummary({
         {player.ranking !== null ? (
           <Badge variant="outline">{previewPlayer ? `${previewPlayer.seed} 号种子` : `#${player.ranking}`}</Badge>
         ) : (
-          <Badge variant="outline">官方未返回排名</Badge>
+          <Badge variant="outline">排名暂未提供</Badge>
         )}
       </div>
 
@@ -87,7 +87,7 @@ function PlayerSummary({
           {player.name}
         </p>
         <p className="mt-1 text-sm text-muted-foreground">
-          {player.ranking !== null ? `世界排名 #${player.ranking}` : '世界排名官方未返回'}
+          {player.ranking !== null ? `世界排名 #${player.ranking}` : '世界排名暂未提供'}
         </p>
       </div>
 
@@ -117,9 +117,9 @@ function PlayerSummary({
       ) : visualStatus === 'live' && isServing === false ? (
         <span className="text-sm text-muted-foreground">接发球</span>
       ) : visualStatus === 'live' ? (
-        <span className="text-sm text-muted-foreground">发球方官方未返回</span>
+        <span className="text-sm text-muted-foreground">发球方暂未提供</span>
       ) : (
-        <span className="text-sm text-muted-foreground">状态待确认</span>
+        <span className="text-sm text-muted-foreground">比赛信息待更新</span>
       )}
     </div>
   )
@@ -191,7 +191,7 @@ function LiveScore({
           ? <>第 {previewMatchMeta.currentSet} 盘 · 第 {previewMatchMeta.currentGame} 局</>
           : currentSetNumber !== null
             ? <>第 {currentSetNumber} 盘</>
-            : <>当前盘官方未返回</>}
+            : <>当前盘比分暂未提供</>}
         <span className="font-mono text-muted-foreground">
           {preview ? previewMatchMeta.liveElapsed : match.freshnessLabel}
         </span>
@@ -238,7 +238,7 @@ function LiveScore({
             ? `${match.players.find((player) => player.id === knownServerPlayerId(match))?.shortName ?? ''} 发球`
             : match.visualStatus === 'upcoming'
               ? '开赛前未产生发球方'
-              : '官方未返回发球方'}
+              : '发球方暂未提供'}
         </span>
         <span aria-hidden="true">·</span>
         <span>当前局 {score.points[0] ?? '–'}–{score.points[1] ?? '–'}</span>
@@ -347,7 +347,7 @@ export function MatchHero({ match, highlight, onAsk, onRefresh, preview = false 
           ) : visualStatus === 'upcoming' ? (
             <Badge variant="outline" role="status">即将开始</Badge>
           ) : (
-            <Badge variant="outline" role="status">状态待确认</Badge>
+            <Badge variant="outline" role="status">比赛信息待更新</Badge>
           )}
         </CardAction>
       </CardHeader>
@@ -397,7 +397,7 @@ export function MatchHero({ match, highlight, onAsk, onRefresh, preview = false 
         <p className="text-sm leading-relaxed text-muted-foreground">
           {preview
             ? visualStatus === 'upcoming'
-              ? '赛程与背景资料已同步'
+              ? '赛程和比赛信息已更新'
               : visualStatus === 'live'
                 ? '实时数据延迟约 2.4 秒'
                 : '最终比分与赛后摘要已核验'

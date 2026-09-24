@@ -25,16 +25,20 @@ describe('P3 markets preview', () => {
 
     const tabs = screen.getAllByRole('tab')
     expect(tabs).toHaveLength(3)
-    expect(tabs.map((tab) => tab.textContent)).toEqual(['机会BUY 与 WAIT', '全部市场覆盖与 market-only', 'Paper生命周期账本'])
+    expect(tabs.map((tab) => tab.textContent)).toEqual([
+      '机会模型判断与关注理由',
+      '全部市场比赛与最新报价',
+      '模拟记录仅供模拟，不涉及真实资金',
+    ])
     expect(screen.getByRole('tabpanel')).toHaveAttribute('id', 'markets-panel-opportunities')
 
     await user.click(screen.getByRole('tab', { name: /全部市场/ }))
     expect(screen.getByRole('tabpanel')).toHaveAttribute('id', 'markets-panel-all')
     expect(screen.getByText('市场筛选')).toBeVisible()
 
-    await user.click(screen.getByRole('tab', { name: /^Paper/ }))
+    await user.click(screen.getByRole('tab', { name: /^模拟记录/ }))
     expect(screen.getByRole('tabpanel')).toHaveAttribute('id', 'markets-panel-paper')
-    expect(screen.getByText('Paper 生命周期账本')).toBeVisible()
+    expect(screen.getByRole('heading', { name: '模拟记录' })).toBeVisible()
   })
 
   it('keeps market rows internal and exposes no wallet or real-trade control', () => {
@@ -52,6 +56,40 @@ describe('P3 markets preview', () => {
       expect(link.getAttribute('href')).toMatch(/^\/(?!\/)/)
     }
     expect(screen.queryAllByRole('button', { name: /钱包|下单|真实交易/ })).toHaveLength(0)
+  })
+
+  it('uses customer language for preview states instead of implementation labels', () => {
+    render(
+      <MarketsPage
+        initialView="opportunities"
+        initialState="populated"
+        initialTiers={[]}
+        initialGender="all"
+        initialPhase="all"
+      />,
+    )
+
+    expect(screen.getByRole('heading', { name: '比赛市场' })).toBeVisible()
+    expect(document.body.textContent).toContain('有买入或观望信号')
+    expect(document.body.textContent).not.toMatch(/BUY \+ WAIT|部分 stale|Markets · P3/)
+  })
+
+  it('uses plain Chinese labels for quote spread and available market depth', async () => {
+    render(
+      <MarketsPage
+        initialView="all"
+        initialState="populated"
+        initialTiers={[]}
+        initialGender="all"
+        initialPhase="all"
+      />,
+    )
+
+    expect(await screen.findByRole('heading', { name: '比赛市场' })).toBeVisible()
+    expect(screen.getAllByText('买卖价差').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('可交易金额').length).toBeGreaterThan(0)
+    expect(document.body.textContent).not.toMatch(/\bspread\b|\bdepth\b|主巡覆盖|不伪造模型值/)
+    expect(screen.getAllByText('暂不提供胜率估算').length).toBeGreaterThan(0)
   })
 
 })
@@ -246,15 +284,17 @@ describe('MarketsWorkspace (production)', () => {
     render(<MarketsWorkspace />)
 
     await waitFor(() => expect(screen.getByText('Alpha One vs. Beta Two')).toBeTruthy())
-    const rows = screen.getAllByRole('link', { name: /查看 .* 的 (buy|wait) 决策/ })
+    const rows = screen.getAllByRole('link', { name: /查看 .* 的(模拟买入机会|等待更好价格)决策/ })
     expect(rows.map((row) => row.getAttribute('href'))).toEqual([
       '/matches/mat_1',
       '/matches/mat_2',
     ])
     expect(screen.getByText('方向：Beta Two')).toBeTruthy()
     expect(screen.getByText('方向：Gamma Three')).toBeTruthy()
-    expect(screen.getByText('+7.0pp')).toBeTruthy()
-    expect(screen.getByText('最高价 55.0%')).toBeTruthy()
+    expect(screen.getByText('模拟买入机会')).toBeTruthy()
+    expect(screen.getByText('等待更好价格')).toBeTruthy()
+    expect(screen.getByText('+7.0 个百分点')).toBeTruthy()
+    expect(screen.getByText('最高买入价 55.0%')).toBeTruthy()
   })
 
   it('keeps every row link internal and exposes no trade buttons', async () => {
@@ -270,7 +310,7 @@ describe('MarketsWorkspace (production)', () => {
     expect(
       screen.queryAllByRole('button', { name: /BUY|SELL|钱包|下单|真实交易/ }),
     ).toHaveLength(0)
-    await user.click(screen.getByRole('tab', { name: /Paper/ }))
+    await user.click(screen.getByRole('tab', { name: /模拟记录/ }))
     expect(
       screen.queryAllByRole('button', { name: /BUY|SELL|钱包|下单|真实交易/ }),
     ).toHaveLength(0)
@@ -380,7 +420,7 @@ describe('MarketsWorkspace (production)', () => {
 
     await waitFor(() => expect(screen.getByText('已加载 50 / 51 场')).toBeTruthy())
     await user.click(screen.getByRole('button', { name: '女子' }))
-    expect(screen.getByText('筛选后无市场')).toBeTruthy()
+    expect(screen.getByText('没有符合条件的比赛')).toBeTruthy()
     expect(screen.getByRole('button', { name: '加载更多' })).toBeTruthy()
     await user.click(screen.getByRole('button', { name: '加载更多' }))
     await waitFor(() =>
@@ -425,19 +465,19 @@ describe('MarketsWorkspace (production)', () => {
     })
     const user = userEvent.setup()
     render(<MarketsWorkspace />)
-    await user.click(screen.getByRole('tab', { name: /^Paper/ }))
+    await user.click(screen.getByRole('tab', { name: /^模拟记录/ }))
 
-    await waitFor(() => expect(screen.getByText('Paper 生命周期账本')).toBeTruthy())
+    await waitFor(() => expect(screen.getByRole('heading', { name: '模拟记录' })).toBeTruthy())
     expect(screen.getByText('3 条')).toBeTruthy()
-    const badges = screen.getAllByText(/FILLED \/ HOLD|ENTRY PENDING|SETTLED/)
+    const badges = screen.getAllByText(/^(模拟持有中|等待买入确认|已结算)$/)
     expect(badges.map((badge) => badge.textContent)).toEqual([
-      'FILLED / HOLD',
-      'ENTRY PENDING',
-      'SETTLED',
+      '模拟持有中',
+      '等待买入确认',
+      '已结算',
     ])
     expect(screen.getAllByText('$10.00 · 52.5%')).toHaveLength(3)
     expect(screen.getByText('+$1.40')).toBeTruthy()
-    expect(screen.queryByText(/钱包|下单|真实交易/)).toBeNull()
+    expect(screen.getByText(/不会触发真实交易/)).toBeTruthy()
   })
 
   it('shows a loading skeleton before data arrives', async () => {
@@ -452,7 +492,8 @@ describe('MarketsWorkspace (production)', () => {
     const user = userEvent.setup()
     render(<MarketsWorkspace />)
 
-    await waitFor(() => expect(screen.getByText(/rate_limited/)).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('请求过于频繁，请稍后再试。')).toBeTruthy())
+    expect(screen.queryByText(/rate_limited/)).toBeNull()
     expect(screen.getByRole('alert')).toBeTruthy()
 
     listMarketOpportunitiesMock.mockResolvedValue({
@@ -463,7 +504,7 @@ describe('MarketsWorkspace (production)', () => {
     await waitFor(() => expect(screen.getByText('Alpha One vs. Beta Two')).toBeTruthy())
   })
 
-  it('keeps last trusted rows visible when a refresh fails', async () => {
+  it('keeps stale decision rows visible without marking a fresh quote stale', async () => {
     const user = userEvent.setup()
     listMarketsMock.mockResolvedValue({
       markets: [summaryDto({ is_stale: true, decision_action: 'wait' })],
@@ -473,11 +514,11 @@ describe('MarketsWorkspace (production)', () => {
     })
     render(<MarketsWorkspace />)
     await user.click(screen.getByRole('tab', { name: /全部市场/ }))
-    await waitFor(() => expect(screen.getByText(/部分市场已超过 freshness 阈值/)).toBeTruthy())
-    expect(screen.getAllByText(/最后可信 ·/).length).toBeGreaterThanOrEqual(1)
-    // The stale row shows the revoked-action badge, never a fresh BUY.
-    expect(screen.getByText('WAIT')).toBeTruthy()
-    expect(screen.queryByText('BUY')).toBeNull()
+    await waitFor(() => expect(screen.getAllByText(/报价更新较慢/).length).toBeGreaterThan(0))
+    expect(screen.queryByText(/最后可信 ·/)).toBeNull()
+    // The decision is stale and its action is revoked; the quote timestamp is independent.
+    expect(screen.getByText('等待更好价格')).toBeTruthy()
+    expect(screen.queryByText('买入信号')).toBeNull()
   })
 
   it('renders closed markets with the closed phase badge', async () => {
@@ -491,8 +532,8 @@ describe('MarketsWorkspace (production)', () => {
     render(<MarketsWorkspace />)
     await user.click(screen.getByRole('tab', { name: /全部市场/ }))
     // The closed badge appears on the row (plus the phase filter chip).
-    await waitFor(() => expect(screen.getAllByText('已收盘').length).toBeGreaterThanOrEqual(2))
-    expect(screen.getByText('NO BET')).toBeTruthy()
+    await waitFor(() => expect(screen.getAllByText('已结束').length).toBeGreaterThanOrEqual(2))
+    expect(screen.getByText('暂不参与')).toBeTruthy()
   })
 
   it('renders honest empty states per view', async () => {
@@ -506,13 +547,13 @@ describe('MarketsWorkspace (production)', () => {
     render(<MarketsWorkspace />)
 
     // NO_ELIGIBLE_ACTION has its own honest copy (T88).
-    await waitFor(() => expect(screen.getByText('当前没有满足策略门的机会。')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('目前没有符合条件的比赛。')).toBeTruthy())
     await user.click(screen.getByRole('tab', { name: /全部市场/ }))
-    await waitFor(() => expect(screen.getByText('供应商暂无市场')).toBeTruthy())
-    await user.click(screen.getByRole('button', { name: 'ITF' }))
-    await waitFor(() => expect(screen.getByText('筛选后无市场')).toBeTruthy())
-    await user.click(screen.getByRole('tab', { name: /^Paper/ }))
-    await waitFor(() => expect(screen.getByText('暂无 Paper 记录')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('目前没有可显示的比赛报价')).toBeTruthy())
+    await user.click(screen.getByRole('button', { name: 'ITF 巡回赛' }))
+    await waitFor(() => expect(screen.getByText('没有符合条件的比赛')).toBeTruthy())
+    await user.click(screen.getByRole('tab', { name: /^模拟记录/ }))
+    await waitFor(() => expect(screen.getByText('暂无模拟记录')).toBeTruthy())
   })
 
   it('renders the honest disabled panel on p3_disabled', async () => {
@@ -522,8 +563,9 @@ describe('MarketsWorkspace (production)', () => {
     getPaperPositionsMock.mockRejectedValue(error)
     render(<MarketsWorkspace />)
 
-    await waitFor(() => expect(screen.getByText('市场决策支持未启用')).toBeTruthy())
-    expect(screen.getByText(/p3_disabled/)).toBeTruthy()
+    await waitFor(() => expect(screen.getByText('市场功能暂不可用')).toBeTruthy())
+    expect(screen.getByText('市场功能暂未开放；比赛和球员信息仍可正常使用。')).toBeTruthy()
+    expect(screen.queryByText(/p3_disabled/)).toBeNull()
   })
 })
 
@@ -557,21 +599,21 @@ describe('MarketsWorkspace opportunity empty states (T88)', () => {
     render(<MarketsWorkspace initialView="opportunities" />)
 
     await waitFor(() =>
-      expect(screen.getByText('模型尚未完成验证')).toBeTruthy(),
+      expect(screen.getByText('模型仍在验证中')).toBeTruthy(),
     )
     expect(
-      screen.getByText('模型尚未完成验证，当前不生成 BUY / WAIT；全部市场的真实报价仍可查看。'),
+      screen.getByText('模型验证尚未完成，因此暂不提供比赛判断；你仍可查看所有市场的最新报价。'),
     ).toBeTruthy()
-    expect(screen.getByRole('button', { name: '查看全部市场' })).toBeTruthy()
-    expect(screen.queryByText('BUY')).toBeNull()
-    expect(screen.queryByText('WAIT')).toBeNull()
+    expect(screen.getByRole('button', { name: '查看所有比赛报价' })).toBeTruthy()
+    expect(screen.queryByText('买入信号')).toBeNull()
+    expect(screen.queryByText('等待更好价格')).toBeNull()
   })
 
   it('uses a distinct honest copy for every other reason', async () => {
     const cases = [
-      ['NO_ELIGIBLE_ACTION', '当前没有满足策略门的机会。'],
-      ['NO_COVERED_MARKET', '当前没有可评估的主巡单打市场。'],
-      ['DECISION_GAP', '决策数据正在恢复，暂不生成新机会。'],
+      ['NO_ELIGIBLE_ACTION', '目前没有符合条件的比赛。'],
+      ['NO_COVERED_MARKET', '目前没有纳入分析的单打比赛；其他比赛的市场报价仍可查看。'],
+      ['DECISION_GAP', '我们已暂停提供新的比赛判断，请稍后再试。'],
     ] as const
     for (const [reason, copy] of cases) {
       emptyOpportunities(reason)
@@ -585,8 +627,8 @@ describe('MarketsWorkspace opportunity empty states (T88)', () => {
     emptyOpportunities(null)
     render(<MarketsWorkspace initialView="opportunities" />)
 
-    await waitFor(() => expect(screen.getByText('暂无符合门槛的机会')).toBeTruthy())
-    expect(screen.queryByRole('button', { name: '查看全部市场' })).toBeNull()
+    await waitFor(() => expect(screen.getByText('暂时没有可关注的机会')).toBeTruthy())
+    expect(screen.getByRole('button', { name: '查看所有比赛报价' })).toBeTruthy()
   })
 
   it('switching to the all-markets view works from the empty state', async () => {
@@ -594,8 +636,8 @@ describe('MarketsWorkspace opportunity empty states (T88)', () => {
     emptyOpportunities('ELIGIBLE_UNPROMOTED')
     render(<MarketsWorkspace initialView="opportunities" />)
 
-    await waitFor(() => expect(screen.getByText('模型尚未完成验证')).toBeTruthy())
-    await user.click(screen.getByRole('button', { name: '查看全部市场' }))
+    await waitFor(() => expect(screen.getByText('模型仍在验证中')).toBeTruthy())
+    await user.click(screen.getByRole('button', { name: '查看所有比赛报价' }))
     await waitFor(() => expect(screen.getByText('市场筛选')).toBeTruthy())
   })
 })

@@ -57,10 +57,7 @@ export type DecisionPreview = {
   edgePp: number | null
   quoteSide: 'ask' | 'bid' | 'market'
   maxBuyPrice: number | null
-  paperEv: number | null
   confidence: ConfidenceState
-  confidenceLabel: string
-  confidenceValue: number | null
   modelVersion: string
   dataVersion: string
   marketFreshness: string
@@ -167,18 +164,18 @@ export type PaperLedgerPreview = {
 }
 
 const stateLabels: Record<DecisionState, string> = {
-  market_only: 'MARKET ONLY',
-  no_bet: 'NO BET',
-  wait: 'WAIT',
-  buy: 'BUY',
-  entry_pending: 'ENTRY PENDING',
-  missed: 'MISSED',
-  hold: 'FILLED / HOLD',
-  sell: 'SELL',
-  exit_pending: 'EXIT PENDING',
-  exited: 'EXITED',
-  exit_missed: 'EXIT MISSED',
-  settled: 'SETTLED',
+  market_only: '仅显示市场报价',
+  no_bet: '暂不参与',
+  wait: '等待更好价格',
+  buy: '模拟买入机会',
+  entry_pending: '等待买入确认',
+  missed: '未模拟买入',
+  hold: '模拟持有中',
+  sell: '模拟退出机会',
+  exit_pending: '等待退出确认',
+  exited: '已模拟退出',
+  exit_missed: '退出未成交',
+  settled: '已结算',
 }
 
 const stateTones: Record<DecisionState, DecisionTone> = {
@@ -198,85 +195,85 @@ const stateTones: Record<DecisionState, DecisionTone> = {
 
 const stateCopy: Record<DecisionState, Pick<DecisionPreview, 'eyebrow' | 'title' | 'description' | 'reason'>> = {
   market_only: {
-    eyebrow: '仅市场可见',
-    title: '该市场暂不生成模型判断',
-    description: '仅展示两侧独立可执行报价；此赛事未进入主巡模型覆盖范围。',
-    reason: '赛事级别未通过模型覆盖门槛，不能伪造概率或 edge。',
+    eyebrow: '仅显示市场报价',
+    title: '该赛事暂不提供模型估算',
+    description: '这里仍可查看两位球员的市场报价。',
+    reason: '目前没有适用于这类比赛的模型。',
   },
   no_bet: {
-    eyebrow: '已覆盖 · 不行动',
-    title: '价格接近模型判断，没有足够优势',
-    description: '模型可用，但保守净 edge 低于 3.0pp 决策门槛。',
-    reason: '扣除 spread 与执行缓冲后，净 edge 仅 +1.6pp。',
+    eyebrow: '暂不建议模拟买入',
+    title: '模型与市场价格差距不明显',
+    description: '扣除交易成本后，目前没有明显优势。',
+    reason: '模型估算胜率与市场价格接近。',
   },
   wait: {
-    eyebrow: '方向成立 · 等待价格',
-    title: '观点有效，但当前报价超过最高可买价',
-    description: '等待可执行均价回到 55.0% 或更低，再重新评估 Paper intent。',
-    reason: '当前 $10 可执行均价高于策略价格门槛。',
+    eyebrow: '等待更合适的价格',
+    title: '可以关注，但当前价格偏高',
+    description: '价格回落到 55.0% 或以下时，可以重新评估。',
+    reason: '当前模拟买入均价高于参考价。',
   },
   buy: {
-    eyebrow: '研究机会 · Paper only',
-    title: 'Sinner 方向进入策略价格窗口',
-    description: '模型概率 64.0%，$10 可执行市场概率 50.4%，保守 edge +13.6pp。',
-    reason: '覆盖、数据新鲜度、深度和净 edge 四项 hard gate 均通过。',
+    eyebrow: '模拟买入机会',
+    title: 'Sinner 出现模拟买入机会',
+    description: '模型估算胜率 64.0%，10 美元模拟买入均价 50.4%，估算优势 +13.6 个百分点。',
+    reason: '比赛数据和市场价格均符合当前评估条件。',
   },
   entry_pending: {
-    eyebrow: 'Paper intent 已记录',
-    title: '等待入场报价确认，尚未成交',
-    description: '$10 Paper intent 正等待 50.4% 或更优报价；pending 不等于 filled。',
-    reason: '供应商尚未返回可核验成交结果。',
+    eyebrow: '等待成交确认',
+    title: '模拟买入已提交，尚未成交',
+    description: '正在确认市场是否能按预期价格和金额成交。',
+    reason: '确认完成前，暂不计为已买入。',
   },
   missed: {
-    eyebrow: 'Paper intent 未成交',
-    title: '报价跳离上限，本次机会已错过',
-    description: '入场 intent 已关闭，没有仓位，也不会回写为成交。',
-    reason: '可执行均价在确认前升至 56.6%，超过 55.0% 上限。',
+    eyebrow: '模拟买入未成交',
+    title: '价格已超出预期，本次没有买入',
+    description: '价格在确认前升至 56.6%，高于预期的 55.0%。',
+    reason: '没有建立模拟持仓。',
   },
   hold: {
-    eyebrow: '开放 Paper position',
-    title: '仓位已成交，当前建议继续持有',
-    description: '平均入场 50.4%，当前可退出价 61.8%；模型判断仍高于退出报价。',
-    reason: '最新模型 64.0%，尚未达到止盈或模型反转门槛。',
+    eyebrow: '模拟持仓进行中',
+    title: '模拟持仓中',
+    description: '买入均价 50.4%，当前模拟卖出价格 61.8%。',
+    reason: '当前模型估算胜率为 64.0%。',
   },
   sell: {
-    eyebrow: '开放 Paper position',
-    title: '退出报价超过保守价值，记录 SELL 信号',
-    description: '当前可执行 bid 为 64.2%，高于最新模型 57.0%。',
-    reason: '模型下修与市场上行同时触发退出 gate。',
+    eyebrow: '模拟退出机会',
+    title: '出现模拟退出机会',
+    description: '当前模拟卖出价格为 64.2%，模型估算胜率为 57.0%。',
+    reason: '模型估算与市场价格出现明显差异。',
   },
   exit_pending: {
-    eyebrow: 'Paper exit intent 已记录',
-    title: '等待退出报价确认，仓位仍然开放',
-    description: '退出 intent 正等待 63.0% 或更优报价；在确认前不记为已退出。',
-    reason: '供应商尚未返回可核验退出成交。',
+    eyebrow: '等待退出确认',
+    title: '模拟退出已提交，持仓仍然开放',
+    description: '正在确认是否能按预期价格卖出。',
+    reason: '确认完成前，仍按持仓中显示。',
   },
   exited: {
-    eyebrow: 'Paper position 已关闭',
-    title: '仓位按 63.0% 退出',
-    description: '退出价值 $12.50，扣除执行缓冲后的净 P&L 为 +$2.50。',
-    reason: '退出成交已核验，生命周期记录永久保留。',
+    eyebrow: '模拟持仓已退出',
+    title: '模拟持仓已退出',
+    description: '退出价值 $12.50，模拟盈亏为 +$2.50。',
+    reason: '模拟退出已确认，记录已保留。',
   },
   exit_missed: {
-    eyebrow: 'Paper exit 未成交',
-    title: '退出报价撤回，仓位仍然开放',
-    description: '退出 intent 已标记 missed；不能把未成交状态显示为已退出。',
-    reason: 'bid 在确认前跌至 59.1%，低于 63.0% 最低退出价。',
+    eyebrow: '模拟退出未成交',
+    title: '本次没有卖出，模拟持仓仍然开放',
+    description: '市场价格在确认前跌至 59.1%，低于预期的 63.0%。',
+    reason: '模拟持仓仍在进行。',
   },
   settled: {
-    eyebrow: 'Paper market 已结算',
-    title: 'Sinner 方向按胜出结果结算',
-    description: '每份按 $1.00 结算，最终净 P&L +$9.84。',
-    reason: '结算结果已核验；EV exit、HODL 与 convergence-lock 轨迹均保留。',
+    eyebrow: '模拟记录已结算',
+    title: 'Sinner 获胜，模拟记录已结算',
+    description: '最终模拟盈亏为 +$9.84。',
+    reason: '模拟结果已按比赛最终赛果记录。',
   },
 }
 
-const confidenceValues: Record<ConfidenceState, { label: string; value: number | null; spread: number }> = {
-  high: { label: '高置信度', value: 82, spread: 0.035 },
-  medium: { label: '中置信度', value: 68, spread: 0.055 },
-  low: { label: '低置信度', value: 43, spread: 0.09 },
-  empty: { label: '置信度样本不足', value: null, spread: 0.12 },
-  error: { label: '置信度计算失败', value: null, spread: 0.12 },
+const confidenceValues: Record<ConfidenceState, { spread: number }> = {
+  high: { spread: 0.035 },
+  medium: { spread: 0.055 },
+  low: { spread: 0.09 },
+  empty: { spread: 0.12 },
+  error: { spread: 0.12 },
 }
 
 const baseTrajectory = [
@@ -294,20 +291,19 @@ const numberProfile: Record<DecisionState, {
   edge: number | null
   quoteSide: DecisionPreview['quoteSide']
   maxBuyPrice: number | null
-  paperEv: number | null
 }> = {
-  market_only: { model: null, market: 0.504, edge: null, quoteSide: 'market', maxBuyPrice: null, paperEv: null },
-  no_bet: { model: 0.52, market: 0.504, edge: 1.6, quoteSide: 'ask', maxBuyPrice: null, paperEv: 0.16 },
-  wait: { model: 0.64, market: 0.572, edge: 6.8, quoteSide: 'ask', maxBuyPrice: 0.55, paperEv: 0.68 },
-  buy: { model: 0.64, market: 0.504, edge: 13.6, quoteSide: 'ask', maxBuyPrice: 0.55, paperEv: 1.36 },
-  entry_pending: { model: 0.64, market: 0.504, edge: 13.6, quoteSide: 'ask', maxBuyPrice: 0.55, paperEv: 1.36 },
-  missed: { model: 0.64, market: 0.566, edge: 7.4, quoteSide: 'ask', maxBuyPrice: 0.55, paperEv: null },
-  hold: { model: 0.64, market: 0.618, edge: 2.2, quoteSide: 'bid', maxBuyPrice: null, paperEv: 1.36 },
-  sell: { model: 0.57, market: 0.642, edge: -7.2, quoteSide: 'bid', maxBuyPrice: null, paperEv: null },
-  exit_pending: { model: 0.57, market: 0.63, edge: -6, quoteSide: 'bid', maxBuyPrice: null, paperEv: null },
-  exited: { model: 0.57, market: 0.63, edge: -6, quoteSide: 'bid', maxBuyPrice: null, paperEv: null },
-  exit_missed: { model: 0.57, market: 0.591, edge: -2.1, quoteSide: 'bid', maxBuyPrice: null, paperEv: null },
-  settled: { model: 0.91, market: 1, edge: null, quoteSide: 'market', maxBuyPrice: null, paperEv: null },
+  market_only: { model: null, market: 0.504, edge: null, quoteSide: 'market', maxBuyPrice: null },
+  no_bet: { model: 0.52, market: 0.504, edge: 1.6, quoteSide: 'ask', maxBuyPrice: null },
+  wait: { model: 0.64, market: 0.572, edge: 6.8, quoteSide: 'ask', maxBuyPrice: 0.55 },
+  buy: { model: 0.64, market: 0.504, edge: 13.6, quoteSide: 'ask', maxBuyPrice: 0.55 },
+  entry_pending: { model: 0.64, market: 0.504, edge: 13.6, quoteSide: 'ask', maxBuyPrice: 0.55 },
+  missed: { model: 0.64, market: 0.566, edge: 7.4, quoteSide: 'ask', maxBuyPrice: 0.55 },
+  hold: { model: 0.64, market: 0.618, edge: 2.2, quoteSide: 'bid', maxBuyPrice: null },
+  sell: { model: 0.57, market: 0.642, edge: -7.2, quoteSide: 'bid', maxBuyPrice: null },
+  exit_pending: { model: 0.57, market: 0.63, edge: -6, quoteSide: 'bid', maxBuyPrice: null },
+  exited: { model: 0.57, market: 0.63, edge: -6, quoteSide: 'bid', maxBuyPrice: null },
+  exit_missed: { model: 0.57, market: 0.591, edge: -2.1, quoteSide: 'bid', maxBuyPrice: null },
+  settled: { model: 0.91, market: 1, edge: null, quoteSide: 'market', maxBuyPrice: null },
 }
 
 function event(id: string, time: string, title: string, detail: string, status: PaperEvent['status']): PaperEvent {
@@ -315,19 +311,19 @@ function event(id: string, time: string, title: string, detail: string, status: 
 }
 
 function paperEventsFor(state: DecisionState): PaperEvent[] {
-  const intent = event('intent', '09:49:02', '入场 intent', '$10.00 · 最高 55.0%', 'complete')
-  const filled = event('filled', '09:49:04', '入场已成交', '19.84 份 · 均价 50.4%', 'complete')
-  const marked = event('marked', '10:11:20', '持仓重估', '可退出价值 $12.26', 'neutral')
-  const exitIntent = event('exit-intent', '10:18:08', '退出 intent', '最低退出价 63.0%', 'complete')
+  const intent = event('intent', '09:49:02', '已提交模拟买入', '$10.00 · 参考价 55.0%', 'complete')
+  const filled = event('filled', '09:49:04', '模拟买入已成交', '19.84 份 · 均价 50.4%', 'complete')
+  const marked = event('marked', '10:11:20', '持仓价值更新', '当前可卖出价值 $12.26', 'neutral')
+  const exitIntent = event('exit-intent', '10:18:08', '已提交模拟退出', '参考卖出价 63.0%', 'complete')
 
-  if (state === 'entry_pending') return [event('intent-pending', '09:49:02', '入场 intent 等待中', '$10.00 · 尚未成交', 'pending')]
-  if (state === 'missed') return [intent, event('entry-missed', '09:49:07', '入场错过', '报价升至 56.6%，未产生仓位', 'missed')]
+  if (state === 'entry_pending') return [event('intent-pending', '09:49:02', '等待模拟买入确认', '$10.00 · 尚未成交', 'pending')]
+  if (state === 'missed') return [intent, event('entry-missed', '09:49:07', '模拟买入未成交', '报价升至 56.6%，未建立持仓', 'missed')]
   if (state === 'hold') return [intent, filled, marked]
-  if (state === 'sell') return [intent, filled, marked, event('sell-signal', '10:17:54', 'SELL 信号', '模型下修至 57.0%', 'neutral')]
-  if (state === 'exit_pending') return [intent, filled, marked, exitIntent, event('exit-pending', '10:18:09', '退出等待中', '尚未确认成交', 'pending')]
-  if (state === 'exited') return [intent, filled, marked, exitIntent, event('exited', '10:18:12', '退出已成交', '$12.50 · 净 P&L +$2.50', 'complete')]
-  if (state === 'exit_missed') return [intent, filled, marked, exitIntent, event('exit-missed', '10:18:14', '退出错过', '报价跌至 59.1%，仓位仍开放', 'missed')]
-  if (state === 'settled') return [intent, filled, marked, event('settled', '11:42:30', '市场已结算', '$19.84 · 净 P&L +$9.84', 'complete')]
+  if (state === 'sell') return [intent, filled, marked, event('sell-signal', '10:17:54', '出现模拟退出机会', '模型估算胜率下调至 57.0%', 'neutral')]
+  if (state === 'exit_pending') return [intent, filled, marked, exitIntent, event('exit-pending', '10:18:09', '等待模拟退出确认', '尚未确认成交', 'pending')]
+  if (state === 'exited') return [intent, filled, marked, exitIntent, event('exited', '10:18:12', '模拟退出已成交', '$12.50 · 模拟盈亏 +$2.50', 'complete')]
+  if (state === 'exit_missed') return [intent, filled, marked, exitIntent, event('exit-missed', '10:18:14', '模拟退出未成交', '报价跌至 59.1%，持仓仍开放', 'missed')]
+  if (state === 'settled') return [intent, filled, marked, event('settled', '11:42:30', '比赛结果已结算', '$19.84 · 模拟盈亏 +$9.84', 'complete')]
   return []
 }
 
@@ -361,23 +357,23 @@ export function getDecisionPreview(
 
   const gates: DecisionGate[] = [
     {
-      label: '模型覆盖',
-      detail: state === 'market_only' ? '该赛事不在主巡覆盖范围' : 'ATP 主巡模型可用',
+      label: '赛事范围',
+      detail: state === 'market_only' ? '暂不提供胜率估算' : '可提供胜率估算',
       status: state === 'market_only' ? 'fail' : 'pass',
     },
     {
-      label: '数据新鲜度',
-      detail: overlay === 'stale' ? '超过 45 秒阈值，撤销动作' : overlay === 'gap' ? '轨迹存在 1 个不可插值缺口' : '盘口 4 秒前 · 模型 11 秒前',
+      label: '数据更新情况',
+      detail: overlay === 'stale' ? '报价更新较慢，已暂停新的模拟操作' : overlay === 'gap' ? '比赛数据更新中断，已暂停新的模拟操作' : '报价 4 秒前 · 胜率估算 11 秒前',
       status: overlay === 'none' ? 'pass' : 'fail',
     },
     {
-      label: '市场深度',
-      detail: '$10 可执行报价深度已核验',
+      label: '可交易金额',
+      detail: '10 美元模拟金额可成交',
       status: 'pass',
     },
     {
-      label: '净 edge',
-      detail: numbers.edge === null ? '该状态不计算 edge' : `${numbers.edge > 0 ? '+' : ''}${numbers.edge.toFixed(1)}pp`,
+      label: '模型与市场差距',
+      detail: numbers.edge === null ? '暂不可计算' : `${numbers.edge > 0 ? '+' : ''}${numbers.edge.toFixed(1)} 个百分点`,
       status: numbers.edge !== null && numbers.edge >= 3 ? 'pass' : numbers.edge === null ? 'unknown' : 'fail',
     },
   ]
@@ -402,23 +398,20 @@ export function getDecisionPreview(
     edgePp: numbers.edge,
     quoteSide: numbers.quoteSide,
     maxBuyPrice: numbers.maxBuyPrice,
-    paperEv: numbers.paperEv,
     confidence,
-    confidenceLabel: confidenceProfile.label,
-    confidenceValue: confidenceProfile.value,
     modelVersion: 'tnx-atp-live-v3.4.1',
     dataVersion: 'p3-preview-2026-09-16.7',
-    marketFreshness: overlay === 'stale' ? '最后可信报价 · 2 分 14 秒前' : overlay === 'gap' ? '报价流存在缺口 · 22 秒前' : '盘口 · 4 秒前',
-    modelFreshness: overlay === 'stale' ? '最后可信模型 · 2 分 21 秒前' : '模型 · 11 秒前',
+    marketFreshness: overlay === 'stale' ? '报价更新较慢 · 2 分 14 秒前' : overlay === 'gap' ? '报价中断 · 22 秒前' : '报价更新 · 4 秒前',
+    modelFreshness: overlay === 'stale' ? '胜率估算更新 · 2 分 21 秒前' : '胜率估算更新 · 11 秒前',
     asOf: '2026-09-16 10:18:12 北京',
     overlay,
     actionAvailable,
     trajectory,
     gates,
     reasons: [
-      'Sinner 最近 20 分接发压制率提升，结构化比赛特征为正向。',
-      '盘口两侧报价独立计算；50.4% 不是对手报价的补数。',
-      overlay === 'none' ? '所有 freshness gate 均在阈值内。' : '降级层覆盖基础状态，保留最后可信数字但撤销动作。',
+      'Sinner 最近 20 分接发压制率提升，模型对其胜率的估算随之变化。',
+      '买入价与卖出价分别计算，不能简单相加为 100%。',
+      overlay === 'none' ? '比赛和市场数据均及时。' : '报价或实时数据暂不可用，已暂停新的模拟操作。',
     ],
     paper: hasPaperLifecycle(state)
       ? {
@@ -497,7 +490,7 @@ export function getHomePulseRows(state: HomePulseState): HomePulseRow[] {
     rows[0] = {
       ...rows[0],
       stale: true,
-      freshness: '最后可信 · 2 分 14 秒前',
+      freshness: '上次有效报价 · 2 分 14 秒前',
       href: '/match?preview=p3&status=live&state=hold&overlay=stale',
     }
   }
@@ -569,7 +562,7 @@ export const marketListingFixtures: MarketListingPreview[] = [
     spread: 0.012,
     depth: 420,
     modelProbability: 0.52,
-    reason: '净 edge +1.6pp，低于 3.0pp hard gate',
+    reason: '模型与市场差距较小，暂不建议模拟买入',
     freshness: '4 秒前',
     stale: false,
     href: '/match?preview=p3&status=live&state=no_bet',
@@ -590,7 +583,7 @@ export const marketListingFixtures: MarketListingPreview[] = [
     spread: 0.019,
     depth: 238,
     modelProbability: 0.55,
-    reason: '当前价高于 54.0% 最高可买价',
+    reason: '当前买入价高于模型可接受范围',
     freshness: '12 秒前',
     stale: false,
     href: '/match?preview=p3&status=upcoming&state=no_bet',
@@ -611,7 +604,7 @@ export const marketListingFixtures: MarketListingPreview[] = [
     spread: 0.023,
     depth: 96,
     modelProbability: null,
-    reason: 'Challenger 暂无模型覆盖',
+    reason: '挑战赛暂不提供胜率估算',
     freshness: '21 秒前',
     stale: false,
     href: '/match?preview=p3&status=live&state=market_only',
@@ -632,7 +625,7 @@ export const marketListingFixtures: MarketListingPreview[] = [
     spread: 0.027,
     depth: 54,
     modelProbability: null,
-    reason: 'ITF 暂无模型覆盖',
+    reason: 'ITF 赛事暂不提供胜率估算',
     freshness: '39 秒前',
     stale: true,
     href: '/match?preview=p3&status=upcoming&state=market_only&overlay=stale',
@@ -653,7 +646,7 @@ export const marketListingFixtures: MarketListingPreview[] = [
     spread: 0.027,
     depth: 71,
     modelProbability: null,
-    reason: '表演赛不进入模型覆盖',
+    reason: '表演赛暂不提供胜率估算',
     freshness: '18 秒前',
     stale: false,
     href: '/match?preview=p3&status=upcoming&state=market_only',

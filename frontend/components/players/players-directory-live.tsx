@@ -13,6 +13,7 @@ import {
 import { RankingsTable } from '@/components/players/rankings-table'
 import { Button } from '@/components/ui/button'
 import { ApiError, getPlayerRankings, searchPlayerDirectory } from '@/lib/api/client'
+import { userFacingApiError } from '@/lib/api/user-facing-errors'
 import type { PlayerSearchResolutionDto, RankingPageDto } from '@/lib/api/types'
 import {
   PRODUCTION_COUNTRY_OPTIONS,
@@ -74,7 +75,7 @@ function DirectoryUnavailablePanel({ onRetry }: { onRetry: () => void }) {
         <div className="flex max-w-md flex-col gap-1">
           <p className="font-medium">排名暂不可用</p>
           <p className="text-sm leading-relaxed text-muted-foreground">
-            本地目录还没有可用的排名快照；请先完成目录同步，或稍后重试。
+            排名数据暂时不可用，请稍后重试。
           </p>
         </div>
         <Button type="button" variant="outline" onClick={onRetry}>
@@ -133,7 +134,7 @@ export function PlayersDirectoryLive({ initialFilters }: { initialFilters: Playe
     task.catch((error: unknown) => {
       if (controller.signal.aborted) return
       const message =
-        error instanceof ApiError && error.message ? error.message : '无法连接到球员目录服务，请稍后重试。'
+        userFacingApiError(error instanceof ApiError ? error.code : null, 'player')
       setState({ phase: 'error', message })
     })
 
@@ -162,11 +163,6 @@ export function PlayersDirectoryLive({ initialFilters }: { initialFilters: Playe
     applyFilters({ ...filters, query: '', page: 1 })
   }
 
-  function runQuickSearch(query: string, tour: TourKey) {
-    setSearchValue(query)
-    applyFilters({ ...filters, tour, query, page: 1 })
-  }
-
   function resetFilters() {
     setSearchValue('')
     applyFilters({ tour: 'ATP', countryCode: 'ALL', query: '', page: 1 })
@@ -177,8 +173,7 @@ export function PlayersDirectoryLive({ initialFilters }: { initialFilters: Playe
   }
 
   const selectedCountry = PRODUCTION_COUNTRY_OPTIONS.find((country) => country.code === filters.countryCode)
-  const headerNote =
-    state.phase === 'rankings' ? rankingsSnapshotNote(state.data.as_of) : 'LIVE DATA'
+  const headerNote = state.phase === 'rankings' ? rankingsSnapshotNote(state.data.as_of) : null
 
   return (
     <PlayersDirectoryShell
@@ -191,7 +186,6 @@ export function PlayersDirectoryLive({ initialFilters }: { initialFilters: Playe
       onCountryChange={selectCountry}
       onSubmitSearch={submitSearch}
       onClearSearch={clearSearch}
-      onQuickSearch={runQuickSearch}
       onReset={resetFilters}
     >
       {state.phase === 'loading' ? <DirectorySkeleton /> : null}

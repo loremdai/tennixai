@@ -22,8 +22,8 @@ async function waitForCompleteAnswer(page: import('@playwright/test').Page): Pro
 test('real LLM smoke: structured card plus streamed prose', async ({ page }) => {
   await page.goto('/')
 
-  await page.getByLabel('继续向 Tennix 提问').fill('今晚 Sinner 几点比赛？')
-  await page.getByLabel('继续向 Tennix 提问').press('Enter')
+  await page.getByLabel('向 Tennix 提问').fill('今晚 Sinner 几点比赛？')
+  await page.getByLabel('向 Tennix 提问').press('Enter')
 
   const card = page.getByRole('link', { name: /打开比赛：Sinner 对阵/ }).first()
   await expect(card).toBeVisible()
@@ -42,7 +42,7 @@ test('real LLM global match question keeps data after planning', async ({ page }
 
   await page.goto('/')
 
-  const input = page.getByLabel('继续向 Tennix 提问')
+  const input = page.getByLabel('向 Tennix 提问')
   await input.fill('Sinner 的比赛如何了')
   await input.press('Enter')
 

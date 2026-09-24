@@ -70,7 +70,7 @@ export type PaperRowModel = {
   match: string
   tournament: string
   direction: string
-  state: 'entry_pending' | 'hold' | 'exit_pending' | 'exited' | 'missed' | 'settled'
+  state: 'entry_pending' | 'hold' | 'exit_pending' | 'exit_missed' | 'exited' | 'missed' | 'settled'
   cost: number
   shares: number
   averageEntry: number | null
@@ -98,39 +98,39 @@ export type PulseRowModel = {
 }
 
 export const TIER_LABELS: Record<string, string> = {
-  main: '主巡',
+  main: 'ATP/WTA 主巡',
   atp: 'ATP',
   wta: 'WTA',
-  challenger: 'Challenger',
-  itf: 'ITF',
-  other: '其他',
+  challenger: '挑战赛',
+  itf: 'ITF 巡回赛',
+  other: '其他比赛',
 }
 
 const REASON_LABELS: Record<string, string> = {
-  MARKET_UNMAPPED: '未映射到比赛 · 仅市场数据',
-  MODEL_UNPROMOTED: '模型未晋升 · 仅市场数据',
-  PROMOTION_NOT_GRANTED: '晋升未授予 · 仅市场数据',
-  ARTIFACT_INVALID: '模型工件无效 · 仅市场数据',
-  POLICY_DISABLED: '策略未启用 · 仅市场数据',
-  OUT_OF_DOMAIN: '覆盖范围外 · 仅市场数据',
-  DATA_INCOMPLETE: '比分数据不完整 · 等待恢复',
-  MODEL_DISAGREEMENT: '模型分歧 · 保持观望',
-  RULE_CHANGED: '规则已变更 · 动作撤销',
-  STALE: '报价过期 · 动作撤销',
-  GAP: '数据缺口 · 动作撤销',
-  INSUFFICIENT_LIQUIDITY: '深度不足以执行 $10',
-  NO_NET_EDGE: '保守净 edge 未达门槛',
+  MARKET_UNMAPPED: '暂时无法确认对应的比赛，仅显示市场报价',
+  MODEL_UNPROMOTED: '模型仍在验证，目前仅显示市场报价',
+  PROMOTION_NOT_GRANTED: '模型仍在验证，目前仅显示市场报价',
+  ARTIFACT_INVALID: '目前仅显示市场报价',
+  POLICY_DISABLED: '目前仅显示市场报价',
+  OUT_OF_DOMAIN: '目前仅显示市场报价',
+  DATA_INCOMPLETE: '比赛数据不完整，暂不提供判断',
+  MODEL_DISAGREEMENT: '模型判断不一致，暂不提供建议',
+  RULE_CHANGED: '评估标准更新，暂不提供判断',
+  STALE: '市场报价更新较慢，相关判断已暂停',
+  GAP: '比赛数据更新中断，相关判断已暂停',
+  INSUFFICIENT_LIQUIDITY: '可交易金额不足',
+  NO_NET_EDGE: '模型与市场的差距暂不明显',
 }
 
 /** Visible quote states (spec §5.3). A bare '—' is never a state. */
 const QUOTE_STATE_LABELS: Record<QuoteStateValue, string> = {
-  realtime: '实时盘口',
-  snapshot: '快照报价',
+  realtime: '实时更新',
+  snapshot: '最近报价',
   partial: '部分报价',
-  no_liquidity: '暂无挂单',
+  no_liquidity: '暂无可交易报价',
   unavailable: '报价暂不可用',
-  stale: '最后可信报价已过期',
-  limited: '覆盖受限 · 等待下一轮',
+  stale: '上次有效报价',
+  limited: '报价暂不可用',
 }
 
 /** Only these two carry a meaningful "· N 分钟前" suffix. */
@@ -144,10 +144,10 @@ const MODEL_AVAILABILITY_LABELS: Record<
   ModelAvailabilitySummaryValue,
   string | null
 > = {
-  available: '主巡覆盖',
-  eligible_unpromoted: '模型未晋升 · 不产生 BUY/WAIT',
+  available: '已纳入模型评估',
+  eligible_unpromoted: '模型仍在验证',
   out_of_scope: null,
-  not_evaluated: '待下一决策周期',
+  not_evaluated: '等待下一次评估',
 }
 
 export function quoteStateLabel(
@@ -161,12 +161,13 @@ export function quoteStateLabel(
 }
 
 const PAPER_DETAIL_LABELS: Record<PaperRowModel['state'], string> = {
-  entry_pending: 'FOK 意图已提交 · 等待延迟窗口',
-  hold: '已成交 · 单次退出待触发',
-  exit_pending: 'FOK 退出意图已提交',
-  exited: '已按退出报价成交',
-  missed: '入场未成交 · 不再重试',
-  settled: '已按市场最终 resolution 结算',
+  entry_pending: '正在确认模拟买入',
+  hold: '已模拟买入，持有中',
+  exit_pending: '正在确认模拟退出',
+  exit_missed: '模拟退出未成交，仍持有至结算',
+  exited: '模拟退出已完成',
+  missed: '模拟买入未成交',
+  settled: '比赛市场已结算',
 }
 
 export function parseDecimalOrNull(value: string | null | undefined): number | null {
@@ -183,7 +184,7 @@ export function overlayOf(isStale: boolean, hasGap: boolean): DecisionOverlay {
 
 /** Deterministic relative freshness text; `now` is injected for tests. */
 export function formatFreshness(asOf: string | null, now: Date, stale = false): string {
-  const prefix = stale ? '最后可信 · ' : ''
+  const prefix = stale ? '上次有效报价 · ' : ''
   if (!asOf) return `${prefix}时间未知`
   const then = new Date(asOf).getTime()
   if (!Number.isFinite(then)) return `${prefix}时间未知`
@@ -267,8 +268,8 @@ export function toMarketRow(dto: MarketSummaryDto, now: Date): MarketRowModel {
       dto.reason_code !== null
         ? (REASON_LABELS[dto.reason_code] ?? dto.reason_code)
         : null,
-    freshness: formatFreshness(dto.as_of, now, dto.is_stale || dto.has_gap),
-    stale: dto.is_stale,
+    freshness: formatFreshness(dto.quote.as_of, now, dto.quote.state === 'stale'),
+    stale: dto.quote.state === 'stale',
     overlay: overlayOf(dto.is_stale, dto.has_gap),
     href: dto.match_id ? `/matches/${encodeURIComponent(dto.match_id)}` : null,
   }
@@ -280,7 +281,7 @@ const PAPER_STATE_MAP: Record<PaperPositionDto['status'], PaperRowModel['state']
   open: 'hold',
   exit_pending: 'exit_pending',
   exited: 'exited',
-  exit_missed: 'missed',
+  exit_missed: 'exit_missed',
   settled: 'settled',
 }
 

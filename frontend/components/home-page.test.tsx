@@ -271,12 +271,23 @@ afterEach(() => {
 })
 
 async function askQuestion(question: string) {
-  const input = screen.getByLabelText('继续向 Tennix 提问')
+  const input = screen.getByLabelText('向 Tennix 提问')
   await userEvent.type(input, question)
   await userEvent.keyboard('{Enter}')
 }
 
 describe('HomePage slate', () => {
+  it('presents one consumer-facing question entry without roadmap controls', async () => {
+    render(<HomePage />)
+
+    expect(await screen.findByRole('heading', { name: '看比赛，也看懂比赛' })).toBeVisible()
+    expect(screen.getByRole('textbox', { name: '向 Tennix 提问' })).toBeVisible()
+    expect(screen.getAllByRole('textbox')).toHaveLength(1)
+    expect(screen.queryByRole('group', { name: '选择产品阶段' })).toBeNull()
+    expect(screen.queryByText(/P1|P2|P3/)).toBeNull()
+    expect(screen.queryByText('Market Intelligence')).toBeNull()
+  })
+
   it('loads live and upcoming catalogs exactly once without polling timers', async () => {
     render(<HomePage />)
 
@@ -316,6 +327,17 @@ describe('HomePage slate', () => {
     expect(screen.getByRole('heading', { name: '今晚比赛' })).toBeVisible()
   })
 
+  it('keeps match discovery primary without repeating the main navigation as quick-link cards', async () => {
+    render(<HomePage />)
+
+    await screen.findByText('Jannik Sinner')
+
+    expect(screen.getByRole('navigation', { name: '主导航' })).toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: '快速浏览' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '正在直播' })).toBeVisible()
+    expect(screen.getByRole('heading', { name: '今晚比赛' })).toBeVisible()
+  })
+
   it('shows flags on Home match cards without adding country names', async () => {
     render(<HomePage />)
 
@@ -330,7 +352,8 @@ describe('HomePage slate', () => {
 
     render(<HomePage />)
 
-    expect(await screen.findByText(/provider_unavailable/)).toBeVisible()
+    expect(await screen.findByText('比赛信息暂时无法加载，请稍后重试。')).toBeVisible()
+    expect(screen.queryByText(/provider_unavailable/)).toBeNull()
     const retry = screen.getByRole('button', { name: '重试加载比赛数据' })
     expect(retry).toBeVisible()
   })
@@ -345,10 +368,10 @@ describe('HomePage slate', () => {
 
     render(<HomePage />)
 
-    expect(await screen.findByText(/直播比赛加载失败（provider_unavailable）/)).toBeVisible()
+    expect(await screen.findByText('比赛信息暂时无法加载，请稍后重试。')).toBeVisible()
     expect(screen.getByRole('heading', { name: '今晚比赛' })).toBeVisible()
     expect(screen.getByText('Carlos Alcaraz')).toBeVisible()
-    expect(screen.queryByText(/比赛数据加载失败（provider_unavailable）/)).toBeNull()
+    expect(screen.queryByText(/provider_unavailable/)).toBeNull()
   })
 
   it('offers all provider live matches when the approved default facets hide them', async () => {
@@ -396,12 +419,13 @@ describe('HomePage P3 preview', () => {
 })
 
 describe('HomePage production P3', () => {
-  it('keeps the placeholder card and anchor link when P3 is disabled', async () => {
+  it('does not fake market intelligence when unavailable and keeps a working route', async () => {
     render(<HomePage />)
 
-    expect(await screen.findByRole('heading', { name: 'Market Intelligence' })).toBeVisible()
+    expect(await screen.findByText('Jannik Sinner')).toBeVisible()
     expect(screen.queryByRole('heading', { name: '市场脉搏' })).toBeNull()
-    expect(screen.getByRole('link', { name: /市场/ })).toHaveAttribute('href', '/#markets')
+    expect(screen.queryByText('Market Intelligence')).toBeNull()
+    expect(screen.getByRole('link', { name: '市场' })).toHaveAttribute('href', '/markets')
     // A disabled deployment makes zero P3 requests from the browser.
     expect(getMarketPulseMock).not.toHaveBeenCalled()
   })
@@ -431,9 +455,9 @@ describe('HomePage production P3', () => {
 
     expect(await screen.findByRole('heading', { name: '市场脉搏' })).toBeVisible()
     expect(screen.queryByRole('heading', { name: 'Market Intelligence' })).toBeNull()
-    expect(screen.getByRole('link', { name: /市场/ })).toHaveAttribute('href', '/markets')
+    expect(screen.getByRole('link', { name: '市场' })).toHaveAttribute('href', '/markets')
     expect(
-      screen.getByRole('link', { name: /查看 Jannik Sinner vs\. Casper Ruud 的 buy 决策/ }),
+      screen.getByRole('link', { name: /查看 Jannik Sinner vs\. Casper Ruud 的模拟买入机会判断/ }),
     ).toHaveAttribute('href', '/matches/mat_live1')
   })
 })
@@ -447,7 +471,7 @@ describe('HomePage facets', () => {
     expect(screen.getByRole('button', { name: /ATP/ })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: /WTA/ })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: /单打/ })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('button', { name: /Challenger/ })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: /挑战赛/ })).toHaveAttribute('aria-pressed', 'false')
     expect(screen.queryByRole('button', { name: '恢复默认' })).toBeNull()
   })
 
@@ -696,14 +720,14 @@ describe('HomePage chat', () => {
   it('renders broad historical unsupported without a card', async () => {
     mockStream({
       data: { kind: 'unsupported', matches: [] },
-      text: 'P2 暂不支持大范围历史查询。',
+      text: '目前无法查询球员的全部历史赛果，可以试试查询最近的比赛或指定赛季。',
     })
     render(<HomePage />)
     await screen.findByText('Jannik Sinner')
 
     await askQuestion('Sinner 的全部历史战绩')
 
-    expect(await screen.findByText('P2 暂不支持大范围历史查询。')).toBeVisible()
+    expect(await screen.findByText('目前无法查询球员的全部历史赛果，可以试试查询最近的比赛或指定赛季。')).toBeVisible()
     expect(screen.queryByRole('link', { name: /打开比赛：Sinner 对阵/ })).toBeNull()
   })
 
@@ -718,7 +742,7 @@ describe('HomePage chat', () => {
 
     await askQuestion('现在比分多少？')
 
-    const staleLabels = await screen.findAllByText(/数据较旧 · 240 秒未刷新/)
+    const staleLabels = await screen.findAllByText(/数据可能延迟 · 4 分钟前/)
     expect(staleLabels.length).toBeGreaterThan(0)
     expect(staleLabels[0]).toBeVisible()
   })
@@ -734,11 +758,12 @@ describe('HomePage chat', () => {
     render(<HomePage />)
     await screen.findByText('Jannik Sinner')
 
-    const input = screen.getByLabelText('继续向 Tennix 提问')
+    const input = screen.getByLabelText('向 Tennix 提问')
     await userEvent.type(input, '今晚有比赛吗？')
     await userEvent.keyboard('{Enter}')
 
-    const assistantForm = input.closest('form') as HTMLFormElement
+    const assistantInput = await screen.findByLabelText('继续向 Tennix 提问')
+    const assistantForm = assistantInput.closest('form') as HTMLFormElement
     await waitFor(() => {
       expect(within(assistantForm).getByRole('button', { name: '发送问题' })).toBeDisabled()
     })
@@ -752,9 +777,10 @@ describe('HomePage chat', () => {
 
     await askQuestion('今晚有比赛吗？')
 
-    const errorCopies = await screen.findAllByText(/llm_unavailable/)
+    const errorCopies = await screen.findAllByText('AI 助手暂时无法回答，请稍后重试。')
     expect(errorCopies.length).toBeGreaterThan(0)
     expect(errorCopies[0]).toBeVisible()
+    expect(screen.queryByText(/llm_unavailable/)).toBeNull()
     expect(screen.getByRole('button', { name: '重试提问' })).toBeVisible()
   })
 
@@ -792,17 +818,18 @@ describe('HomePage chat', () => {
     expect(screen.queryByText('样例数据仅用于产品界面演示')).toBeNull()
     expect(screen.queryByText('5 场比赛')).toBeNull()
     expect(screen.queryByText('12 场比赛')).toBeNull()
-    expect(screen.getByText('数据由 Tennix 服务提供 · 时间为北京时间')).toBeVisible()
+    expect(screen.getByText('比赛时间均为北京时间')).toBeVisible()
   })
 
-  it('shows follow-up placeholders instead of fabricated sections', async () => {
+  it('does not show unsupported follow-up sections or roadmap copy', async () => {
     render(<HomePage />)
     await screen.findByText('Jannik Sinner')
 
-    expect(screen.getByText('P1 暂不支持历史赛果')).toBeVisible()
-    expect(screen.getByText('关注功能将在后续阶段接入')).toBeVisible()
+    expect(screen.queryByText('P1 暂不支持历史赛果')).toBeNull()
+    expect(screen.queryByText('关注功能将在后续阶段接入')).toBeNull()
     expect(screen.queryByText('正在比赛')).toBeNull()
     expect(screen.queryByText('第三盘 5–4')).toBeNull()
+    expect(screen.queryByRole('link', { name: /关注球员|最近赛果/ })).toBeNull()
   })
 
   it('opens the featured match with the internal id route', async () => {

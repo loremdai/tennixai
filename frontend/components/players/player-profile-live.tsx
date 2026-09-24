@@ -16,6 +16,7 @@ import { PlayerResults } from '@/components/players/player-results'
 import { PlayerSeasonSummary } from '@/components/players/player-season-summary'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { ApiError, getPlayerProfile, getPlayerResults } from '@/lib/api/client'
+import { userFacingApiError } from '@/lib/api/user-facing-errors'
 import type { PlayerProfileViewDto, PlayerResultPageDto } from '@/lib/api/types'
 import {
   beijingCalendarYear,
@@ -98,7 +99,7 @@ function ProfileNotFoundPanel() {
           <div className="flex max-w-md flex-col gap-1">
             <p className="font-medium">未找到该球员</p>
             <p className="text-sm leading-relaxed text-muted-foreground">
-              该内部球员 ID 没有对应的本地目录成员，请返回球员目录重新查找。
+              这条球员资料链接可能已失效，请返回球员目录重新搜索。
             </p>
           </div>
           <Link href="/players" className={cn(buttonVariants({ variant: 'outline' }))}>返回球员目录</Link>
@@ -139,7 +140,7 @@ export function PlayerProfileLive({ playerId }: { playerId: string }) {
         }
         setProfile({
           phase: 'error',
-          message: error instanceof ApiError && error.message ? error.message : '无法连接到球员资料服务，请稍后重试。',
+          message: userFacingApiError(error instanceof ApiError ? error.code : null, 'player'),
         })
       })
     return () => controller.abort()

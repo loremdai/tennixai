@@ -77,11 +77,11 @@ describe('toPaperModel', () => {
     expect(model).not.toBeNull()
     expect(model!.state).toBe('settled')
     expect(model!.events.map((event) => event.title)).toEqual([
-      'Paper entry intent 已记录',
-      '入场 FOK 全部成交',
-      'Paper exit intent 已记录',
+      '已提交模拟买入',
+      '模拟买入已成交',
+      '已提交模拟退出',
       '退出未成交',
-      '已按市场最终 resolution 结算',
+      '比赛结果已结算',
     ])
     // Superseded intents read complete; only a trailing intent stays pending.
     expect(model!.events.map((event) => event.status)).toEqual([
@@ -91,7 +91,7 @@ describe('toPaperModel', () => {
       'missed',
       'complete',
     ])
-    expect(model!.events[3].detail).toContain('仓位保持开放')
+    expect(model!.events[3].detail).toContain('模拟持仓仍然开放')
     expect(model!.netPnl).toBeCloseTo(1.4)
   })
 
@@ -120,7 +120,7 @@ describe('toPaperModel', () => {
     )
     expect(missed!.state).toBe('missed')
     expect(missed!.events[1].status).toBe('missed')
-    expect(missed!.events[1].detail).toContain('深度不足以执行 $10')
+    expect(missed!.events[1].detail).toContain('可交易金额不足')
   })
 
   it('returns null without a ledger position', () => {
@@ -136,7 +136,9 @@ describe('PaperLifecycleLive', () => {
     expect(screen.getByText('19.05')).toBeTruthy()
     expect(screen.getByText('$11.40')).toBeTruthy()
     expect(screen.getByText('—')).toBeTruthy() // net P&L unset until settlement
-    expect(screen.getByText('FILLED / HOLD')).toBeTruthy()
+    expect(screen.getByText('模拟持有中')).toBeTruthy()
+    expect(screen.getByText('模拟交易记录')).toBeTruthy()
+    expect(screen.queryByText(/Paper lifecycle|P&L|intent|FOK/i)).toBeNull()
   })
 
   it('renders em dashes for pending intents without fabricating a position', () => {
@@ -150,10 +152,10 @@ describe('PaperLifecycleLive', () => {
       ),
     )!
     render(<PaperLifecycleLive paper={model} />)
-    expect(screen.getByText('ENTRY PENDING')).toBeTruthy()
+    expect(screen.getByText('等待买入确认')).toBeTruthy()
     // shares / current value / net P&L stay em-dashed before a fill.
     expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(3)
-    expect(screen.getByText('Paper entry intent 已记录')).toBeTruthy()
+    expect(screen.getByText('已提交模拟买入')).toBeTruthy()
   })
 
   it('never claims real wagering in the ledger copy', () => {

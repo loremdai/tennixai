@@ -77,26 +77,26 @@ export function MatchDecisionPage({
 
       <main id="match-decision-content" className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-5 md:px-6 md:py-7">
         <P3PreviewControls
-          title="Match · P3 状态预览"
-          description="固定 fixtures；所有选择写回 URL，可直接刷新与分享。"
+          title="比赛判断演示"
+          description="以下为示例比赛和模拟报价，不代表实时赛况或真实交易。"
           fields={[
             {
               key: 'state',
-              label: '业务状态',
+              label: '判断状态',
               value: state,
               options: [
-                { value: 'market_only', label: 'MARKET ONLY' },
-                { value: 'no_bet', label: 'NO BET' },
-                { value: 'wait', label: 'WAIT' },
-                { value: 'buy', label: 'BUY' },
-                { value: 'entry_pending', label: 'ENTRY PENDING' },
-                { value: 'missed', label: 'MISSED' },
-                { value: 'hold', label: 'FILLED / HOLD' },
-                { value: 'sell', label: 'SELL' },
-                { value: 'exit_pending', label: 'EXIT PENDING' },
-                { value: 'exited', label: 'EXITED' },
-                { value: 'exit_missed', label: 'EXIT MISSED' },
-                { value: 'settled', label: 'SETTLED' },
+                { value: 'market_only', label: '仅显示市场报价' },
+                { value: 'no_bet', label: '暂不参与' },
+                { value: 'wait', label: '等待更好价格' },
+                { value: 'buy', label: '模拟买入机会' },
+                { value: 'entry_pending', label: '等待买入确认' },
+                { value: 'missed', label: '未模拟买入' },
+                { value: 'hold', label: '模拟持有中' },
+                { value: 'sell', label: '模拟退出机会' },
+                { value: 'exit_pending', label: '等待退出确认' },
+                { value: 'exited', label: '已模拟退出' },
+                { value: 'exit_missed', label: '退出未成交' },
+                { value: 'settled', label: '已结算' },
               ],
             },
             {
@@ -110,26 +110,26 @@ export function MatchDecisionPage({
             },
             {
               key: 'overlay',
-              label: '叠加层',
+              label: '数据状态',
               value: overlay,
               options: [
                 { value: 'none', label: '正常' },
-                { value: 'stale', label: 'STALE' },
-                { value: 'gap', label: 'DATA GAP' },
+                { value: 'stale', label: '报价更新较慢' },
+                { value: 'gap', label: '比赛数据更新中断' },
               ],
             },
             {
               key: 'analysis',
-              label: '轨迹',
+              label: '走势曲线',
               value: analysis,
               options: [
-                { value: 'expanded', label: '展开' },
-                { value: 'collapsed', label: '折叠' },
+                { value: 'expanded', label: '显示' },
+                { value: 'collapsed', label: '隐藏' },
               ],
             },
             {
               key: 'methodology',
-              label: '方法',
+              label: '详细说明',
               value: methodology,
               options: [
                 { value: 'collapsed', label: '折叠' },
@@ -138,12 +138,14 @@ export function MatchDecisionPage({
             },
             {
               key: 'confidence',
-              label: '置信度',
+              label: '估算范围',
               value: confidence,
               options: [
-                { value: 'value', label: '有值' },
-                { value: 'empty', label: '为空' },
-                { value: 'error', label: '错误' },
+                { value: 'high', label: '较窄' },
+                { value: 'medium', label: '一般' },
+                { value: 'low', label: '较宽' },
+                { value: 'empty', label: '数据不足' },
+                { value: 'error', label: '暂不可用' },
               ],
             },
           ]}
@@ -187,7 +189,7 @@ export function MatchDecisionPage({
       <footer className="border-t">
         <div className="mx-auto flex max-w-7xl flex-col justify-between gap-2 px-4 py-6 text-sm text-muted-foreground sm:flex-row md:px-6">
           <span>Tennix · 比赛智能，逐分解释</span>
-          <span>P3 固定预览数据 · 仅用于研究与 Paper 模拟</span>
+          <span>示例数据仅用于页面演示 · 不涉及真实交易</span>
         </div>
       </footer>
     </div>

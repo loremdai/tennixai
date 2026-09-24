@@ -23,9 +23,7 @@ export type DecisionSummaryModel = {
   edgePp: number | null
   quoteSide: 'ask' | 'bid' | 'market'
   maxBuyPrice: number | null
-  paperEv: number | null
   confidenceLabel: string
-  confidenceValue: number | null
   modelAvailability: string | null
   modelVersion: string
   dataVersion: string
@@ -88,61 +86,61 @@ export type TrajectoryPointModel = {
 }
 
 export const STATE_LABELS: Record<WorkbenchState, string> = {
-  market_only: 'MARKET ONLY',
-  no_bet: 'NO BET',
-  wait: 'WAIT',
-  buy: 'BUY',
-  entry_pending: 'ENTRY PENDING',
-  missed: 'MISSED',
-  hold: 'FILLED / HOLD',
-  sell: 'SELL',
-  exit_pending: 'EXIT PENDING',
-  exited: 'EXITED',
-  exit_missed: 'EXIT MISSED',
-  settled: 'SETTLED',
+  market_only: '仅显示市场报价',
+  no_bet: '暂不参与',
+  wait: '等待更好价格',
+  buy: '模拟买入机会',
+  entry_pending: '等待买入确认',
+  missed: '未模拟买入',
+  hold: '模拟持有中',
+  sell: '模拟退出机会',
+  exit_pending: '等待退出确认',
+  exited: '已模拟退出',
+  exit_missed: '退出未成交',
+  settled: '已结算',
 }
 
 const GATE_LABELS: Record<string, string> = {
-  mapping: '市场映射',
-  rules: '规则一致性',
-  model: '模型可用性',
-  policy: '策略门槛',
-  liquidity: '深度与最小单',
-  net_edge: '保守净 edge',
-  overlay: '新鲜度叠加',
-  position: '仓位状态',
-  pre_position: '入场前置',
+  mapping: '比赛信息匹配',
+  rules: '市场规则',
+  model: '判断依据',
+  policy: '评估条件',
+  liquidity: '可交易金额',
+  net_edge: '模型与市场差距',
+  overlay: '数据是否及时',
+  position: '模拟持仓',
+  pre_position: '买入条件',
 }
 
 const REASON_LABELS: Record<string, string> = {
-  MARKET_UNMAPPED: '市场未映射到比赛，仅展示市场数据',
-  MODEL_UNPROMOTED: '模型未晋升：不生成 BUY/SELL，只展示市场数据',
-  PROMOTION_NOT_GRANTED: '晋升未授予：保持 NO BET',
-  ARTIFACT_INVALID: '模型工件校验失败：fail-closed',
-  POLICY_DISABLED: '策略未启用：保持 NO BET',
-  OUT_OF_DOMAIN: '赛事在模型覆盖范围外，仅展示市场数据',
-  DATA_INCOMPLETE: '比分数据不完整，等待恢复后重估',
-  MODEL_DISAGREEMENT: '模型分歧超过门槛，保持观望',
-  RULE_CHANGED: '市场规则已变更，动作已撤销',
-  STALE: '报价超过 freshness 阈值，动作已撤销',
-  GAP: '数据缺口，动作已撤销且不插值',
-  INSUFFICIENT_LIQUIDITY: '深度不足以执行 $10',
-  NO_NET_EDGE: '保守净 edge 未达门槛',
+  MARKET_UNMAPPED: '暂时无法确认该市场对应的比赛',
+  MODEL_UNPROMOTED: '胜率估算仍在验证，目前仅显示市场报价',
+  PROMOTION_NOT_GRANTED: '胜率估算仍在验证，目前仅显示市场报价',
+  ARTIFACT_INVALID: '胜率估算暂不可用，目前仅显示市场报价',
+  POLICY_DISABLED: '目前仅显示市场报价，暂不提供胜率估算',
+  OUT_OF_DOMAIN: '该场比赛暂未提供胜率估算',
+  DATA_INCOMPLETE: '比赛数据不完整，暂时无法评估',
+  MODEL_DISAGREEMENT: '不同分析结果不一致，暂不提供建议',
+  RULE_CHANGED: '市场规则有变化，已暂停新的模拟操作',
+  STALE: '市场报价更新较慢，已暂停新的模拟操作',
+  GAP: '比赛数据更新中断，已暂停新的模拟操作',
+  INSUFFICIENT_LIQUIDITY: '当前可交易金额不足',
+  NO_NET_EDGE: '模型估算与市场报价差距不明显',
 }
 
 const NO_FILL_LABELS: Record<string, string> = {
-  DEPTH_INSUFFICIENT: '深度不足以执行 $10',
-  PRICE_EXCEEDED: '价格超出上限',
-  EXPIRED: '意图已过期',
-  BOOK_UNVERIFIABLE: '订单簿不可核验',
-  POSITION_MISSING: '仓位缺失',
+  DEPTH_INSUFFICIENT: '可交易金额不足',
+  PRICE_EXCEEDED: '价格高于预期',
+  EXPIRED: '报价已过期',
+  BOOK_UNVERIFIABLE: '暂时无法确认可成交价格',
+  POSITION_MISSING: '未找到对应的模拟持仓',
 }
 
 const AVAILABILITY_LABELS: Record<string, string> = {
-  available: '模型可用',
-  degraded: '降级 · 仅比分缺失',
-  unpromoted: '模型未晋升',
-  unavailable: '模型不可用',
+  available: '可评估',
+  degraded: '部分比赛数据缺失',
+  unpromoted: '模型仍在验证',
+  unavailable: '暂不可评估',
 }
 
 const EVENT_COPY: Record<
@@ -150,38 +148,38 @@ const EVENT_COPY: Record<
   { title: string; detail: string; status: 'complete' | 'pending' | 'missed' }
 > = {
   entry_intent: {
-    title: 'Paper entry intent 已记录',
-    detail: '$10 FOK · 等待延迟窗口与深度核验',
+    title: '已提交模拟买入',
+    detail: '10 美元模拟订单，正在确认价格与可交易金额',
     status: 'pending',
   },
   entry_fill: {
-    title: '入场 FOK 全部成交',
-    detail: '主 Paper position 已开放；一次性，不追加',
+    title: '模拟买入已成交',
+    detail: '模拟持仓已建立',
     status: 'complete',
   },
   entry_no_fill: {
-    title: '入场未成交',
-    detail: 'typed no-fill；不重试、不追价、不回写成交',
+    title: '模拟买入未成交',
+    detail: '价格或可交易金额不符合预期',
     status: 'missed',
   },
   exit_intent: {
-    title: 'Paper exit intent 已记录',
-    detail: '$10 FOK 退出 · 等待确认',
+    title: '已提交模拟退出',
+    detail: '正在确认可成交价格',
     status: 'pending',
   },
   exit_fill: {
-    title: '退出 FOK 全部成交',
-    detail: '仓位已关闭；记录永久保留',
+    title: '模拟退出已成交',
+    detail: '模拟持仓已关闭，记录已保留',
     status: 'complete',
   },
   exit_no_fill: {
     title: '退出未成交',
-    detail: '仓位保持开放并继续持有至结算',
+    detail: '模拟持仓仍然开放',
     status: 'missed',
   },
   settled: {
-    title: '已按市场最终 resolution 结算',
-    detail: 'EV exit、HODL 与 convergence-lock 三轨均保留',
+    title: '比赛结果已结算',
+    detail: '模拟结果已按最终赛果记录',
     status: 'complete',
   },
 }
@@ -246,22 +244,22 @@ function pct(value: number | null): string {
 }
 
 function edgeText(value: number | null): string {
-  return value === null ? '—' : `${value > 0 ? '+' : ''}${value.toFixed(1)}pp`
+  return value === null ? '—' : `${value > 0 ? '+' : ''}${value.toFixed(1)} 个百分点`
 }
 
 const STATE_FALLBACK_REASON: Record<WorkbenchState, string> = {
-  market_only: '仅展示两侧独立可执行报价；不伪造模型概率或 edge。',
-  no_bet: '模型可用，但保守净 edge 未达决策门槛。',
-  wait: '方向成立；等待可执行均价回到最高可买价或更低。',
-  buy: '覆盖、新鲜度、深度与净 edge 全部 hard gate 通过。',
-  entry_pending: '供应商尚未返回可核验成交结果；pending 不等于 filled。',
-  missed: '入场 intent 已关闭，没有仓位，也不会回写为成交。',
-  hold: '仓位开放；尚未达到止盈或模型反转门槛。',
-  sell: '退出报价触发退出 gate；记录 SELL 研究信号。',
-  exit_pending: '退出 intent 等待确认；确认前不记为已退出。',
-  exited: '退出成交已核验，生命周期记录永久保留。',
-  exit_missed: '退出未成交；仓位保持开放并持有至结算。',
-  settled: '结算只服从市场最终 resolution；三轨结果均保留。',
+  market_only: '目前只显示市场报价，暂无模型判断。',
+  no_bet: '模型与市场价格差距不明显，暂不建议模拟买入。',
+  wait: '这个方向值得关注，但当前价格偏高。',
+  buy: '比赛数据与市场报价符合模拟买入条件。',
+  entry_pending: '模拟买入已提交，正在确认是否成交。',
+  missed: '当前价格已超出预期，本次模拟买入未成交。',
+  hold: '模拟持仓仍在进行，暂未出现退出信号。',
+  sell: '当前价格已达到模拟退出条件。',
+  exit_pending: '模拟退出已提交，正在确认是否成交。',
+  exited: '模拟持仓已退出，记录已保留。',
+  exit_missed: '模拟退出未成交，持仓仍然开放。',
+  settled: '比赛结果已确认，模拟记录已结算。',
 }
 
 export function toDecisionSummaryModel(
@@ -285,27 +283,27 @@ export function toDecisionSummaryModel(
   let description: string
   switch (state) {
     case 'buy':
-      title = `${selectionName ?? '目标方向'} 进入策略价格窗口`
-      description = `模型概率 ${pct(modelProbability)}，$10 可执行市场概率 ${pct(executableProbability)}，保守 edge ${edgeText(edgePp)}。`
+      title = `${selectionName ?? '所选球员'} 出现模拟买入机会`
+      description = `模型估算胜率 ${pct(modelProbability)}，10 美元模拟买入均价 ${pct(executableProbability)}，估算优势 ${edgeText(edgePp)}。`
       break
     case 'wait':
-      title = '观点有效，但当前报价超过最高可买价'
+      title = '可以关注，但当前价格偏高'
       description =
         maxBuyPrice !== null
-          ? `等待可执行均价回到 ${pct(maxBuyPrice)} 或更低，再重新评估 Paper intent。`
-          : '等待可执行均价回到策略门槛，再重新评估 Paper intent。'
+          ? `价格回落到 ${pct(maxBuyPrice)} 或以下时，可以重新评估。`
+          : '等价格更合适时，再重新评估这个方向。'
       break
     case 'hold':
-      title = '仓位已成交，当前建议继续持有'
-      description = `模型概率 ${pct(modelProbability)}；退出价值 ${pct(executableProbability)}。`
+      title = '模拟持仓中'
+      description = `模型估算胜率 ${pct(modelProbability)}；当前模拟卖出价格 ${pct(executableProbability)}。`
       break
     case 'sell':
-      title = '退出报价触发退出 gate，记录 SELL 信号'
-      description = `当前可执行 bid ${pct(executableProbability)}；最新模型 ${pct(modelProbability)}。`
+      title = '出现模拟退出机会'
+      description = `当前模拟卖出价格 ${pct(executableProbability)}；模型估算胜率 ${pct(modelProbability)}。`
       break
     case 'settled':
-      title = 'Paper market 已按最终 resolution 结算'
-      description = '结算结果已核验；EV exit、HODL 与 convergence-lock 轨迹均保留。'
+      title = '模拟记录已结算'
+      description = '比赛结果已核验，模拟结果已记录。'
       break
     default:
       title = STATE_FALLBACK_REASON[state]
@@ -323,7 +321,7 @@ export function toDecisionSummaryModel(
     description,
     reason:
       snapshot.reason_code !== null
-        ? (REASON_LABELS[snapshot.reason_code] ?? snapshot.reason_code)
+        ? (REASON_LABELS[snapshot.reason_code] ?? '系统暂未提供更多判断原因')
         : STATE_FALLBACK_REASON[state],
     selectionLabel: selectionName ?? '—',
     modelProbability,
@@ -332,14 +330,14 @@ export function toDecisionSummaryModel(
     quoteSide:
       snapshot.quote_side === 'entry' ? 'ask' : snapshot.quote_side === 'exit' ? 'bid' : 'market',
     maxBuyPrice,
-    paperEv: parseDecimalOrNull(snapshot.hold_value),
-    confidenceLabel: availability ? (AVAILABILITY_LABELS[availability] ?? availability) : '—',
-    confidenceValue: null,
+    confidenceLabel: availability
+      ? (AVAILABILITY_LABELS[availability] ?? '暂不可评估')
+      : '—',
     modelAvailability: availability,
     modelVersion: snapshot.model_version ?? '—',
     dataVersion: snapshot.data_version ?? '—',
-    marketFreshness: `报价 · ${age}`,
-    modelFreshness: `模型 · ${clock}`,
+    marketFreshness: `报价更新 · ${age}`,
+    modelFreshness: `模型更新 · ${clock}`,
     asOf: clock,
     overlay: workbenchOverlay(snapshot),
     actionAvailable: state === 'buy' || state === 'sell',
@@ -347,36 +345,36 @@ export function toDecisionSummaryModel(
 }
 
 const STATE_EYEBROW: Record<WorkbenchState, string> = {
-  market_only: '仅市场可见',
-  no_bet: '已覆盖 · 不行动',
-  wait: '方向成立 · 等待价格',
-  buy: '研究机会 · Paper only',
-  entry_pending: 'Paper intent 已记录',
-  missed: 'Paper intent 未成交',
-  hold: '开放 Paper position',
-  sell: '开放 Paper position',
-  exit_pending: 'Paper exit intent 已记录',
-  exited: 'Paper position 已关闭',
-  exit_missed: 'Paper exit 未成交',
-  settled: 'Paper market 已结算',
+  market_only: '仅显示市场报价',
+  no_bet: '当前不建议模拟买入',
+  wait: '等待更合适的价格',
+  buy: '模拟买入机会',
+  entry_pending: '等待成交确认',
+  missed: '模拟买入未成交',
+  hold: '模拟持仓进行中',
+  sell: '模拟退出机会',
+  exit_pending: '等待退出确认',
+  exited: '模拟持仓已退出',
+  exit_missed: '模拟退出未成交',
+  settled: '模拟记录已结算',
 }
 
 function defaultTitle(state: WorkbenchState, selectionName: string | null): string {
   switch (state) {
     case 'market_only':
-      return '该市场暂不生成模型判断'
+      return '目前只显示市场报价'
     case 'no_bet':
-      return '价格接近模型判断，没有足够优势'
+      return '模型与市场价格差距不明显'
     case 'entry_pending':
-      return '等待入场报价确认，尚未成交'
+      return '等待买入确认，尚未成交'
     case 'missed':
-      return '报价跳离上限，本次机会已错过'
+      return '价格已超出预期，本次模拟买入未成交'
     case 'exit_pending':
-      return '等待退出报价确认，仓位仍然开放'
+      return '等待退出确认，模拟持仓仍然开放'
     case 'exited':
-      return `${selectionName ?? '目标'} 方向仓位已退出`
+      return `${selectionName ?? '所选球员'} 的模拟持仓已退出`
     case 'exit_missed':
-      return '退出报价撤回，仓位仍然开放'
+      return '退出未成交，模拟持仓仍然开放'
     default:
       return STATE_FALLBACK_REASON[state]
   }
@@ -389,28 +387,28 @@ function defaultDescription(
 ): string {
   switch (state) {
     case 'market_only':
-      return '仅展示两侧独立可执行报价；此市场不在模型覆盖范围内。'
+      return '这里只显示市场买入和卖出报价；这类比赛暂不提供模型估算。'
     case 'no_bet':
-      return `模型概率 ${pct(modelProbability)}，$10 可执行市场概率 ${pct(executableProbability)}；净 edge 未达门槛。`
+      return `模型估算胜率 ${pct(modelProbability)}，10 美元模拟买入均价 ${pct(executableProbability)}；扣除成本后的价格差距不明显。`
     case 'entry_pending':
-      return `$10 Paper intent 正等待可执行报价确认；pending 不等于 filled。`
+      return '10 美元模拟订单正在确认价格与可交易金额。'
     case 'missed':
-      return '入场 intent 已关闭，没有仓位，也不会回写为成交。'
+      return '价格已超出预期，本次模拟买入没有成交。'
     case 'exit_pending':
-      return '退出 intent 正等待可执行报价确认；在确认前不记为已退出。'
+      return '模拟退出正在确认是否成交；确认前仍显示为持仓中。'
     case 'exited':
-      return '退出成交已核验，生命周期记录永久保留。'
+      return '模拟退出已确认，记录已保留。'
     case 'exit_missed':
-      return '退出 intent 已标记 missed；不能把未成交状态显示为已退出。'
+      return '模拟退出没有成交，持仓仍然开放。'
     default:
       return ''
   }
 }
 
 function relativeAge(iso: string | null, now: Date): string {
-  if (!iso) return '时间未知'
+  if (!iso) return '更新时间暂不可用'
   const then = new Date(iso).getTime()
-  if (!Number.isFinite(then)) return '时间未知'
+  if (!Number.isFinite(then)) return '更新时间暂不可用'
   const seconds = Math.max(0, Math.floor((now.getTime() - then) / 1000))
   if (seconds < 5) return '刚刚'
   if (seconds < 60) return `${seconds} 秒前`
@@ -421,31 +419,29 @@ function relativeAge(iso: string | null, now: Date): string {
 
 export function toEvidenceModel(snapshot: DecisionSnapshotDto): EvidenceModel {
   const gates: EvidenceGateModel[] = snapshot.gates.map((gate) => ({
-    label: GATE_LABELS[gate.gate] ?? gate.gate,
+    label: GATE_LABELS[gate.gate] ?? '其他条件',
     detail: gate.passed
-      ? '通过'
-      : (gate.reason_code
-          ? (REASON_LABELS[gate.reason_code] ?? gate.reason_code)
-          : '未通过'),
+      ? '已满足'
+      : (gate.reason_code ? (REASON_LABELS[gate.reason_code] ?? '暂未满足') : '暂未满足'),
     status: gate.passed ? 'pass' : 'fail',
   }))
   const reasons: string[] = []
   if (snapshot.reason_code !== null) {
-    reasons.push(REASON_LABELS[snapshot.reason_code] ?? snapshot.reason_code)
+    reasons.push(REASON_LABELS[snapshot.reason_code] ?? '系统暂未提供更多判断原因')
   }
   for (const gate of snapshot.gates) {
     if (!gate.passed) {
       reasons.push(
-        `hard gate 未通过 · ${GATE_LABELS[gate.gate] ?? gate.gate}${
-          gate.reason_code ? `（${REASON_LABELS[gate.reason_code] ?? gate.reason_code}）` : ''
+        `暂未满足：${GATE_LABELS[gate.gate] ?? '其他条件'}${
+          gate.reason_code ? `（${REASON_LABELS[gate.reason_code] ?? '条件未满足'}）` : ''
         }`,
       )
     }
   }
-  if (snapshot.is_stale) reasons.push('报价超过 freshness 阈值 · 新动作已撤销')
-  if (snapshot.has_gap) reasons.push('数据缺口 · 新动作已撤销且不插值')
-  if (snapshot.lock_profit_available) reasons.push('止盈退出可用（仅诊断信息）')
-  if (reasons.length === 0) reasons.push('全部 hard gate 通过；证据与版本如下。')
+  if (snapshot.is_stale) reasons.push('市场报价更新较慢，已暂停新的模拟操作')
+  if (snapshot.has_gap) reasons.push('比赛数据更新中断，已暂停新的模拟操作')
+  if (snapshot.lock_profit_available) reasons.push('当前价格已达到预设的模拟退出条件')
+  if (reasons.length === 0) reasons.push('比赛与市场数据均符合当前评估条件。')
   const availability = snapshot.model_availability
   return {
     gates,
@@ -457,7 +453,7 @@ export function toEvidenceModel(snapshot: DecisionSnapshotDto): EvidenceModel {
     asOf: formatClock(snapshot.as_of),
     availabilityBanner:
       availability === 'unpromoted' || availability === 'unavailable'
-        ? '模型未晋升或不可用：本页只展示市场数据与 NO BET，不会生成 BUY/SELL。'
+        ? '模型暂不可评估，目前只显示市场报价。'
         : null,
   }
 }
@@ -481,7 +477,7 @@ export function toPaperModel(snapshot: DecisionSnapshotDto): PaperModel | null {
           ? `${copy.detail} · ${
               NO_FILL_LABELS[event.reason_code] ??
               REASON_LABELS[event.reason_code] ??
-              event.reason_code
+              '系统暂未提供更多说明'
             }`
           : copy.detail,
       status: copy.status === 'pending' && !isLast ? 'complete' : copy.status,

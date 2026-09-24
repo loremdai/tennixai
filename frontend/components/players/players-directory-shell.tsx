@@ -24,14 +24,6 @@ export type PlayersFilters = {
   page: number
 }
 
-export const quickSearches: Array<{ label: string; query: string; tour: TourKey }> = [
-  { label: 'Ben Shelton', query: 'Ben Shelton', tour: 'ATP' },
-  { label: 'B. Shelton', query: 'B. Shelton', tour: 'ATP' },
-  { label: '郑钦文', query: '郑钦文', tour: 'WTA' },
-  { label: '排名 201', query: 'Coleman Wong', tour: 'ATP' },
-  { label: '暂无当前排名', query: 'Bryan Shelton', tour: 'ATP' },
-]
-
 export function replaceDirectoryUrl(filters: PlayersFilters) {
   const params = new URLSearchParams()
   // Keep the preview switch sticky across interactions so a reload stays in
@@ -48,10 +40,8 @@ export function replaceDirectoryUrl(filters: PlayersFilters) {
 }
 
 /**
- * Shared v0 page shell for `/players`: header, tour tabs, country filters,
- * search form and quick chips. The preview and production containers pass
- * their own results area as `children`; the frozen visual structure lives
- * here so both modes stay pixel-identical.
+ * Shared page shell for `/players`. Production and preview containers pass
+ * their own result area as `children` while sharing the same consumer UI.
  */
 export function PlayersDirectoryShell({
   headerNote,
@@ -63,11 +53,10 @@ export function PlayersDirectoryShell({
   onCountryChange,
   onSubmitSearch,
   onClearSearch,
-  onQuickSearch,
   onReset,
   children,
 }: {
-  headerNote: string
+  headerNote: string | null
   filters: PlayersFilters
   searchValue: string
   countries: CountryPreview[]
@@ -76,7 +65,6 @@ export function PlayersDirectoryShell({
   onCountryChange: (countryCode: string) => void
   onSubmitSearch: () => void
   onClearSearch: () => void
-  onQuickSearch: (query: string, tour: TourKey) => void
   onReset: () => void
   children: ReactNode
 }) {
@@ -98,17 +86,16 @@ export function PlayersDirectoryShell({
       <ProductHeader active="players" />
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 md:px-6 md:py-8">
         <section className="flex flex-col gap-3" aria-labelledby="players-page-title">
-          <p className="font-mono text-xs font-semibold tracking-[0.18em] text-primary">PLAYER DIRECTORY</p>
           <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
             <div className="flex max-w-2xl flex-col gap-2">
               <h1 id="players-page-title" className="text-balance text-3xl font-semibold tracking-tight md:text-4xl">
                 球员与世界排名
               </h1>
               <p className="text-pretty text-sm leading-relaxed text-muted-foreground md:text-base">
-                浏览 ATP 与 WTA 单打 Top 200，并按英文名、中文名或常用缩写搜索完整球员目录。
+                查看 ATP 与 WTA 单打排名，支持用英文名、中文名或常见简称搜索球员。
               </p>
             </div>
-            <p className="font-mono text-xs text-muted-foreground">{headerNote}</p>
+            {headerNote ? <p className="text-xs text-muted-foreground">{headerNote}</p> : null}
           </div>
         </section>
 
@@ -195,7 +182,7 @@ export function PlayersDirectoryShell({
               value={searchValue}
               onChange={(event) => onSearchValueChange(event.target.value)}
               onKeyDown={guardComposition}
-              placeholder="搜索 Ben Shelton、Shelton、B. Shelton 或郑钦文"
+              placeholder="输入英文名、中文名或常见简称"
               autoComplete="off"
               className="h-11 bg-background pl-10 pr-11"
             />
@@ -214,20 +201,7 @@ export function PlayersDirectoryShell({
             <button type="submit" className="sr-only">搜索球员</button>
           </form>
 
-          <div className="flex flex-wrap items-center gap-2" aria-label="预览搜索示例">
-            <span className="text-xs text-muted-foreground">试试</span>
-            {quickSearches.map((item) => (
-              <Button
-                key={item.label}
-                type="button"
-                variant="secondary"
-                size="xs"
-                onClick={() => onQuickSearch(item.query, item.tour)}
-              >
-                {item.label}
-              </Button>
-            ))}
-          </div>
+          <p className="text-xs text-muted-foreground">可搜索 ATP 和 WTA 球员，不受当前排名分类影响。</p>
         </section>
 
         {children}

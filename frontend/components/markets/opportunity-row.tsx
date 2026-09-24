@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 
-import { DecisionStatusBadge } from '@/components/p3/decision-status'
+import { DecisionStatusBadge, decisionStateLabels } from '@/components/p3/decision-status'
 import type { DecisionOverlay } from '@/components/p3/p3-preview-data'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -34,7 +34,7 @@ export function OpportunityRow({ opportunity }: { opportunity: OpportunityRowDat
     <Link
       href={opportunity.href}
       className="group rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      aria-label={`查看 ${opportunity.match} 的 ${opportunity.state} 决策`}
+      aria-label={`查看 ${opportunity.match} 的${decisionStateLabels[opportunity.state]}决策`}
     >
       <Card size="sm" className="transition-[transform,box-shadow] group-hover:-translate-y-0.5 group-hover:ring-primary/35">
         <CardContent className="grid min-h-28 grid-cols-2 items-center gap-4 py-1 md:grid-cols-[minmax(15rem,1.5fr)_minmax(8rem,0.7fr)_minmax(8rem,0.7fr)_minmax(8rem,0.7fr)_auto_auto]">
@@ -48,20 +48,20 @@ export function OpportunityRow({ opportunity }: { opportunity: OpportunityRowDat
           </div>
 
           <dl>
-            <dt className="text-xs text-muted-foreground">模型概率</dt>
+            <dt className="text-xs text-muted-foreground">模型估算胜率</dt>
             <dd className="mt-1 font-mono text-xl font-semibold tabular-nums">{formatPercent(opportunity.modelProbability)}</dd>
           </dl>
           <dl>
-            <dt className="text-xs text-muted-foreground">$10 可执行均价</dt>
+            <dt className="text-xs text-muted-foreground">$10 模拟买入均价</dt>
             <dd className="mt-1 font-mono text-xl font-semibold tabular-nums">{formatPercent(opportunity.executableProbability)}</dd>
           </dl>
           <dl>
-            <dt className="text-xs text-muted-foreground">保守净 edge</dt>
+            <dt className="text-xs text-muted-foreground">模型与市场差距</dt>
             <dd className="mt-1 font-mono text-xl font-semibold text-primary tabular-nums">
-              {opportunity.edgePp === null ? '—' : `+${opportunity.edgePp.toFixed(1)}pp`}
+              {opportunity.edgePp === null ? '—' : `+${opportunity.edgePp.toFixed(1)} 个百分点`}
             </dd>
             {opportunity.maxBuyPrice !== null ? (
-              <dd className="mt-1 text-xs text-muted-foreground">最高价 {formatPercent(opportunity.maxBuyPrice)}</dd>
+              <dd className="mt-1 text-xs text-muted-foreground">最高买入价 {formatPercent(opportunity.maxBuyPrice)}</dd>
             ) : null}
           </dl>
 

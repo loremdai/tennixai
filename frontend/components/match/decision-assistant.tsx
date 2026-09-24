@@ -21,18 +21,18 @@ import {
   InputGroupInput,
 } from '@/components/ui/input-group'
 
-const prompts = ['为什么是这个状态？', '$10 可执行价格是什么？', '什么会让建议失效？']
+const prompts = ['为什么会有这个判断？', '这个价格怎么算的？', '什么情况下会暂停？']
 
 function explain(question: string, decision: DecisionPreview): string {
   if (question.includes('价格') || question.includes('$10')) {
     return decision.executableProbability === null
-      ? '该快照没有可执行报价，因此不会用中间价或另一侧的补数代替。'
-      : `目标方向按 $10 深度得到 ${(decision.executableProbability * 100).toFixed(1)}% 的可执行概率；两侧报价独立计算，不强制互补。`
+      ? '目前没有足够的市场报价，暂时无法估算这个价格。'
+      : `按 10 美元模拟金额，结合市场上的实际买卖报价估算为 ${(decision.executableProbability * 100).toFixed(1)}%。买入价和卖出价分别计算。`
   }
   if (question.includes('失效') || question.includes('撤销')) {
-    return '超过 freshness 阈值、出现不可插值的数据 gap、流动性 gate 失败或模型覆盖不足时，基础动作会被撤销或降级；最后可信数字仍会保留并标时。'
+    return '如果比赛数据更新中断、报价更新较慢、可交易金额不足，或暂未提供胜率估算，就会暂停新的模拟操作，并保留上次有效数据。'
   }
-  return `${decision.stateLabel} 来自结构化 hard gates 与版本化模型：${decision.reason} 该助手只解释已生成的字段，不生成概率、价格或决策归因。`
+  return `${decision.reason} 胜率由模型估算，市场价格会随比赛进程和交易情况变化。`
 }
 
 export function DecisionAssistant({ decision }: { decision: DecisionPreview }) {
@@ -58,10 +58,10 @@ export function DecisionAssistant({ decision }: { decision: DecisionPreview }) {
   return (
     <Card id="decision-assistant" data-tone="assistant" className="scroll-mt-24">
       <CardHeader>
-        <CardTitle><h2>本场决策助手</h2></CardTitle>
-        <p className="text-sm text-muted-foreground">解释当前结构化结论，不改写数值</p>
+        <CardTitle><h2>本场判断助手</h2></CardTitle>
+        <p className="text-sm text-muted-foreground">了解这场比赛的估算结果、市场价格和模拟记录</p>
         <CardAction>
-          <Badge variant="secondary"><Sparkles data-icon="inline-start" aria-hidden="true" />解释层</Badge>
+          <Badge variant="secondary"><Sparkles data-icon="inline-start" aria-hidden="true" />判断说明</Badge>
         </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -74,7 +74,7 @@ export function DecisionAssistant({ decision }: { decision: DecisionPreview }) {
           {answer ? (
             <article className="rounded-lg bg-muted/35 p-4">
               <div className="flex items-center gap-2 text-sm font-medium text-primary">
-                <BrainCircuit aria-hidden="true" className="size-4" />基于当前快照
+                  <BrainCircuit aria-hidden="true" className="size-4" />基于当前比赛信息
               </div>
               <p className="mt-3 text-sm font-medium">“{question}”</p>
               <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{answer}</p>
@@ -82,7 +82,7 @@ export function DecisionAssistant({ decision }: { decision: DecisionPreview }) {
           ) : (
             <div className="flex min-h-28 flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-muted/15 p-4 text-center">
               <BrainCircuit aria-hidden="true" className="size-5 text-primary" />
-              <p className="text-sm font-medium">询问 BUY / WAIT、报价口径或 hard gates</p>
+              <p className="text-sm font-medium">可以问为什么这样判断，或报价代表什么</p>
             </div>
           )}
         </div>
@@ -96,7 +96,7 @@ export function DecisionAssistant({ decision }: { decision: DecisionPreview }) {
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="例如：为什么现在是 BUY？"
+              placeholder="例如：模型为什么看好这位球员？"
               autoComplete="off"
             />
             <InputGroupAddon align="inline-end">

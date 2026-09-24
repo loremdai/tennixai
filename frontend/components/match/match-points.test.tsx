@@ -132,6 +132,6 @@ describe('MatchPointsTimeline', () => {
 
   it('renders an empty state without points', () => {
     render(<MatchPointsTimeline points={[]} players={players} />)
-    expect(screen.getByText(/供应商尚未返回逐分数据/)).toBeVisible()
+    expect(screen.getByText(/本场比赛暂无逐分记录/)).toBeVisible()
   })
 })

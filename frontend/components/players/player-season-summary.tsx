@@ -45,7 +45,7 @@ export function PlayerSeasonSummary({ summary }: { summary: PlayerSeasonSummaryP
       <CardHeader>
         <div>
           <CardTitle><h2 id="season-summary-title">赛季摘要</h2></CardTitle>
-          <p className="mt-1 text-sm text-muted-foreground">与历史赛果年份筛选同步</p>
+          <p className="mt-1 text-sm text-muted-foreground">切换年份后，赛季数据和历史赛果会一起更新。</p>
         </div>
         <CardAction><Badge variant="outline">{summary.season}</Badge></CardAction>
       </CardHeader>
