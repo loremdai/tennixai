@@ -10,14 +10,14 @@
 
 **执行者 / 分支：** Codex / `main`；T98 起始提交 `4ccf257`。保留工作区内已存在的用户改动，未纳入 T98。
 
-**运行手册与计划：** [本地真实运行手册](docs/runbooks/local-real-runtime.md)；[T97 审计计划](docs/superpowers/plans/2026-09-24-tennixai-t97-global-field-presentation-audit.md)；T98 全产品审计计划编制中；[T95–T97 字段矩阵](docs/research/2026-09-24-tennixai-t95-match-field-integrity-matrix.md)。
+**运行手册与计划：** [本地真实运行手册](docs/runbooks/local-real-runtime.md)；[T98 审计规格（待审阅）](docs/superpowers/specs/2026-09-24-tennixai-whole-product-audit.md)；[T97 审计计划](docs/superpowers/plans/2026-09-24-tennixai-t97-global-field-presentation-audit.md)；[T95–T97 字段矩阵](docs/research/2026-09-24-tennixai-t95-match-field-integrity-matrix.md)。
 
 ## T98 全产品缺陷与字段真相审计（`in_progress`）
 
 - **目标：** 以当前代码、测试、演示页面和官方数据契约为证据，跨 Home、Players、Match、Markets、Opportunities、Paper 及关键后端链路逐域走查；修复可复现 bug，并为每个对外字段确认来源、转换、空值/异常语义及验证证据。
 - **起始状态：** `main` / `4ccf257`，与 `origin/main` 同步；工作区现有用户改动按下方已知清单保留。
 - **边界：** 继续使用演示/fixture 数据；不运行 `init`、真实 provider/LLM 请求，不读取或修改根 `.env`，不访问 `.next`，不启停本任务之外的服务或容器。
-- **进度：** 已领取；正在建立页面×字段域审计清单、证据等级和分批验证门。
+- **进度：** 已完成代码/路由/DTO/既有矩阵的只读盘点；审计规格已写入，待用户审阅确认后编制逐项执行计划。
 
 ## T97 Global Field Presentation Audit (`done`)
 
