@@ -399,7 +399,7 @@ export function UpcomingSection({
         headingId="upcoming-title"
         eyebrow="TONIGHT"
         title="今晚比赛"
-        description="已换算为澳门本地时间。"
+        description="已换算为北京时间。"
         action={
           <Link href="#upcoming" className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground">
             查看完整赛程

@@ -167,7 +167,7 @@ class RankingPage(FrozenModel):
     page_size: int
     total: int
     entries: tuple[RankingEntry, ...]
-    as_of: datetime
+    as_of: datetime | None
     availability: CapabilityStatus
 
 

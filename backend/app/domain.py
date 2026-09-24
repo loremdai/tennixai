@@ -1,7 +1,16 @@
 from datetime import datetime
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
+
+from app.country_codes import iso_alpha2_from_code
 
 
 class MatchStatus(StrEnum):
@@ -106,6 +115,21 @@ class Player(FrozenModel):
     localized_name: str | None = None
     country_code: str | None = None
     ranking: int | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def discard_serialized_country_alpha2(cls, value):
+        # This is derived output, not accepted provider input. Removing it
+        # also lets Redis snapshots round-trip safely through this strict model.
+        if isinstance(value, dict) and "country_alpha2" in value:
+            value = value.copy()
+            value.pop("country_alpha2")
+        return value
+
+    @computed_field
+    @property
+    def country_alpha2(self) -> str | None:
+        return iso_alpha2_from_code(self.country_code)
 
 
 class Tournament(FrozenModel):
@@ -257,8 +281,11 @@ class HeadToHead(FrozenModel):
     first_player_id: str
     second_player_id: str
     meetings: tuple[Match, ...] = ()
+    meetings_may_be_truncated: bool = False
     first_player_recent: tuple[Match, ...] = ()
+    first_player_recent_may_be_truncated: bool = False
     second_player_recent: tuple[Match, ...] = ()
+    second_player_recent_may_be_truncated: bool = False
     freshness: DataFreshness
 
 

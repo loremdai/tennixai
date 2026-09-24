@@ -14,6 +14,7 @@ import re
 from collections.abc import Callable
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 from pydantic import ValidationError
@@ -36,6 +37,7 @@ from app.domain import (
     StatisticProvenance,
     Tournament,
 )
+from app.country_codes import iso_alpha3_from_name
 from app.errors import AppError
 from app.identity import IdentityRepository
 from app.players.models import (
@@ -112,9 +114,9 @@ SURFACE_ALIASES = {
 }
 
 # API-Tennis exposes player_country as a name, while the canonical model has
-# an ISO 3166-1 alpha-3 code. The provider's explicit "World" affiliation is
-# retained as the canonical non-country value `world`; unknown names remain
-# unavailable instead of being guessed.
+# an ISO 3166-1 alpha-3 code. This explicit alias map preserves tennis-specific
+# names and conventions; ordinary ISO names fall back to the ISO registry.
+# The provider's "World" affiliation remains the non-country value `world`.
 COUNTRY_CODES = {
     "argentina": "arg",
     "australia": "aus",
@@ -213,7 +215,7 @@ def normalize_surface(raw: str | None) -> str | None:
 
 def country_code_from_name(country: str | None) -> str | None:
     normalized = " ".join((country or "").strip().casefold().split())
-    return COUNTRY_CODES.get(normalized)
+    return COUNTRY_CODES.get(normalized) or iso_alpha3_from_name(country)
 
 
 def parse_positive_int(raw: int | str | None) -> int | None:
@@ -709,12 +711,14 @@ class ApiTennisProvider:
         identities: IdentityRepository,
         api_key: str,
         now: Callable[[], datetime],
+        product_timezone: str = "Asia/Shanghai",
         directory: object | None = None,
     ) -> None:
         self._client = client
         self._identities = identities
         self._api_key = api_key
         self._now = now
+        self._product_timezone = ZoneInfo(product_timezone)
         self._directory = directory
 
     async def _request(
@@ -907,7 +911,7 @@ class ApiTennisProvider:
                     # a live sample conflicts with the official rank history.
                     # The repository derives it from consecutive snapshots.
                     movement=RankingMovement.UNKNOWN,
-                    ranking_date=now.date(),
+                    ranking_date=now.astimezone(self._product_timezone).date(),
                     fetched_at=now,
                 )
             )
@@ -969,21 +973,46 @@ class ApiTennisProvider:
         )
         if external_id is None:
             raise AppError("not_found", "Player not found", 404)
+        utc_start = datetime.combine(
+            start, datetime.min.time(), self._product_timezone
+        ).astimezone(timezone.utc)
+        utc_end = datetime.combine(
+            end + timedelta(days=1), datetime.min.time(), self._product_timezone
+        ).astimezone(timezone.utc)
+        gmt_start_date = utc_start.date()
+        gmt_end_date = (utc_end - timedelta(microseconds=1)).date()
         rows = await self._match_rows(
             "get_fixtures",
             {
                 "player_key": external_id,
-                "date_start": start.isoformat(),
-                "date_stop": end.isoformat(),
+                # The provider filters by GMT dates, while the product contract
+                # uses local calendar dates. Fetch a small superset, then apply
+                # the exact local-date boundary below.
+                "date_start": (gmt_start_date - timedelta(days=1)).isoformat(),
+                "date_stop": (utc_end.date() + timedelta(days=1)).isoformat(),
                 "timezone": "GMT",
             },
         )
-        matches = [
-            match
-            for dto in rows
-            if (match := await map_match(dto, self._identities, self._now)) is not None
-            and match.status is MatchStatus.FINISHED
-        ]
+        matches = []
+        for dto in rows:
+            match = await map_match(dto, self._identities, self._now)
+            if match is None or match.status is not MatchStatus.FINISHED:
+                continue
+            if match.scheduled_at is None:
+                try:
+                    event_date = date.fromisoformat(dto.event_date or "")
+                except ValueError:
+                    # Keep unassignable provider rows visible so the service
+                    # can report the result page as partial.
+                    matches.append(match)
+                    continue
+                if not gmt_start_date <= event_date <= gmt_end_date:
+                    continue
+            elif not start <= match.scheduled_at.astimezone(
+                self._product_timezone
+            ).date() <= end:
+                continue
+            matches.append(match)
         matches.sort(key=lambda match: match.scheduled_at or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
         return tuple(matches)
 
@@ -1098,8 +1127,15 @@ class ApiTennisProvider:
             first_player_id=first_player_id,
             second_player_id=second_player_id,
             meetings=tuple(meetings),
+            meetings_may_be_truncated=len(dto.h2h) >= bounded,
             first_player_recent=tuple(first_recent),
+            first_player_recent_may_be_truncated=(
+                len(dto.first_player_results) >= bounded
+            ),
             second_player_recent=tuple(second_recent),
+            second_player_recent_may_be_truncated=(
+                len(dto.second_player_results) >= bounded
+            ),
             freshness=DataFreshness(provider=PROVIDER_NAME, observed_at=self._now()),
         )
 

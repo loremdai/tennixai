@@ -21,7 +21,7 @@ from p2_fakes import P2_NOW, CatalogFakeProvider
 def service(catalog_provider: CatalogFakeProvider) -> TennisService:
     cache: AsyncTTLCache[str, object] = AsyncTTLCache(max_entries=256)
     return TennisService(
-        catalog_provider, cache, now=lambda: P2_NOW, timezone="Asia/Macau"
+        catalog_provider, cache, now=lambda: P2_NOW, timezone="Asia/Shanghai"
     )
 
 
@@ -170,13 +170,17 @@ async def test_catalog_rejects_invalid_status(service: TennisService) -> None:
 
 
 @pytest.mark.asyncio
-async def test_yesterday_results_use_macau_calendar(
+async def test_yesterday_results_use_beijing_calendar(
     service: TennisService, catalog_provider: CatalogFakeProvider
 ) -> None:
     yesterday_noon_utc = datetime(2026, 9, 8, 12, 0, tzinfo=timezone.utc)
     today_early_utc = datetime(2026, 9, 9, 1, 0, tzinfo=timezone.utc)
     older = datetime(2026, 9, 4, 12, 0, tzinfo=timezone.utc)
+    doubles_yesterday = catalog_provider.finished_match(
+        "yesterday_doubles", yesterday_noon_utc + timedelta(hours=1)
+    ).model_copy(update={"tournament": catalog_provider.itf_doubles_upcoming.tournament})
     catalog_provider.recent_results = [
+        doubles_yesterday,
         catalog_provider.finished_match("yesterday", yesterday_noon_utc),
         catalog_provider.finished_match("today", today_early_utc),
         catalog_provider.finished_match("older", older),
@@ -189,6 +193,61 @@ async def test_yesterday_results_use_macau_calendar(
     assert [match.id for match in results.matches] == ["mat_hist_yesterday"]
     assert results.scope == "yesterday"
     assert results.player_id == sinner
+
+
+@pytest.mark.asyncio
+async def test_yesterday_history_is_partial_when_a_singles_result_is_undated(
+    service: TennisService, catalog_provider: CatalogFakeProvider
+) -> None:
+    catalog_provider.recent_results = [
+        catalog_provider.finished_match("undated_yesterday", None)
+    ]
+    sinner = await _sinner_id(catalog_provider)
+
+    results = await service.get_player_results(sinner, scope="yesterday", limit=5)
+
+    assert results.availability is CapabilityStatus.PARTIAL
+    assert results.matches == ()
+
+
+@pytest.mark.asyncio
+async def test_recent_history_excludes_newer_doubles_result(
+    service: TennisService, catalog_provider: CatalogFakeProvider
+) -> None:
+    sinner = await _sinner_id(catalog_provider)
+    newest_doubles = catalog_provider.finished_match(
+        "newest_doubles", P2_NOW - timedelta(hours=1)
+    ).model_copy(update={"tournament": catalog_provider.itf_doubles_upcoming.tournament})
+    older_singles = catalog_provider.finished_match(
+        "older_singles", P2_NOW - timedelta(hours=2)
+    )
+    catalog_provider.finished_results += (newest_doubles, older_singles)
+
+    results = await service.get_player_results(sinner, scope="recent", limit=1)
+
+    assert [match.id for match in results.matches] == [older_singles.id]
+
+
+@pytest.mark.asyncio
+async def test_yesterday_results_are_partial_when_provider_window_hits_fetch_limit(
+    service: TennisService, catalog_provider: CatalogFakeProvider
+) -> None:
+    yesterday = catalog_provider.finished_match(
+        "yesterday_at_fetch_boundary", datetime(2026, 9, 8, 12, 0, tzinfo=timezone.utc)
+    )
+    today = [
+        catalog_provider.finished_match(
+            f"today_{index}", P2_NOW - timedelta(minutes=index + 1)
+        )
+        for index in range(9)
+    ]
+    catalog_provider.recent_results = [yesterday, *today]
+    sinner = await _sinner_id(catalog_provider)
+
+    results = await service.get_player_results(sinner, scope="yesterday", limit=5)
+
+    assert results.availability is CapabilityStatus.PARTIAL
+    assert [match.id for match in results.matches] == [yesterday.id]
 
 
 @pytest.mark.asyncio
@@ -339,6 +398,67 @@ async def test_head_to_head_preserves_orientation_and_limits(
     assert len(result.head_to_head.meetings) == 2
     assert len(result.head_to_head.first_player_recent) == 1
     assert len(result.head_to_head.second_player_recent) == 1
+
+
+@pytest.mark.parametrize(
+    "capped_collection",
+    ("h2h_meetings", "h2h_first_recent", "h2h_second_recent"),
+)
+@pytest.mark.asyncio
+async def test_head_to_head_is_partial_when_any_collection_reaches_fetch_limit(
+    capped_collection: str,
+    service: TennisService,
+    catalog_provider: CatalogFakeProvider,
+) -> None:
+    sinner = await _sinner_id(catalog_provider)
+    ruud = await _ruud_id(catalog_provider)
+    history = [
+        catalog_provider.finished_match(
+            f"{capped_collection}_{index}", P2_NOW - timedelta(days=index + 1)
+        )
+        for index in range(10)
+    ]
+    setattr(catalog_provider, capped_collection, history)
+
+    result = await service.get_head_to_head(sinner, ruud, limit=10)
+
+    assert result.availability is CapabilityStatus.PARTIAL
+
+
+@pytest.mark.parametrize(
+    ("provider_attribute", "field"),
+    [
+        ("h2h_meetings_may_be_truncated", "meetings_may_be_truncated"),
+        (
+            "h2h_first_recent_may_be_truncated",
+            "first_player_recent_may_be_truncated",
+        ),
+        (
+            "h2h_second_recent_may_be_truncated",
+            "second_player_recent_may_be_truncated",
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_head_to_head_respects_provider_truncation_with_unmappable_rows(
+    provider_attribute: str,
+    field: str,
+    service: TennisService,
+    catalog_provider: CatalogFakeProvider,
+) -> None:
+    sinner = await _sinner_id(catalog_provider)
+    ruud = await _ruud_id(catalog_provider)
+    catalog_provider.h2h_meetings = [
+        catalog_provider.finished_match(f"h{i}", P2_NOW - timedelta(days=i + 1))
+        for i in range(9)
+    ]
+    setattr(catalog_provider, provider_attribute, True)
+
+    result = await service.get_head_to_head(sinner, ruud, limit=10)
+
+    assert result.availability is CapabilityStatus.PARTIAL
+    assert result.head_to_head is not None
+    assert getattr(result.head_to_head, field) is True
 
 
 @pytest.mark.asyncio

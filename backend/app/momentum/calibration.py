@@ -293,6 +293,7 @@ async def _run(args: argparse.Namespace) -> None:
             identities=MemoryIdentityRepository(),
             api_key=api_key.get_secret_value(),
             now=clock,
+            product_timezone=settings.product_timezone,
         )
     else:
         provider = FakeTennisProvider(identities=MemoryIdentityRepository(), now=clock)

@@ -1,7 +1,7 @@
 """API-Tennis REST adapter contract tests (deterministic, MockTransport only)."""
 
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import httpx
@@ -160,13 +160,40 @@ def draw_unavailable_handler(request: httpx.Request) -> httpx.Response:
     return route_handler(request)
 
 
-def test_metadata_normalizers_only_map_explicit_values() -> None:
+def test_metadata_normalizers_map_country_names_and_leave_unknown_values_unmapped() -> None:
     assert normalize_surface(" Red Clay ") == "clay"
     assert normalize_surface("Indoor Hard") is None
     assert country_code_from_name("Germany") == "deu"
     assert country_code_from_name("World") == "world"
     assert country_code_from_name("Russia") == "rus"
     assert country_code_from_name("Belarus") == "blr"
+    assert country_code_from_name("Cyprus") == "cyp"
+    assert country_code_from_name("Congo, the Democratic Republic of the") == "cod"
+    assert country_code_from_name("Tennixia") is None
+
+
+@pytest.mark.asyncio
+async def test_finished_result_keeps_set_count_when_vendor_has_no_set_rows(provider) -> None:
+    built, _ = provider
+    row = dict(load("fixtures.json")["result"][0])
+    row.update(
+        {
+            "event_final_result": "2 - 0",
+            "event_status": "Finished",
+            "event_winner": "First Player",
+            "scores": [],
+        }
+    )
+
+    snapshot = await map_livescore_row_to_snapshot(
+        MatchDto.model_validate(row), built._identities, built._now
+    )
+
+    assert snapshot is not None
+    assert snapshot.match.live_state is not None
+    assert snapshot.match.live_state.score is not None
+    assert snapshot.match.live_state.score.sets_won == (2, 0)
+    assert snapshot.match.live_state.score.sets == ()
 
 
 @pytest.fixture()
@@ -395,6 +422,65 @@ async def test_live_request_uses_method_timezone_and_key(provider) -> None:
     assert request.url.params["method"] == "get_livescore"
     assert request.url.params["timezone"] == "GMT"
     assert request.url.params["APIkey"] == API_KEY
+
+
+@pytest.mark.asyncio
+async def test_player_results_period_uses_beijing_calendar_at_year_boundaries() -> None:
+    rows = []
+    for event_key, event_date, event_time in (
+        (1, "2025-12-31", "15:59"),  # Beijing Dec 31, outside 2026
+        (2, "2025-12-31", "16:00"),  # Beijing Jan 1, inside 2026
+        (3, "2026-12-31", "15:59"),  # Beijing Dec 31, inside 2026
+        (4, "2026-12-31", "16:00"),  # Beijing Jan 1, outside 2026
+        (5, "2026-07-01", None),  # Date-only row remains visible for review
+    ):
+        rows.append(
+            {
+                "event_key": event_key,
+                "event_date": event_date,
+                "event_time": event_time,
+                "event_first_player": "A. Player",
+                "first_player_key": 1274,
+                "event_second_player": "B. Player",
+                "second_player_key": 876,
+                "event_winner": "First Player",
+                "event_status": "Finished",
+                "event_type_type": "Atp Singles",
+                "tournament_name": "Boundary Open",
+                "tournament_key": 2356,
+            }
+        )
+
+    def history_handler(request: httpx.Request) -> httpx.Response:
+        if request.url.params.get("method") == "get_fixtures":
+            date_start = request.url.params["date_start"]
+            date_stop = request.url.params["date_stop"]
+            matching_rows = [
+                row for row in rows if date_start <= row["event_date"] <= date_stop
+            ]
+            return httpx.Response(200, json={"success": 1, "result": matching_rows})
+        return route_handler(request)
+
+    built, seen, client, _ = build_provider(history_handler, with_directory=False)
+    try:
+        player_id = await built._identities.get_or_create(
+            "player", "api_tennis", "1274"
+        )
+        matches = await built.get_player_results_for_period(
+            player_id, start=date(2026, 1, 1), end=date(2026, 12, 31)
+        )
+
+        assert {match.id for match in matches} == {
+            await built._identities.get_or_create("match", "api_tennis", "2"),
+            await built._identities.get_or_create("match", "api_tennis", "3"),
+            await built._identities.get_or_create("match", "api_tennis", "5"),
+        }
+        request = seen[-1]
+        assert request.url.params["timezone"] == "GMT"
+        assert request.url.params["date_start"] == "2025-12-30"
+        assert request.url.params["date_stop"] == "2027-01-01"
+    finally:
+        await client.aclose()
 
 
 @pytest.mark.asyncio
@@ -1047,6 +1133,89 @@ async def test_head_to_head_maps_meetings_and_recent_with_limits(provider) -> No
 
     with pytest.raises(AppError):
         await built.get_head_to_head(cui.id, "ply_missing", limit=2)
+
+
+@pytest.mark.parametrize(
+    ("list_key", "match_field", "truncation_field"),
+    [
+        ("H2H", "meetings", "meetings_may_be_truncated"),
+        (
+            "firstPlayerResults",
+            "first_player_recent",
+            "first_player_recent_may_be_truncated",
+        ),
+        (
+            "secondPlayerResults",
+            "second_player_recent",
+            "second_player_recent_may_be_truncated",
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_head_to_head_reports_raw_cap_when_a_row_cannot_be_mapped(
+    list_key: str, match_field: str, truncation_field: str
+) -> None:
+    rows = []
+    for event_key in range(10):
+        rows.append(
+            {
+                "event_key": event_key,
+                "event_date": "2026-09-08",
+                "event_time": "07:10",
+                "event_first_player": "J. Cui",
+                "first_player_key": 1274,
+                "event_second_player": "F. Sun",
+                "second_player_key": None if event_key == 0 else 876,
+                "event_winner": "First Player",
+                "event_status": "Finished",
+                "event_type_type": "Atp Singles",
+                "tournament_name": "Boundary Open",
+                "tournament_key": 2356,
+            }
+        )
+
+    def history_handler(request: httpx.Request) -> httpx.Response:
+        if request.url.params.get("method") == "get_H2H":
+            return httpx.Response(
+                200,
+                json={
+                    "success": 1,
+                    "result": {
+                        "H2H": rows if list_key == "H2H" else [],
+                        "firstPlayerResults": (
+                            rows if list_key == "firstPlayerResults" else []
+                        ),
+                        "secondPlayerResults": (
+                            rows if list_key == "secondPlayerResults" else []
+                        ),
+                    },
+                },
+            )
+        return route_handler(request)
+
+    built, _, client, _ = build_provider(history_handler, with_directory=False)
+    try:
+        first_id = await built._identities.get_or_create(
+            "player", "api_tennis", "1274"
+        )
+        second_id = await built._identities.get_or_create(
+            "player", "api_tennis", "876"
+        )
+
+        result = await built.get_head_to_head(first_id, second_id, limit=10)
+
+        assert len(getattr(result, match_field)) == 9
+        assert getattr(result, truncation_field) is True
+        assert all(
+            getattr(result, field) is (field == truncation_field)
+            for field in (
+                "meetings_may_be_truncated",
+                "first_player_recent_may_be_truncated",
+                "second_player_recent_may_be_truncated",
+            )
+        )
+    finally:
+        await client.aclose()
 
 
 @pytest.mark.asyncio

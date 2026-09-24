@@ -383,7 +383,7 @@ export function MatchPage({ matchId, previewMatch, preview = false }: MatchPageP
         <div className="mx-auto flex max-w-7xl flex-col justify-between gap-2 px-4 py-5 text-sm text-muted-foreground sm:flex-row md:px-6">
           <span>Tennix · 比赛智能，逐分解释</span>
           <span>
-            {isPreview ? '样例数据仅用于产品界面演示' : '数据由 Tennix 服务提供 · 时间为澳门本地时间'}
+            {isPreview ? '样例数据仅用于产品界面演示' : '数据由 Tennix 服务提供 · 时间为北京时间'}
           </span>
         </div>
       </footer>

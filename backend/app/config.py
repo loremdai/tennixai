@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     llm_base_url: str | None = None
     llm_model: str = "qwen3.8-max-0902"
     llm_timeout_seconds: float = Field(default=45.0, gt=0, le=300)
-    product_timezone: str = "Asia/Macau"
+    product_timezone: str = "Asia/Shanghai"
     cache_max_entries: int = 256
     fixed_now: str | None = None
     database_url: str = "postgresql+asyncpg://tennix:tennix@127.0.0.1:5432/tennix"

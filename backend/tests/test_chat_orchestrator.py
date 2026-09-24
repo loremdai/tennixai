@@ -166,7 +166,7 @@ def build_orchestrator(model: FakeChatModel, provider_type=RecordingProvider):
     fake = FakeTennisProvider(identities=MemoryIdentityRepository(), now=lambda: NOW)
     recording = provider_type(fake)
     cache: AsyncTTLCache[str, object] = AsyncTTLCache(max_entries=256)
-    service = TennisService(recording, cache, now=lambda: NOW, timezone="Asia/Macau")
+    service = TennisService(recording, cache, now=lambda: NOW, timezone="Asia/Shanghai")
     tools = BusinessTools(service)
     return ChatOrchestrator(tools, model), recording
 
@@ -1254,7 +1254,6 @@ async def test_runtime_default_heuristics_drive_fake_model() -> None:
 
 def _resolver_orchestrator(model: FakeChatModel):
     from app.players.models import RankingEntry, RankingMovement, Tour
-    from app.players.normalization import derive_english_aliases
     from app.players.repository import MemoryPlayerDirectoryRepository
     from app.players.resolver import PlayerResolver
 
@@ -1270,7 +1269,7 @@ def _resolver_orchestrator(model: FakeChatModel):
     ]
     cache: AsyncTTLCache[str, object] = AsyncTTLCache(max_entries=256)
     service = TennisService(
-        fake, cache, now=lambda: NOW, timezone="Asia/Macau",
+        fake, cache, now=lambda: NOW, timezone="Asia/Shanghai",
         directory=directory, resolver=PlayerResolver(directory),
     )
     return ChatOrchestrator(BusinessTools(service), model), directory, entries

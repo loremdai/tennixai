@@ -11,6 +11,7 @@ export type PlayerHistoryState =
   | 'stale'
 export type CompetitionTier = TourKey | 'Challenger' | 'ITF' | 'Other'
 export type MatchOutcome = 'win' | 'loss'
+export type PlayerResultOutcome = MatchOutcome | 'unknown'
 
 export type RankMovement = {
   direction: MovementDirection
@@ -82,7 +83,7 @@ export type PlayerResultPreview = {
     countryName: string
     flagUrl: string | null
   }
-  outcome: MatchOutcome
+  outcome: PlayerResultOutcome
   score: string | null
 }
 

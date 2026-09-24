@@ -410,7 +410,7 @@ export function getDecisionPreview(
     dataVersion: 'p3-preview-2026-09-16.7',
     marketFreshness: overlay === 'stale' ? '最后可信报价 · 2 分 14 秒前' : overlay === 'gap' ? '报价流存在缺口 · 22 秒前' : '盘口 · 4 秒前',
     modelFreshness: overlay === 'stale' ? '最后可信模型 · 2 分 21 秒前' : '模型 · 11 秒前',
-    asOf: '2026-09-16 10:18:12 澳门',
+    asOf: '2026-09-16 10:18:12 北京',
     overlay,
     actionAvailable,
     trajectory,

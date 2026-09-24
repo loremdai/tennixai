@@ -1,7 +1,7 @@
 """Canonical player ranking adapter contract tests (deterministic, MockTransport only)."""
 
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import httpx
@@ -39,7 +39,9 @@ def route_handler(request: httpx.Request) -> httpx.Response:
     return httpx.Response(200, json={"success": 1, "result": []})
 
 
-def make_provider(seen: list[httpx.Request]) -> ApiTennisProvider:
+def make_provider(
+    seen: list[httpx.Request], *, now: datetime = NOW
+) -> ApiTennisProvider:
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(request)
         return route_handler(request)
@@ -49,7 +51,7 @@ def make_provider(seen: list[httpx.Request]) -> ApiTennisProvider:
         client=client,
         identities=MemoryIdentityRepository(),
         api_key=API_KEY,
-        now=lambda: NOW,
+        now=lambda: now,
     )
 
 
@@ -77,6 +79,17 @@ async def test_get_rankings_maps_standings_to_internal_entries() -> None:
     assert "player_key" not in dumped
     assert API_KEY not in dumped
     assert entries[-1].player.country_code == "usa"
+
+
+@pytest.mark.asyncio
+async def test_ranking_snapshot_date_uses_beijing_calendar() -> None:
+    provider = make_provider(
+        [], now=datetime(2026, 9, 24, 16, 30, tzinfo=timezone.utc)
+    )
+
+    entries = await provider.get_rankings(Tour.ATP)
+
+    assert entries[0].ranking_date == datetime(2026, 9, 25).date()
 
 
 @pytest.mark.asyncio
@@ -177,7 +190,7 @@ async def test_get_rankings_translates_vendor_failures() -> None:
 
 
 @pytest.mark.asyncio
-async def test_player_profile_does_not_treat_season_rank_as_current_world_rank() -> None:
+async def test_player_profile_maps_identity_fields_without_using_season_rank() -> None:
     identities = MemoryIdentityRepository()
     player_id = await identities.get_or_create("player", "api_tennis", "1905")
 
@@ -192,8 +205,16 @@ async def test_player_profile_does_not_treat_season_rank_as_current_world_rank()
                         "player_key": "1905",
                         "player_name": "N. Djokovic",
                         "player_full_name": "Novak Djokovic",
+                        "player_country": "Serbia",
+                        "player_bday": "22.05.1987",
+                        "player_logo": "https://example.test/novak.png",
                         "stats": [
-                            {"season": "2026", "type": "singles", "rank": "72"},
+                            {
+                                "season": "2026",
+                                "type": "singles",
+                                "rank": "72",
+                                "matches_won": "26",
+                            },
                             {"season": "2026", "type": "doubles", "rank": "4"},
                         ],
                     }
@@ -215,7 +236,12 @@ async def test_player_profile_does_not_treat_season_rank_as_current_world_rank()
 
     assert player.name == "Novak Djokovic"
     assert player.ranking is None
+    assert player.country_code == "srb"
     assert profile.player.ranking is None
+    assert profile.birth_date == date(1987, 5, 22)
+    assert profile.image_url == "https://example.test/novak.png"
+    assert len(profile.seasons) == 1
+    assert profile.seasons[0].matches_won == 26
 
 
 def test_season_stats_keep_blank_and_invalid_numbers_unavailable() -> None:

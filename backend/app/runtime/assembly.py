@@ -138,6 +138,7 @@ def build_local_runtime_assembly(
         identities=identities,
         api_key=api_key.get_secret_value(),
         now=now,
+        product_timezone=settings.product_timezone,
         directory=directory,
     )
     resolver = PlayerResolver(directory)
@@ -312,6 +313,7 @@ def build_local_runtime_daemon(
         identities=identities,
         api_key=api_key.get_secret_value(),
         now=clock,
+        product_timezone=settings.product_timezone,
         directory=directory_repo,
     )
     resolver = PlayerResolver(directory_repo)

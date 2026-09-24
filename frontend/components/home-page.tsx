@@ -375,7 +375,7 @@ export function HomePage({
       <footer className="border-t">
         <div className="mx-auto flex max-w-7xl flex-col justify-between gap-2 px-4 py-6 text-sm text-muted-foreground sm:flex-row md:px-6">
           <span>Tennix · Tennis, data, intelligence.</span>
-          <span>{showP3Preview ? 'P3 固定预览数据 · 仅用于研究与 Paper 模拟' : '数据由 Tennix 服务提供 · 时间为澳门本地时间'}</span>
+          <span>{showP3Preview ? 'P3 固定预览数据 · 仅用于研究与 Paper 模拟' : '数据由 Tennix 服务提供 · 时间为北京时间'}</span>
         </div>
       </footer>
     </div>

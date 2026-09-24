@@ -40,6 +40,7 @@ async def _run_sync() -> int:
             identities=PostgresIdentityRepository(database),
             api_key=api_key.get_secret_value(),
             now=lambda: datetime.now(timezone.utc),
+            product_timezone=settings.product_timezone,
         )
         repository = PostgresPlayerDirectoryRepository(database)
         sync = PlayerDirectorySync(

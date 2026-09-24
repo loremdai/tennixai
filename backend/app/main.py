@@ -111,6 +111,7 @@ def create_app(
                 identities=provider_identity,
                 api_key=api_key.get_secret_value(),
                 now=clock,
+                product_timezone=settings.product_timezone,
                 directory=directory,
             )
         elif settings.provider_mode == "replay":

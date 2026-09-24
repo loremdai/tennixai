@@ -58,7 +58,7 @@ function liveMatch(overrides: Partial<MatchDto> = {}): MatchDto {
 }
 
 describe('toHomeMatch', () => {
-  it('maps an upcoming match with internal href and Macau time', () => {
+  it('maps an upcoming match with internal href and Beijing time', () => {
     const view = toHomeMatch(baseMatch())
 
     expect(view.id).toBe('mat_abc123')
@@ -134,7 +134,7 @@ describe('toMatchViewModel', () => {
 
     expect(view.canonicalStatus).toBe('scheduled')
     expect(view.visualStatus).toBe('upcoming')
-    expect(view.timezoneLabel).toBe('澳门时间')
+    expect(view.timezoneLabel).toBe('北京时间')
     expect(view.scheduledTime).toBe('20:30')
     expect(view.scheduledDate).toContain('9')
     expect(view.scheduledDate).toContain('8')
@@ -279,7 +279,7 @@ describe('statistics presentation mapping', () => {
     expect(formatStatValue(null, 'count')).toBe('官方未返回')
   })
 
-  it('formats snapshot as_of in Macau time and keeps missing values null', () => {
+  it('formats snapshot as_of in Beijing time and keeps missing values null', () => {
     const label = formatAsOf('2026-09-08T10:00:00Z')
     expect(label).toMatch(/9月8日/)
     expect(label).toMatch(/18:00/)

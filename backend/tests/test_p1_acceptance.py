@@ -148,7 +148,7 @@ async def acceptance_harness() -> AcceptanceHarness:
     await fake.build()
     counting = CountingProviderWrapper(fake)
     cache: AsyncTTLCache[str, object] = AsyncTTLCache(max_entries=256)
-    service = TennisService(counting, cache, now=lambda: NOW, timezone="Asia/Macau")
+    service = TennisService(counting, cache, now=lambda: NOW, timezone="Asia/Shanghai")
     tools = RecordingBusinessTools(service)
     model = FakeChatModel()
     orchestrator = ChatOrchestrator(tools, model)

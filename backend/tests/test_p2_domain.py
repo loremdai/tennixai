@@ -48,6 +48,38 @@ def match() -> Match:
     )
 
 
+def test_player_derives_alpha2_for_complete_nationality_presentation() -> None:
+    player = Player(
+        id="ply_cyprus",
+        name="Player Cyprus",
+        country_code="cyp",
+    )
+
+    assert player.country_alpha2 == "CY"
+    assert player.model_dump(mode="json")["country_alpha2"] == "CY"
+    assert Player.model_validate(player.model_dump()).country_alpha2 == "CY"
+    assert Player(id="ply_world", name="World player", country_code="world").country_alpha2 is None
+
+
+def test_player_country_alpha2_round_trips_inside_a_redis_shaped_snapshot(
+    match: Match,
+) -> None:
+    players = (
+        Player(id="ply_cyprus", name="Player Cyprus", country_code="cyp"),
+        Player(id="ply_world", name="World player", country_code="world"),
+    )
+    snapshot = MatchSnapshot(
+        match=match.model_copy(update={"players": players}),
+        state_version=0,
+        as_of=FIXED_NOW,
+    )
+
+    restored = MatchSnapshot.model_validate_json(snapshot.model_dump_json())
+
+    assert restored.match.players[0].country_alpha2 == "CY"
+    assert restored.match.players[1].country_alpha2 is None
+
+
 def test_p2_enums_have_exact_frozen_values() -> None:
     assert [item.value for item in CircuitTier] == [
         "atp",
@@ -416,8 +448,11 @@ def test_head_to_head_defaults_to_empty_canonical_sets() -> None:
         freshness=DataFreshness(provider="fake", observed_at=FIXED_NOW),
     )
     assert head_to_head.meetings == ()
+    assert head_to_head.meetings_may_be_truncated is False
     assert head_to_head.first_player_recent == ()
+    assert head_to_head.first_player_recent_may_be_truncated is False
     assert head_to_head.second_player_recent == ()
+    assert head_to_head.second_player_recent_may_be_truncated is False
 
     with pytest.raises(ValidationError):
         HeadToHead(

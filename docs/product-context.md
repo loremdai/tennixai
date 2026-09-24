@@ -457,7 +457,7 @@ P1 does not introduce:
 
 P1 runs as a local, single-user, single-process product slice. Its process-local cache uses in-flight request coalescing, a maximum of 256 entries, and these initial TTLs: 60 seconds for live lists and live match detail, 10 minutes for upcoming matches, one hour for player search, and 30 seconds for empty or not-found results. A stale live value may be served for at most five minutes and a stale upcoming value for at most 30 minutes, with freshness clearly marked. Provider `429` responses preserve `Retry-After` semantics.
 
-Relative dates use `Asia/Macau`. `today` is the local calendar day, `next` is the earliest non-terminal match after the current time, and `tonight` is the active or next local night window from 18:00 through 05:59 the following day. Match selection excludes fixtures whose canonical start time has already passed unless their lifecycle is live.
+Relative dates use Beijing time (`Asia/Shanghai`). `today` is the Beijing calendar day, `next` is the earliest non-terminal match after the current time, and `tonight` is the active or next Beijing night window from 18:00 through 05:59 the following day. Match selection excludes fixtures whose canonical start time has already passed unless their lifecycle is live.
 
 Redis is introduced in P2 for shared cache state, coordinated polling and locks, provider-quota accounting, and event distribution across workers. PostgreSQL is introduced alongside it for stable identities, external-ID mappings, snapshots, and later history.
 

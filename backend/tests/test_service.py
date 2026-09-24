@@ -25,7 +25,7 @@ from app.realtime.models import ReductionChange
 from app.service import MatchTimeScope, TennisService, tonight_window
 
 UTC = timezone.utc
-NOW_UTC = datetime(2026, 9, 8, 12, 0, tzinfo=UTC)  # 20:00 Asia/Macau
+NOW_UTC = datetime(2026, 9, 8, 12, 0, tzinfo=UTC)  # 20:00 Asia/Shanghai
 
 SINNER = Player(id="ply_s", name="Jannik Sinner")
 SINNER_SHORT = Player(id="ply_short", name="Sinner")
@@ -207,7 +207,7 @@ def build_service(
         provider,
         cache,
         now=utc_clock,
-        timezone="Asia/Macau",
+        timezone="Asia/Shanghai",
         snapshots=snapshots,
         publisher=publisher,
         resolver=resolver,
@@ -351,7 +351,7 @@ async def test_next_returns_earliest_future_non_terminal_match(
 
 
 @pytest.mark.asyncio
-async def test_today_uses_macau_calendar_day_and_excludes_past_fixtures(
+async def test_today_uses_beijing_calendar_day_and_excludes_past_fixtures(
     selection_provider: CountingProvider,
 ) -> None:
     service, _, _ = build_service(selection_provider)

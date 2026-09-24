@@ -58,7 +58,7 @@ async def test_end_to_end_live_question_returns_structured_or_honest_empty() -> 
         )
         cache: AsyncTTLCache[str, object] = AsyncTTLCache(max_entries=256)
         service = TennisService(
-            provider, cache, now=lambda: datetime.now(timezone.utc), timezone="Asia/Macau"
+            provider, cache, now=lambda: datetime.now(timezone.utc), timezone="Asia/Shanghai"
         )
         tools = BusinessTools(service)
         model = OpenAICompatibleChatModel(

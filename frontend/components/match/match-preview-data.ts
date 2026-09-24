@@ -142,7 +142,7 @@ export function buildPreviewMatch(status: MatchStatus): MatchViewModel {
     surface: previewMatchMeta.surface,
     scheduledDate: previewMatchMeta.scheduledDate,
     scheduledTime: previewMatchMeta.scheduledTime,
-    timezoneLabel: '澳门时间',
+    timezoneLabel: '北京时间',
     format: previewMatchMeta.format,
     indoorLabel: '室内',
     players: [

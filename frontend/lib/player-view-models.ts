@@ -33,7 +33,7 @@ export const EMPTY_CURRENT_STATUS_MESSAGE = '当前没有可用的正在进行�
 export const MISSING_SCORE_LABEL = '比分暂无'
 export const MISSING_ROUND_LABEL = '轮次暂无'
 export const MISSING_TIME_LABEL = '时间暂无'
-export const MACAU_TIMEZONE_LABEL = '澳门时间'
+export const BEIJING_TIMEZONE_LABEL = '北京时间'
 
 const SURFACE_LABELS: Record<string, string> = {
   hard: '硬地',
@@ -48,14 +48,37 @@ const TIER_LABELS: Record<string, CompetitionTier> = {
   itf: 'ITF',
 }
 
-const macauPartsFormatter = new Intl.DateTimeFormat('zh-CN', {
-  timeZone: 'Asia/Macau',
+const beijingPartsFormatter = new Intl.DateTimeFormat('zh-CN', {
+  timeZone: 'Asia/Shanghai',
   month: 'numeric',
   day: 'numeric',
   hour: '2-digit',
   minute: '2-digit',
   hour12: false,
 })
+const beijingDateFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Shanghai',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+})
+
+function beijingCalendarDate(date: Date): { year: number; month: number; day: number } {
+  const parts = beijingDateFormatter.formatToParts(date)
+  const valueOf = (type: string) => Number(parts.find((part) => part.type === type)?.value)
+  return { year: valueOf('year'), month: valueOf('month'), day: valueOf('day') }
+}
+
+export function beijingCalendarYear(now: Date = new Date()): number {
+  return beijingCalendarDate(now).year
+}
+
+function beijingDateKey(iso: string): string | null {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return null
+  const { year, month, day } = beijingCalendarDate(date)
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
 
 export const PRODUCTION_COUNTRY_OPTIONS: CountryPreview[] = Object.entries(COUNTRY_METADATA)
   .filter(([code]) => code !== 'world')
@@ -103,7 +126,7 @@ function entryFromSummary(
     name: player.name,
     nameZh: player.localized_name ?? null,
     shortName: shortNameFrom(player.name),
-    ...countryPresentation(player.country_code),
+    ...countryPresentation(player.country_code, player.country_alpha2 ?? null),
     rank: options.rank,
     points: options.points,
     movement: options.movement ?? movementFor('unknown'),
@@ -184,9 +207,9 @@ export function toSeasonSummary(
 function ageFrom(birthDate: string, now: Date): number | null {
   const [year, month, day] = birthDate.split('-').map(Number)
   if (!year || !month || !day) return null
-  let age = now.getUTCFullYear() - year
-  const currentMonth = now.getUTCMonth() + 1
-  if (currentMonth < month || (currentMonth === month && now.getUTCDate() < day)) age -= 1
+  const current = beijingCalendarDate(now)
+  let age = current.year - year
+  if (current.month < month || (current.month === month && current.day < day)) age -= 1
   return age >= 0 ? age : null
 }
 
@@ -213,27 +236,36 @@ function opponentOf(match: MatchDto, playerId: string): MatchDto['players'][numb
 /** Formats set (and live point) scores from the profiled player's perspective. */
 export function formatMatchScore(match: MatchDto, playerId: string): string | null {
   const score = match.live_state?.score
-  if (!score || score.sets.length === 0) return null
+  if (!score) return null
   const side = match.players[1]?.id === playerId ? 2 : 1
   const other = side === 1 ? 2 : 1
-  const sets = score.sets
-    .map((set) => {
-      const selfGames = side === 1 ? set.player1_games : set.player2_games
-      const otherGames = side === 1 ? set.player2_games : set.player1_games
-      return `${selfGames ?? '-'}–${otherGames ?? '-'}`
-    })
-    .join(' ')
+  const hasPerSetGames = score.sets.some(
+    (set) => set.player1_games !== null || set.player2_games !== null,
+  )
+  const hasSetCount = score.sets_won !== null && score.sets_won.some((sets) => sets > 0)
+  const sets = hasPerSetGames
+    ? score.sets
+        .map((set) => {
+          const selfGames = side === 1 ? set.player1_games : set.player2_games
+          const otherGames = side === 1 ? set.player2_games : set.player1_games
+          return `${selfGames ?? '-'}–${otherGames ?? '-'}`
+        })
+        .join(' ')
+    : hasSetCount
+      ? `${score.sets_won![side - 1]}–${score.sets_won![other - 1]} 盘`
+      : ''
   const selfPoint = score.points[side - 1]
   const otherPoint = score.points[other - 1]
   if (match.status === 'live' && selfPoint && otherPoint) {
-    return `${sets} · ${selfPoint}–${otherPoint}`
+    const currentPoint = `${selfPoint}–${otherPoint}`
+    return sets ? `${sets} · ${currentPoint}` : currentPoint
   }
-  return sets
+  return sets || null
 }
 
 export function toResultPreview(match: MatchDto, playerId: string, fallbackSeason: number): PlayerResultPreview {
   const opponentPlayer = opponentOf(match, playerId)
-  const date = match.scheduled_at ? match.scheduled_at.slice(0, 10) : null
+  const date = match.scheduled_at ? beijingDateKey(match.scheduled_at) : null
   return {
     id: match.id,
     matchId: match.id,
@@ -247,9 +279,14 @@ export function toResultPreview(match: MatchDto, playerId: string, fallbackSeaso
     opponent: {
       name: opponentPlayer.name,
       nameZh: opponentPlayer.localized_name ?? null,
-      ...countryPresentation(opponentPlayer.country_code),
+      ...countryPresentation(opponentPlayer.country_code, opponentPlayer.country_alpha2 ?? null),
     },
-    outcome: match.winner_player_id === playerId ? 'win' : 'loss',
+    outcome:
+      match.winner_player_id === null
+        ? 'unknown'
+        : match.winner_player_id === playerId
+          ? 'win'
+          : 'loss',
     score: formatMatchScore(match, playerId),
   }
 }
@@ -261,11 +298,11 @@ function freshnessNote(match: MatchDto): string {
   return `${Math.max(1, Math.floor(ageSeconds / 60))} 分钟前更新`
 }
 
-function macauStartLabel(iso: string | null): string {
+function beijingStartLabel(iso: string | null): string {
   if (!iso) return MISSING_TIME_LABEL
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return MISSING_TIME_LABEL
-  const parts = macauPartsFormatter.formatToParts(date)
+  const parts = beijingPartsFormatter.formatToParts(date)
   const valueOf = (type: string) => parts.find((part) => part.type === type)?.value ?? ''
   return `${valueOf('month')}月${valueOf('day')}日 ${valueOf('hour')}:${valueOf('minute')}`
 }
@@ -283,7 +320,7 @@ export function toCurrentStatus(
   const opponent = {
     name: opponentPlayer.name,
     nameZh: opponentPlayer.localized_name ?? null,
-    ...countryPresentation(opponentPlayer.country_code),
+    ...countryPresentation(opponentPlayer.country_code, opponentPlayer.country_alpha2 ?? null),
   }
   const round = match.round ?? MISSING_ROUND_LABEL
 
@@ -313,8 +350,8 @@ export function toCurrentStatus(
     event: match.tournament.name,
     round,
     opponent,
-    startLabel: macauStartLabel(match.scheduled_at),
-    countdown: MACAU_TIMEZONE_LABEL,
+    startLabel: beijingStartLabel(match.scheduled_at),
+    countdown: BEIJING_TIMEZONE_LABEL,
   }
 }
 
@@ -322,6 +359,10 @@ export type ResultsReadyState = Extract<
   PlayerHistoryState,
   'ready' | 'empty' | 'partial' | 'unavailable' | 'stale'
 >
+
+export function playerResultSeasons(currentSeason: number): number[] {
+  return Array.from({ length: 5 }, (_, index) => currentSeason - index)
+}
 
 export function resultsHistoryState(page: PlayerResultPageDto): ResultsReadyState {
   if (page.availability === 'unavailable') return 'unavailable'
@@ -342,6 +383,7 @@ export function rankingsAvailabilityNotice(
 export type RankingPageAvailability = RankingPageDto['availability']
 
 /** Header note for the production directory: the snapshot instant, truthfully. */
-export function rankingsSnapshotNote(asOf: string): string {
+export function rankingsSnapshotNote(asOf: string | null): string {
+  if (asOf === null) return '排名快照时间未知'
   return `快照 · ${formatAsOf(asOf) ?? asOf}`
 }

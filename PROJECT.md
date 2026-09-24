@@ -3,7 +3,7 @@
 > 本文件回答“这个项目是什么、为什么做、哪些原则不能被破坏”。
 > 全局进度见 [ROADMAP.md](./ROADMAP.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-22 15:50 CST
+**最后更新：** 2026-09-24
 
 **产品阶段：** P1 — 比赛信息查询助手（`done`，2026-09-08）；P2.0–P2.6 全部 `done`（P2.6 于 2026-09-13 经 T54 修正门重新关闭）；P3 — Market & Decision Support（`done`，2026-09-17 经 T71 证据表关闭，P3.0–P3.3 已完成（T56–T65）；T66 只读 P3 REST/独立 SSE/Chat 工具已完成（`be17eea`+`3ef0cd3`）；T67 typed frontend transport/独立 stream hooks 已完成（`808b87e`）；T68 Home Pulse 与 `/markets` 三视图已完成（`39756f7`）；T69 Match Decision Workbench 已完成（`64bb505`）；T70 双流 replay/recovery/全回归/视觉门已完成（`01e6ba0`）；T71 真实只读 shadow gate 已完成（`3fde00a`））；P4 — Product Hardening & Optimization（P4.0 Local Real Runtime 设计与实施计划 `done`；P4.1 Local Real Runtime Implementation 已关闭，2026-09-18 经 T80 证据表与 Completion Gate 九条逐条核验关闭（T73–T80 全部 `done`）；T81 视觉 E2E 并行稳定性收口已 `done`（2026-09-18，原生 `@visual` tag + 功能并行/视觉串行两条顺序 CLI lane，默认 `pnpm test:e2e` 连续两次 110 passed/44 skipped/0 failed，批准 PNG 零变更）；T82 一键启动器修复已 `done`（`2cea490`：`up` 直接执行已安装 Next，不再调用 PATH 上的 pnpm；普通 `up → health → down` 真实门通过）；T81/T82 均不改变产品数据、paper-only 或自动下单边界；P4.3 Market Data Truthfulness & Coverage 已关闭（2026-09-23，T83–T89 全部 `done`，含一次真实本地 coverage gate 运行））
 
@@ -67,7 +67,7 @@ LLM 负责理解意图、选择业务工具和组织表达，不是网球事实�
 
 ### Players
 
-承担 Ranking Discovery 和 Player Investigation：`/players` 默认展示 ATP/WTA 单打 Top 200，可搜索本地目录中的全部已知单打球员；`/players/[playerId]` 展示英文主名/中文辅名、档案、当前排名、赛季统计、live/next 状态和按需历史赛果。第一版不做双打或独立 Player Chat。
+承担 Ranking Discovery 和 Player Investigation：`/players` 默认展示 ATP/WTA 单打 Top 200，可搜索本地目录中的全部已知单打球员；`/players/[playerId]` 展示英文主名/中文辅名、档案、当前排名、赛季统计、live/next 状态和按需历史赛果。国籍使用规范 ISO alpha-3，展示时派生 alpha-2 以提供中文国家名和旗帜；普通国家名称由 ISO registry 归一化，未知值不猜测。旗帜由 FlagCDN 按代码提供，不逐国绘制或维护本地图片。第一版不做双打或独立 Player Chat。
 
 ## 四阶段产品路线
 
@@ -143,7 +143,7 @@ TennisService → REST DTO / Home Chat / Match Chat
 - 后端：Python、FastAPI、Pydantic、httpx。
 - 前后端边界：浏览器只请求 Next.js `/api/*`；Route Handler 薄代理 FastAPI，并透传 SSE。
 - 数据：LiveTennisAPI Free；进程内 identity 与 bounded TTL cache；不接 PostgreSQL/Redis。
-- 时间：canonical UTC；自然语言时间按 `Asia/Macau`，`tonight` 为有效或下一段 18:00–05:59。
+- 时间：canonical UTC；产品自然语言、日期筛选和前端展示统一使用北京时间 `Asia/Shanghai`，`tonight` 为有效或下一段 18:00–05:59。此项取代早期设计文档中的澳门时区口径。
 - Chat：OpenAI-compatible Chat Completions + Qwen `qwen3.8-max-0902`；最多两轮工具调用。
 - 业务工具：仅 `find_player_matches`、`get_live_matches`、`get_match`。
 - 刷新：初次加载、用户提问和手动刷新；P1 不自动轮询。

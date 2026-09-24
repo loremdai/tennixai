@@ -46,7 +46,7 @@ export type MatchViewModel = {
   surface: string
   scheduledDate: string
   scheduledTime: string
-  timezoneLabel: '澳门时间'
+  timezoneLabel: '北京时间'
   format: string
   indoorLabel: string
   players: [PlayerViewModel, PlayerViewModel]
@@ -69,14 +69,14 @@ const OFFICIAL_MISSING_TIME = '官方未返回开赛时间'
 const FLAG_CDN_URL = 'https://flagcdn.com/w40'
 
 const timeFormatter = new Intl.DateTimeFormat('zh-CN', {
-  timeZone: 'Asia/Macau',
+  timeZone: 'Asia/Shanghai',
   hour: '2-digit',
   minute: '2-digit',
   hour12: false,
 })
 
 const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
-  timeZone: 'Asia/Macau',
+  timeZone: 'Asia/Shanghai',
   month: 'long',
   day: 'numeric',
 })
@@ -92,9 +92,9 @@ type CountryMetadata = {
   alpha2: string | null
 }
 
-// Keep this map limited to countries currently emitted by the provider. It
-// gives the UI a deterministic Chinese label and FlagCDN resource without
-// guessing from a player's name or an unrecognized provider value.
+// Preferred Chinese labels for countries already encountered in product data.
+// Other ISO countries use the alpha-2 value supplied by the canonical model
+// and Intl.DisplayNames instead of being hidden just because they are not here.
 export const COUNTRY_METADATA: Record<string, CountryMetadata> = {
   arg: { name: '阿根廷', alpha2: 'ar' },
   aus: { name: '澳大利亚', alpha2: 'au' },
@@ -166,6 +166,8 @@ export const COUNTRY_METADATA: Record<string, CountryMetadata> = {
   world: { name: '世界', alpha2: null },
 }
 
+const countryDisplayNames = new Intl.DisplayNames(['zh-CN'], { type: 'region' })
+
 function toVisualStatus(status: MatchStatus): HomeMatchViewModel['status'] {
   if (status === 'scheduled') return 'upcoming'
   if (status === 'live') return 'live'
@@ -205,7 +207,10 @@ function initials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
-export function countryPresentation(countryCode: string | null): Pick<PlayerViewModel, 'countryCode' | 'countryName' | 'flagUrl'> {
+export function countryPresentation(
+  countryCode: string | null,
+  countryAlpha2: string | null = null,
+): Pick<PlayerViewModel, 'countryCode' | 'countryName' | 'flagUrl'> {
   const normalized = (countryCode ?? '').trim().toLowerCase()
   if (!normalized) {
     return {
@@ -216,10 +221,18 @@ export function countryPresentation(countryCode: string | null): Pick<PlayerView
   }
 
   const metadata = COUNTRY_METADATA[normalized]
+  const normalizedAlpha2 = (countryAlpha2 ?? '').trim().toLowerCase()
+  const alpha2 =
+    metadata?.alpha2 ?? (/^[a-z]{2}$/.test(normalizedAlpha2) ? normalizedAlpha2 : null)
+  const localizedName = alpha2 ? countryDisplayNames.of(alpha2.toUpperCase()) : undefined
   return {
     countryCode: normalized.toUpperCase(),
-    countryName: metadata?.name ?? OFFICIAL_MISSING_COUNTRY_NAME,
-    flagUrl: metadata?.alpha2 ? `${FLAG_CDN_URL}/${metadata.alpha2}.png` : null,
+    countryName:
+      metadata?.name ??
+      (localizedName && localizedName !== alpha2?.toUpperCase()
+        ? localizedName
+        : OFFICIAL_MISSING_COUNTRY_NAME),
+    flagUrl: alpha2 ? `${FLAG_CDN_URL}/${alpha2}.png` : null,
   }
 }
 
@@ -229,7 +242,7 @@ function toPlayerView(player: MatchDto['players'][number]): PlayerViewModel {
     name: player.name,
     shortName: shortName(player.name),
     initials: initials(player.name),
-    ...countryPresentation(player.country_code),
+    ...countryPresentation(player.country_code, player.country_alpha2 ?? null),
     ranking: player.ranking,
   }
 }
@@ -298,7 +311,7 @@ export function toMatchViewModel(match: MatchDto): MatchViewModel {
     surface: surfaceLabel(match.surface, match.indoor),
     scheduledDate: formatDate(match.scheduled_at),
     scheduledTime: formatTime(match.scheduled_at),
-    timezoneLabel: '澳门时间',
+    timezoneLabel: '北京时间',
     format: match.format ? (match.format === 'BO5' ? '五盘三胜 · BO5' : `三盘两胜 · ${match.format}`) : OFFICIAL_MISSING_FORMAT,
     indoorLabel: match.indoor === null ? OFFICIAL_MISSING_INDOOR : match.indoor ? '室内' : '室外',
     players: [toPlayerView(match.players[0]), toPlayerView(match.players[1])],
@@ -354,7 +367,7 @@ function trimNumber(value: number): string {
 }
 
 const asOfFormatter = new Intl.DateTimeFormat('zh-CN', {
-  timeZone: 'Asia/Macau',
+  timeZone: 'Asia/Shanghai',
   month: 'long',
   day: 'numeric',
   hour: '2-digit',

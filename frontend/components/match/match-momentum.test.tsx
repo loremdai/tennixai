@@ -42,7 +42,7 @@ const match = {
   surface: '室内硬地',
   scheduledDate: '9月8日',
   scheduledTime: '18:00',
-  timezoneLabel: '澳门时间',
+  timezoneLabel: '北京时间',
   format: '三盘两胜 · BO3',
   indoorLabel: '室内',
   players: [

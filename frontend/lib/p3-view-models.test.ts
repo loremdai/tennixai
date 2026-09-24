@@ -19,6 +19,13 @@ import {
   toPulseRow,
   type PulseRowModel,
 } from './p3-view-models'
+import { formatClock } from './p3-workbench-models'
+
+describe('formatClock', () => {
+  it('formats timestamps in Beijing time independent of browser timezone', () => {
+    expect(formatClock('2026-01-01T00:00:00Z')).toBe('08:00:00')
+  })
+})
 
 const NOW = new Date('2026-09-16T12:00:00Z')
 

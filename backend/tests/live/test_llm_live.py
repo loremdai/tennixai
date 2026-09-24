@@ -106,7 +106,7 @@ def _build() -> tuple[ChatOrchestrator, RecordingBusinessTools, LiveGateFakeProv
     api_key, base_url, model_name = _require_credentials()
     provider = LiveGateFakeProvider(now=lambda: NOW)
     cache: AsyncTTLCache[str, object] = AsyncTTLCache(max_entries=256)
-    service = TennisService(provider, cache, now=lambda: NOW, timezone="Asia/Macau")
+    service = TennisService(provider, cache, now=lambda: NOW, timezone="Asia/Shanghai")
     tools = RecordingBusinessTools(service)
     model = OpenAICompatibleChatModel(
         api_key=api_key,
@@ -304,8 +304,6 @@ async def test_qwen_comprehensive_match_answer_waits_for_all_requested_context()
 def _build_with_directory() -> tuple[
     ChatOrchestrator, RecordingBusinessTools, MemoryPlayerDirectoryRepository, TennisService, LiveGateFakeProvider
 ]:
-    from app.players.models import RankingEntry, RankingMovement, Tour
-    from app.players.normalization import derive_english_aliases
     from app.players.repository import MemoryPlayerDirectoryRepository
     from app.players.resolver import PlayerResolver
 
@@ -314,7 +312,7 @@ def _build_with_directory() -> tuple[
     directory = MemoryPlayerDirectoryRepository()
     cache: AsyncTTLCache[str, object] = AsyncTTLCache(max_entries=256)
     service = TennisService(
-        provider, cache, now=lambda: NOW, timezone="Asia/Macau",
+        provider, cache, now=lambda: NOW, timezone="Asia/Shanghai",
         directory=directory, resolver=PlayerResolver(directory),
     )
     tools = RecordingBusinessTools(service)
@@ -323,8 +321,6 @@ def _build_with_directory() -> tuple[
 
 
 async def _seed_resolver_directory(directory, provider=None) -> None:
-    import asyncio
-
     from app.players.models import RankingEntry, RankingMovement, Tour
     from app.players.normalization import derive_english_aliases, normalize_player_name
 

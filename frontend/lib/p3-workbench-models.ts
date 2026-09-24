@@ -226,16 +226,19 @@ export function workbenchOverlay(snapshot: DecisionSnapshotDto): DecisionOverlay
   return 'none'
 }
 
+const workbenchClockFormatter = new Intl.DateTimeFormat('zh-CN', {
+  timeZone: 'Asia/Shanghai',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+})
+
 export function formatClock(iso: string | null): string {
   if (!iso) return '—'
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return '—'
-  return date.toLocaleTimeString('zh-MO', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  })
+  return workbenchClockFormatter.format(date)
 }
 
 function pct(value: number | null): string {

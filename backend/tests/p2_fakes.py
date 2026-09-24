@@ -18,7 +18,7 @@ from app.errors import AppError
 from app.identity import MemoryIdentityRepository
 from app.providers.fake import FakeTennisProvider
 
-# 2026-09-09T12:00Z == 2026-09-09 20:00 Asia/Macau; "yesterday" is 2026-09-08.
+# 2026-09-09T12:00Z == 2026-09-09 20:00 Asia/Shanghai; "yesterday" is 2026-09-08.
 P2_NOW = datetime(2026, 9, 9, 12, 0, tzinfo=timezone.utc)
 
 
@@ -36,6 +36,9 @@ class CatalogFakeProvider(FakeTennisProvider):
         self.h2h_meetings: list[Match] = []
         self.h2h_first_recent: list[Match] = []
         self.h2h_second_recent: list[Match] = []
+        self.h2h_meetings_may_be_truncated = False
+        self.h2h_first_recent_may_be_truncated = False
+        self.h2h_second_recent_may_be_truncated = False
         self.h2h_error: AppError | None = None
 
     async def _post_build(self) -> None:
@@ -192,5 +195,12 @@ class CatalogFakeProvider(FakeTennisProvider):
             meetings=tuple(self.h2h_meetings[:bounded]),
             first_player_recent=tuple(self.h2h_first_recent[:bounded]),
             second_player_recent=tuple(self.h2h_second_recent[:bounded]),
+            meetings_may_be_truncated=self.h2h_meetings_may_be_truncated,
+            first_player_recent_may_be_truncated=(
+                self.h2h_first_recent_may_be_truncated
+            ),
+            second_player_recent_may_be_truncated=(
+                self.h2h_second_recent_may_be_truncated
+            ),
             freshness=DataFreshness(provider="fake", observed_at=self._now()),
         )

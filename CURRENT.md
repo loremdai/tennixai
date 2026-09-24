@@ -12,13 +12,13 @@
 
 **运行手册与背景计划：** [本地真实运行手册](docs/runbooks/local-real-runtime.md)；[T94 排名一致性计划](docs/superpowers/plans/2026-09-24-tennixai-t94-realtime-ranking-authority.md)；[T96 历史赛果/H2H字段审计计划](docs/superpowers/plans/2026-09-24-tennixai-t96-history-h2h-field-audit.md)。最近完成的比赛字段审计：[T95 计划](docs/superpowers/plans/2026-09-24-tennixai-t95-match-field-integrity-audit.md)；[T95 字段矩阵](docs/research/2026-09-24-tennixai-t95-match-field-integrity-matrix.md)。
 
-## T96 Player History and Head-to-Head Field Audit (`in_progress`)
+## T96 Player and Historical Results Field Audit (`in_progress`)
 
-- **范围：** 补查 T95 未覆盖的 canonical `HeadToHead` 与 service 层 `HeadToHeadResult`、`PlayerResults`，从 API-Tennis DTO/provider 映射追踪至服务缓存、REST/chat 和球员结果 UI；补齐矩阵中每个字段的来源、顺序/身份、空值、截断、freshness 和消费者。
-- **待验证疑点：** 服务仅在 `meetings` 达到内部十条上限时标记 aggregate `partial`，但 provider 也会分别把 `first_player_recent`、`second_player_recent` 截到十条。先用回归测试确认，再决定是否修复。
-- **官方语义：** API-Tennis 文档说明 `get_H2H` 返回 `H2H`、`firstPlayerResults`、`secondPlayerResults` 三组结果，但没有声明最大条数；十条限制是本项目的本地上限。未知含义不得猜测。
+- **范围：** 补查 T95/T92 未完整列出的排名快照、球员资料/赛季统计、历史赛果页和对战历史模型：`RankingEntry`、`RankingPage`、`PlayerProfileData/View`、`PlayerSeasonRecord`、`PlayerResultPage`、`PlayerResults`、`HeadToHead`、`HeadToHeadResult`。追踪 DTO/provider→目录/服务→REST/chat→前端，并把所有字段写入证据矩阵。
+- **已由 RED 回归证实：** H2H 的三组数组任何一组触及 10 条本地上限都应标记 `partial`；“昨天赛果”最近 30 天列表触及 10 条上限时不可声称完整；成功但无结果的赛季应是 available + total 0，而不是 unavailable；空排名筛选页应使用真实快照时间，无任何排名快照时 `as_of=null`；球员页下一场应按开赛时间选最早，不依赖供应商顺序。相应最小修复已在本地，尚待整组验证。
+- **官方语义：** API-Tennis 文档定义 standings/profile 与 `get_H2H` 三组结果，但没定义 H2H 排序/上限、standing 源更新时间或 `movement` 对比周期；当地十条上限与观测时间必须标为项目策略。日期/国家映射、统计赛季类型和排名权威来源均须有测试/官方依据；未知含义保持未知。
 - **边界：** 本任务不运行 `init`、不启动项目服务、不调用真实 API、不读取/修改根 `.env`，不触碰 `.next`；Colima 保持运行，但用户要求停止的其他项目容器和 Tennix 服务均保持停止。
-- **验收：** 先看到回归测试按预期失败；若证实缺陷则最小修复并测试各列表上限/未截断边界。运行相关 service/provider/API/chat/player-results 测试、可运行的确定性后端测试、改动文件 Ruff 与 `git diff --check`。准确记录因 PostgreSQL 未运行而未能执行的测试，不宣称通过。
+- **验收：** 每个已确认问题均保留 RED→GREEN 回归；运行相关 service/provider/API/chat/player-directory/profile 测试、确定性后端测试、球员 view-model Vitest 与 TypeScript 检查、改动文件 Ruff 和 `git diff --check`。准确记录因 PostgreSQL 未运行而未能执行的测试，不宣称通过。
 
 ## T95 范围与交接
 

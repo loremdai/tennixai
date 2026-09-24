@@ -10,7 +10,10 @@ import type {
 } from '@/lib/api/types'
 import {
   PRODUCTION_COUNTRY_OPTIONS,
+  beijingCalendarYear,
+  playerResultSeasons,
   resultsHistoryState,
+  rankingsSnapshotNote,
   searchResolutionToEntries,
   toCurrentStatus,
   toDirectoryEntry,
@@ -22,6 +25,35 @@ import {
 import { countryPresentation } from '@/lib/view-models'
 
 const NOW = new Date('2026-09-08T10:00:00Z')
+
+describe('rankingsSnapshotNote', () => {
+  it('does not invent a snapshot time when the source has no ranking data', () => {
+    expect(rankingsSnapshotNote(null)).toBe('排名快照时间未知')
+  })
+})
+
+describe('playerResultSeasons', () => {
+  it('keeps the current season and prior four selectable without profile stats', () => {
+    expect(playerResultSeasons(2027)).toEqual([2027, 2026, 2025, 2024, 2023])
+  })
+})
+
+describe('Beijing calendar', () => {
+  it('uses the Beijing year instead of the UTC year near midnight', () => {
+    expect(beijingCalendarYear(new Date('2026-12-31T16:30:00Z'))).toBe(2027)
+  })
+
+  it('calculates player age by the Beijing calendar date', () => {
+    const profile = profileViewFixture({
+      profile: {
+        ...profileViewFixture().profile,
+        birth_date: '2027-01-01',
+      },
+    })
+
+    expect(toProfilePreview(profile, new Date('2026-12-31T16:30:00Z')).age).toBe(0)
+  })
+})
 
 function rankingEntryFixture(overrides: Partial<RankingEntryDto> = {}): RankingEntryDto {
   return {
@@ -340,6 +372,23 @@ describe('toResultPreview', () => {
     })
   })
 
+  it('keeps an unreported winner unknown instead of labeling it a loss', () => {
+    expect(
+      toResultPreview(matchFixture({ winner_player_id: null }), 'ply_self', 2026).outcome,
+    ).toBe('unknown')
+  })
+
+  it('uses the Beijing calendar date and season for near-midnight UTC results', () => {
+    const result = toResultPreview(
+      matchFixture({ scheduled_at: '2026-12-31T18:30:00Z' }),
+      'ply_self',
+      2026,
+    )
+
+    expect(result.date).toBe('2027-01-01')
+    expect(result.season).toBe(2027)
+  })
+
   it('formats the score from the profiled player perspective', () => {
     const won = matchFixture({
       winner_player_id: 'ply_self',
@@ -360,6 +409,39 @@ describe('toResultPreview', () => {
     expect(toResultPreview(won, 'ply_self', 2026).score).toBe('6–4 3–6')
     expect(toResultPreview(won, 'ply_opp', 2026).score).toBe('4–6 6–3')
     expect(toResultPreview(won, 'ply_opp', 2026).outcome).toBe('loss')
+  })
+
+  it('shows a truthful set-count fallback when historic per-set games are absent', () => {
+    const result = matchFixture({
+      live_state: {
+        score: {
+          sets_won: [2, 1],
+          sets: [],
+          points: [null, null],
+          is_tiebreak: null,
+        },
+        server_player_id: null,
+      },
+    })
+
+    expect(toResultPreview(result, 'ply_self', 2026).score).toBe('2–1 盘')
+    expect(toResultPreview(result, 'ply_opp', 2026).score).toBe('1–2 盘')
+  })
+
+  it('uses the set-count fallback when score rows exist without game values', () => {
+    const result = matchFixture({
+      live_state: {
+        score: {
+          sets_won: [2, 0],
+          sets: [{ number: 1, player1_games: null, player2_games: null }],
+          points: [null, null],
+          is_tiebreak: null,
+        },
+        server_player_id: null,
+      },
+    })
+
+    expect(toResultPreview(result, 'ply_self', 2026).score).toBe('2–0 盘')
   })
 
   it('maps tier and surface values, keeping unknown ones truthful', () => {
@@ -445,7 +527,7 @@ describe('toCurrentStatus', () => {
     expect(status.freshness).toBe('数据较旧')
   })
 
-  it('maps a scheduled match onto the next card in Macau time', () => {
+  it('maps a scheduled match onto the next card in Beijing time', () => {
     const next = matchFixture({ status: 'scheduled', scheduled_at: '2026-09-08T13:30:00Z', winner_player_id: null })
 
     expect(toCurrentStatus(next, 'ply_self', NOW)).toMatchObject({
@@ -454,7 +536,7 @@ describe('toCurrentStatus', () => {
       event: 'Fake ATP Event 1',
       round: '1st Round',
       startLabel: '9月8日 21:30',
-      countdown: '澳门时间',
+      countdown: '北京时间',
     })
   })
 })
@@ -485,6 +567,14 @@ describe('resultsHistoryState', () => {
 })
 
 describe('directory presentation helpers', () => {
+  it('renders country names and flags outside the hand-maintained label overrides', () => {
+    expect(countryPresentation('cyp', 'CY')).toMatchObject({
+      countryCode: 'CYP',
+      countryName: '塞浦路斯',
+      flagUrl: 'https://flagcdn.com/w40/cy.png',
+    })
+  })
+
   it('offers production country options including China and Hong Kong', () => {
     const chn = PRODUCTION_COUNTRY_OPTIONS.find((option) => option.code === 'CHN')
     const hkg = PRODUCTION_COUNTRY_OPTIONS.find((option) => option.code === 'HKG')

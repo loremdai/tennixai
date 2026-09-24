@@ -792,7 +792,7 @@ describe('HomePage chat', () => {
     expect(screen.queryByText('样例数据仅用于产品界面演示')).toBeNull()
     expect(screen.queryByText('5 场比赛')).toBeNull()
     expect(screen.queryByText('12 场比赛')).toBeNull()
-    expect(screen.getByText('数据由 Tennix 服务提供 · 时间为澳门本地时间')).toBeVisible()
+    expect(screen.getByText('数据由 Tennix 服务提供 · 时间为北京时间')).toBeVisible()
   })
 
   it('shows follow-up placeholders instead of fabricated sections', async () => {

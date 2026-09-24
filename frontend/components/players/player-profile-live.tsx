@@ -18,6 +18,8 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { ApiError, getPlayerProfile, getPlayerResults } from '@/lib/api/client'
 import type { PlayerProfileViewDto, PlayerResultPageDto } from '@/lib/api/types'
 import {
+  beijingCalendarYear,
+  playerResultSeasons,
   resultsHistoryState,
   toCurrentStatus,
   toProfilePreview,
@@ -115,7 +117,7 @@ export function PlayerProfileLive({ playerId }: { playerId: string }) {
   const [profile, setProfile] = useState<ProfileState>({ phase: 'loading' })
   const [results, setResults] = useState<ResultsState>({ phase: 'loading' })
   const [retryKey, setRetryKey] = useState(0)
-  const [season, setSeason] = useState(() => new Date().getFullYear())
+  const [season, setSeason] = useState(() => beijingCalendarYear())
   const [tier, setTier] = useState<'ALL' | CompetitionTier>('ALL')
   const [outcome, setOutcome] = useState<'ALL' | MatchOutcome>('ALL')
   const [page, setPage] = useState(1)
@@ -184,7 +186,7 @@ export function PlayerProfileLive({ playerId }: { playerId: string }) {
   const seasonRecord = view.profile.seasons.find((record) => record.season === season) ?? null
   const summary = toSeasonSummary(season, seasonRecord)
   const currentStatus = toCurrentStatus(view.current_match, view.profile.player.id)
-  const seasons = view.profile.seasons.map((record) => record.season)
+  const seasons = playerResultSeasons(view.selected_season)
 
   const historyState: PlayerHistoryState =
     results.phase === 'loading'

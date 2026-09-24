@@ -10,6 +10,7 @@ from app.domain import (
     CapabilityStatus,
     CircuitTier,
     DataFreshness,
+    Discipline,
     Match,
     MatchStatus,
     Player,
@@ -56,7 +57,13 @@ def _finished_match(index: int, season: int, circuit: str, zheng_wins: bool) -> 
         id=f"mat_fin_{season}_{index}",
         status=MatchStatus.FINISHED,
         players=(ZHENG, OPPONENT),
-        tournament=Tournament(id=f"trn_{circuit}_{index}", name=f"Event {index}", tour="wta", circuit=CircuitTier(circuit)),
+        tournament=Tournament(
+            id=f"trn_{circuit}_{index}",
+            name=f"Event {index}",
+            tour="wta",
+            circuit=CircuitTier(circuit),
+            discipline=Discipline.SINGLES,
+        ),
         scheduled_at=datetime(season, 1, 5, 10, 0, tzinfo=UTC) + timedelta(days=index * 3),
         winner_player_id=ZHENG.id if zheng_wins else OPPONENT.id,
         freshness=DataFreshness(provider="fake", observed_at=NOW_UTC),
@@ -145,7 +152,7 @@ def build_service(provider: ProfileProvider, directory: MemoryPlayerDirectoryRep
         provider,
         cache,
         now=lambda: NOW_UTC,
-        timezone="Asia/Macau",
+        timezone="Asia/Shanghai",
         directory=directory,
     )
 
@@ -195,6 +202,38 @@ async def test_rankings_page_reads_directory(seeded_directory) -> None:
 
 
 @pytest.mark.asyncio
+async def test_empty_country_filter_keeps_the_rankings_snapshot_time(
+    seeded_directory,
+) -> None:
+    service = TennisService(
+        ProfileProvider(),
+        AsyncTTLCache(max_entries=64),
+        now=lambda: NOW_UTC + timedelta(days=1),
+        timezone="Asia/Shanghai",
+        directory=seeded_directory,
+    )
+
+    page = await service.get_rankings_page(
+        Tour.ATP, page=1, page_size=50, country_code="chn"
+    )
+
+    assert page.total == 0
+    assert page.as_of == NOW_UTC
+
+
+@pytest.mark.asyncio
+async def test_rankings_page_has_no_as_of_when_no_snapshot_exists() -> None:
+    service = build_service(ProfileProvider(), MemoryPlayerDirectoryRepository())
+
+    page = await service.get_rankings_page(
+        Tour.ATP, page=1, page_size=50, country_code=None
+    )
+
+    assert page.availability is CapabilityStatus.UNAVAILABLE
+    assert page.as_of is None
+
+
+@pytest.mark.asyncio
 async def test_profile_view_selects_season_and_current_match_none(
     seeded_directory,
 ) -> None:
@@ -212,6 +251,16 @@ async def test_profile_view_selects_season_and_current_match_none(
     # profile fetch is cached for one hour
     await service.get_player_profile_view(ZHENG.id, season=2025)
     assert provider.calls["profile"] == 1
+
+
+@pytest.mark.asyncio
+async def test_profile_default_season_uses_beijing_calendar_year() -> None:
+    now = datetime(2026, 12, 31, 18, 0, tzinfo=UTC)
+    service = build_service_with_now(ProfileProvider(), now)
+
+    view = await service.get_player_profile_view(ZHENG.id)
+
+    assert view.selected_season == 2027
 
 
 @pytest.mark.asyncio
@@ -250,13 +299,17 @@ async def test_profile_view_prefers_live_over_next(seeded_directory) -> None:
     provider = ProfileProvider()
     live = Match(
         id="mat_live_z", status=MatchStatus.LIVE, players=(ZHENG, OPPONENT),
-        tournament=Tournament(id="trn_l", name="Live Event", tour="wta"),
+        tournament=Tournament(
+            id="trn_l", name="Live Event", tour="wta", discipline=Discipline.SINGLES
+        ),
         scheduled_at=NOW_UTC - timedelta(hours=1),
         freshness=DataFreshness(provider="fake", observed_at=NOW_UTC),
     )
     upcoming = Match(
         id="mat_next_z", status=MatchStatus.SCHEDULED, players=(ZHENG, OPPONENT),
-        tournament=Tournament(id="trn_n", name="Next Event", tour="wta"),
+        tournament=Tournament(
+            id="trn_n", name="Next Event", tour="wta", discipline=Discipline.SINGLES
+        ),
         scheduled_at=NOW_UTC + timedelta(hours=5),
         freshness=DataFreshness(provider="fake", observed_at=NOW_UTC),
     )
@@ -267,6 +320,68 @@ async def test_profile_view_prefers_live_over_next(seeded_directory) -> None:
     view = await service.get_player_profile_view(ZHENG.id, season=2026)
     assert view.current_match is not None
     assert view.current_match.id == "mat_live_z"
+
+
+@pytest.mark.asyncio
+async def test_profile_view_selects_earliest_upcoming_match_not_provider_order(
+    seeded_directory,
+) -> None:
+    provider = ProfileProvider()
+    later = _finished_match(1, 2026, "wta", True).model_copy(
+        update={
+            "id": "mat_later",
+            "status": MatchStatus.SCHEDULED,
+            "scheduled_at": NOW_UTC + timedelta(days=2),
+            "winner_player_id": None,
+        }
+    )
+    earlier = _finished_match(2, 2026, "wta", True).model_copy(
+        update={
+            "id": "mat_earlier",
+            "status": MatchStatus.SCHEDULED,
+            "scheduled_at": NOW_UTC + timedelta(days=1),
+            "winner_player_id": None,
+        }
+    )
+    provider.upcoming = [later, earlier]
+    service = build_service(provider, seeded_directory)
+
+    view = await service.get_player_profile_view(ZHENG.id, season=2026)
+
+    assert view.current_match is not None
+    assert view.current_match.id == earlier.id
+
+
+@pytest.mark.asyncio
+async def test_profile_current_match_excludes_doubles(seeded_directory) -> None:
+    provider = ProfileProvider()
+    doubles_live = _finished_match(1, 2026, "wta", True).model_copy(
+        update={
+            "id": "mat_doubles_live",
+            "status": MatchStatus.LIVE,
+            "tournament": _finished_match(1, 2026, "wta", True).tournament.model_copy(
+                update={"discipline": Discipline.DOUBLES}
+            ),
+            "scheduled_at": NOW_UTC - timedelta(hours=1),
+            "winner_player_id": None,
+        }
+    )
+    next_singles = _finished_match(2, 2026, "wta", True).model_copy(
+        update={
+            "id": "mat_singles_next",
+            "status": MatchStatus.SCHEDULED,
+            "scheduled_at": NOW_UTC + timedelta(days=1),
+            "winner_player_id": None,
+        }
+    )
+    provider.live = [doubles_live]
+    provider.upcoming = [next_singles]
+    service = build_service(provider, seeded_directory)
+
+    view = await service.get_player_profile_view(ZHENG.id, season=2026)
+
+    assert view.current_match is not None
+    assert view.current_match.id == next_singles.id
 
 
 @pytest.mark.asyncio
@@ -313,6 +428,81 @@ async def test_result_page_paginates_and_filters(seeded_directory) -> None:
 
 
 @pytest.mark.asyncio
+async def test_result_page_excludes_doubles_from_singles_history(seeded_directory) -> None:
+    provider = ProfileProvider()
+    doubles = _finished_match(10, 2026, "wta", True).model_copy(
+        update={
+            "id": "mat_doubles_history",
+            "tournament": _finished_match(10, 2026, "wta", True).tournament.model_copy(
+                update={"discipline": Discipline.DOUBLES}
+            ),
+        }
+    )
+    provider._finished += (doubles,)
+    service = build_service(provider, seeded_directory)
+
+    result = await service.get_player_result_page(
+        ZHENG.id, season=2026, tiers=(), outcome=ResultOutcome.ALL, page=1
+    )
+
+    assert result.total == 23
+    assert all(match.tournament.discipline is Discipline.SINGLES for match in result.matches)
+    assert "mat_doubles_history" not in {match.id for match in result.matches}
+
+
+@pytest.mark.asyncio
+async def test_result_page_does_not_call_unknown_winner_a_loss(seeded_directory) -> None:
+    provider = ProfileProvider()
+    unknown_winner = _finished_match(30, 2026, "wta", True).model_copy(
+        update={"id": "mat_unknown_winner", "winner_player_id": None}
+    )
+    provider._finished += (unknown_winner,)
+    service = build_service(provider, seeded_directory)
+
+    losses = await service.get_player_result_page(
+        ZHENG.id, season=2026, tiers=(), outcome=ResultOutcome.LOST, page=1
+    )
+
+    assert "mat_unknown_winner" not in {match.id for match in losses.matches}
+
+
+@pytest.mark.asyncio
+async def test_successful_empty_season_results_are_available_not_unavailable(
+    seeded_directory,
+) -> None:
+    service = build_service(ProfileProvider(), seeded_directory)
+
+    result = await service.get_player_result_page(
+        ZHENG.id, season=2024, tiers=(), outcome=ResultOutcome.ALL, page=1
+    )
+
+    assert result.availability is CapabilityStatus.AVAILABLE
+    assert result.total == 0
+    assert result.matches == ()
+
+
+@pytest.mark.asyncio
+async def test_result_page_marks_undated_matches_partial() -> None:
+    undated = _finished_match(0, 2026, "wta", True).model_copy(
+        update={"id": "mat_undated", "scheduled_at": None}
+    )
+    provider = SeasonResultsProvider({2026: (undated,)})
+    service = TennisService(
+        provider,
+        AsyncTTLCache(max_entries=64),
+        now=lambda: NOW_UTC,
+        timezone="Asia/Shanghai",
+    )
+
+    result = await service.get_player_result_page(
+        ZHENG.id, season=2026, tiers=(), outcome=ResultOutcome.ALL, page=1
+    )
+
+    assert result.availability is CapabilityStatus.PARTIAL
+    assert [match.id for match in result.matches] == ["mat_undated"]
+
+
+@pytest.mark.asyncio
 async def test_result_page_rejects_out_of_range_season(seeded_directory) -> None:
     service = build_service(ProfileProvider(), seeded_directory)
     with pytest.raises(AppError) as failure:
@@ -320,6 +510,19 @@ async def test_result_page_rejects_out_of_range_season(seeded_directory) -> None
             ZHENG.id, season=2021, tiers=(), outcome=ResultOutcome.ALL, page=1
         )
     assert failure.value.code == "invalid_request"
+
+
+@pytest.mark.asyncio
+async def test_result_page_accepts_current_beijing_season_at_utc_year_boundary() -> None:
+    now = datetime(2026, 12, 31, 18, 0, tzinfo=UTC)
+    service = build_service_with_now(ProfileProvider(), now)
+
+    result = await service.get_player_result_page(
+        ZHENG.id, season=2027, tiers=(), outcome=ResultOutcome.ALL, page=1
+    )
+
+    assert result.season == 2027
+    assert result.total == 0
 
 
 class LongHistoryProvider(ProfileProvider):
@@ -362,7 +565,12 @@ def _result(
         id=match_id,
         status=status,
         players=(ZHENG, OPPONENT),
-        tournament=Tournament(id="trn_hist", name="History Event", tour="wta"),
+        tournament=Tournament(
+            id="trn_hist",
+            name="History Event",
+            tour="wta",
+            discipline=Discipline.SINGLES,
+        ),
         scheduled_at=scheduled_at,
         winner_player_id=ZHENG.id,
         freshness=DataFreshness(provider="fake", observed_at=NOW_UTC),
@@ -391,7 +599,7 @@ def build_service_with_now(provider: ProfileProvider, now: datetime):
         provider,
         cache,
         now=lambda: now,
-        timezone="Asia/Macau",
+        timezone="Asia/Shanghai",
     )
 
 
@@ -516,8 +724,8 @@ async def test_latest_results_invalid_limit_fails_before_provider_access() -> No
 
 
 @pytest.mark.asyncio
-async def test_latest_results_use_macau_calendar_year() -> None:
-    # 2026-12-31T18:00Z is already 2027-01-01 02:00 in Asia/Macau.
+async def test_latest_results_use_beijing_calendar_year() -> None:
+    # 2026-12-31T18:00Z is already 2027-01-01 02:00 in Asia/Shanghai.
     new_year_edge = datetime(2026, 12, 31, 18, 0, tzinfo=UTC)
     provider = SeasonResultsProvider({})
     service = build_service_with_now(provider, new_year_edge)
@@ -557,6 +765,20 @@ async def test_get_player_results_recent_scope_uses_season_window() -> None:
     assert [match.id for match in results.matches] == ["mat_3", "mat_2", "mat_1"]
     assert provider.calls["live"] == 0
     assert provider.calls["fixtures"] == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("scope", ["last", "recent"])
+async def test_chat_history_is_partial_when_a_singles_result_is_undated(scope: str) -> None:
+    undated = _result("mat_undated", None)
+    dated = _result("mat_dated", datetime(2026, 5, 1, 10, 0, tzinfo=UTC))
+    provider = SeasonResultsProvider({2026: (undated, dated)})
+    service = build_service(provider, MemoryPlayerDirectoryRepository())
+
+    results = await service.get_player_results(ZHENG.id, scope, 1)
+
+    assert results.availability is CapabilityStatus.PARTIAL
+    assert [match.id for match in results.matches] == [dated.id]
 
 
 # --------------------------------------------- T54 profile-only season records
@@ -625,7 +847,7 @@ async def test_season_record_zero_match_record_is_not_unavailable(
 
 
 @pytest.mark.asyncio
-async def test_season_record_uses_macau_calendar_year() -> None:
+async def test_season_record_uses_beijing_calendar_year() -> None:
     new_year_edge = datetime(2026, 12, 31, 18, 0, tzinfo=UTC)
     provider = ProfileProvider()
     service = build_service_with_now(provider, new_year_edge)

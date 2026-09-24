@@ -34,7 +34,7 @@ async def fake_provider() -> FakeTennisProvider:
 @pytest.fixture()
 def service(fake_provider: FakeTennisProvider) -> TennisService:
     cache: AsyncTTLCache[str, object] = AsyncTTLCache(max_entries=256)
-    return TennisService(fake_provider, cache, now=lambda: NOW, timezone="Asia/Macau")
+    return TennisService(fake_provider, cache, now=lambda: NOW, timezone="Asia/Shanghai")
 
 
 @pytest.fixture()
@@ -437,7 +437,7 @@ async def resolver_service(fake_provider: FakeTennisProvider):
         fake_provider,
         cache,
         now=lambda: NOW,
-        timezone="Asia/Macau",
+        timezone="Asia/Shanghai",
         directory=directory,
         resolver=PlayerResolver(directory),
     )
@@ -740,7 +740,7 @@ async def test_season_record_absent_is_typed_unavailable() -> None:
     )
     cache: AsyncTTLCache[str, object] = AsyncTTLCache(max_entries=64)
     service = TennisService(
-        provider, cache, now=lambda: NOW, timezone="Asia/Macau"
+        provider, cache, now=lambda: NOW, timezone="Asia/Shanghai"
     )
     tools = BusinessTools(service)
 

@@ -16,6 +16,7 @@ export type PlayerDto = {
   id: string
   name: string
   country_code: string | null
+  country_alpha2?: string | null
   ranking: number | null
   localized_name?: string | null
 }
@@ -303,6 +304,7 @@ export type PlayerSummaryDto = {
   name: string
   localized_name: string | null
   country_code: string | null
+  country_alpha2?: string | null
   ranking: number | null
 }
 
@@ -322,7 +324,7 @@ export type RankingPageDto = {
   page_size: number
   total: number
   entries: RankingEntryDto[]
-  as_of: string
+  as_of: string | null
   availability: CapabilityStatus
 }
 

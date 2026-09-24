@@ -413,6 +413,7 @@ def build_verify_dependencies(settings: Any) -> VerifyDependencies:
         identities=identities,
         api_key=api_key.get_secret_value(),
         now=clock,
+        product_timezone=settings.product_timezone,
         directory=directory,
     )
     resolver = PlayerResolver(directory)

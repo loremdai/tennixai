@@ -1,4 +1,4 @@
-"""TennisService: player resolution, Asia/Macau time scopes, cache policy.
+"""TennisService: player resolution, Beijing time scopes, cache policy.
 
 The service is the single source of truth for REST and chat tools. It never
 exposes provider DTOs, and time semantics live here as tested service rules
@@ -344,10 +344,10 @@ class TennisService:
         entries, total = await self._directory.get_rankings(
             tour, page=page, page_size=page_size, country_code=country_code
         )
-        _, tour_total = await self._directory.get_rankings(
+        snapshot_entries, tour_total = await self._directory.get_rankings(
             tour, page=1, page_size=1, country_code=None
         )
-        as_of = max((entry.fetched_at for entry in entries), default=self._now())
+        as_of = max((entry.fetched_at for entry in snapshot_entries), default=None)
         return RankingPage(
             tour=tour,
             page=page,
@@ -364,7 +364,7 @@ class TennisService:
         self, player_id: str, *, season: int | None = None
     ) -> PlayerProfileView:
         await self._ensure_seeded()
-        current_year = self._now().year
+        current_year = self._now().astimezone(self._timezone).year
         selected = season if season is not None else current_year
         if not current_year - 4 <= selected <= current_year:
             raise AppError("invalid_request", "Season outside the five-season window", 422)
@@ -401,14 +401,29 @@ class TennisService:
         season_record = next(
             (record for record in profile.seasons if record.season == selected), None
         )
+
+        def scheduled_order(match: Match) -> tuple[datetime, str]:
+            return (
+                match.scheduled_at or datetime.max.replace(tzinfo=timezone.utc),
+                match.id,
+            )
+
         current_match: Match | None = None
-        live = await self._list_by_player_id("live", player_id)
+        live = [
+            match
+            for match in await self._list_by_player_id("live", player_id)
+            if match.tournament.discipline is Discipline.SINGLES
+        ]
         if live:
-            current_match = live[0]
+            current_match = min(live, key=scheduled_order)
         else:
-            upcoming = await self._list_by_player_id("upcoming", player_id)
+            upcoming = [
+                match
+                for match in await self._list_by_player_id("upcoming", player_id)
+                if match.tournament.discipline is Discipline.SINGLES
+            ]
             if upcoming:
-                current_match = upcoming[0]
+                current_match = min(upcoming, key=scheduled_order)
         return PlayerProfileView(
             profile=profile,
             ranking=current_ranking,
@@ -446,7 +461,7 @@ class TennisService:
         page: int,
     ) -> PlayerResultPage:
         await self._ensure_seeded()
-        current_year = self._now().year
+        current_year = self._now().astimezone(self._timezone).year
         if not current_year - 4 <= season <= current_year:
             raise AppError("invalid_request", "Season outside the five-season window", 422)
         player: Player | None = None
@@ -456,13 +471,22 @@ class TennisService:
                 raise AppError("not_found", "Player not found", 404)
             player = directory_player.player
         raw = await self._load_season_results(player_id, season)
-        filtered = [
+        singles_results = tuple(
             match
             for match in raw
+            if match.tournament.discipline is Discipline.SINGLES
+        )
+        filtered = [
+            match
+            for match in singles_results
             if (not tiers or match.tournament.circuit in tiers)
             and (
                 outcome is ResultOutcome.ALL
-                or (outcome is ResultOutcome.WON) == (match.winner_player_id == player_id)
+                or (
+                    match.winner_player_id is not None
+                    and (outcome is ResultOutcome.WON)
+                    == (match.winner_player_id == player_id)
+                )
             )
         ]
         filtered.sort(
@@ -473,7 +497,11 @@ class TennisService:
         page_size = 20
         start = (max(1, page) - 1) * page_size
         if player is None:
-            player = raw[0].players[0] if raw else Player(id=player_id, name="Unknown player")
+            player = (
+                singles_results[0].players[0]
+                if singles_results
+                else Player(id=player_id, name="Unknown player")
+            )
         return PlayerResultPage(
             player=player,
             season=season,
@@ -483,9 +511,11 @@ class TennisService:
             page_size=page_size,
             total=len(filtered),
             matches=tuple(filtered[start : start + page_size]),
-            availability=CapabilityStatus.AVAILABLE
-            if raw
-            else CapabilityStatus.UNAVAILABLE,
+            availability=(
+                CapabilityStatus.PARTIAL
+                if any(match.scheduled_at is None for match in singles_results)
+                else CapabilityStatus.AVAILABLE
+            ),
         )
 
     async def _load_season_results(self, player_id: str, season: int) -> tuple[Match, ...]:
@@ -509,9 +539,9 @@ class TennisService:
             raise AppError("not_found", "Player not found", 404)
         return cast(tuple[Match, ...], outcome.value)
 
-    async def get_latest_player_results(
+    async def _get_latest_player_results_with_completeness(
         self, player_id: str, *, limit: int
-    ) -> tuple[Match, ...]:
+    ) -> tuple[tuple[Match, ...], bool]:
         """Result-count semantics for `last`/`recent` across the five-season window.
 
         Seasons are queried newest first through the cached on-demand season
@@ -523,12 +553,16 @@ class TennisService:
         await self._ensure_seeded()
         current_year = self._now().astimezone(self._timezone).year
         collected: dict[str, Match] = {}
+        has_undated_singles = False
         for season in range(current_year, current_year - 5, -1):
             raw = await self._load_season_results(player_id, season)
             for match in raw:
                 if match.status is not MatchStatus.FINISHED:
                     continue
+                if match.tournament.discipline is not Discipline.SINGLES:
+                    continue
                 if match.scheduled_at is None:
+                    has_undated_singles = True
                     continue
                 collected.setdefault(match.id, match)
             if len(collected) >= limit:
@@ -538,7 +572,15 @@ class TennisService:
             key=lambda match: (match.scheduled_at, match.id),
             reverse=True,
         )
-        return tuple(ordered[:limit])
+        return tuple(ordered[:limit]), has_undated_singles
+
+    async def get_latest_player_results(
+        self, player_id: str, *, limit: int
+    ) -> tuple[Match, ...]:
+        matches, _ = await self._get_latest_player_results_with_completeness(
+            player_id, limit=limit
+        )
+        return matches
 
     async def get_player_season_record(
         self, player_id: str, *, season: int | None = None
@@ -838,13 +880,19 @@ class TennisService:
             # `last`/`recent` use result-count semantics over the bounded
             # five-season window; `last` always means exactly one match.
             effective_limit = 1 if results_scope is PlayerResultsScope.LAST else limit
-            matches = await self.get_latest_player_results(
-                player_id, limit=effective_limit
+            matches, has_undated_singles = (
+                await self._get_latest_player_results_with_completeness(
+                    player_id, limit=effective_limit
+                )
             )
             return PlayerResults(
                 player_id=player_id,
                 scope=results_scope,
-                availability=CapabilityStatus.AVAILABLE,
+                availability=(
+                    CapabilityStatus.PARTIAL
+                    if has_undated_singles
+                    else CapabilityStatus.AVAILABLE
+                ),
                 matches=matches,
             )
 
@@ -859,8 +907,20 @@ class TennisService:
                 matches=(),
             )
 
+        fetched_matches = cast(list[Match], fetched)
+        has_undated_singles = any(
+            match.status is MatchStatus.FINISHED
+            and match.tournament.discipline is Discipline.SINGLES
+            and match.scheduled_at is None
+            for match in fetched_matches
+        )
+        availability = (
+            CapabilityStatus.PARTIAL
+            if len(fetched_matches) >= HISTORY_FETCH_LIMIT or has_undated_singles
+            else CapabilityStatus.AVAILABLE
+        )
         matches = sorted(
-            cast(list[Match], fetched),
+            fetched_matches,
             key=lambda match: match.scheduled_at
             or datetime.min.replace(tzinfo=timezone.utc),
             reverse=True,
@@ -871,13 +931,15 @@ class TennisService:
         matches = [
             match
             for match in matches
-            if match.scheduled_at is not None
+            if match.status is MatchStatus.FINISHED
+            and match.tournament.discipline is Discipline.SINGLES
+            and match.scheduled_at is not None
             and match.scheduled_at.astimezone(self._timezone).date() == yesterday
         ]
         return PlayerResults(
             player_id=player_id,
             scope=results_scope,
-            availability=CapabilityStatus.AVAILABLE,
+            availability=availability,
             matches=tuple(matches[:limit]),
         )
 
@@ -1154,15 +1216,32 @@ class TennisService:
         head_to_head = cast(HeadToHead, fetched)
         availability = (
             CapabilityStatus.PARTIAL
-            if len(head_to_head.meetings) >= HISTORY_FETCH_LIMIT
+            if any(
+                len(matches) >= HISTORY_FETCH_LIMIT
+                for matches in (
+                    head_to_head.meetings,
+                    head_to_head.first_player_recent,
+                    head_to_head.second_player_recent,
+                )
+            )
+            or head_to_head.meetings_may_be_truncated
+            or head_to_head.first_player_recent_may_be_truncated
+            or head_to_head.second_player_recent_may_be_truncated
             else CapabilityStatus.AVAILABLE
         )
         bounded = HeadToHead(
             first_player_id=head_to_head.first_player_id,
             second_player_id=head_to_head.second_player_id,
             meetings=head_to_head.meetings[:limit],
+            meetings_may_be_truncated=head_to_head.meetings_may_be_truncated,
             first_player_recent=head_to_head.first_player_recent[:limit],
+            first_player_recent_may_be_truncated=(
+                head_to_head.first_player_recent_may_be_truncated
+            ),
             second_player_recent=head_to_head.second_player_recent[:limit],
+            second_player_recent_may_be_truncated=(
+                head_to_head.second_player_recent_may_be_truncated
+            ),
             freshness=head_to_head.freshness,
         )
         return HeadToHeadResult(

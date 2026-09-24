@@ -167,7 +167,7 @@ async def test_profile_and_season_results_honest_shape(live_directory) -> None:
         provider,
         AsyncTTLCache(max_entries=8),
         now=lambda: datetime.now(timezone.utc),
-        timezone="Asia/Macau",
+        timezone="Asia/Shanghai",
         directory=repository,
     )
     current_year = datetime.now(timezone.utc).year
@@ -229,7 +229,7 @@ async def test_home_history_chat_matches_probed_service_facts(live_directory) ->
     the canonical service result captured in the same run.
     """
     from app.chat.client import OpenAICompatibleChatModel
-    from app.chat.models import ChatEventType, ChatMessage, ChatRequest
+    from app.chat.models import ChatMessage, ChatRequest
     from app.chat.orchestrator import ChatOrchestrator
     from app.chat.tools import BusinessTools
     from app.players.resolver import PlayerResolver
@@ -249,7 +249,7 @@ async def test_home_history_chat_matches_probed_service_facts(live_directory) ->
         provider,
         AsyncTTLCache(max_entries=32),
         now=lambda: datetime.now(timezone.utc),
-        timezone="Asia/Macau",
+        timezone="Asia/Shanghai",
         directory=repository,
         resolver=resolver,
     )

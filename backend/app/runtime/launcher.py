@@ -1215,6 +1215,7 @@ async def run_runtime_bootstrap(
             identities=identities,
             api_key=api_key.get_secret_value(),
             now=clock,
+            product_timezone=settings.product_timezone,
             directory=directory,
         )
         translator = OpenAICompatibleTranslator(

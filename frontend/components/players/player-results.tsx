@@ -356,9 +356,17 @@ export function PlayerResults({
                     </div>
                     <Badge
                       variant="outline"
-                      className={result.outcome === 'win' ? 'w-fit border-primary/25 bg-primary/10 text-primary' : 'w-fit text-muted-foreground'}
+                      className={
+                        result.outcome === 'win'
+                          ? 'w-fit border-primary/25 bg-primary/10 text-primary'
+                          : 'w-fit text-muted-foreground'
+                      }
                     >
-                      {result.outcome === 'win' ? '胜' : '负'}
+                      {result.outcome === 'win'
+                        ? '胜'
+                        : result.outcome === 'loss'
+                          ? '负'
+                          : '赛果未知'}
                     </Badge>
                     <span className="font-mono text-sm font-semibold tabular-nums">{result.score ?? '比分暂无'}</span>
                     <ChevronRight aria-hidden="true" className="hidden size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground md:block" />
