@@ -47,6 +47,8 @@ Tennis Data / Intelligence Product
 
 LLM 负责理解意图、选择业务工具和组织表达，不是网球事实来源。比分、赛程、球员、赛事、发球方、状态和内部 ID 必须来自结构化服务结果。
 
+**面向消费者的界面原则：** 页面先回答普通网球用户最关心的问题；使用自然中文和常见网球术语，不把 P1–P4、供应商、内部 ID、模型版本或测试状态当作产品文案。缺失、延迟和暂不可用的信息要如实说明，不用猜测值填空；更深的技术依据按需展开。
+
 ### Home Page
 
 承担 Discovery、Search、Schedule、Live Now、Following，以及未来具备数据能力后的 Recent Results。P3 将现有市场情报占位升级为最多三行的「市场脉搏」：有开放 paper position 时为其保留一行并优先异常或需动作状态，其余按赛中 `BUY` → 赛前 `BUY` → 最强 `WAIT` 选取。每行只显示比赛、模型概率、可执行市场概率、当前动作与 freshness；点击进入 Match Page，“查看全部”进入 `/markets`。Home 不承载交易按钮、轨迹或详细 ledger，无机会时显示诚实空态。典型查询输出仍是：简短回答 + Structured Match Card + Open Match。

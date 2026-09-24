@@ -1,6 +1,6 @@
 # T97 — Global Field Presentation Audit
 
-**Status:** Planned / in progress  
+**Status:** Completed
 **Owner:** Codex on `main`  
 **Start HEAD:** `c84fa6d`  
 **Date:** 2026-09-24
@@ -44,3 +44,11 @@ Use the browser to audit the whole user-facing product, not only the current T94
 - Do not run the LLM-consuming `init` or bypass it with direct migrations; stop at that boundary and request approval if real data requires it.
 - Do not stop or alter unrelated user services/containers. Stop only processes/containers started by this task if cleanup is necessary.
 - Browser checks must stay read-only with respect to external services; paper actions are test/demo-only and no Polymarket order or transaction may be submitted.
+
+## Completion record — 2026-09-24
+
+- Implementation commit: `12403b9` (`feat: refine consumer-facing frontend`).
+- Full frontend tests: 35 files / 454 passed; `tsc --noEmit` passed. Playwright: 58 mocked P3 desktop/mobile cases and 2 mocked Home chat cases passed. Backend copy regressions: 2 passed. `git diff --check` passed.
+- A broader two-file Chat test run had 53 passed and one failure because the match-context streaming path requires Redis at `127.0.0.1:6379`, which was not running. No Redis was started. No frontend lint script/ESLint binary is installed.
+- Browser review used demo state only. Managed `tennix-live` status had no persisted health or database/cache containers; the user chose not to run the one-time `init`. Real provider/runtime behavior therefore remains unverified and is not reported as passing.
+- No credentials were inspected; no `.env`, `.next`, database, live service, provider, or LLM state was changed. Unrelated user workspace changes were not included in the implementation commit.

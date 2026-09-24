@@ -2,24 +2,27 @@
 
 > 快速了解现在做到哪里、最近做完什么、接下来由谁接手。长期路线与阶段证据见 [ROADMAP.md](./ROADMAP.md)，产品定位和稳定架构见 [PROJECT.md](./PROJECT.md)。
 
-**最后更新：** 2026-09-24 12:31 CST
+**最后更新：** 2026-09-24 18:10（北京时间）
 
-**当前主任务：** T97 — 全站字段与展示走查（`in_progress`）。本任务把浏览器验收扩展至 Home、Players、Match、Markets、Paper 全局页面；真实运行时仍因未初始化而单独受阻，不运行可能消耗 LLM 配额的 `init`。
+**当前主任务：** 暂无已领取任务。T97 已完成；P4.5 仍在进行，下一项范围待确认。
 
-**最近任务：** T97 — Global Field Presentation Audit (`in_progress`)，起始提交 `c84fa6d`。
+**最近任务：** T97 — Global Field Presentation Audit（`done`），实现提交 `12403b9`。
 
-**执行者 / 分支：** Codex / `main`；T97 起始提交 `c84fa6d`，领取记录由本次计划提交。T96 实现 `b4acb8b`。T94 代码已完成（`bbb7d4a`、`d302316`、`93e1243`），本地真实运行时/浏览器门因 `LOCAL_NOT_INITIALIZED` 等待初始化授权。保留所有既有未跟踪文件。
+**执行者 / 分支：** Codex / `main`；T97 起始提交 `c84fa6d`，实现提交 `12403b9`。T96 实现 `b4acb8b`。保留工作区内与 T97 无关的用户改动，未纳入提交。
 
-**运行手册与计划：** [本地真实运行手册](docs/runbooks/local-real-runtime.md)；[T97 全站字段与展示审计计划](docs/superpowers/plans/2026-09-24-tennixai-t97-global-field-presentation-audit.md)；[T94 排名一致性计划](docs/superpowers/plans/2026-09-24-tennixai-t94-realtime-ranking-authority.md)；[T95–T96 字段矩阵](docs/research/2026-09-24-tennixai-t95-match-field-integrity-matrix.md)。
+**运行手册与计划：** [本地真实运行手册](docs/runbooks/local-real-runtime.md)；[T97 审计计划](docs/superpowers/plans/2026-09-24-tennixai-t97-global-field-presentation-audit.md)；[消费者前端设计简报](docs/superpowers/specs/2026-09-24-tennixai-consumer-frontend-design.md)；[T95–T97 字段矩阵](docs/research/2026-09-24-tennixai-t95-match-field-integrity-matrix.md)。
 
-## T97 Global Field Presentation Audit (`in_progress`)
+## T97 Global Field Presentation Audit (`done`)
 
 - **目标：** 按全站页面核对字段可见性与表达是否准确，不把真实供应商缺项误报为 UI bug，也不把测试夹具通过当成真实数据通过。
 - **范围：** Home/全局搜索与结构化回答、Players 排名目录/球员主页/历史结果、Match 详情（比分/时间/球员/赛事/统计/PBP/momentum/chat/决策）、Markets（两侧报价/深度/时间/模型状态/机会原因）、Paper ledger，以及桌面/窄屏布局、缺省/错误/partial/stale 状态、北京时区和供应商字段隔离。
 - **起始状态：** `main` / `c84fa6d`，工作区只有已知用户未跟踪文件；服务栈停止，`./scripts/tennix-live up` 之前返回 `LOCAL_NOT_INITIALIZED`。不读取或修改根 `.env`，不运行 LLM 消耗型 `init`，不手工迁移数据库。
 - **证据方法：** 复用 T95–T96 canonical 字段矩阵和现有 E2E/fixtures；打开实际页面检查完整用户可见字段，按供应商能力、映射/数据、传输/缓存、展示层分层记录；每个确认缺陷必须有复现样例和回归测试。
 - **验收门：** 全部列出页面至少有浏览器或 E2E 实际覆盖证据；真实运行时无法启动则单独列为阻塞，不声称真实数据通过；修复已证实问题并更新矩阵；运行受影响测试、前端测试/typecheck、相关 Playwright、改动文件 lint 和 `git diff --check`；最终提交并推送。
-- **当前进度：** 计划已建立；页面/字段清单在整理。实现与全站浏览器检查尚未开始。
+- **交付：** Home 移除产品阶段开关、重复入口、未实现的球员关注/历史入口和虚构市场概率卡；搜索与赛程发现仍在首页主路径。Players、Match、Markets、机会和 Paper 页面统一为面向网球用户的中文文案，保留数据来源、空值、延迟、未成交和模拟状态的区别。球员排名更新时间明确标为北京时间；未知决策原因不再泄漏内部代码。未改变供应商、预测、决策或 paper 语义。
+- **验证：** 前端 Vitest `35 files / 454 passed`；TypeScript `tsc --noEmit` 通过；Playwright 的 P3 市场/比赛页面桌面与手机检查 `58 passed`，Home 结构化问答桌面/手机 `2 passed`；后端问答文案定向测试 `2 passed`；`git diff --check` 通过。较宽的两份 Chat 测试有 `53 passed / 1 failed`：唯一失败的比赛上下文流测试因本机 Redis `127.0.0.1:6379` 未运行而无法执行；没有为此启动 Redis。仓库无前端 lint 脚本或 ESLint 可执行文件。
+- **真实数据边界：** 用户批准使用真实服务，但选择不执行首次初始化。`tennix-live status` 显示受管运行栈停止、无持久健康记录、无 Postgres/Redis 容器；真实浏览器数据门因此保持阻塞。首页/球员页所见是演示数据，Match 页面显示可恢复的加载错误，Markets 显示 P3 未开放状态；这些不是实时 API 验收。未运行 `init`、真实供应商/LLM 调用，未读取/修改根 `.env`，未启动/停止容器或服务，未访问 `.next`。
+- **保留的用户改动：** `.codex/`、`.superpowers/`、`REALTIME_LATENCY_INVESTIGATION.md`、`backend/app/service.py`、`backend/tests/test_p3_query_freshness.py` 与 `frontend/next-env.d.ts` 均未纳入 T97 提交。
 
 ## T96 Player and Historical Results Field Audit (`done`)
 
