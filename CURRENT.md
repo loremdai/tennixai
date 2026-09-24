@@ -2,7 +2,7 @@
 
 > 快速了解现在做到哪里、最近做完什么、接下来由谁接手。长期路线与阶段证据见 [ROADMAP.md](./ROADMAP.md)，产品定位和稳定架构见 [PROJECT.md](./PROJECT.md)。
 
-**最后更新：** 2026-09-24 20:07（北京时间）
+**最后更新：** 2026-09-24 20:16（北京时间）
 
 **当前主任务：** T98 — 全产品缺陷与字段真相审计（`in_progress`）。按用户当前 Goal，检查全部产品页面与关键数据链路，修复有证据的 bug，并查清其余字段的来源、语义、缺失规则和显示方式。当前继续使用演示/fixture 数据；用户明确选择暂不初始化，不运行 `init`、真实 API 或 LLM。
 
@@ -22,6 +22,7 @@
 - **市场结算候选问题：** [Polymarket 官方实时数据文档](https://docs.polymarket.com/market-data/realtime-data)规定原始 WS 事件名是 `market_resolved`，且需订阅时启用 `custom_feature_enabled: true`；当前主要行情 feed 未启用该开关，只接受旧名 `resolution`。后台 Gamma REST 仍每 120 秒检查结算、每轮最多 32 个目标并轮转，因此并非永不结算，但实时事件链路不通，Paper 结算可能延迟。另，公开 SSE 声明了 `resolution_delta`，前端也会消费并据此冻结盘口/触发重拉，但后端没有该事件的生产者；现有测试只手工构造前端事件，未测官方 WS 帧或后端发布。尚未修改。
 - **字段清单缺口：** 既有 T95–T97 矩阵未逐字段覆盖 Player Resolution、Match Catalog 的筛选/计数/featured 字段、全部 Chat 事件与结构化字段、P3 SSE 事件、错误信封及运行健康 DTO。继续追踪其来源、转换、空值与页面消费；没有页面消费者的字段会明确标作技术用途/未消费。
 - **其他展示/契约线索：** `/players/search` 当前返回解析对象，但未使用的旧 `getPlayers()` 客户端和单测仍把它当球员数组，属于过期契约；首页“候选球员”直接显示小写三字母国家码。Polymarket 的本地 `spread` 是有双边盘口结果价差的均值，`depth_usd` 是两种结果最佳 bid/ask 金额合计，而页面文案是“买卖价差/可交易金额”；需核对定义后再改标签。
+- **演示数据覆盖：** 当前没有全站统一的演示模式。`/players?preview=1`、`/match?status=...`、`/markets?preview=p3` 各自可看固定样例；首页 `/?preview=p3` 只控制 P3 预览，首页比赛/搜索仍走后端数据链路。因此“不初始化、继续用演示数据”可以支持局部样例走查，但不能让全站以演示数据完整运行。`frontend/next.config.mjs` 启动时会读取根 `.env`，Next 也会写入 `.next`；在本任务边界下不启动 Next/Playwright，继续使用代码与已提交视觉基线审计。
 - **审批门：** T98 规格仍为待用户审阅；在规格获批前继续只读审计，不编制实施步骤、不改产品实现。用户选择继续用演示/fixture 数据；不运行 `init`、真实 API、LLM 或交易，不读根 `.env`，不访问 `.next`。
 
 ## T97 Global Field Presentation Audit (`done`)
