@@ -2,7 +2,7 @@
 
 > 快速了解现在做到哪里、最近做完什么、接下来由谁接手。长期路线与阶段证据见 [ROADMAP.md](./ROADMAP.md)，产品定位和稳定架构见 [PROJECT.md](./PROJECT.md)。
 
-**最后更新：** 2026-09-24 20:01（北京时间）
+**最后更新：** 2026-09-24 20:06（北京时间）
 
 **当前主任务：** T98 — 全产品缺陷与字段真相审计（`in_progress`）。按用户当前 Goal，检查全部产品页面与关键数据链路，修复有证据的 bug，并查清其余字段的来源、语义、缺失规则和显示方式。当前继续使用演示/fixture 数据；用户明确选择暂不初始化，不运行 `init`、真实 API 或 LLM。
 
@@ -18,7 +18,7 @@
 - **起始状态：** `main` / `4ccf257`，与 `origin/main` 同步；工作区现有用户改动按下方已知清单保留。
 - **边界：** 继续使用演示/fixture 数据；不运行 `init`、真实 provider/LLM 请求，不读取或修改根 `.env`，不访问 `.next`，不启停本任务之外的服务或容器。
 - **进度：** 已完成代码/路由/DTO/既有矩阵的只读盘点。发现三项待回归验证的 Chat 缺陷：① 后端会发出 `market_opportunities` / `match_decision` 结构化结果，但前端类型未包含这两种 `kind`，首页可能将其误报为“没有符合条件的比赛”且不呈现结构化 P3 结果；② Chat 流在 `done/error` 前 EOF 会走成功分支，并把部分回答写入下一轮历史；③ 后端可在同一轮发出多个不同 `data` 结果、前端也累积了 `dataItems`，但首页比赛卡片只读最后一条 `chat.data`，多项比赛查询可能丢卡。证据：`backend/app/chat/tools.py`、`backend/app/chat/executor.py`、`backend/app/chat/orchestrator.py`、`backend/tests/test_chat_orchestrator.py`、`frontend/lib/api/types.ts`、`frontend/components/home/home-assistant.tsx`、`frontend/hooks/use-chat-stream.ts`、`frontend/hooks/use-chat-stream.test.tsx`。字段清单对照还发现既有 T95–T97 矩阵没有逐字段覆盖 Player Resolution、Match Catalog（筛选项/计数/featured match）、全部公开 Chat 事件与 P3 Chat 结构化字段、P3 SSE 事件、错误信封及运行健康 DTO；这些字段需继续追踪并标为面向用户或仅技术用途。另经 [Polymarket 官方价格与订单簿文档](https://docs.polymarket.com/market-data/prices-order-books) 核验，供应商给的是各结果独立的盘口档位；本地 `spread` 实为有 bid/ask 的结果价差均值，`depth_usd` 实为两种结果的最佳 bid/ask 名义金额合计，而生产页写作“买卖价差/可交易金额”。这是需进一步评估的字段语义/文案不匹配线索，尚未认定或修复。审计规格已写入，待用户审阅确认后编制逐项执行计划；上述缺陷和文案线索均未修改或以回归测试验收。
-- **新增核查：** [Polymarket 官方实时数据文档](https://docs.polymarket.com/market-data/realtime-data) 的原始 WebSocket 协议将结算生命周期事件定义为 `market_resolved`，并要求订阅帧设置 `custom_feature_enabled: true`；当前 `backend/app/markets/live.py` 未开启该选项，且只白名单旧事件名 `resolution`，`backend/app/markets/reducer.py` 也只识别该旧名。现有模拟测试只覆盖 `resolution`，未覆盖官方事件帧。结算并非完全失效：daemon 另以 Gamma REST `get_resolution` 兜底，默认每 120 秒检查且每轮最多 32 个目标、超额时轮转；因此目前证据指向实时生命周期事件路径不通、Paper 结算依赖有界轮询并可能延迟，而非断言永远无法结算。该项尚未修改；待规格获批后用官方原始事件 fixture 建立失败回归，并确认事件仅触发 REST 权威核验、不直接信任推送结果。
+- **新增核查：** [Polymarket 官方实时数据文档](https://docs.polymarket.com/market-data/realtime-data) 的原始 WebSocket 协议将结算生命周期事件定义为 `market_resolved`，并要求订阅帧设置 `custom_feature_enabled: true`；当前 `backend/app/markets/live.py` 未开启该选项，且只白名单旧事件名 `resolution`，`backend/app/markets/reducer.py` 也只识别该旧名。现有模拟测试只覆盖 `resolution`，未覆盖官方事件帧。结算并非完全失效：daemon 另以 Gamma REST `get_resolution` 兜底，默认每 120 秒检查且每轮最多 32 个目标、超额时轮转；因此目前证据指向实时生命周期事件路径不通、Paper 结算依赖有界轮询并可能延迟，而非断言永远无法结算。另，公开 P3 SSE 已声明并在前端消费 `resolution_delta`，但后端 `routes.py` 只有订阅模式/事件白名单，尚无任何事件生产者；结算时前端不能收到该 delta 来冻结盘口与触发即时 REST 刷新。模拟 hook/decoder 测试只验证了手工注入事件，后端 SSE 测试未覆盖此类型。上述项尚未修改；待规格获批后用官方原始事件 fixture 建立失败回归，并确认推送只触发 REST 权威核验、不直接信任推送结果。
 
 ## T97 Global Field Presentation Audit (`done`)
 
