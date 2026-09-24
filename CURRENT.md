@@ -2,15 +2,22 @@
 
 > 快速了解现在做到哪里、最近做完什么、接下来由谁接手。长期路线与阶段证据见 [ROADMAP.md](./ROADMAP.md)，产品定位和稳定架构见 [PROJECT.md](./PROJECT.md)。
 
-**最后更新：** 2026-09-24 18:10（北京时间）
+**最后更新：** 2026-09-24 19:29（北京时间）
 
-**当前主任务：** 暂无已领取任务。T97 已完成；P4.5 仍在进行，下一项范围待确认。
+**当前主任务：** T98 — 全产品缺陷与字段真相审计（`in_progress`）。按用户当前 Goal，检查全部产品页面与关键数据链路，修复有证据的 bug，并查清其余字段的来源、语义、缺失规则和显示方式。当前继续使用演示/fixture 数据；用户明确选择暂不初始化，不运行 `init`、真实 API 或 LLM。
 
-**最近任务：** T97 — Global Field Presentation Audit（`done`），实现提交 `12403b9`。
+**最近任务：** T98 — 全产品缺陷与字段真相审计（`in_progress`），起始提交 `4ccf257`。
 
-**执行者 / 分支：** Codex / `main`；T97 起始提交 `c84fa6d`，实现提交 `12403b9`。T96 实现 `b4acb8b`。保留工作区内与 T97 无关的用户改动，未纳入提交。
+**执行者 / 分支：** Codex / `main`；T98 起始提交 `4ccf257`。保留工作区内已存在的用户改动，未纳入 T98。
 
-**运行手册与计划：** [本地真实运行手册](docs/runbooks/local-real-runtime.md)；[T97 审计计划](docs/superpowers/plans/2026-09-24-tennixai-t97-global-field-presentation-audit.md)；[消费者前端设计简报](docs/superpowers/specs/2026-09-24-tennixai-consumer-frontend-design.md)；[T95–T97 字段矩阵](docs/research/2026-09-24-tennixai-t95-match-field-integrity-matrix.md)。
+**运行手册与计划：** [本地真实运行手册](docs/runbooks/local-real-runtime.md)；[T97 审计计划](docs/superpowers/plans/2026-09-24-tennixai-t97-global-field-presentation-audit.md)；T98 全产品审计计划编制中；[T95–T97 字段矩阵](docs/research/2026-09-24-tennixai-t95-match-field-integrity-matrix.md)。
+
+## T98 全产品缺陷与字段真相审计（`in_progress`）
+
+- **目标：** 以当前代码、测试、演示页面和官方数据契约为证据，跨 Home、Players、Match、Markets、Opportunities、Paper 及关键后端链路逐域走查；修复可复现 bug，并为每个对外字段确认来源、转换、空值/异常语义及验证证据。
+- **起始状态：** `main` / `4ccf257`，与 `origin/main` 同步；工作区现有用户改动按下方已知清单保留。
+- **边界：** 继续使用演示/fixture 数据；不运行 `init`、真实 provider/LLM 请求，不读取或修改根 `.env`，不访问 `.next`，不启停本任务之外的服务或容器。
+- **进度：** 已领取；正在建立页面×字段域审计清单、证据等级和分批验证门。
 
 ## T97 Global Field Presentation Audit (`done`)
 
