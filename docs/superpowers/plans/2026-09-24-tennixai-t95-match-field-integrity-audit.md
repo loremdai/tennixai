@@ -118,7 +118,7 @@
 - [x] Verify nullable/missing fields remain nullable through Pydantic response models, TypeScript DTOs, and UI; verify unsupported provider fields never leak.
 - [x] Run the full deterministic backend suite and frontend unit/typecheck gates that do not restart services or touch `.next`; run focused PostgreSQL integration tests for changed persistence paths.
 - [x] Review every matrix row; each must have source semantics plus code-path evidence and a named test, or be explicitly marked unavailable/unknown with a reason.
-- [ ] Record commit IDs, exact test counts, unresolved provider-semantic limits, and the separately authorized runtime restart gate in `CURRENT.md` and `ROADMAP.md`.
+- [x] Record commit IDs, exact test counts, unresolved provider-semantic limits, and the separate runtime verification gate in `CURRENT.md` and `ROADMAP.md`.
 
 ## Known Runtime Gate
 
