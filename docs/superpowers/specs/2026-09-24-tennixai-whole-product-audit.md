@@ -64,7 +64,7 @@
 - 集成门若需要 Redis/PostgreSQL，但当前演示环境未运行，仅标明实际限制；不得为绕过限制运行首次初始化或把本地演示数据当成真实验证。
 - 完成记录必须保留尚不能验证的 provider/运行时边界，并更新 `CURRENT.md`、`ROADMAP.md` 与字段矩阵。
 
-## 当前验证进度（2026-09-25）
+## 完成证据（2026-09-25，提交 `ad3edb9`）
 
 - 首次 Home 目录读取的懒加载竞态已通过 RED→GREEN 修复：目录排名与别名同步完成前不读取并覆盖比赛卡球员资料；并发首调会等待同一轮同步结束。后端定向服务、目录同步、球员解析和 Chat 工具测试 `103 passed`；Ruff lint 通过。四个被检查的 Python 文件在任务起始 HEAD 已不符合当前 Ruff formatter，故没有对整文件进行格式重排。
 - 当前 UI 在隔离 `/tmp` 副本以 fake provider/LLM、P3 disabled、固定时钟运行；`env -i` 清洁环境，不复制 `.env`，不读项目 `.next`，不初始化数据库或调用真实服务。功能 Playwright `80 passed`，首页问答另 `4 passed`，视觉 Playwright `30 passed / 4 skipped`；P2 Replay 的 4 项在 fake mode 跳过，P1 Match live/upcoming 截图视觉用例因 Redis 依赖未计入通过。76 张桌面/移动截图由演示数据重生成，并经同一隔离环境逐屏比对；不代表真实 API/运行时验收。
