@@ -80,7 +80,6 @@ function RecentControlPanel({
   const keyPoints = snapshot.points
     .filter((point) => point.is_break_point || point.is_set_point || point.is_match_point)
     .filter((point) => chart.some((item) => item.sequence === point.sequence))
-  const asOf = formatAsOf(snapshot.as_of)
 
   if (!latest || chart.length === 0) {
     return (
@@ -89,6 +88,8 @@ function RecentControlPanel({
       </p>
     )
   }
+
+  const asOf = formatAsOf(latest.as_of)
 
   return (
     <div className="flex flex-col gap-4">

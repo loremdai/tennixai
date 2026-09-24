@@ -2,7 +2,7 @@
 
 import asyncio
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import pytest
 from httpx import AsyncClient
@@ -23,7 +23,7 @@ from app.identity import MemoryIdentityRepository
 from app.main import create_app
 from app.providers.fake import FakeTennisProvider
 from app.realtime.reducer import reduce_live_snapshot
-from realtime_fakes import FakeClock, InMemoryRedis, RealtimeBundle
+from realtime_fakes import FakeClock, RealtimeBundle
 
 NOW = datetime(2026, 9, 9, 12, 0, tzinfo=timezone.utc)
 
@@ -66,6 +66,7 @@ def live_match(match_id: str = "mat_stream") -> Match:
         players=(Player(id="ply_a", name="A"), Player(id="ply_b", name="B")),
         tournament=Tournament(id="trn_t", name="Tulln"),
         live_state=LiveMatchState(
+            current_set_number=3,
             score=MatchScore(
                 sets_won=(1, 1),
                 sets=(SetScore(number=3, player1_games=2, player2_games=2),),
@@ -174,6 +175,28 @@ async def test_snapshot_endpoint_returns_full_snapshot(env) -> None:
 
 
 @pytest.mark.asyncio
+async def test_rest_snapshot_matches_initial_sse_ready_snapshot(env) -> None:
+    client, bundle, provider = env
+    expected = await seed_store(bundle, "mat_contract", 2)
+
+    rest_response = await client.get("/api/v1/matches/mat_contract")
+    frames = await collect_frames(
+        client, "/api/v1/matches/mat_contract/stream", max_frames=1
+    )
+
+    assert rest_response.status_code == 200
+    assert len(frames) == 1
+    ready = frames[0]
+    assert ready["event"] == "ready"
+    assert ready["id"] == str(expected.state_version)
+    assert ready["data"]["snapshot"] == rest_response.json()["data"]
+    assert rest_response.json()["data"]["match"]["live_state"]["current_set_number"] == 3
+    assert ready["data"]["snapshot"]["match"]["live_state"]["current_set_number"] == 3
+    assert ready["data"]["state_version"] == rest_response.json()["data"]["state_version"]
+    assert ready["data"]["as_of"] == rest_response.json()["data"]["as_of"]
+
+
+@pytest.mark.asyncio
 async def test_stream_sends_ready_then_atomic_deltas_with_version_ids(env) -> None:
     client, bundle, provider = env
     snapshot = await seed_store(bundle, "mat_stream", 2)
@@ -196,6 +219,38 @@ async def test_stream_sends_ready_then_atomic_deltas_with_version_ids(env) -> No
     assert frames[1]["id"] == "2"
     assert frames[1]["data"]["state_version"] == 2
     assert set(frames[1]["data"]["changes"]) == {"point_appended", "momentum_updated"}
+
+
+@pytest.mark.asyncio
+async def test_persisted_snapshot_tracks_sse_delta_version(env) -> None:
+    client, bundle, provider = env
+    initial = await seed_store(bundle, "mat_persisted_delta", 2)
+    expected: dict[str, MatchSnapshot] = {}
+
+    async def publish_later() -> None:
+        await asyncio.sleep(0.2)
+        reduction = reduce_live_snapshot(
+            initial, candidate("mat_persisted_delta", 3)
+        )
+        expected["snapshot"] = reduction.snapshot
+        await bundle.store.save_reduction(reduction)
+        await bundle.publisher.publish_delta(reduction)
+
+    task = asyncio.create_task(publish_later())
+    frames = await collect_frames(
+        client, "/api/v1/matches/mat_persisted_delta/stream", max_frames=2
+    )
+    await task
+    rest_response = await client.get("/api/v1/matches/mat_persisted_delta")
+
+    delta = frames[1]
+    assert delta["event"] == "match_delta"
+    assert delta["id"] == str(expected["snapshot"].state_version)
+    assert delta["data"]["state_version"] == expected["snapshot"].state_version
+    assert rest_response.status_code == 200
+    assert rest_response.json()["data"] == expected["snapshot"].model_dump(mode="json")
+    assert rest_response.json()["data"]["state_version"] == delta["data"]["state_version"]
+    assert delta["data"]["as_of"] == rest_response.json()["data"]["as_of"]
 
 
 @pytest.mark.asyncio
@@ -255,7 +310,7 @@ def _reduction_to_version(bundle: RealtimeBundle, base: MatchSnapshot, points: i
 @pytest.mark.asyncio
 async def test_match_ended_closes_the_stream(env) -> None:
     client, bundle, provider = env
-    snapshot = await seed_store(bundle, "mat_stream", 1)
+    await seed_store(bundle, "mat_stream", 1)
 
     async def publish_later() -> None:
         await asyncio.sleep(0.2)

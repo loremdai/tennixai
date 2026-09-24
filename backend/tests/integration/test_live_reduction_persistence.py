@@ -1,16 +1,20 @@
 """Transactional persistence of live reductions against compose PostgreSQL."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import select, text, update
 from sqlalchemy.exc import IntegrityError
 
 from app.config import Settings
 from app.domain import (
     CapabilityStatus,
+    CircuitTier,
     DataFreshness,
+    DataQuality,
+    Discipline,
+    Gender,
     LiveMatchState,
     Match,
     MatchScore,
@@ -77,7 +81,14 @@ def point(match_id: str, sequence: int, score_after: tuple[str, str], winner: st
         point_number=sequence,
         server_player_id="ply_a",
         winner_player_id=winner,
+        score_before=MatchScore(
+            sets_won=(0, 0),
+            sets=(SetScore(number=3, player1_games=2, player2_games=2),),
+            points=("0", "0"),
+        ),
         score_after=MatchScore(sets_won=(0, 0), sets=(), points=score_after),
+        is_set_point=False,
+        is_match_point=True,
         observed_at=NOW,
         provider="itest",
         source_fingerprint=f"fp-{sequence}",
@@ -106,9 +117,25 @@ async def candidate(database: Database, *, points: int = 3, aces: float = 2) -> 
     match = Match(
         id=match_id,
         status=MatchStatus.LIVE,
-        players=(Player(id="ply_a", name="A"), Player(id="ply_b", name="B")),
-        tournament=Tournament(id="trn_a", name="T"),
+        players=(
+            Player(id="ply_a", name="A", localized_name="甲", country_code="chn"),
+            Player(id="ply_b", name="B", localized_name="乙", country_code="jpn"),
+        ),
+        tournament=Tournament(
+            id="trn_a",
+            name="T",
+            tour="atp",
+            circuit=CircuitTier.ATP,
+            gender=Gender.MEN,
+            discipline=Discipline.SINGLES,
+        ),
+        scheduled_at=NOW + timedelta(days=1),
+        round="Round of 32",
+        surface="hard",
+        indoor=True,
+        format="BO3",
         live_state=LiveMatchState(
+            current_set_number=3,
             score=MatchScore(
                 sets_won=(1, 1),
                 sets=(SetScore(number=3, player1_games=2, player2_games=2),),
@@ -117,14 +144,25 @@ async def candidate(database: Database, *, points: int = 3, aces: float = 2) -> 
             server_player_id="ply_a",
             state_version=0,
         ),
-        freshness=DataFreshness(provider="itest", observed_at=NOW),
+        freshness=DataFreshness(
+            provider="api_tennis",
+            source_updated_at=NOW - timedelta(seconds=15),
+            observed_at=NOW,
+        ),
     )
     return MatchSnapshot(
         match=match,
         points=tuple(point(match_id, i, ("15", "0")) for i in range(1, points + 1)),
         statistics=(statistic(match_id, aces),),
         momentum=(),
-        quality=(),
+        quality=(
+            DataQuality(
+                capability="statistics",
+                status=CapabilityStatus.AVAILABLE,
+                provider="api_tennis",
+                observed_at=NOW,
+            ),
+        ),
         state_version=0,
         as_of=NOW,
     )
@@ -132,22 +170,91 @@ async def candidate(database: Database, *, points: int = 3, aces: float = 2) -> 
 
 async def test_load_snapshot_rebuilds_the_canonical_view(database: Database) -> None:
     repository = MatchSnapshotRepository(database)
-    reduction = reduce_live_snapshot(None, await candidate(database, points=2, aces=4))
+    source = await candidate(database, points=2, aces=4)
+    indeterminate = source.points[0].model_copy(
+        update={
+            "winner_player_id": None,
+            "quality": DataQuality(
+                capability="point_winner",
+                status=CapabilityStatus.PARTIAL,
+                provider="api_tennis",
+                reason="winner_indeterminate",
+                observed_at=NOW,
+            ),
+        }
+    )
+    source = source.model_copy(
+        update={"points": (indeterminate, *source.points[1:])}
+    )
+    reduction = reduce_live_snapshot(None, source)
     await repository.save_reduction(reduction)
 
     loaded = await repository.load_snapshot(reduction.match_id)
 
     assert loaded is not None
+    assert loaded.match.live_state is not None
+    assert loaded.match.live_state.current_set_number == 3
     assert loaded.state_version == reduction.snapshot.state_version
     assert [point.sequence for point in loaded.points] == [1, 2]
-    assert loaded.points[0].winner_player_id == "ply_a"
+    assert loaded.points[0].winner_player_id is None
+    assert loaded.points[0].score_before == reduction.snapshot.points[0].score_before
+    assert loaded.points[0].score_after == reduction.snapshot.points[0].score_after
+    assert loaded.points[0].is_break_point is None
+    assert loaded.points[0].is_set_point is False
+    assert loaded.points[0].is_match_point is True
+    assert loaded.points[0].observed_at == NOW
+    assert loaded.points[0].provider == "itest"
+    assert loaded.points[0].source_fingerprint == "fp-1"
+    assert loaded.points[0].revision == 1
+    assert loaded.points[0].quality == reduction.snapshot.points[0].quality
     aces = next(stat for stat in loaded.statistics if stat.name is StatisticName.ACES)
     assert aces.player1_value == 4
+    assert aces.player2_value == 1
+    assert aces.unit == "count"
+    assert aces.provenance is StatisticProvenance.PROVIDER
+    assert aces.availability is CapabilityStatus.AVAILABLE
+    assert aces.as_of == NOW
     assert loaded.match.players[0].id == "ply_a"
+    assert loaded.match.players[0].localized_name == "甲"
+    assert loaded.match.players[0].country_code == "chn"
+    assert loaded.match.players[0].ranking is None
+    assert loaded.match.tournament == reduction.snapshot.match.tournament
+    assert loaded.match.scheduled_at == NOW + timedelta(days=1)
+    assert loaded.match.round == "Round of 32"
+    assert loaded.match.surface == "hard"
+    assert loaded.match.indoor is True
+    assert loaded.match.format == "BO3"
+    assert loaded.match.freshness == reduction.snapshot.match.freshness
     assert loaded.match.live_state is not None
+    assert loaded.match.live_state == reduction.snapshot.match.live_state
     assert loaded.match.live_state.state_version == loaded.state_version
-    assert len(loaded.momentum) == 2
+    assert len(loaded.momentum) == 1
     assert all(item.state_version == loaded.state_version for item in loaded.momentum)
+    assert loaded.momentum == reduction.snapshot.momentum
+    assert loaded.quality == reduction.snapshot.quality
+    assert loaded.as_of == reduction.snapshot.as_of
+
+
+async def test_legacy_snapshot_without_freshness_reports_unknown_provider(
+    database: Database,
+) -> None:
+    repository = MatchSnapshotRepository(database)
+    reduction = reduce_live_snapshot(None, await candidate(database))
+    await repository.save_reduction(reduction)
+
+    async with database.session() as session:
+        await session.execute(
+            update(MatchStateSnapshotRow)
+            .where(MatchStateSnapshotRow.match_id == reduction.match_id)
+            .values(freshness=None)
+        )
+        await session.commit()
+
+    loaded = await repository.load_snapshot(reduction.match_id)
+
+    assert loaded is not None
+    assert loaded.match.freshness.provider == "unknown"
+    assert loaded.match.freshness.observed_at == loaded.as_of
 
 
 async def test_save_reduction_upserts_and_replays_momentum_observations(

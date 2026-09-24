@@ -29,12 +29,13 @@ export type TournamentDto = {
 }
 export type SetScoreDto = { number: number; player1_games: number | null; player2_games: number | null }
 export type MatchScoreDto = {
-  sets_won: [number, number]
+  sets_won: [number, number] | null
   sets: SetScoreDto[]
   points: [string | null, string | null]
-  is_tiebreak: boolean
+  is_tiebreak: boolean | null
 }
 export type LiveStateDto = {
+  current_set_number?: number | null
   score: MatchScoreDto | null
   server_player_id: string | null
   state_version?: number
@@ -99,9 +100,9 @@ export type PointEventDto = {
   winner_player_id: string | null
   score_before: MatchScoreDto | null
   score_after: MatchScoreDto
-  is_break_point: boolean
-  is_set_point: boolean
-  is_match_point: boolean
+  is_break_point: boolean | null
+  is_set_point: boolean | null
+  is_match_point: boolean | null
   observed_at: string
   provider: string
   source_fingerprint: string
@@ -179,9 +180,9 @@ export type IntelligencePacketDto = {
     server: string | null
     winner: string | null
     score_after: MatchScoreDto
-    is_break_point: boolean
-    is_set_point: boolean
-    is_match_point: boolean
+    is_break_point: boolean | null
+    is_set_point: boolean | null
+    is_match_point: boolean | null
   }>
   momentum: Array<{
     point_sequence: number

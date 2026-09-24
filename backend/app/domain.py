@@ -118,19 +118,20 @@ class Tournament(FrozenModel):
 
 
 class SetScore(FrozenModel):
-    number: int
+    number: int = Field(ge=1)
     player1_games: int | None = None
     player2_games: int | None = None
 
 
 class MatchScore(FrozenModel):
-    sets_won: tuple[int, int]
+    sets_won: tuple[int, int] | None = None
     sets: tuple[SetScore, ...]
     points: tuple[str | None, str | None] = (None, None)
-    is_tiebreak: bool = False
+    is_tiebreak: bool | None = None
 
 
 class LiveMatchState(FrozenModel):
+    current_set_number: int | None = Field(default=None, ge=1)
     score: MatchScore | None = None
     server_player_id: str | None = None
     state_version: int = Field(default=0, ge=0)
@@ -197,9 +198,9 @@ class PointEvent(FrozenModel):
     winner_player_id: str | None = None
     score_before: MatchScore | None = None
     score_after: MatchScore
-    is_break_point: bool = False
-    is_set_point: bool = False
-    is_match_point: bool = False
+    is_break_point: bool | None = None
+    is_set_point: bool | None = None
+    is_match_point: bool | None = None
     observed_at: datetime
     provider: str
     source_fingerprint: str

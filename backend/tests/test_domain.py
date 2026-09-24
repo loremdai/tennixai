@@ -113,6 +113,11 @@ def test_live_match_state_defaults_and_score_shape() -> None:
     assert empty.server_player_id is None
 
 
+def test_set_score_number_is_one_based() -> None:
+    with pytest.raises(ValidationError):
+        SetScore(number=0, player1_games=0, player2_games=0)
+
+
 def test_match_status_values() -> None:
     assert [status.value for status in MatchStatus] == [
         "scheduled",

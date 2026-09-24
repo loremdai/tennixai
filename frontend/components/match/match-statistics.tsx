@@ -62,7 +62,7 @@ export function MatchStatisticsCard({
       name: stat.name,
       period: stat.period,
       label: meta.label,
-      unit: meta.unit,
+      unit: stat.unit ?? meta.unit,
       p1: stat.player1_value,
       p2: stat.player2_value,
       partial: stat.availability === 'partial',

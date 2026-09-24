@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from app.identity import MemoryIdentityRepository
+from app.providers.api_tennis import STAT_NAME_MAP
 from app.providers.replay import ReplayTennisProvider
 
 
@@ -78,5 +79,22 @@ async def test_replay_materializes_canonical_identity_and_full_statistics() -> N
     assert candidate.match.id == match.id
     assert len(candidate.statistics) == 22
     assert all(stat.match_id == match.id for stat in candidate.statistics)
+    expected_units = {name: unit for name, unit in STAT_NAME_MAP.values()}
+    assert {stat.name for stat in candidate.statistics} == set(expected_units)
+    assert {stat.name: stat.unit for stat in candidate.statistics} == expected_units
+    expected_percentages = {
+        "service_games_won": (85.7, 80.0),
+        "break_points_saved": (66.7, 50.0),
+        "break_points_converted": (25.0, 40.0),
+        "return_games_won": (20.0, 25.0),
+        "net_points_won": (63.6, 57.1),
+        "total_points_won": (56.4, 43.6),
+        "total_games_won": (53.6, 46.4),
+    }
+    assert {
+        stat.name.value: (stat.player1_value, stat.player2_value)
+        for stat in candidate.statistics
+        if stat.name.value in expected_percentages
+    } == expected_percentages
     assert all(point.match_id == match.id for point in candidate.points)
     assert all("replay-live" not in player.id for player in candidate.match.players)

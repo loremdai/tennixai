@@ -173,7 +173,12 @@ def test_feed_updates_preserve_hydrated_player_metadata() -> None:
         update={
             "players": (
                 Player(id=PLY_A, name="Jerry Roddick", ranking=3),
-                Player(id=PLY_B, name="Ryota Tanuma", ranking=8),
+                Player(
+                    id=PLY_B,
+                    name="Ryota Tanuma",
+                    localized_name="田沼涼太",
+                    ranking=8,
+                ),
             )
         }
     )
@@ -188,7 +193,7 @@ def test_feed_updates_preserve_hydrated_player_metadata() -> None:
             match=base_match().model_copy(
                 update={
                     "players": (
-                        Player(id=PLY_A, name="J. Roddick"),
+                        Player(id=PLY_A, name="J. Roddick", localized_name=None),
                         Player(id=PLY_B, name="R. Tanuma"),
                     )
                 }
@@ -201,6 +206,35 @@ def test_feed_updates_preserve_hydrated_player_metadata() -> None:
         "Ryota Tanuma",
     ]
     assert [player.ranking for player in later.snapshot.match.players] == [3, 8]
+    assert later.snapshot.match.players[1].localized_name == "田沼涼太"
+
+
+def test_localized_name_correction_advances_version() -> None:
+    previous_match = base_match().model_copy(
+        update={
+            "players": (
+                Player(id=PLY_A, name="Player A", localized_name="旧译名"),
+                Player(id=PLY_B, name="Player B"),
+            )
+        }
+    )
+    candidate_match = base_match().model_copy(
+        update={
+            "players": (
+                Player(id=PLY_A, name="Player A", localized_name="新译名"),
+                Player(id=PLY_B, name="Player B"),
+            )
+        }
+    )
+    previous = reduce_live_snapshot(None, supplier_snapshot(match=previous_match))
+
+    reduction = reduce_live_snapshot(
+        previous.snapshot, supplier_snapshot(match=candidate_match)
+    )
+
+    assert reduction.changed is True
+    assert reduction.events == (ReductionChange.PLAYER_METADATA_UPDATED,)
+    assert reduction.snapshot.match.players[0].localized_name == "新译名"
 
 
 def test_profile_metadata_change_advances_version() -> None:

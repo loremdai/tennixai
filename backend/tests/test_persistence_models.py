@@ -54,6 +54,11 @@ def test_point_events_declare_match_sequence_identity() -> None:
     assert ("match_id", "sequence") in uniques
 
 
+def test_point_event_markers_allow_unknown_provider_semantics() -> None:
+    for name in ("is_break_point", "is_set_point", "is_match_point"):
+        assert PointEventRow.__table__.columns[name].nullable is True
+
+
 def test_point_revisions_are_append_identifiable() -> None:
     uniques = _unique_column_sets(PointEventRevisionRow.__table__)
     assert ("point_event_id", "revision") in uniques

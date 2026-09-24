@@ -89,7 +89,13 @@ def _state_fingerprint(match: Match) -> tuple:
         match.winner_player_id,
         _match_metadata_fingerprint(match),
         tuple(
-            (player.id, player.name, player.country_code, player.ranking)
+            (
+                player.id,
+                player.name,
+                player.localized_name,
+                player.country_code,
+                player.ranking,
+            )
             for player in match.players
         ),
         live.connection_status if live is not None else None,
@@ -129,6 +135,7 @@ def _preserve_player_metadata(
         incoming.model_copy(
             update={
                 "name": _preferred_player_name(stored.name, incoming.name),
+                "localized_name": incoming.localized_name or stored.localized_name,
                 "country_code": incoming.country_code or stored.country_code,
                 "ranking": (
                     incoming.ranking
@@ -307,10 +314,22 @@ def reduce_live_snapshot(
         if _score_fingerprint(match) != _score_fingerprint(previous.match):
             changes.add(ReductionChange.SCORE_UPDATED)
         if tuple(
-            (player.id, player.name, player.country_code, player.ranking)
+            (
+                player.id,
+                player.name,
+                player.localized_name,
+                player.country_code,
+                player.ranking,
+            )
             for player in match.players
         ) != tuple(
-            (player.id, player.name, player.country_code, player.ranking)
+            (
+                player.id,
+                player.name,
+                player.localized_name,
+                player.country_code,
+                player.ranking,
+            )
             for player in previous.match.players
         ):
             changes.add(ReductionChange.PLAYER_METADATA_UPDATED)

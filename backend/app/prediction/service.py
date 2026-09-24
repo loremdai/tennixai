@@ -320,11 +320,20 @@ class PredictionService:
         self, snapshot: MatchSnapshot, artifact: PredictionArtifact
     ) -> PredictionSnapshot:
         match = snapshot.match
+        tour = match.tournament.tour
+        if tour not in {"atp", "wta"}:
+            return self._abstain(
+                snapshot, ModelAvailability.UNAVAILABLE, "TOUR_UNKNOWN"
+            )
+        if tour != match.tournament.circuit.value:
+            return self._abstain(
+                snapshot, ModelAvailability.UNAVAILABLE, "TOUR_MISMATCH"
+            )
         when = (match.scheduled_at or snapshot.as_of).date()
         query = HistoricalMatch(
             match_key=match.id,
             date=when,
-            tour=match.tournament.tour or "atp",
+            tour=tour,
             surface=match.surface or "unknown",
             format=match.format or "unknown",
             player_a=match.players[0].id,
@@ -362,9 +371,9 @@ class PredictionService:
         live_state = match.live_state
         if live_state is not None and live_state.score is not None:
             sets = live_state.score.sets_won
-            if sets[0] > sets[1]:
+            if sets is not None and sets[0] > sets[1]:
                 raw = 1.0
-            elif sets[1] > sets[0]:
+            elif sets is not None and sets[1] > sets[0]:
                 raw = 0.0
             else:
                 raw = None
@@ -397,6 +406,10 @@ class PredictionService:
         live_state = match.live_state
         assert live_state is not None and live_state.score is not None  # noqa: S101
         score = live_state.score
+        if score.sets_won is None:
+            return self._abstain(
+                snapshot, ModelAvailability.UNAVAILABLE, "DATA_INCOMPLETE"
+            )
 
         best_of = FORMAT_ALIASES.get((match.format or "").strip().lower())
         if best_of is None:

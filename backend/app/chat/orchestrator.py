@@ -24,7 +24,6 @@ from app.chat.models import (
     ChatEventType,
     ChatRequest,
     ChatScope,
-    ModelTurn,
     StructuredToolResult,
     ToolCall,
     ToolOutcome,
@@ -232,7 +231,11 @@ def _model_match_summary(match: Match) -> dict[str, Any]:
     if match.live_state is not None and match.live_state.score is not None:
         match_score = match.live_state.score
         score = {
-            "sets_won": list(match_score.sets_won),
+            "sets_won": (
+                list(match_score.sets_won)
+                if match_score.sets_won is not None
+                else None
+            ),
             "sets": [
                 {
                     "number": set_score.number,
@@ -278,7 +281,11 @@ def _model_intelligence_packet(packet: IntelligencePacket) -> dict[str, Any]:
         payload["score_by_player"] = [
             {
                 "player": players[index],
-                "sets_won": packet.score.sets_won[index],
+                "sets_won": (
+                    packet.score.sets_won[index]
+                    if packet.score.sets_won is not None
+                    else None
+                ),
                 "sets": [
                     {
                         "number": set_score.number,

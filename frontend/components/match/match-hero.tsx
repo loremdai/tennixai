@@ -50,7 +50,7 @@ function PlayerSummary({
   previewPlayer: PreviewPlayer | null
   side: 'left' | 'right'
   visualStatus: MatchViewModel['visualStatus']
-  isServing: boolean
+  isServing: boolean | null
   isWinner: boolean
   highlight: MatchHighlight
 }) {
@@ -114,8 +114,10 @@ function PlayerSummary({
           <span className="live-pulse size-2 rounded-full bg-primary" aria-hidden="true" />
           当前发球
         </div>
-      ) : visualStatus === 'live' ? (
+      ) : visualStatus === 'live' && isServing === false ? (
         <span className="text-sm text-muted-foreground">接发球</span>
+      ) : visualStatus === 'live' ? (
+        <span className="text-sm text-muted-foreground">发球方官方未返回</span>
       ) : (
         <span className="text-sm text-muted-foreground">状态待确认</span>
       )}
@@ -141,10 +143,17 @@ function ScheduledMatch({ match, preview }: { match: MatchViewModel; preview: bo
   )
 }
 
+function knownServerPlayerId(match: MatchViewModel): string | null {
+  return match.players.some((player) => player.id === match.serverPlayerId)
+    ? match.serverPlayerId
+    : null
+}
+
 function scoreRows(match: MatchViewModel, score: MatchScoreDto) {
+  const serverPlayerId = knownServerPlayerId(match)
   return match.players.map((player, index) => ({
     player,
-    serving: match.serverPlayerId === player.id,
+    serving: serverPlayerId === player.id,
     sets: score.sets.map((set) =>
       index === 0 ? set.player1_games ?? null : set.player2_games ?? null,
     ),
@@ -165,6 +174,7 @@ function LiveScore({
   if (!score) return null
   const rows = scoreRows(match, score)
   const setCount = score.sets.length
+  const currentSetNumber = preview ? previewMatchMeta.currentSet : match.currentSetNumber
 
   return (
     <div
@@ -179,7 +189,9 @@ function LiveScore({
         <Radio aria-hidden="true" className="size-4" />
         {preview
           ? <>第 {previewMatchMeta.currentSet} 盘 · 第 {previewMatchMeta.currentGame} 局</>
-          : <>第 {setCount} 盘</>}
+          : currentSetNumber !== null
+            ? <>第 {currentSetNumber} 盘</>
+            : <>当前盘官方未返回</>}
         <span className="font-mono text-muted-foreground">
           {preview ? previewMatchMeta.liveElapsed : match.freshnessLabel}
         </span>
@@ -193,7 +205,7 @@ function LiveScore({
           <tr className="font-mono text-xs text-muted-foreground sm:text-sm">
             <th scope="col" className="w-20 text-left font-normal">球员</th>
             {score.sets.map((set) => (
-              <th key={set.number} scope="col" className={cn('font-normal', set.number === setCount && 'text-primary')}>
+              <th key={set.number} scope="col" className={cn('font-normal', set.number === currentSetNumber && 'text-primary')}>
                 {set.number}
               </th>
             ))}
@@ -210,7 +222,7 @@ function LiveScore({
                 </span>
               </th>
               {row.sets.map((games, index) => (
-                <td key={`${row.player.id}-${index}`} className={cn('py-2', index === setCount - 1 && 'text-primary')}>
+                <td key={`${row.player.id}-${index}`} className={cn('py-2', score.sets[index]?.number === currentSetNumber && 'text-primary')}>
                   {games ?? '-'}
                 </td>
               ))}
@@ -222,18 +234,22 @@ function LiveScore({
 
       <div className="flex flex-wrap items-center justify-center gap-2 text-sm text-muted-foreground">
         <span>
-          {match.serverPlayerId
-            ? `${match.players.find((player) => player.id === match.serverPlayerId)?.shortName ?? ''} 发球`
+          {knownServerPlayerId(match)
+            ? `${match.players.find((player) => player.id === knownServerPlayerId(match))?.shortName ?? ''} 发球`
             : match.visualStatus === 'upcoming'
               ? '开赛前未产生发球方'
               : '官方未返回发球方'}
         </span>
         <span aria-hidden="true">·</span>
         <span>当前局 {score.points[0] ?? '–'}–{score.points[1] ?? '–'}</span>
-        <span aria-hidden="true">·</span>
-        <span>
-          {setLabel(setCount - 1)} {rows[0].sets[setCount - 1] ?? '-'}–{rows[1].sets[setCount - 1] ?? '-'}
-        </span>
+        {setCount > 0 ? (
+          <>
+            <span aria-hidden="true">·</span>
+            <span>
+              {setLabel(setCount - 1)} {rows[0].sets[setCount - 1] ?? '-'}–{rows[1].sets[setCount - 1] ?? '-'}
+            </span>
+          </>
+        ) : null}
       </div>
     </div>
   )
@@ -303,6 +319,7 @@ export function MatchHero({ match, highlight, onAsk, onRefresh, preview = false 
   const visualStatus = match.visualStatus
   const isLive = visualStatus === 'live'
   const isFinished = visualStatus === 'finished'
+  const serverPlayerId = knownServerPlayerId(match)
 
   return (
     <Card id="match" data-tone="hero" className="relative">
@@ -342,7 +359,7 @@ export function MatchHero({ match, highlight, onAsk, onRefresh, preview = false 
             previewPlayer={preview ? getPreviewPlayer(match.players[0].id) : null}
             side="left"
             visualStatus={visualStatus}
-            isServing={match.serverPlayerId === match.players[0].id}
+            isServing={serverPlayerId === null ? null : serverPlayerId === match.players[0].id}
             isWinner={match.winnerPlayerId === match.players[0].id}
             highlight={highlight}
           />
@@ -358,7 +375,7 @@ export function MatchHero({ match, highlight, onAsk, onRefresh, preview = false 
             previewPlayer={preview ? getPreviewPlayer(match.players[1].id) : null}
             side="right"
             visualStatus={visualStatus}
-            isServing={match.serverPlayerId === match.players[1].id}
+            isServing={serverPlayerId === null ? null : serverPlayerId === match.players[1].id}
             isWinner={match.winnerPlayerId === match.players[1].id}
             highlight={highlight}
           />

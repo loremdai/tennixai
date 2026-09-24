@@ -168,6 +168,7 @@ export function buildPreviewMatch(status: MatchStatus): MatchViewModel {
       },
     ],
     score: status === 'live' ? liveScoreDto : status === 'finished' ? finishedScoreDto : null,
+    currentSetNumber: status === 'live' ? previewMatchMeta.currentSet : null,
     serverPlayerId: status === 'live' ? previewPlayers[0].id : null,
     winnerPlayerId: status === 'finished' ? previewPlayers[0].id : null,
     freshnessLabel: '预览数据',

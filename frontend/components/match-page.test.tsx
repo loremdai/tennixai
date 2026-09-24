@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -82,6 +82,7 @@ function makeMatch(overrides: Partial<MatchDto> = {}): MatchDto {
     indoor: true,
     format: 'BO3',
     live_state: {
+      current_set_number: 3,
       score: {
         sets_won: [1, 1],
         sets: [
@@ -231,6 +232,91 @@ describe('production match page', () => {
     expect(server).not.toBeNull()
     expect(server?.textContent).toContain('当前发球')
     expect(screen.getAllByText('当前发球').length).toBeGreaterThan(0)
+  })
+
+  it('uses the provider current set when score rows are incomplete', async () => {
+    nextMatch = makeMatch({
+      live_state: {
+        current_set_number: 3,
+        score: {
+          sets_won: [1, 1],
+          sets: [
+            { number: 1, player1_games: 6, player2_games: 4 },
+            { number: 2, player1_games: 4, player2_games: 6 },
+          ],
+          points: ['30', '15'],
+          is_tiebreak: false,
+        },
+        server_player_id: 'ply_1',
+      },
+    })
+
+    render(<MatchPage matchId="mat_1" />)
+
+    await screen.findByText('Jannik Sinner')
+    expect(screen.getAllByText('第 3 盘')).toHaveLength(2)
+    expect(screen.queryAllByText('第 2 盘')).toHaveLength(0)
+    const liveTable = screen.getByRole('table', { name: '实时比赛比分' })
+    expect(within(liveTable).getByRole('columnheader', { name: '2' })).not.toHaveClass('text-primary')
+  })
+
+  it('does not infer the current set from the number of score rows', async () => {
+    nextMatch = makeMatch({
+      live_state: {
+        current_set_number: null,
+        score: {
+          sets_won: [1, 1],
+          sets: [
+            { number: 1, player1_games: 6, player2_games: 4 },
+            { number: 2, player1_games: 4, player2_games: 6 },
+          ],
+          points: ['30', '15'],
+          is_tiebreak: false,
+        },
+        server_player_id: 'ply_1',
+      },
+    })
+
+    render(<MatchPage matchId="mat_1" />)
+
+    await screen.findByText('Jannik Sinner')
+    expect(screen.getAllByText('当前盘官方未返回')).toHaveLength(2)
+    expect(screen.queryAllByText('第 2 盘')).toHaveLength(0)
+    const liveTable = screen.getByRole('table', { name: '实时比赛比分' })
+    expect(within(liveTable).getByRole('columnheader', { name: '2' })).not.toHaveClass('text-primary')
+  })
+
+  it('does not claim both players are receiving when the server is unknown', async () => {
+    nextMatch = makeMatch({
+      live_state: { score: null, server_player_id: null },
+    })
+
+    render(<MatchPage matchId="mat_1" />)
+
+    await screen.findByText('Jannik Sinner')
+    expect(screen.queryAllByText('接发球')).toHaveLength(0)
+    expect(screen.getAllByText('发球方官方未返回')).toHaveLength(2)
+  })
+
+  it('does not invent a set label when a live snapshot has no set rows', async () => {
+    nextMatch = makeMatch({
+      live_state: {
+        score: {
+          sets_won: [0, 0],
+          sets: [],
+          points: ['15', '0'],
+          is_tiebreak: false,
+        },
+        server_player_id: 'ply_1',
+      },
+    })
+
+    render(<MatchPage matchId="mat_1" />)
+
+    await screen.findByText('Jannik Sinner')
+    expect(screen.getByText('当前局 15–0')).toBeVisible()
+    expect(screen.queryAllByText(/第\s*0\s*盘/)).toHaveLength(0)
+    expect(screen.queryByText(/第-盘|第\d+盘 -–-/)).toBeNull()
   })
 
   it('maps finished hero state with winner', async () => {

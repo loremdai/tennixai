@@ -26,13 +26,14 @@ class RealtimePublisher:
 
     async def publish_delta(self, reduction: LiveReduction) -> None:
         snapshot = reduction.snapshot
+        snapshot_data = json.loads(snapshot.model_dump_json())
         event = {
             "type": "match_delta",
             "match_id": reduction.match_id,
-            "state_version": snapshot.state_version,
-            "as_of": snapshot.as_of.isoformat(),
+            "state_version": snapshot_data["state_version"],
+            "as_of": snapshot_data["as_of"],
             "changes": [change.value for change in reduction.events],
-            "snapshot": json.loads(snapshot.model_dump_json()),
+            "snapshot": snapshot_data,
         }
         await self._redis.set(hot_key(reduction.match_id), snapshot.model_dump_json())
         await self._redis.publish(match_channel(reduction.match_id), json.dumps(event))

@@ -51,6 +51,7 @@ export type MatchViewModel = {
   indoorLabel: string
   players: [PlayerViewModel, PlayerViewModel]
   score: MatchScoreDto | null
+  currentSetNumber: number | null
   serverPlayerId: string | null
   winnerPlayerId: string | null
   freshnessLabel: string
@@ -302,6 +303,7 @@ export function toMatchViewModel(match: MatchDto): MatchViewModel {
     indoorLabel: match.indoor === null ? OFFICIAL_MISSING_INDOOR : match.indoor ? '室内' : '室外',
     players: [toPlayerView(match.players[0]), toPlayerView(match.players[1])],
     score: match.live_state?.score ?? null,
+    currentSetNumber: match.live_state?.current_set_number ?? null,
     serverPlayerId: match.live_state?.server_player_id ?? null,
     winnerPlayerId: match.winner_player_id,
     freshnessLabel: freshnessLabel(match),

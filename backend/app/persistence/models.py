@@ -214,6 +214,7 @@ class MatchStateSnapshotRow(Base):
         ForeignKey("matches.id"), primary_key=True
     )
     state: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    freshness: Mapped[dict | None] = mapped_column(JSONB)
     state_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     connection_status: Mapped[str] = mapped_column(
         String(16), nullable=False, default="unavailable"
@@ -243,9 +244,9 @@ class PointEventRow(Base):
     winner_player_id: Mapped[str | None] = mapped_column(String(64))
     score_before: Mapped[dict | None] = mapped_column(JSONB)
     score_after: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    is_break_point: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    is_set_point: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    is_match_point: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_break_point: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    is_set_point: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    is_match_point: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     provider: Mapped[str] = mapped_column(String(32), nullable=False)
     source_fingerprint: Mapped[str] = mapped_column(String(128), nullable=False)

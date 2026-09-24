@@ -22,6 +22,7 @@ from app.players.repository import MemoryPlayerDirectoryRepository
 from app.players.sync import PlayerDirectorySync
 from app.providers.api_tennis import (
     ApiTennisProvider,
+    STAT_NAME_MAP,
     country_code_from_name,
     map_livescore_row_to_snapshot,
     map_status,
@@ -216,6 +217,158 @@ def test_classification_of_none_is_honest_unknown():
     )
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("event_type", "circuit", "tour"),
+    [("Atp Singles", CircuitTier.ATP, "atp"), ("Wta Singles", CircuitTier.WTA, "wta")],
+)
+async def test_match_mapping_preserves_recognized_tour_identity(
+    provider, event_type, circuit, tour
+) -> None:
+    built, _ = provider
+    row = dict(load("livescore.json")["result"][0])
+    row["event_type_type"] = event_type
+
+    snapshot = await map_livescore_row_to_snapshot(
+        MatchDto.model_validate(row), built._identities, built._now
+    )
+
+    assert snapshot is not None
+    assert snapshot.match.tournament.circuit is circuit
+    assert snapshot.match.tournament.tour == tour
+
+
+@pytest.mark.asyncio
+async def test_blank_provider_round_maps_to_unavailable_value(provider) -> None:
+    built, _ = provider
+    row = dict(load("livescore.json")["result"][0])
+    row["tournament_round"] = "  "
+
+    snapshot = await map_livescore_row_to_snapshot(
+        MatchDto.model_validate(row), built._identities, built._now
+    )
+
+    assert snapshot is not None
+    assert snapshot.match.round is None
+
+
+@pytest.mark.asyncio
+async def test_unknown_server_and_missing_tournament_metadata_stay_explicit(provider) -> None:
+    built, _ = provider
+    row = dict(load("livescore.json")["result"][0])
+    row.update(
+        {
+            "event_serve": "Court Official",
+            "tournament_key": None,
+            "tournament_name": "  ",
+        }
+    )
+    row["pointbypoint"][0]["player_served"] = "Court Official"
+
+    snapshot = await map_livescore_row_to_snapshot(
+        MatchDto.model_validate(row), built._identities, built._now
+    )
+
+    assert snapshot is not None
+    assert snapshot.match.live_state is not None
+    assert snapshot.match.live_state.server_player_id is None
+    assert snapshot.points[0].server_player_id is None
+    assert snapshot.match.tournament.name == "Unknown tournament"
+    assert snapshot.match.tournament.id == await built._identities.get_or_create(
+        "tournament", "api_tennis", str(row["event_key"])
+    )
+
+
+@pytest.mark.asyncio
+async def test_invalid_set_numbers_fall_back_to_response_order(provider) -> None:
+    built, _ = provider
+    row = dict(load("livescore.json")["result"][0])
+    row["scores"] = [
+        {"score_set": "0", "score_first": "6", "score_second": "4"},
+        {"score_set": "unknown", "score_first": "2", "score_second": "6"},
+    ]
+
+    snapshot = await map_livescore_row_to_snapshot(
+        MatchDto.model_validate(row), built._identities, built._now
+    )
+
+    assert snapshot is not None
+    score = snapshot.match.live_state.score
+    assert score is not None
+    assert [set_score.number for set_score in score.sets] == [1, 2]
+
+
+@pytest.mark.asyncio
+async def test_set_game_scores_trim_whitespace_and_reject_negative_values(provider) -> None:
+    built, _ = provider
+    row = dict(load("livescore.json")["result"][0])
+    row["scores"] = [
+        {"score_set": "1", "score_first": " 6 ", "score_second": "-1"}
+    ]
+
+    snapshot = await map_livescore_row_to_snapshot(
+        MatchDto.model_validate(row), built._identities, built._now
+    )
+
+    assert snapshot is not None
+    score = snapshot.match.live_state.score
+    assert score is not None
+    assert score.sets[0].player1_games == 6
+    assert score.sets[0].player2_games is None
+
+
+@pytest.mark.asyncio
+async def test_missing_game_numbers_restart_at_one_for_each_set(provider) -> None:
+    built, _ = provider
+    row = dict(load("livescore.json")["result"][0])
+    row["pointbypoint"] = [
+        {
+            "set_number": "Set 1",
+            "number_game": None,
+            "points": [{"number_point": "1", "score": "15 - 0"}],
+        },
+        {
+            "set_number": "Set 2",
+            "number_game": None,
+            "points": [{"number_point": "1", "score": "15 - 0"}],
+        },
+    ]
+
+    snapshot = await map_livescore_row_to_snapshot(
+        MatchDto.model_validate(row), built._identities, built._now
+    )
+
+    assert snapshot is not None
+    assert [(point.set_number, point.game_number) for point in snapshot.points] == [
+        (1, 1),
+        (2, 1),
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("invalid_number", ["0", "-1"])
+async def test_nonpositive_pbp_numbers_fall_back_to_positive_sequence_values(
+    provider, invalid_number: str
+) -> None:
+    built, _ = provider
+    row = dict(load("livescore.json")["result"][0])
+    row["pointbypoint"] = [
+        {
+            "set_number": f"Set {invalid_number}",
+            "number_game": invalid_number,
+            "points": [{"number_point": invalid_number, "score": "15 - 0"}],
+        }
+    ]
+
+    snapshot = await map_livescore_row_to_snapshot(
+        MatchDto.model_validate(row), built._identities, built._now
+    )
+
+    assert snapshot is not None
+    point = snapshot.points[0]
+    assert (point.set_number, point.game_number, point.point_number) == (1, 1, 1)
+
+
 @pytest.mark.parametrize(
     ("event_status", "event_live", "expected"),
     [
@@ -266,6 +419,7 @@ async def test_live_maps_vendor_payload_to_canonical(provider) -> None:
 
     state = rich.live_state
     assert state is not None and state.score is not None
+    assert state.current_set_number == 3
     assert state.score.sets_won == (1, 1)
     assert [
         (row.number, row.player1_games, row.player2_games) for row in state.score.sets
@@ -273,10 +427,105 @@ async def test_live_maps_vendor_payload_to_canonical(provider) -> None:
     assert state.score.points == ("0", "40")
     assert state.server_player_id == rich.players[0].id
     assert rich.winner_player_id is None
-
     assert rich.freshness.provider == "api_tennis"
     assert rich.freshness.observed_at == NOW
     assert rich.freshness.source_updated_at is None
+
+
+@pytest.mark.asyncio
+async def test_live_state_does_not_infer_current_set_from_score_rows(provider) -> None:
+    built, _ = provider
+    row = dict(load("livescore.json")["result"][0])
+    row["event_status"] = "In Progress"
+
+    snapshot = await map_livescore_row_to_snapshot(
+        MatchDto.model_validate(row), built._identities, built._now
+    )
+
+    assert snapshot is not None
+    assert snapshot.match.live_state is not None
+    assert snapshot.match.live_state.current_set_number is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("event_status", "event_live"),
+    [("Set 3", "1"), ("Cancelled", "0")],
+)
+async def test_non_finished_match_does_not_claim_event_winner(
+    provider, event_status: str, event_live: str
+) -> None:
+    built, _ = provider
+    row = dict(load("livescore.json")["result"][0])
+    row["event_status"] = event_status
+    row["event_live"] = event_live
+    row["event_winner"] = "First Player"
+
+    snapshot = await map_livescore_row_to_snapshot(
+        MatchDto.model_validate(row), built._identities, built._now
+    )
+
+    assert snapshot is not None
+    assert snapshot.match.winner_player_id is None
+
+
+@pytest.mark.asyncio
+async def test_missing_provider_tiebreak_marker_stays_unknown(provider) -> None:
+    built, _ = provider
+    row = dict(load("livescore.json")["result"][0])
+
+    snapshot = await map_livescore_row_to_snapshot(
+        MatchDto.model_validate(row), built._identities, built._now
+    )
+
+    assert snapshot is not None
+    assert snapshot.match.live_state is not None
+    assert snapshot.match.live_state.score is not None
+    assert snapshot.match.live_state.score.is_tiebreak is None
+
+
+@pytest.mark.asyncio
+async def test_missing_final_set_count_stays_unknown_in_match_and_pbp(provider) -> None:
+    built, _ = provider
+    row = dict(load("livescore.json")["result"][0])
+    row["event_final_result"] = "-"
+
+    snapshot = await map_livescore_row_to_snapshot(
+        MatchDto.model_validate(row), built._identities, built._now
+    )
+
+    assert snapshot is not None
+    assert snapshot.match.live_state is not None
+    assert snapshot.match.live_state.score is not None
+    assert snapshot.match.live_state.score.sets_won is None
+    assert snapshot.points
+    assert snapshot.points[0].score_after.sets_won is None
+
+
+@pytest.mark.asyncio
+async def test_scheduled_zero_placeholders_do_not_create_a_live_score(provider) -> None:
+    built, _ = provider
+    row = dict(load("livescore.json")["result"][0])
+    row.update(
+        {
+            "event_status": "",
+            "event_live": "0",
+            "event_final_result": "0 - 0",
+            "event_game_result": "0 - 0",
+            "scores": [
+                {"score_first": "0", "score_second": "0", "score_set": "1"}
+            ],
+            "pointbypoint": [],
+        }
+    )
+
+    snapshot = await map_livescore_row_to_snapshot(
+        MatchDto.model_validate(row), built._identities, built._now
+    )
+
+    assert snapshot is not None
+    assert snapshot.match.status is MatchStatus.SCHEDULED
+    assert snapshot.match.live_state is None
 
 
 @pytest.mark.asyncio
@@ -333,6 +582,8 @@ async def test_snapshot_maps_points_with_sequence_flags_and_winner_rules(provide
     assert first.game_number == 1
     assert first.point_number == 1
     assert first.server_player_id == expected_server.id
+    assert first.score_before is not None
+    assert first.score_before.points == ("0", "0")
     assert first.score_after.points == tuple(
         side.strip() for side in first_game["points"][0]["score"].split(" - ")
     )
@@ -340,16 +591,29 @@ async def test_snapshot_maps_points_with_sequence_flags_and_winner_rules(provide
     # determinable and equals the side whose score changed.
     assert first.winner_player_id is not None
     assert first.quality is None
+    assert first.is_break_point is None
+    assert first.is_set_point is None
+    assert first.is_match_point is None
+    assert all(point.observed_at == NOW for point in snapshot.points)
 
-    flagged = [point for point in snapshot.points if point.is_break_point]
-    raw_flagged_count = sum(
-        1
-        for game in load("livescore.json")["result"][0]["pointbypoint"]
-        for point in game.get("points") or []
+    raw_breakpoint_sequences = {
+        sequence
+        for sequence, point in enumerate(
+            (
+                point
+                for game in load("livescore.json")["result"][0]["pointbypoint"]
+                for point in game.get("points") or []
+            ),
+            start=1,
+        )
         if point.get("break_point")
+    }
+    assert raw_breakpoint_sequences
+    assert all(
+        point.is_break_point is None
+        for point in snapshot.points
+        if point.sequence in raw_breakpoint_sequences
     )
-    assert flagged
-    assert len(flagged) == raw_flagged_count
 
     indeterminate = [point for point in snapshot.points if point.winner_player_id is None]
     assert indeterminate, "fixture must contain an indeterminate point"
@@ -370,6 +634,71 @@ async def test_snapshot_maps_points_with_sequence_flags_and_winner_rules(provide
         for point in snapshot.points
     }
     assert len(point_identities) == len(snapshot.points)
+
+
+@pytest.mark.asyncio
+async def test_unrecognized_point_flag_text_remains_unknown(provider) -> None:
+    built, _ = provider
+    row = load("livescore.json")["result"][0]
+    row["pointbypoint"][2]["points"][3]["break_point"] = "First Play"
+    row["pointbypoint"][2]["points"][4]["set_point"] = "First Play"
+    row["pointbypoint"][2]["points"][5]["match_point"] = "First Play"
+    dto = MatchDto.model_validate(row)
+
+    snapshot = await map_livescore_row_to_snapshot(dto, built._identities, built._now)
+
+    assert snapshot is not None
+    # API-Tennis documents these fields but does not define non-null values;
+    # never turn opaque vendor text into a confirmed key-point badge.
+    assert snapshot.points[15].is_break_point is None
+    assert snapshot.points[16].is_set_point is None
+    assert snapshot.points[17].is_match_point is None
+
+
+@pytest.mark.asyncio
+async def test_null_point_flags_remain_unknown(provider) -> None:
+    built, _ = provider
+    row = load("livescore.json")["result"][0]
+    dto = MatchDto.model_validate(row)
+
+    snapshot = await map_livescore_row_to_snapshot(dto, built._identities, built._now)
+
+    assert snapshot is not None
+    first = snapshot.points[0]
+    assert first.is_break_point is None
+    assert first.is_set_point is None
+    assert first.is_match_point is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("advantage_score", "winner_index"),
+    [("A - 40", 1), ("40 - A", 0)],
+)
+async def test_advantage_reset_assigns_point_to_player_who_removed_advantage(
+    provider, advantage_score, winner_index: int
+) -> None:
+    built, _ = provider
+    row = load("livescore.json")["result"][0]
+    row["pointbypoint"] = [
+        {
+            "set_number": "Set 1",
+            "number_game": "1",
+            "player_served": "First Player",
+            "points": [
+                {"number_point": str(index), "score": score}
+                for index, score in enumerate(
+                    ("40 - 40", advantage_score, "40 - 40"), start=1
+                )
+            ],
+        }
+    ]
+    dto = MatchDto.model_validate(row)
+
+    snapshot = await map_livescore_row_to_snapshot(dto, built._identities, built._now)
+
+    assert snapshot is not None
+    assert snapshot.points[-1].winner_player_id == snapshot.match.players[winner_index].id
 
 
 @pytest.mark.asyncio
@@ -403,6 +732,13 @@ async def test_snapshot_maps_22_stat_catalog_and_ignores_unmappable(provider) ->
         stat
         for stat in rows["statistics"]
         if stat["stat_name"] == "Aces"
+        and stat["stat_period"] == "match"
+        and str(stat["player_key"]) == p1_key
+    )
+    raw_first_serve_points = next(
+        stat
+        for stat in rows["statistics"]
+        if stat["stat_name"] == "1st serve points won"
         and stat["stat_period"] == "match"
         and str(stat["player_key"]) == p1_key
     )
@@ -447,6 +783,18 @@ async def test_snapshot_maps_22_stat_catalog_and_ignores_unmappable(provider) ->
     assert percentage.player1_value is not None
     assert percentage.player2_value is not None
 
+    serve_points_won = next(
+        statistic
+        for statistic in snapshot.statistics
+        if statistic.name is StatisticName.FIRST_SERVE_POINTS_WON
+        and statistic.period == "match"
+    )
+    assert raw_first_serve_points["stat_value"] == "72%"
+    assert raw_first_serve_points["stat_won"] == 26
+    assert raw_first_serve_points["stat_total"] == 36
+    assert serve_points_won.player1_value == 72.0
+    assert serve_points_won.unit == "percent"
+
 
 @pytest.mark.asyncio
 async def test_snapshot_quality_declares_available_and_missing_capabilities(provider) -> None:
@@ -460,6 +808,11 @@ async def test_snapshot_quality_declares_available_and_missing_capabilities(prov
     assert declared["point_by_point"] is CapabilityStatus.AVAILABLE
     assert declared["statistics"] is CapabilityStatus.AVAILABLE
     assert declared["momentum"] is CapabilityStatus.UNAVAILABLE
+    quality = {item.capability: item for item in snapshot.quality}
+    assert quality["point_by_point"].provider == "api_tennis"
+    assert quality["point_by_point"].reason is None
+    assert quality["point_by_point"].observed_at == NOW
+    assert quality["momentum"].reason == "not_computed"
 
     # The ITF match has an empty statistics array: declared, not zero.
     itf = next(
@@ -473,6 +826,120 @@ async def test_snapshot_quality_declares_available_and_missing_capabilities(prov
     assert itf_snapshot.statistics == ()
     assert itf_declared["point_by_point"] is CapabilityStatus.AVAILABLE
     assert itf_snapshot.points
+
+
+@pytest.mark.asyncio
+async def test_statistics_capability_is_partial_when_only_one_side_is_returned(
+    provider,
+) -> None:
+    built, _ = provider
+    row = dict(load("livescore.json")["result"][0])
+    one_player_aces = next(
+        stat for stat in row["statistics"] if stat["stat_name"] == "Aces"
+    )
+    row["statistics"] = [one_player_aces]
+
+    snapshot = await map_livescore_row_to_snapshot(
+        MatchDto.model_validate(row), built._identities, built._now
+    )
+
+    assert snapshot is not None
+    metric = snapshot.statistics[0]
+    assert metric.availability is CapabilityStatus.PARTIAL
+    stats_quality = next(item for item in snapshot.quality if item.capability == "statistics")
+    assert stats_quality.status is CapabilityStatus.PARTIAL
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("stat_name", "invalid_value"),
+    [
+        ("Aces", "NaN"),
+        ("Aces", "inf"),
+        ("Aces", "-1"),
+        ("1st serve percentage", "101%"),
+    ],
+)
+async def test_invalid_stat_values_are_not_exposed(
+    provider, stat_name: str, invalid_value: str
+) -> None:
+    built, _ = provider
+    row = dict(load("livescore.json")["result"][0])
+    source = next(stat for stat in row["statistics"] if stat["stat_name"] == stat_name)
+    row["statistics"] = [source | {"stat_value": invalid_value}]
+
+    snapshot = await map_livescore_row_to_snapshot(
+        MatchDto.model_validate(row), built._identities, built._now
+    )
+
+    assert snapshot is not None
+    assert snapshot.statistics == ()
+    stats_quality = next(item for item in snapshot.quality if item.capability == "statistics")
+    assert stats_quality.status is CapabilityStatus.UNAVAILABLE
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("period", ["set 0", "set:-1", "other"])
+async def test_invalid_stat_periods_are_not_exposed(provider, period: str) -> None:
+    built, _ = provider
+    row = dict(load("livescore.json")["result"][0])
+    source = next(stat for stat in row["statistics"] if stat["stat_name"] == "Aces")
+    row["statistics"] = [source | {"stat_period": period}]
+
+    snapshot = await map_livescore_row_to_snapshot(
+        MatchDto.model_validate(row), built._identities, built._now
+    )
+
+    assert snapshot is not None
+    assert snapshot.statistics == ()
+    stats_quality = next(item for item in snapshot.quality if item.capability == "statistics")
+    assert stats_quality.status is CapabilityStatus.UNAVAILABLE
+
+
+@pytest.mark.asyncio
+async def test_statistic_for_unknown_player_is_not_exposed(provider) -> None:
+    built, _ = provider
+    row = dict(load("livescore.json")["result"][0])
+    source = next(stat for stat in row["statistics"] if stat["stat_name"] == "Aces")
+    row["statistics"] = [source | {"player_key": "999999"}]
+
+    snapshot = await map_livescore_row_to_snapshot(
+        MatchDto.model_validate(row), built._identities, built._now
+    )
+
+    assert snapshot is not None
+    assert snapshot.statistics == ()
+    stats_quality = next(item for item in snapshot.quality if item.capability == "statistics")
+    assert stats_quality.status is CapabilityStatus.UNAVAILABLE
+
+
+def test_stat_catalog_covers_each_canonical_metric_with_its_unit() -> None:
+    expected = {
+        "aces": (StatisticName.ACES, "count"),
+        "double faults": (StatisticName.DOUBLE_FAULTS, "count"),
+        "1st serve percentage": (StatisticName.FIRST_SERVE_PERCENTAGE, "percent"),
+        "1st serve points won": (StatisticName.FIRST_SERVE_POINTS_WON, "percent"),
+        "2nd serve points won": (StatisticName.SECOND_SERVE_POINTS_WON, "percent"),
+        "service points won": (StatisticName.SERVICE_POINTS_WON, "percent"),
+        "service games won": (StatisticName.SERVICE_GAMES_WON, "percent"),
+        "break points saved": (StatisticName.BREAK_POINTS_SAVED, "percent"),
+        "break points converted": (StatisticName.BREAK_POINTS_CONVERTED, "percent"),
+        "return points won": (StatisticName.RETURN_POINTS_WON, "percent"),
+        "1st return points won": (StatisticName.FIRST_RETURN_POINTS_WON, "percent"),
+        "2nd return points won": (StatisticName.SECOND_RETURN_POINTS_WON, "percent"),
+        "return games won": (StatisticName.RETURN_GAMES_WON, "percent"),
+        "winners": (StatisticName.WINNERS, "count"),
+        "unforced errors": (StatisticName.UNFORCED_ERRORS, "count"),
+        "net points won": (StatisticName.NET_POINTS_WON, "percent"),
+        "total points won": (StatisticName.TOTAL_POINTS_WON, "percent"),
+        "total games won": (StatisticName.TOTAL_GAMES_WON, "percent"),
+        "match points saved": (StatisticName.MATCH_POINTS_SAVED, "count"),
+        "average 1st serve speed": (StatisticName.AVERAGE_FIRST_SERVE_SPEED, "km/h"),
+        "average 2nd serve speed": (StatisticName.AVERAGE_SECOND_SERVE_SPEED, "km/h"),
+        "distance covered": (StatisticName.DISTANCE_COVERED, "m"),
+    }
+
+    assert STAT_NAME_MAP == expected
 
 
 @pytest.mark.asyncio

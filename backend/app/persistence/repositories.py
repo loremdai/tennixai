@@ -303,7 +303,11 @@ class MatchSnapshotRepository:
             format=match_row.format,
             live_state=LiveMatchState.model_validate(row.state),
             winner_player_id=match_row.winner_player_id,
-            freshness=DataFreshness(provider="postgres", observed_at=row.as_of),
+            freshness=(
+                DataFreshness.model_validate(row.freshness)
+                if row.freshness is not None
+                else DataFreshness(provider="unknown", observed_at=row.as_of)
+            ),
         )
         points = tuple(
             PointEvent(
@@ -462,6 +466,9 @@ class MatchSnapshotRepository:
                 statement = pg_insert(MatchStateSnapshotRow).values(
                     match_id=reduction.match_id,
                     state=live_state.model_dump(mode="json"),
+                    freshness=snapshot.match.freshness.model_dump(
+                        mode="json", exclude={"is_stale", "age_seconds"}
+                    ),
                     state_version=snapshot.state_version,
                     connection_status=live_state.connection_status.value,
                     as_of=snapshot.as_of,
@@ -473,6 +480,7 @@ class MatchSnapshotRepository:
                         index_elements=["match_id"],
                         set_={
                             "state": statement.excluded.state,
+                            "freshness": statement.excluded.freshness,
                             "state_version": statement.excluded.state_version,
                             "connection_status": statement.excluded.connection_status,
                             "as_of": statement.excluded.as_of,

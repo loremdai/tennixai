@@ -24,11 +24,11 @@ class LivePlayerDto(VendorModel):
 
 
 class LiveScoreDto(VendorModel):
-    sets: list[int] = []
+    sets: list[int] | None = None
     games: list[list[int]] = []
     points: list[str | None] = []
     server: int | None = None
-    is_tiebreak: bool = False
+    is_tiebreak: bool | None = None
     timestamp: str | None = None
 
 

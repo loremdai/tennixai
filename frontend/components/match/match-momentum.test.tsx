@@ -50,6 +50,7 @@ const match = {
     { id: 'ply_2', name: 'Carlos Alcaraz', shortName: 'Alcaraz', initials: 'CA', countryCode: 'ESP', countryName: '西班牙', flagUrl: 'https://flagcdn.com/w40/es.png', ranking: 2 },
   ],
   score: null,
+  currentSetNumber: null,
   serverPlayerId: 'ply_1',
   winnerPlayerId: null,
   freshnessLabel: '更新于 18:00',
@@ -129,6 +130,24 @@ describe('MatchMomentumCard', () => {
     expect(screen.getByText('关键分标记')).toBeVisible()
     expect(screen.getAllByText(/第 22 分/).length).toBeGreaterThan(0)
     expect(screen.getByRole('list', { name: '近期控制指数观测' }).querySelectorAll('li')).toHaveLength(20)
+  })
+
+  it('uses the latest momentum observation time instead of the snapshot time', () => {
+    const current = snapshot(6)
+    current.as_of = '2026-09-08T11:00:00Z'
+    current.momentum.at(-1)!.as_of = '2026-09-08T10:00:00Z'
+
+    render(
+      <MatchMomentumCard
+        match={match}
+        preview={false}
+        highlight={null}
+        snapshot={current}
+      />,
+    )
+
+    expect(screen.getByText(/更新于 9月8日 18:00/)).toBeVisible()
+    expect(screen.queryByText(/更新于 9月8日 19:00/)).toBeNull()
   })
 
   it('labels a short sample as provisional and stays honest when no index exists', () => {

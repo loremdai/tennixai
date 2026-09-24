@@ -76,7 +76,7 @@ def map_score(dto: LiveScoreDto) -> MatchScore:
     )
     points = tuple((dto.points + [None, None])[:2])
     return MatchScore(
-        sets_won=tuple((dto.sets + [0, 0])[:2]),
+        sets_won=(tuple(dto.sets[:2]) if dto.sets is not None and len(dto.sets) >= 2 else None),
         sets=sets,
         points=points,
         is_tiebreak=dto.is_tiebreak,

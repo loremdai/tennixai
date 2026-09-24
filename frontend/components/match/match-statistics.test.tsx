@@ -62,29 +62,76 @@ afterEach(cleanup)
 
 describe('MatchStatisticsCard', () => {
   it('renders the 22 canonical labels with units and groups', () => {
+    const catalog = [
+      ['aces', 'ACE 球', 'count'],
+      ['double_faults', '双误', 'count'],
+      ['first_serve_percentage', '一发成功率', 'percent'],
+      ['first_serve_points_won', '一发得分率', 'percent'],
+      ['second_serve_points_won', '二发得分率', 'percent'],
+      ['service_points_won', '发球得分率', 'percent'],
+      ['service_games_won', '发球局胜率', 'percent'],
+      ['break_points_saved', '破发点挽救率', 'percent'],
+      ['break_points_converted', '破发点转化率', 'percent'],
+      ['return_points_won', '接发得分率', 'percent'],
+      ['first_return_points_won', '一发接发得分率', 'percent'],
+      ['second_return_points_won', '二发接发得分率', 'percent'],
+      ['return_games_won', '接发局胜率', 'percent'],
+      ['winners', '制胜分', 'count'],
+      ['unforced_errors', '非受迫性失误', 'count'],
+      ['net_points_won', '上网得分率', 'percent'],
+      ['total_points_won', '总得分', 'percent'],
+      ['total_games_won', '总赢局', 'percent'],
+      ['match_points_saved', '赛点挽救', 'count'],
+      ['average_first_serve_speed', '一发平均速度', 'km/h'],
+      ['average_second_serve_speed', '二发平均速度', 'km/h'],
+      ['distance_covered', '跑动距离', 'm'],
+    ] as const
+
+    render(
+      <MatchStatisticsCard
+        statistics={catalog.map(([name, , unit], index) => ({
+          ...stat(name, index + 1, index + 101),
+          unit,
+        }))}
+        points={[]}
+        players={players}
+      />,
+    )
+
+    for (const [index, [, label, unit]] of catalog.entries()) {
+      const leftValue = index + 1
+      const formatted = unit === 'percent'
+        ? `${leftValue}%`
+        : unit === 'count'
+          ? String(leftValue)
+          : `${leftValue} ${unit}`
+      expect(screen.getByText(`全场 · ${label}`)).toBeVisible()
+      expect(screen.getByText(formatted)).toBeVisible()
+    }
+    expect(screen.getByText('发球')).toBeVisible()
+    expect(screen.getByText('接发')).toBeVisible()
+    expect(screen.getByText('关键分')).toBeVisible()
+    expect(screen.getByText('制胜与失误')).toBeVisible()
+    expect(screen.getByText('总计')).toBeVisible()
+    expect(screen.getByText('体能')).toBeVisible()
+  })
+
+  it('uses the canonical unit for total points and games won', () => {
     render(
       <MatchStatisticsCard
         statistics={[
-          stat('aces', 8, 5),
-          stat('double_faults', 1, 3),
-          stat('first_serve_percentage', 68, 61),
-          stat('average_first_serve_speed', 181, 176),
-          stat('distance_covered', 2410, 2600),
+          { ...stat('total_points_won', 49, 51), unit: 'percent' },
+          { ...stat('total_games_won', 53, 47), unit: 'percent' },
         ]}
         points={[]}
         players={players}
       />,
     )
 
-    expect(screen.getByText('全场 · ACE 球')).toBeVisible()
-    expect(screen.getByText('8')).toBeVisible()
-    expect(screen.getByText('全场 · 双误')).toBeVisible()
-    expect(screen.getByText('全场 · 一发成功率')).toBeVisible()
-    expect(screen.getByText('68%')).toBeVisible()
-    expect(screen.getByText('181 km/h')).toBeVisible()
-    expect(screen.getByText('2410 m')).toBeVisible()
-    expect(screen.getByText('发球')).toBeVisible()
-    expect(screen.getByText('体能')).toBeVisible()
+    expect(screen.getByText('49%')).toBeVisible()
+    expect(screen.getByText('51%')).toBeVisible()
+    expect(screen.getByText('53%')).toBeVisible()
+    expect(screen.getByText('47%')).toBeVisible()
   })
 
   it('marks missing statistics as unavailable instead of zero', () => {

@@ -248,6 +248,58 @@ def test_wta_main_tour_is_also_covered(artifact_dir):
     assert service.predict(snapshot).availability is ModelAvailability.AVAILABLE
 
 
+def test_wta_prematch_uses_wta_history(artifact_dir, monkeypatch):
+    observed = {}
+
+    def capture_query(self, state, match):
+        observed["match"] = match
+        return 0.6
+
+    monkeypatch.setattr(
+        "app.prediction.service.EloCandidate.predict_before", capture_query
+    )
+    service = PredictionService(artifact_dir=artifact_dir)
+    snapshot = make_snapshot(make_match(circuit=CircuitTier.WTA))
+
+    prediction = service.predict(snapshot)
+
+    assert prediction.availability is ModelAvailability.AVAILABLE
+    assert observed["match"].tour == "wta"
+
+
+def test_prematch_with_unknown_tour_abstains_instead_of_using_atp(artifact_dir):
+    match = make_match()
+    match = match.model_copy(
+        update={
+            "tournament": match.tournament.model_copy(update={"tour": None}),
+        }
+    )
+    prediction = PredictionService(artifact_dir=artifact_dir).predict(
+        make_snapshot(match)
+    )
+
+    assert prediction.availability is ModelAvailability.UNAVAILABLE
+    assert prediction.abstain_reason == "TOUR_UNKNOWN"
+    assert prediction.outcomes == ()
+
+
+def test_prematch_with_tour_circuit_mismatch_abstains(artifact_dir):
+    match = make_match()
+    match = match.model_copy(
+        update={
+            "tournament": match.tournament.model_copy(update={"tour": "wta"}),
+        }
+    )
+
+    prediction = PredictionService(artifact_dir=artifact_dir).predict(
+        make_snapshot(match)
+    )
+
+    assert prediction.availability is ModelAvailability.UNAVAILABLE
+    assert prediction.abstain_reason == "TOUR_MISMATCH"
+    assert prediction.outcomes == ()
+
+
 @pytest.mark.parametrize(
     ("circuit", "discipline"),
     [
@@ -382,6 +434,27 @@ def test_live_missing_score_abstains(artifact_dir):
 
     assert prediction.availability is ModelAvailability.UNAVAILABLE
     assert prediction.abstain_reason == "DATA_INCOMPLETE"
+
+
+def test_live_missing_completed_set_count_abstains(artifact_dir):
+    match = make_match(
+        status=MatchStatus.LIVE,
+        live_state=live_state(),
+    )
+    state = match.live_state
+    assert state is not None and state.score is not None
+    unknown_score = state.score.model_copy(update={"sets_won": None})
+    match = match.model_copy(
+        update={"live_state": state.model_copy(update={"score": unknown_score})}
+    )
+
+    prediction = PredictionService(artifact_dir=artifact_dir).predict(
+        make_snapshot(match)
+    )
+
+    assert prediction.availability is ModelAvailability.UNAVAILABLE
+    assert prediction.abstain_reason == "DATA_INCOMPLETE"
+    assert prediction.outcomes == ()
 
 
 def test_pbp_shrinkage_moves_live_probability_directionally(artifact_dir):

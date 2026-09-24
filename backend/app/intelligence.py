@@ -47,9 +47,9 @@ class IntelligencePoint(BaseModel):
     server: str | None
     winner: str | None
     score_after: MatchScore
-    is_break_point: bool
-    is_set_point: bool
-    is_match_point: bool
+    is_break_point: bool | None
+    is_set_point: bool | None
+    is_match_point: bool | None
 
 
 class IntelligenceKeyPoint(BaseModel):

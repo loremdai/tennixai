@@ -149,14 +149,15 @@ async def match_stream(
         pubsub = realtime.redis.pubsub()
         await pubsub.subscribe(match_channel(match_id))
         try:
+            snapshot_data = json.loads(snapshot.model_dump_json())
             yield _frame(
                 "ready",
                 {
-                    "snapshot": json.loads(snapshot.model_dump_json()),
-                    "state_version": snapshot.state_version,
-                    "as_of": snapshot.as_of.isoformat(),
+                    "snapshot": snapshot_data,
+                    "state_version": snapshot_data["state_version"],
+                    "as_of": snapshot_data["as_of"],
                 },
-                frame_id=str(snapshot.state_version),
+                frame_id=str(snapshot_data["state_version"]),
             )
             last_heartbeat = asyncio.get_running_loop().time()
             while True:

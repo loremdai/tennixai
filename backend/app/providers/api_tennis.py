@@ -9,6 +9,7 @@ The mapping helpers are module-level so the WebSocket live feed shares them.
 
 import hashlib
 import json
+import math
 import re
 from collections.abc import Callable
 from datetime import date, datetime, timedelta, timezone
@@ -46,7 +47,10 @@ from app.players.models import (
     Tour,
 )
 from app.players.normalization import normalize_player_name
-from app.providers.api_tennis_classification import classify_event_type
+from app.providers.api_tennis_classification import (
+    classify_event_type,
+    tour_from_event_type,
+)
 from app.providers.api_tennis_dtos import (
     ApiTennisResponse,
     DrawResultDto,
@@ -244,6 +248,11 @@ def parse_point_pair(raw: str | None) -> tuple[str, str] | None:
     return match.group(1), match.group(2)
 
 
+def map_point_marker(_raw: str | None) -> bool | None:
+    """Keep API-Tennis key-point markers unknown until their values are documented."""
+    return None
+
+
 def parse_scheduled_at(date_raw: str | None, time_raw: str | None) -> datetime | None:
     """Vendor times are requested with timezone=GMT, so they are UTC."""
     if not date_raw:
@@ -278,8 +287,8 @@ def map_period(stat_period: str | None) -> str | None:
     if text == "match":
         return "match"
     match = re.fullmatch(r"set\s*:?(\d+)", text)
-    if match is not None:
-        return f"set:{match.group(1)}"
+    if match is not None and int(match.group(1)) > 0:
+        return f"set:{int(match.group(1))}"
     return None
 
 
@@ -290,9 +299,10 @@ def parse_stat_value(raw: str | None) -> float | None:
     if text.endswith("%"):
         text = text[:-1].strip()
     try:
-        return float(text)
+        value = float(text)
     except ValueError:
         return None
+    return value if math.isfinite(value) and value >= 0 else None
 
 
 def point_value(token: str) -> int | None:
@@ -321,16 +331,20 @@ async def map_player(
 def map_live_state(
     dto: MatchDto, player_ids: tuple[str, str], status: MatchStatus
 ) -> LiveMatchState | None:
+    current_set = re.fullmatch(
+        r"set\s+(\d+)", (dto.event_status or "").strip(), re.IGNORECASE
+    )
+    current_set_number = (
+        parse_positive_int(current_set.group(1))
+        if status is MatchStatus.LIVE and current_set is not None
+        else None
+    )
     sets_won = parse_int_pair(dto.event_final_result)
     set_rows = [
         SetScore(
-            number=int(row.score_set) if (row.score_set or "").isdigit() else index + 1,
-            player1_games=(
-                int(row.score_first) if (row.score_first or "").isdigit() else None
-            ),
-            player2_games=(
-                int(row.score_second) if (row.score_second or "").isdigit() else None
-            ),
+            number=parse_positive_int(row.score_set) or index + 1,
+            player1_games=parse_non_negative_int(row.score_first),
+            player2_games=parse_non_negative_int(row.score_second),
         )
         for index, row in enumerate(dto.scores)
     ]
@@ -339,15 +353,22 @@ def map_live_state(
         # The vendor pre-seeds 0-0 set rows for scheduled matches; only a
         # real final/game score justifies a live state before the match
         # starts.
-        if sets_won is None and points is None:
+        has_nonzero_sets = sets_won is not None and sets_won != (0, 0)
+        has_nonzero_games = any(
+            (row.player1_games or 0) > 0 or (row.player2_games or 0) > 0
+            for row in set_rows
+        )
+        has_nonzero_points = points is not None and points != ("0", "0")
+        if not (has_nonzero_sets or has_nonzero_games or has_nonzero_points):
             return None
     score = MatchScore(
-        sets_won=sets_won or (0, 0),
+        sets_won=sets_won,
         sets=tuple(set_rows),
         points=points or (None, None),
-        is_tiebreak=False,
+        is_tiebreak=None,
     )
     return LiveMatchState(
+        current_set_number=current_set_number,
         score=score,
         server_player_id=slot_player_id(dto.event_serve, player_ids),
         state_version=0,
@@ -388,7 +409,7 @@ async def map_match(
             "tournament", PROVIDER_NAME, str(tournament_external)
         ),
         name=(dto.tournament_name or "").strip() or "Unknown tournament",
-        tour=None,
+        tour=tour_from_event_type(dto.event_type_type),
         circuit=circuit,
         gender=gender,
         discipline=discipline,
@@ -403,12 +424,16 @@ async def map_match(
         players=(p1, p2),
         tournament=tournament,
         scheduled_at=parse_scheduled_at(dto.event_date, dto.event_time),
-        round=dto.tournament_round,
+        round=(dto.tournament_round or "").strip() or None,
         surface=surface,
         indoor=None,
         format=None,
         live_state=live_state,
-        winner_player_id=slot_player_id(dto.event_winner, player_ids),
+        winner_player_id=(
+            slot_player_id(dto.event_winner, player_ids)
+            if status is MatchStatus.FINISHED
+            else None
+        ),
         freshness=DataFreshness(
             provider=PROVIDER_NAME,
             source_updated_at=None,
@@ -427,6 +452,7 @@ def map_points(
     points: list[PointEvent] = []
     sequence = 0
     last_known_set = 1
+    last_game_by_set: dict[int, int] = {}
     used_point_numbers: dict[tuple[int, int], set[int]] = {}
     for game in dto.pointbypoint:
         set_number = _leading_int(game.set_number)
@@ -434,9 +460,10 @@ def map_points(
             set_number = last_known_set
         else:
             last_known_set = set_number
-        game_number = _leading_int(game.number_game) or (
-            (points[-1].game_number + 1) if points else 1
-        )
+        game_number = _leading_int(game.number_game)
+        if game_number is None:
+            game_number = last_game_by_set.get(set_number, 0) + 1
+        last_game_by_set[set_number] = game_number
         server_id = slot_player_id(game.player_served, player_ids)
         before: tuple[int, int] = (0, 0)
         before_raw = ("0", "0")
@@ -495,12 +522,12 @@ def map_points(
                     server_player_id=server_id,
                     winner_player_id=winner_id,
                     score_before=MatchScore(
-                        sets_won=(0, 0), sets=(), points=before_raw
+                        sets_won=None, sets=(), points=before_raw
                     ),
-                    score_after=MatchScore(sets_won=(0, 0), sets=(), points=parsed),
-                    is_break_point=raw_point.break_point is not None,
-                    is_set_point=raw_point.set_point is not None,
-                    is_match_point=raw_point.match_point is not None,
+                    score_after=MatchScore(sets_won=None, sets=(), points=parsed),
+                    is_break_point=map_point_marker(raw_point.break_point),
+                    is_set_point=map_point_marker(raw_point.set_point),
+                    is_match_point=map_point_marker(raw_point.match_point),
                     observed_at=observed_at,
                     provider=PROVIDER_NAME,
                     source_fingerprint=hashlib.sha256(
@@ -518,6 +545,12 @@ def map_points(
 def _derive_point_winner(
     before: tuple[int, int], after: tuple[int, int], player_ids: tuple[str, str]
 ) -> str | None:
+    # At deuce, losing the advantage returns that player's score to 40; the
+    # opponent wins the point even though the displayed score decreased.
+    if before == (41, 40) and after == (40, 40):
+        return player_ids[1]
+    if before == (40, 41) and after == (40, 40):
+        return player_ids[0]
     first_changed = after[0] != before[0]
     second_changed = after[1] != before[1]
     if first_changed and not second_changed and after[0] > before[0]:
@@ -545,7 +578,11 @@ def map_statistics(
         if value is None:
             continue
         canonical_name, unit = mapped
+        if unit == "percent" and value > 100:
+            continue
         key_slot = str(stat.player_key)
+        if key_slot not in player_keys:
+            continue
         entry = merged.setdefault(
             (canonical_name, period),
             {"unit": unit, "player1_value": None, "player2_value": None},
@@ -578,30 +615,41 @@ def map_statistics(
 
 
 def build_snapshot_quality(
-    has_points: bool, has_statistics: bool, now: Callable[[], datetime]
+    points: tuple[PointEvent, ...],
+    statistics: tuple[MatchStatistic, ...],
+    now: Callable[[], datetime],
 ) -> tuple[DataQuality, ...]:
     observed_at = now()
+    statistics_status = (
+        CapabilityStatus.UNAVAILABLE
+        if not statistics
+        else CapabilityStatus.PARTIAL
+        if any(item.availability is not CapabilityStatus.AVAILABLE for item in statistics)
+        else CapabilityStatus.AVAILABLE
+    )
     return (
         DataQuality(
             capability="point_by_point",
             status=(
                 CapabilityStatus.AVAILABLE
-                if has_points
+                if points
                 else CapabilityStatus.UNAVAILABLE
             ),
             provider=PROVIDER_NAME,
-            reason=None if has_points else "not_reported",
+            reason=None if points else "not_reported",
             observed_at=observed_at,
         ),
         DataQuality(
             capability="statistics",
-            status=(
-                CapabilityStatus.AVAILABLE
-                if has_statistics
-                else CapabilityStatus.UNAVAILABLE
-            ),
+            status=statistics_status,
             provider=PROVIDER_NAME,
-            reason=None if has_statistics else "not_reported",
+            reason=(
+                "not_reported"
+                if not statistics
+                else "some_metrics_partial"
+                if statistics_status is CapabilityStatus.PARTIAL
+                else None
+            ),
             observed_at=observed_at,
         ),
         DataQuality(
@@ -617,8 +665,11 @@ def build_snapshot_quality(
 def _leading_int(raw: str | None) -> int | None:
     if raw is None:
         return None
-    match = re.search(r"\d+", str(raw))
-    return int(match.group(0)) if match else None
+    match = re.search(r"(?<![-\d])\d+", str(raw))
+    if match is None:
+        return None
+    value = int(match.group(0))
+    return value if value > 0 else None
 
 
 async def map_livescore_row_to_snapshot(
@@ -641,7 +692,7 @@ async def map_livescore_row_to_snapshot(
         points=points,
         statistics=statistics,
         momentum=(),
-        quality=build_snapshot_quality(bool(points), bool(statistics), now),
+        quality=build_snapshot_quality(points, statistics, now),
         state_version=live_state.state_version if live_state is not None else 0,
         as_of=now(),
     )

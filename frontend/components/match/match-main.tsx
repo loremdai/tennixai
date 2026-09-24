@@ -143,8 +143,20 @@ type ScoreRowView = {
   winner?: boolean
 }
 
-function ScoreTable({ rows, showPoints }: { rows: [ScoreRowView, ScoreRowView]; showPoints: boolean }) {
+function ScoreTable({
+  rows,
+  setNumbers,
+  currentSetNumber,
+  showPoints,
+}: {
+  rows: [ScoreRowView, ScoreRowView]
+  setNumbers: number[]
+  currentSetNumber: number | null
+  showPoints: boolean
+}) {
   const setCount = rows[0].sets.length
+  const highlightedSetNumber = showPoints ? currentSetNumber : setNumbers.at(-1) ?? null
+  const setNumberAt = (index: number) => setNumbers[index] ?? index + 1
   return (
     <table className="w-full table-fixed" aria-label={showPoints ? '实时详细比分' : '最终详细比分'}>
       <caption className="sr-only">
@@ -154,8 +166,8 @@ function ScoreTable({ rows, showPoints }: { rows: [ScoreRowView, ScoreRowView]; 
         <tr className="text-xs text-muted-foreground sm:text-sm">
           <th scope="col" className="w-20 pb-3 text-left font-normal">球员</th>
           {rows[0].sets.map((_, index) => (
-            <th key={index} scope="col" className={cn('pb-3 font-normal', index === setCount - 1 && 'text-primary')}>
-              {setLabel(index)}
+            <th key={index} scope="col" className={cn('pb-3 font-normal', setNumberAt(index) === highlightedSetNumber && 'text-primary')}>
+              {setLabel(setNumberAt(index) - 1)}
             </th>
           ))}
           {showPoints ? <th scope="col" className="pb-3 font-normal">当前局</th> : null}
@@ -171,7 +183,7 @@ function ScoreTable({ rows, showPoints }: { rows: [ScoreRowView, ScoreRowView]; 
               </span>
             </th>
             {row.sets.map((set, index) => (
-              <td key={`${row.playerId}-${index}`} className={cn('text-center', index === setCount - 1 && 'text-primary')}>
+              <td key={`${row.playerId}-${index}`} className={cn('text-center', setNumberAt(index) === highlightedSetNumber && 'text-primary')}>
                 {set ?? '-'}
               </td>
             ))}
@@ -230,7 +242,11 @@ export function ScoreProgressCard({ match, preview, highlight }: Pick<MainColumn
             {visualStatus === 'upcoming'
               ? '等待开赛'
               : visualStatus === 'live'
-                ? `第 ${match.score?.sets.length ?? '-'} 盘`
+                ? preview
+                  ? `第 ${previewMatchMeta.currentSet} 盘`
+                  : match.currentSetNumber !== null
+                    ? `第 ${match.currentSetNumber} 盘`
+                    : '当前盘官方未返回'
                 : visualStatus === 'finished'
                   ? '已完赛'
                   : '状态待确认'}
@@ -246,7 +262,12 @@ export function ScoreProgressCard({ match, preview, highlight }: Pick<MainColumn
           />
         ) : visualStatus === 'live' ? (
           <div className="flex flex-col gap-5">
-            <ScoreTable rows={rows} showPoints />
+            <ScoreTable
+              rows={rows}
+              setNumbers={preview ? rows[0].sets.map((_, index) => index + 1) : match.score?.sets.map((set) => set.number) ?? []}
+              currentSetNumber={preview ? previewMatchMeta.currentSet : match.currentSetNumber}
+              showPoints
+            />
             <div className="grid grid-cols-3 items-center rounded-lg bg-muted/30 p-4 text-center">
               <div>
                 <p className="font-mono text-2xl font-semibold">{rows[0].points ?? '–'}</p>
@@ -266,7 +287,12 @@ export function ScoreProgressCard({ match, preview, highlight }: Pick<MainColumn
           </div>
         ) : (
           <div className="flex flex-col gap-5">
-            <ScoreTable rows={rows} showPoints={false} />
+            <ScoreTable
+              rows={rows}
+              setNumbers={preview ? rows[0].sets.map((_, index) => index + 1) : match.score?.sets.map((set) => set.number) ?? []}
+              currentSetNumber={null}
+              showPoints={false}
+            />
             <div className="flex flex-col gap-2 rounded-lg bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="font-semibold">

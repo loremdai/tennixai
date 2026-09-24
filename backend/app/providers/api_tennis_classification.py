@@ -42,3 +42,13 @@ def classify_event_type(event_type: str | None) -> tuple[CircuitTier, Gender, Di
         discipline = Discipline.UNKNOWN
 
     return circuit, gender, discipline
+
+
+def tour_from_event_type(event_type: str | None) -> str | None:
+    """Return a tour only for explicitly named ATP/WTA event families."""
+    text = " ".join((event_type or "").casefold().split())
+    if text.startswith("atp "):
+        return "atp"
+    if text.startswith("wta "):
+        return "wta"
+    return None
