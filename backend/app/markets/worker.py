@@ -67,6 +67,7 @@ class MarketWorker:
         cleanup_interval_cycles: int = 50,
         on_state: Callable[[str, Any], Awaitable[None]] | None = None,
         on_connection: Callable[[str, str], Awaitable[None]] | None = None,
+        on_resolution_hint: Callable[[str], None] | None = None,
         metrics: Any = None,
     ) -> None:
         self._deps = _WorkerDeps(feed, rest, publisher, observations, raw)
@@ -80,12 +81,14 @@ class MarketWorker:
         self._cleanup_interval = cleanup_interval_cycles
         self._on_state = on_state
         self._on_connection = on_connection
+        self._on_resolution_hint = on_resolution_hint
         self._metrics = metrics
         # Public so the runtime daemon can aggregate hook failures into one
         # health surface; only counts, never identifiers.
         self.callback_failures: dict[str, int] = {
             "on_state": 0,
             "on_connection": 0,
+            "on_resolution_hint": 0,
         }
         self._subs: dict[str, _MarketSubscription] = {}
         self._starting: set[str] = set()
@@ -372,6 +375,11 @@ class MarketWorker:
                     }
                 )
         if reduction.resolution_requested:
+            if self._on_resolution_hint is not None:
+                try:
+                    self._on_resolution_hint(sub.market_id)
+                except Exception:
+                    self.callback_failures["on_resolution_hint"] += 1
             self._observation_buffer.append(
                 {
                     "market_id": sub.market_id,

@@ -21,6 +21,10 @@ export function getChatAnswerLabel(chat: ChatAnswerState, scope: ChatAnswerScope
       return '本场比赛分析'
     case 'player_history':
       return '球员赛果与战绩'
+    case 'market_opportunities':
+      return '市场机会'
+    case 'match_decision':
+      return '本场判断结果'
     default:
       return scope === 'match' ? '本场比赛结构化结果' : '回答'
   }

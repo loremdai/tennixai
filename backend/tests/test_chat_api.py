@@ -6,6 +6,7 @@ from httpx import ASGITransport, AsyncClient
 from app.chat.models import ChatEvent, ChatEventType
 from app.config import Settings
 from app.main import create_app
+from realtime_fakes import FakeClock, RealtimeBundle
 
 FIXED_NOW = "2026-09-08T10:00:00Z"
 
@@ -24,7 +25,10 @@ def parse_sse(text: str) -> list[tuple[str, dict]]:
 
 @pytest.fixture()
 async def client() -> AsyncClient:
-    app = create_app(Settings(_env_file=None, fixed_now=FIXED_NOW))
+    app = create_app(
+        Settings(_env_file=None, fixed_now=FIXED_NOW),
+        realtime=RealtimeBundle(FakeClock()),
+    )
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as http_client:
         yield http_client
@@ -170,6 +174,7 @@ async def test_chat_stream_preserves_warning_events() -> None:
     app = create_app(
         Settings(_env_file=None, fixed_now=FIXED_NOW),
         chat_orchestrator=WarningOrchestrator(),
+        realtime=RealtimeBundle(FakeClock()),
     )
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as http_client:

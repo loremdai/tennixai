@@ -1,5 +1,6 @@
 """P2 service: catalog filters/sort/facets and bounded history/H2H."""
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -13,6 +14,10 @@ from app.domain import (
     MatchStatus,
 )
 from app.errors import AppError
+from app.identity import MemoryIdentityRepository
+from app.players.repository import MemoryPlayerDirectoryRepository
+from app.players.sync import DirectorySeeder, PlayerDirectorySync
+from app.providers.fake import FakeTennisProvider
 from app.service import MatchFilters, TennisService, catalog_sort_key
 from p2_fakes import P2_NOW, CatalogFakeProvider
 
@@ -64,6 +69,63 @@ async def test_default_catalog_prefers_top_tour_singles(
     assert catalog.featured_match_id == catalog.matches[0].id
     # Earlier scheduled top-tier match is featured.
     assert catalog.matches[0].id == catalog_provider.sinner_alcaraz.id
+
+
+@pytest.mark.asyncio
+async def test_first_catalog_read_seeds_rankings_before_hydrating_match_players() -> None:
+    identities = MemoryIdentityRepository()
+    provider = await FakeTennisProvider.create(identities, now=lambda: P2_NOW)
+    directory = MemoryPlayerDirectoryRepository()
+    seeder = DirectorySeeder(
+        PlayerDirectorySync(provider, directory, now=lambda: P2_NOW)
+    )
+    service = TennisService(
+        provider,
+        AsyncTTLCache(max_entries=32),
+        now=lambda: P2_NOW,
+        timezone="Asia/Shanghai",
+        directory=directory,
+        seeder=seeder.ensure,
+    )
+
+    catalog = await service.list_catalog(status="live")
+
+    sinner = next(player for match in catalog.matches for player in match.players if player.name == "Jannik Sinner")
+    assert sinner.ranking == 1
+
+
+@pytest.mark.asyncio
+async def test_concurrent_service_seed_callers_wait_for_the_active_seed(
+    catalog_provider: CatalogFakeProvider,
+) -> None:
+    started = asyncio.Event()
+    release = asyncio.Event()
+    calls = 0
+
+    async def seed() -> None:
+        nonlocal calls
+        calls += 1
+        started.set()
+        await release.wait()
+
+    service = TennisService(
+        catalog_provider,
+        AsyncTTLCache(max_entries=8),
+        now=lambda: P2_NOW,
+        timezone="Asia/Shanghai",
+        seeder=seed,
+    )
+    first = asyncio.create_task(service._ensure_seeded())
+    await started.wait()
+    second = asyncio.create_task(service._ensure_seeded())
+    await asyncio.sleep(0)
+    second_waited = not second.done()
+
+    release.set()
+    await asyncio.gather(first, second)
+
+    assert second_waited
+    assert calls == 1
 
 
 @pytest.mark.asyncio

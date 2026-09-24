@@ -262,11 +262,15 @@ export type StructuredData = {
     | 'intelligence'
     | 'player_resolution'
     | 'player_history'
+    | 'market_opportunities'
+    | 'match_decision'
     | 'unsupported'
   matches: MatchDto[]
   packet?: IntelligencePacketDto | null
   resolution?: PlayerResolutionDto | null
   player_history?: PlayerHistoryContextDto | null
+  market_opportunities?: { opportunities: OpportunityDto[]; truncated: boolean } | null
+  match_decision?: DecisionSnapshotDto | null
   metadata?: Record<string, unknown>
   answer_context?: AnswerContextDto | null
 }

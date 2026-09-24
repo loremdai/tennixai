@@ -12,6 +12,8 @@ import {
 
 import { MatchResultCard } from '@/components/home/home-match-result-card'
 import { HomePlayerHistory } from '@/components/home/home-player-history'
+import { PlayerCountry } from '@/components/player-country'
+import { OpportunityRow } from '@/components/markets/opportunity-row'
 import { ChatWarnings } from '@/components/chat-warnings'
 import { MarkdownAnswer } from '@/components/markdown-answer'
 import { userFacingApiError } from '@/lib/api/user-facing-errors'
@@ -34,7 +36,8 @@ import {
 } from '@/components/ui/input-group'
 import type { StructuredData } from '@/lib/api/types'
 import type { HomeMatchViewModel } from '@/lib/view-models'
-import { toHomeMatch } from '@/lib/view-models'
+import { countryPresentation, toHomeMatch } from '@/lib/view-models'
+import { toOpportunityRow } from '@/lib/p3-view-models'
 import { getChatAnswerLabel } from '@/lib/chat-answer'
 import { playerHistoryTitle } from '@/lib/player-history-view'
 
@@ -53,10 +56,17 @@ function answerTitle(
   if (historyItems.length > 1) {
     return '球员赛果与战绩'
   }
+  if (chat.data?.kind === 'market_opportunities') return '市场机会'
+  if (chat.data?.kind === 'match_decision') return '本场判断结果'
   if (cards.length > 0) {
     return `${cards[0].players[0]} 对阵 ${cards[0].players[1]}`
   }
-  if (chat.data?.kind === 'unsupported') return '历史结果查询暂不支持'
+  if (chat.data?.kind === 'unsupported') {
+    const reason = chat.data.metadata?.reason
+    if (reason === 'p3_disabled') return '市场功能暂未开放'
+    if (reason === undefined) return '历史结果查询暂不支持'
+    return '暂不支持此类查询'
+  }
   if (chat.data?.kind === 'player_resolution') {
     if (chat.data.resolution?.status === 'ambiguous') return '多位候选球员，请选择'
     if (chat.data.resolution?.status === 'not_found') return '未找到该球员'
@@ -120,10 +130,29 @@ export function HomeAssistant({
   }
 
   const historyItems = historyItemsOf(chat)
-  const cards =
-    historyItems.length > 0 || chat.data?.kind === 'player_history'
-      ? []
-      : (chat.data?.matches ?? []).map((match) => toHomeMatch(match))
+  const cards = [
+    ...new Map(
+      chat.dataItems
+        .filter(({ kind }) => kind === 'matches' || kind === 'match')
+        .flatMap(({ matches }) => matches)
+        .map((match) => [match.id, toHomeMatch(match)] as const),
+    ).values(),
+  ]
+  const opportunityResults = chat.dataItems
+    .filter(({ kind }) => kind === 'market_opportunities')
+    .map(({ market_opportunities: result }) => result)
+    .filter((result): result is NonNullable<typeof result> => result !== null && result !== undefined)
+  const opportunitiesTruncated = opportunityResults.some((result) => result.truncated)
+  const opportunityRows = [
+    ...new Map(
+      opportunityResults
+        .flatMap(({ opportunities }) => opportunities)
+        .map((opportunity) => [
+          opportunity.market_id,
+          toOpportunityRow(opportunity, new Date()),
+        ] as const),
+    ).values(),
+  ]
   const hasAnswer =
     chat.phase !== 'idle' &&
     (Boolean(chat.data) || Boolean(chat.text) || Boolean(chat.error) || chat.warnings.length > 0)
@@ -131,7 +160,8 @@ export function HomeAssistant({
     chat.text ||
     errorSummary(chat.error)
   const structuredResultsRef = useRef<HTMLDivElement>(null)
-  const structuredCount = cards.length + historyItems.length
+  const structuredCount =
+    cards.length + historyItems.length + opportunityRows.length + Number(opportunitiesTruncated)
 
   useEffect(() => {
     if ((chat.phase !== 'success' && chat.phase !== 'error') || structuredCount === 0) return
@@ -174,7 +204,7 @@ export function HomeAssistant({
                     <BrainCircuit aria-hidden="true" className="size-4" />
                     {getChatAnswerLabel(chat, 'global')}
                   </span>
-                  {chat.error ? null : (
+                  {chat.error || cards.length === 0 ? null : (
                     <CheckCircle2 aria-label="包含比赛信息卡" className="size-4 text-muted-foreground" />
                   )}
                 </div>
@@ -192,7 +222,7 @@ export function HomeAssistant({
                 <div
                   ref={structuredResultsRef}
                   className="scroll-mt-24 flex flex-col gap-3"
-                  aria-label="相关比赛信息"
+                  aria-label="相关比赛和市场信息"
                 >
                   {historyItems.length > 0 ? (
                     <HomePlayerHistory items={historyItems} onFollowUp={followUp} />
@@ -200,30 +230,46 @@ export function HomeAssistant({
                   {cards.map((match) => (
                     <MatchResultCard key={match.id} match={match} onFollowUp={followUp} />
                   ))}
+                  {opportunityRows.map((opportunity) => (
+                    <OpportunityRow key={opportunity.id} opportunity={opportunity} />
+                  ))}
+                  {opportunitiesTruncated ? (
+                    <p className="text-xs text-muted-foreground" role="status">
+                      还有其他符合条件的机会，以下仅展示部分结果。
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
 
               {chat.data?.kind === 'player_resolution'
               && chat.data.resolution?.status === 'ambiguous' ? (
                 <div className="flex flex-col gap-2" aria-label="候选球员">
-                  {chat.data.resolution.candidates.map((candidate) => (
-                    <Link
-                      key={candidate.player.id}
-                      href={`/players/${candidate.player.id}`}
-                      className="flex items-center justify-between gap-3 rounded-xl border bg-card/60 px-4 py-3 text-sm transition-colors hover:bg-muted/40"
-                    >
-                      <span className="font-medium">
-                        {candidate.player.localized_name
-                          ? `${candidate.player.name}（${candidate.player.localized_name}）`
-                          : candidate.player.name}
-                      </span>
-                      <span className="font-mono text-xs text-muted-foreground">
-                        {candidate.player.country_code ?? '—'}
-                        {' '}
-                        {candidate.current_rank ? `#${candidate.current_rank}` : '暂无当前排名'}
-                      </span>
-                    </Link>
-                  ))}
+                  {chat.data.resolution.candidates.map((candidate) => {
+                    const country = countryPresentation(
+                      candidate.player.country_code,
+                      candidate.player.country_alpha2 ?? null,
+                    )
+                    return (
+                      <Link
+                        key={candidate.player.id}
+                        href={`/players/${candidate.player.id}`}
+                        className="flex items-center justify-between gap-3 rounded-xl border bg-card/60 px-4 py-3 text-sm transition-colors hover:bg-muted/40"
+                      >
+                        <span className="font-medium">
+                          {candidate.player.localized_name
+                            ? `${candidate.player.name}（${candidate.player.localized_name}）`
+                            : candidate.player.name}
+                        </span>
+                        <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <PlayerCountry player={country} />
+                          <span>{country.countryName}</span>
+                          <span>
+                            {candidate.current_rank ? `#${candidate.current_rank}` : '暂无当前排名'}
+                          </span>
+                        </span>
+                      </Link>
+                    )
+                  })}
                 </div>
               ) : null}
 

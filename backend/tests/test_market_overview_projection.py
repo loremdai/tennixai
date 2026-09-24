@@ -10,9 +10,19 @@ from decimal import Decimal
 
 from app.markets.models import BookLevel, OrderBookState, OutcomeBook
 from app.persistence.market_repositories import MarketOverviewRow
-from app.service import P3QueryService
+from app.service import P3QueryService, _p3_phase_from_status
 
 NOW = datetime(2026, 9, 22, 8, 0, tzinfo=UTC)
+
+
+def test_only_match_lifecycle_statuses_determine_market_phase() -> None:
+    assert _p3_phase_from_status("live") == "live"
+    assert _p3_phase_from_status("scheduled") == "prematch"
+    assert _p3_phase_from_status("finished") == "closed"
+    assert _p3_phase_from_status("unknown") is None
+    assert _p3_phase_from_status("cancelled") is None
+    assert _p3_phase_from_status("postponed") is None
+    assert _p3_phase_from_status(None) is None
 
 
 def overview(
@@ -182,3 +192,27 @@ async def test_markets_uses_active_link_and_loads_dependencies_in_bulk() -> None
     assert len(service.fact_calls) == 1
     assert set(spy.prediction_calls[0]) == {"mat_1", "mat_2"}
     assert set(hot.bulk_calls[0]) == {"mkt_linked", "mkt_unlinked", "mkt_linked_two"}
+
+
+async def test_unlinked_market_does_not_infer_match_phase_from_listing_status() -> None:
+    service = StubFactsService(
+        facts={},
+        markets=SpyMarkets(
+            [
+                overview("mkt_open", status="open"),
+                overview("mkt_scheduled", status="scheduled"),
+                overview("mkt_unknown", status="unknown"),
+            ]
+        ),
+        paper=None,
+        hot_books=SpyHotBooks(),
+        clock=lambda: NOW,
+    )
+
+    page = await service.markets(page=1, page_size=50)
+
+    assert {row.market_id: row.phase for row in page.markets} == {
+        "mkt_open": None,
+        "mkt_scheduled": None,
+        "mkt_unknown": None,
+    }

@@ -30,7 +30,14 @@ const eventClass: Record<PaperEvent['status'], string> = {
 
 export function PaperLifecycle({ decision }: { decision: DecisionPreview }) {
   if (!decision.paper) return null
-  const noPosition = decision.state === 'entry_pending' || decision.state === 'missed'
+  const entryPending = decision.state === 'entry_pending'
+  const noPosition = entryPending || decision.state === 'missed'
+  const amountValue = noPosition && !entryPending
+    ? '—'
+    : `$${decision.paper.entryCost.toFixed(2)}`
+  const averageValue = noPosition && !entryPending
+    ? '—'
+    : `${(decision.paper.averageEntry * 100).toFixed(1)}%`
 
   return (
     <section aria-labelledby="paper-lifecycle-title">
@@ -46,10 +53,10 @@ export function PaperLifecycle({ decision }: { decision: DecisionPreview }) {
 
         <CardContent className="flex flex-col gap-5">
           <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border sm:grid-cols-5">
-            <dl className="bg-card p-3"><dt className="text-xs text-muted-foreground">模拟投入</dt><dd className="mt-1 font-mono text-lg font-semibold">${decision.paper.entryCost.toFixed(2)}</dd></dl>
-            <dl className="bg-card p-3"><dt className="text-xs text-muted-foreground">模拟买入均价</dt><dd className="mt-1 font-mono text-lg font-semibold">{(decision.paper.averageEntry * 100).toFixed(1)}%</dd></dl>
+            <dl className="bg-card p-3"><dt className="text-xs text-muted-foreground">{entryPending ? '计划投入' : '模拟投入'}</dt><dd className="mt-1 font-mono text-lg font-semibold">{amountValue}</dd></dl>
+            <dl className="bg-card p-3"><dt className="text-xs text-muted-foreground">{entryPending ? '报价均价' : '模拟买入均价'}</dt><dd className="mt-1 font-mono text-lg font-semibold">{averageValue}</dd></dl>
             <dl className="bg-card p-3"><dt className="text-xs text-muted-foreground">持有份数</dt><dd className="mt-1 font-mono text-lg font-semibold">{noPosition ? '—' : decision.paper.shares.toFixed(2)}</dd></dl>
-            <dl className="bg-card p-3"><dt className="text-xs text-muted-foreground">当前模拟卖出价值</dt><dd className="mt-1 font-mono text-lg font-semibold">{noPosition ? '—' : `$${decision.paper.currentExitValue.toFixed(2)}`}</dd></dl>
+            <dl className="bg-card p-3"><dt className="text-xs text-muted-foreground">退出参考金额</dt><dd className="mt-1 font-mono text-lg font-semibold">{noPosition ? '—' : `$${decision.paper.currentExitValue.toFixed(2)}`}</dd>{!noPosition ? <dd className="mt-1 text-xs leading-relaxed text-muted-foreground">按当前最高买价估算，未扣费用，也不保证全部份额都能按此价格卖出。</dd> : null}</dl>
             <dl className="col-span-2 bg-card p-3 sm:col-span-1">
               <dt className="text-xs text-muted-foreground">模拟盈亏</dt>
               <dd className={cn(

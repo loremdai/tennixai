@@ -23,6 +23,20 @@ describe('getChatAnswerLabel', () => {
     expect(getChatAnswerLabel(withKind('player_history'), 'match')).toBe('球员赛果与战绩')
   })
 
+  it('labels P3 structured results by their domain', () => {
+    const marketOpportunities = {
+      data: { kind: 'market_opportunities', matches: [] } as unknown as StructuredData,
+      error: null,
+    }
+    const matchDecision = {
+      data: { kind: 'match_decision', matches: [] } as unknown as StructuredData,
+      error: null,
+    }
+
+    expect(getChatAnswerLabel(marketOpportunities, 'global')).toBe('市场机会')
+    expect(getChatAnswerLabel(matchDecision, 'match')).toBe('本场判断结果')
+  })
+
   it('prioritizes the error label', () => {
     expect(
       getChatAnswerLabel(

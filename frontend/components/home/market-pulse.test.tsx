@@ -14,6 +14,8 @@ describe('P3 Home market pulse preview', () => {
     )
 
     expect(rowLinks).toHaveLength(3)
+    expect(screen.getByText('当前退出参考价')).toBeVisible()
+    expect(screen.getAllByText('10 美元模拟买入价')).toHaveLength(2)
     for (const link of rowLinks) {
       expect(link.getAttribute('href')).toMatch(/^\/(?!\/)/)
     }

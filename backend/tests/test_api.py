@@ -5,19 +5,15 @@ from httpx import ASGITransport, AsyncClient
 
 from app.config import Settings
 from app.domain import (
-    DataFreshness,
     LiveMatchState,
     Match,
-    MatchScore,
-    MatchStatus,
     Player,
-    SetScore,
-    Tournament,
 )
 from app.errors import AppError
 from app.identity import MemoryIdentityRepository
 from app.main import create_app
 from app.providers.fake import FakeTennisProvider
+from realtime_fakes import FakeClock, RealtimeBundle
 
 UTC = timezone.utc
 FIXED_NOW = "2026-09-08T10:00:00Z"
@@ -67,7 +63,11 @@ class StubProvider:
 
 
 async def stub_client(provider: StubProvider) -> AsyncClient:
-    app = create_app(Settings(_env_file=None, fixed_now=FIXED_NOW), provider=provider)
+    app = create_app(
+        Settings(_env_file=None, fixed_now=FIXED_NOW),
+        provider=provider,
+        realtime=RealtimeBundle(FakeClock()),
+    )
     return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
 
 
@@ -263,6 +263,7 @@ async def test_explicit_fake_provider_injection() -> None:
     app = create_app(
         Settings(_env_file=None, fixed_now=FIXED_NOW),
         provider=provider,
+        realtime=RealtimeBundle(FakeClock()),
     )
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http_client:
         response = await http_client.get("/api/v1/matches", params={"status": "live"})

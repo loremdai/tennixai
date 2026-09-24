@@ -16,13 +16,13 @@ import type {
 } from '@/lib/api/types'
 import type { DecisionOverlay, DecisionState } from '@/components/p3/p3-preview-data'
 
-export type RowPhase = 'live' | 'upcoming' | 'closed'
+export type RowPhase = 'live' | 'upcoming' | 'closed' | 'unknown'
 
 export type OpportunityRowModel = {
   id: string
   match: string
   tournament: string
-  phase: Exclude<RowPhase, 'closed'>
+  phase: Exclude<RowPhase, 'closed' | 'unknown'>
   selection: string
   modelProbability: number | null
   executableProbability: number | null
@@ -83,10 +83,10 @@ export type PaperRowModel = {
 
 export type PulseRowModel = {
   id: string
-  priority: 'position' | 'sell' | 'buy_live' | 'buy_upcoming' | 'wait'
+  priority: 'position' | 'sell' | 'buy_live' | 'buy_upcoming' | 'wait' | 'buy_unknown'
   match: string
   tournament: string
-  phase: '直播' | '即将开始' | '已完赛'
+  phase: '直播' | '即将开始' | '已完赛' | '比赛状态未知'
   modelProbability: number | null
   executableProbability: number | null
   edgePp: number | null
@@ -238,7 +238,13 @@ export function toMarketRow(dto: MarketSummaryDto, now: Date): MarketRowModel {
   const [one, two] = namesOf(dto)
   const tier = dto.tier ?? 'other'
   const phase: RowPhase =
-    dto.phase === 'live' ? 'live' : dto.phase === 'prematch' ? 'upcoming' : 'closed'
+    dto.phase === 'live'
+      ? 'live'
+      : dto.phase === 'prematch'
+        ? 'upcoming'
+        : dto.phase === 'closed'
+          ? 'closed'
+          : 'unknown'
   return {
     id: dto.market_id,
     match: dto.match_id ? `${one} vs. ${two}` : (dto.question ?? '—'),
@@ -266,7 +272,7 @@ export function toMarketRow(dto: MarketSummaryDto, now: Date): MarketRowModel {
     modelProbability: dto.model_probability,
     reason:
       dto.reason_code !== null
-        ? (REASON_LABELS[dto.reason_code] ?? dto.reason_code)
+        ? (REASON_LABELS[dto.reason_code] ?? '暂无法提供判断原因')
         : null,
     freshness: formatFreshness(dto.quote.as_of, now, dto.quote.state === 'stale'),
     stale: dto.quote.state === 'stale',
@@ -323,14 +329,23 @@ export function toPulseRow(dto: PulseRowDto, now: Date): PulseRowModel {
       : dto.action === 'buy'
         ? dto.phase === 'live'
           ? 'buy_live'
-          : 'buy_upcoming'
+          : dto.phase === 'upcoming'
+            ? 'buy_upcoming'
+            : 'buy_unknown'
         : 'wait'
   return {
     id: `${dto.kind}:${dto.match_id}`,
     priority,
     match: `${one} vs. ${two}`,
     tournament: dto.tournament_name ?? '—',
-    phase: dto.phase === 'live' ? '直播' : dto.phase === 'upcoming' ? '即将开始' : '已完赛',
+    phase:
+      dto.phase === 'live'
+        ? '直播'
+        : dto.phase === 'upcoming'
+          ? '即将开始'
+          : dto.phase === 'closed'
+            ? '已完赛'
+            : '比赛状态未知',
     modelProbability: dto.model_probability,
     executableProbability: dto.executable_probability,
     edgePp:
@@ -353,11 +368,13 @@ const PULSE_PRIORITY: Record<PulseRowModel['priority'], number> = {
   buy_live: 1,
   buy_upcoming: 2,
   wait: 3,
+  buy_unknown: 4,
 }
 
 /** Defensive client mirror of the server selection contract: one reserved
- * urgent-position row, then live BUY → upcoming BUY → strongest WAIT, capped
- * at three. Stable within groups; the server order is already canonical. */
+ * urgent-position row, then live BUY → upcoming BUY → strongest WAIT → BUY
+ * with unknown phase, capped at three. Stable within groups; the server order
+ * is already canonical. */
 export function selectHomePulseRows(rows: PulseRowModel[]): PulseRowModel[] {
   let reservedPosition: PulseRowModel | null = null
   const rest: PulseRowModel[] = []

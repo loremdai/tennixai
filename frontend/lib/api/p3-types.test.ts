@@ -415,6 +415,12 @@ describe('P3 DTO decoding', () => {
     ).toThrow(P3DecodeError)
   })
 
+  it('does not turn a missing per-player probability into a false zero', () => {
+    expect(() =>
+      decodeMatchDecision({ data: decisionSnapshot({ model_probabilities: { ply_a: null } }) }),
+    ).toThrow(P3DecodeError)
+  })
+
   it('decodes the markets snapshot counters', () => {
     const snapshot = decodeMarketsSnapshot({ markets: 2, opportunities: 1, open_positions: 0 })
     expect(snapshot).toEqual({

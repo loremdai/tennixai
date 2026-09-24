@@ -407,12 +407,16 @@ class RecordingPaper:
 class FakeHotBooks:
     def __init__(self) -> None:
         self.books: dict[str, object] = {}
+        self.resolutions: list[object] = []
         self.raise_error: Exception | None = None
 
     async def get_hot_book(self, market_id: str):
         if self.raise_error is not None:
             raise self.raise_error
         return self.books.get(market_id)
+
+    async def publish_resolution(self, resolution) -> None:
+        self.resolutions.append(resolution)
 
 
 class FakeRealtime:
@@ -512,6 +516,7 @@ def make_daemon(
         ),
         "metrics": P3Metrics(),
         "metadata_cache": None,
+        "resolution_hints": set(),
     }
     parts.update(overrides)
     daemon = LocalRuntimeDaemon(
@@ -538,6 +543,7 @@ def make_daemon(
         quote_fresh_seconds=parts.get("quote_fresh_seconds", 300),
         market_snapshot_seconds=parts.get("market_snapshot_seconds", 120),
         tick_seconds=tick_seconds,
+        resolution_hints=parts["resolution_hints"],
     )
     return daemon, parts
 
@@ -623,6 +629,43 @@ async def test_resolution_recheck_never_runs_more_often_than_discovery():
     clock.advance(seconds=60)
     await daemon.tick_once()
     assert ledger.unsettled_calls == 2
+
+
+async def test_resolution_hint_checks_provider_without_waiting_for_discovery_interval():
+    daemon, parts = make_daemon()
+    provider: FakeMarketProvider = parts["market_provider"]
+    decision: RecordingDecisionWorker = parts["decision_worker"]
+    provider.resolutions["mkt_ws_hint"] = make_resolution("mkt_ws_hint")
+
+    await daemon.tick_once()
+    provider.resolution_calls.clear()
+    decision.resolutions.clear()
+
+    parts["clock"].advance(seconds=1)
+    parts["resolution_hints"].add("mkt_ws_hint")
+    await daemon.tick_once()
+
+    assert provider.resolution_calls == ["mkt_ws_hint"]
+    assert decision.resolutions == [
+        ("mkt_ws_hint", provider.resolutions["mkt_ws_hint"])
+    ]
+    assert parts["hot_books"].resolutions == [provider.resolutions["mkt_ws_hint"]]
+
+
+async def test_nonfinal_resolution_hint_does_not_settle_paper():
+    daemon, parts = make_daemon()
+    provider: FakeMarketProvider = parts["market_provider"]
+    decision: RecordingDecisionWorker = parts["decision_worker"]
+    provider.resolutions["mkt_pending_hint"] = make_resolution(
+        "mkt_pending_hint", status=ResolutionStatus.PENDING
+    )
+    parts["resolution_hints"].add("mkt_pending_hint")
+
+    await daemon.tick_once()
+
+    assert provider.resolution_calls == ["mkt_pending_hint"]
+    assert decision.resolutions == []
+    assert parts["hot_books"].resolutions == []
 
 
 async def test_tick_once_follows_the_exact_bounded_sequence():
@@ -884,6 +927,12 @@ async def test_only_final_resolutions_route_through_decision_worker():
     await daemon.tick_once()
 
     assert decision.resolutions == [("mkt_final", final)]
+    assert parts["hot_books"].resolutions == [final]
+
+    await daemon._resolution_recheck()
+
+    assert decision.resolutions == [("mkt_final", final), ("mkt_final", final)]
+    assert parts["hot_books"].resolutions == [final]
 
 
 async def test_resolution_targets_are_capped():

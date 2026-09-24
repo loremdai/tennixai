@@ -9,7 +9,7 @@ import json
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 
-from app.markets.models import OrderBookState
+from app.markets.models import MarketResolution, OrderBookState
 
 
 def market_hot_key(market_id: str) -> str:
@@ -18,6 +18,10 @@ def market_hot_key(market_id: str) -> str:
 
 def market_channel(market_id: str) -> str:
     return f"tnx:p3:market:{market_id}"
+
+
+def resolution_channel(market_id: str) -> str:
+    return f"tnx:p3:resolution:{market_id}"
 
 
 QUOTE_CATALOG_CHANNEL = "tnx:p3:quotes"
@@ -79,6 +83,16 @@ class MarketHotPublisher:
             "as_of": self._now().isoformat(),
         }
         await self._redis.publish(market_channel(market_id), json.dumps(event))
+        self.events.append(event)
+
+    async def publish_resolution(self, resolution: MarketResolution) -> None:
+        event = {
+            "type": "resolution_delta",
+            **resolution.model_dump(mode="json"),
+        }
+        await self._redis.publish(
+            resolution_channel(resolution.market_id), json.dumps(event)
+        )
         self.events.append(event)
 
     async def get_hot_book(self, market_id: str) -> OrderBookState | None:

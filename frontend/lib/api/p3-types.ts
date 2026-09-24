@@ -495,8 +495,12 @@ function decodeDecisionSnapshot(value: unknown, path: string): DecisionSnapshotD
     const record = raw(probabilitiesRaw, `${path}.model_probabilities`)
     probabilities = {}
     for (const [playerId, probabilityValue] of Object.entries(record)) {
-      const decoded = probability(probabilityValue, `${path}.model_probabilities.${playerId}`)
-      probabilities[playerId] = decoded ?? 0
+      const probabilityPath = `${path}.model_probabilities.${playerId}`
+      const decoded = probability(probabilityValue, probabilityPath)
+      if (decoded === null) {
+        throw new P3DecodeError(probabilityPath, 'expected a probability in [0, 1]')
+      }
+      probabilities[playerId] = decoded
     }
   }
   const lifecycle = rawList(item.lifecycle, `${path}.lifecycle`).map((state, index) =>

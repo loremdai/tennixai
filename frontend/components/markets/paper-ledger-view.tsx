@@ -67,44 +67,81 @@ export function PaperLedgerView({ state }: { state: MarketsPreviewState }) {
       </div>
 
       <div className="grid gap-3">
-        {records.map((record) => (
-          <Link
-            key={record.id}
-            href={record.href}
-            className="group rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label={`查看 ${record.match} 的模拟记录`}
-          >
-            <Card size="sm" className="transition-[transform,box-shadow] group-hover:-translate-y-0.5 group-hover:ring-primary/35">
-              <CardContent className="grid min-h-28 grid-cols-2 items-center gap-4 py-1 md:grid-cols-[minmax(15rem,1.5fr)_minmax(8rem,0.7fr)_minmax(7rem,0.55fr)_minmax(8rem,0.65fr)_minmax(7rem,0.55fr)_auto_auto]">
-                <div className="col-span-2 min-w-0 md:col-span-1">
-                  <h3 className="truncate font-semibold">{record.match}</h3>
-                  <p className="mt-1 truncate text-sm text-muted-foreground">{record.tournament}</p>
-                  <p className="mt-2 text-xs font-medium text-primary">方向：{record.direction}</p>
-                </div>
-                <dl><dt className="text-xs text-muted-foreground">模拟投入 / 买入均价</dt><dd className="mt-1 font-mono font-semibold">{money(record.cost)} · {(record.averageEntry * 100).toFixed(1)}%</dd></dl>
-                <dl><dt className="text-xs text-muted-foreground">持有份额</dt><dd className="mt-1 font-mono text-lg font-semibold tabular-nums">{record.shares.toFixed(2)}</dd></dl>
-                <dl><dt className="text-xs text-muted-foreground">当前可退出金额</dt><dd className="mt-1 font-mono text-lg font-semibold tabular-nums">{money(record.currentExitValue)}</dd></dl>
-                <dl>
-                  <dt className="text-xs text-muted-foreground">模拟盈亏</dt>
-                  <dd className={cn(
-                    'mt-1 font-mono text-lg font-semibold tabular-nums',
-                    record.netPnl !== null && record.netPnl > 0 && 'text-primary',
-                    record.netPnl !== null && record.netPnl < 0 && 'text-destructive',
-                    record.netPnl === null && 'text-muted-foreground',
-                  )}>{record.netPnl === null ? '—' : `${record.netPnl > 0 ? '+' : ''}${money(record.netPnl)}`}</dd>
-                </dl>
-                <div className="flex flex-col items-start gap-1">
-                  <DecisionStatusBadge state={record.state} />
-                  <span className="max-w-48 text-xs leading-relaxed text-muted-foreground">{record.detail}</span>
-                </div>
-                <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground">
-                  <span>{record.freshness}</span>
-                  <ArrowRight aria-hidden="true" className="size-4 text-foreground transition-transform group-hover:translate-x-0.5" />
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
+        {records.map((record) => {
+          const entryPending = record.state === 'entry_pending'
+          const noPosition = entryPending || record.state === 'missed'
+          const averageEntry = `${(record.averageEntry * 100).toFixed(1)}%`
+          const amount = noPosition && !entryPending
+            ? '— · —'
+            : `${money(record.cost)} · ${averageEntry}`
+
+          return (
+            <Link
+              key={record.id}
+              href={record.href}
+              className="group rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label={`查看 ${record.match} 的模拟记录`}
+            >
+              <Card size="sm" className="transition-[transform,box-shadow] group-hover:-translate-y-0.5 group-hover:ring-primary/35">
+                <CardContent className="grid min-h-28 grid-cols-2 items-center gap-4 py-1 md:grid-cols-[minmax(15rem,1.5fr)_minmax(8rem,0.7fr)_minmax(7rem,0.55fr)_minmax(8rem,0.65fr)_minmax(7rem,0.55fr)_auto_auto]">
+                  <div className="col-span-2 min-w-0 md:col-span-1">
+                    <h3 className="truncate font-semibold">{record.match}</h3>
+                    <p className="mt-1 truncate text-sm text-muted-foreground">{record.tournament}</p>
+                    <p className="mt-2 text-xs font-medium text-primary">方向：{record.direction}</p>
+                  </div>
+                  <dl>
+                    <dt className="text-xs text-muted-foreground">
+                      {entryPending ? '计划投入 / 报价均价' : '模拟投入 / 买入均价'}
+                    </dt>
+                    <dd className="mt-1 font-mono font-semibold">{amount}</dd>
+                  </dl>
+                  <dl>
+                    <dt className="text-xs text-muted-foreground">
+                      {entryPending ? '预计份额' : '持有份额'}
+                    </dt>
+                    <dd className="mt-1 font-mono text-lg font-semibold tabular-nums">
+                      {noPosition ? '—' : record.shares.toFixed(2)}
+                    </dd>
+                  </dl>
+                  <dl>
+                    <dt className="text-xs text-muted-foreground">退出参考金额</dt>
+                    <dd className="mt-1 font-mono text-lg font-semibold tabular-nums">
+                      {money(record.currentExitValue)}
+                    </dd>
+                    {record.currentExitValue !== null ? (
+                      <dd className="mt-1 max-w-48 text-xs leading-relaxed text-muted-foreground">
+                        按当前最高买价估算，未扣费用，也不保证全部份额都能按此价格卖出。
+                      </dd>
+                    ) : null}
+                  </dl>
+                  <dl>
+                    <dt className="text-xs text-muted-foreground">模拟盈亏</dt>
+                    <dd className={cn(
+                      'mt-1 font-mono text-lg font-semibold tabular-nums',
+                      !noPosition && record.netPnl !== null && record.netPnl > 0 && 'text-primary',
+                      !noPosition && record.netPnl !== null && record.netPnl < 0 && 'text-destructive',
+                      noPosition || record.netPnl === null ? 'text-muted-foreground' : '',
+                    )}>
+                      {noPosition || record.netPnl === null
+                        ? '—'
+                        : `${record.netPnl > 0 ? '+' : ''}${money(record.netPnl)}`}
+                    </dd>
+                  </dl>
+                  <div className="flex flex-col items-start gap-1">
+                    <DecisionStatusBadge state={record.state} />
+                    <span className="max-w-48 text-xs leading-relaxed text-muted-foreground">
+                      {record.detail}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground">
+                    <span>{record.freshness}</span>
+                    <ArrowRight aria-hidden="true" className="size-4 text-foreground transition-transform group-hover:translate-x-0.5" />
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          )
+        })}
       </div>
 
       <div className="flex items-start gap-2 rounded-lg bg-muted/25 p-3 text-xs leading-relaxed text-muted-foreground">

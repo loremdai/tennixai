@@ -6,6 +6,7 @@ import {
   HISTORY_SEASON_UNAVAILABLE_COPY,
   historyEmptyCopy,
   historyPlayerHeading,
+  historyQualityCopy,
   historyScopeLabel,
   playerHistoryTitle,
   seasonSurfaceEntries,
@@ -86,6 +87,33 @@ describe('historyEmptyCopy', () => {
     expect(historyEmptyCopy(context({ scope: 'season' }))).toBe(HISTORY_SEASON_UNAVAILABLE_COPY)
     expect(HISTORY_EMPTY_RESULTS_COPY).toBe('该范围暂无赛果信息')
     expect(HISTORY_SEASON_UNAVAILABLE_COPY).toBe('该赛季战绩暂不可用')
+  })
+
+  it('does not describe unavailable or partial history as a confirmed empty result', () => {
+    expect(
+      historyEmptyCopy(context({ scope: 'yesterday', availability: 'unavailable' })),
+    ).toBe('赛果暂不可用')
+    expect(
+      historyEmptyCopy(
+        context({
+          scope: 'yesterday',
+          availability: 'partial',
+          empty_reason: 'no_results_in_scope',
+        }),
+      ),
+    ).toBe('赛果数据可能不完整，暂未找到结果')
+    expect(
+      historyEmptyCopy(context({ scope: 'yesterday', availability: 'stale' })),
+    ).toBe('赛果数据可能已过时，暂未找到结果')
+  })
+})
+
+describe('historyQualityCopy', () => {
+  it('discloses when populated match history is partial or stale', () => {
+    expect(historyQualityCopy(context({ availability: 'partial' }))).toBe('赛果数据可能不完整')
+    expect(historyQualityCopy(context({ availability: 'stale' }))).toBe('赛果数据可能已过时')
+    expect(historyQualityCopy(context({ availability: 'available' }))).toBeNull()
+    expect(historyQualityCopy(context({ scope: 'season', availability: 'partial' }))).toBeNull()
   })
 })
 

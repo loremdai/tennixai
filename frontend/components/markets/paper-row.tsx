@@ -27,6 +27,19 @@ function money(value: number | null): string {
 }
 
 export function PaperRow({ record }: { record: PaperRowData }) {
+  const entryPending = record.state === 'entry_pending'
+  const noPosition = entryPending || record.state === 'missed'
+  const amountLabel = entryPending
+    ? '计划投入 / 报价均价'
+    : '模拟投入 / 买入均价'
+  const averageEntry = record.averageEntry === null
+    ? '—'
+    : `${(record.averageEntry * 100).toFixed(1)}%`
+  const formattedAmount = `${money(record.cost)} · ${averageEntry}`
+  const amountValue = noPosition && !entryPending ? '— · —' : formattedAmount
+  const sharesLabel = entryPending ? '预计份额' : '持有份额'
+  const sharesValue = noPosition && !entryPending ? '—' : record.shares.toFixed(2)
+
   return (
     <Link
       href={record.href}
@@ -40,17 +53,17 @@ export function PaperRow({ record }: { record: PaperRowData }) {
             <p className="mt-1 truncate text-sm text-muted-foreground">{record.tournament}</p>
             <p className="mt-2 text-xs font-medium text-primary">方向：{record.direction}</p>
           </div>
-          <dl><dt className="text-xs text-muted-foreground">模拟投入 / 买入均价</dt><dd className="mt-1 font-mono font-semibold">{money(record.cost)} · {record.averageEntry === null ? '—' : `${(record.averageEntry * 100).toFixed(1)}%`}</dd></dl>
-          <dl><dt className="text-xs text-muted-foreground">持有份额</dt><dd className="mt-1 font-mono text-lg font-semibold tabular-nums">{record.shares.toFixed(2)}</dd></dl>
-          <dl><dt className="text-xs text-muted-foreground">当前可退出金额</dt><dd className="mt-1 font-mono text-lg font-semibold tabular-nums">{money(record.currentExitValue)}</dd></dl>
+          <dl><dt className="text-xs text-muted-foreground">{amountLabel}</dt><dd className="mt-1 font-mono font-semibold">{amountValue}</dd></dl>
+          <dl><dt className="text-xs text-muted-foreground">{sharesLabel}</dt><dd className="mt-1 font-mono text-lg font-semibold tabular-nums">{sharesValue}</dd></dl>
+          <dl><dt className="text-xs text-muted-foreground">退出参考金额</dt><dd className="mt-1 font-mono text-lg font-semibold tabular-nums">{money(record.currentExitValue)}</dd>{record.currentExitValue !== null ? <dd className="mt-1 max-w-48 text-xs leading-relaxed text-muted-foreground">按当前最高买价估算，未扣费用，也不保证全部份额都能按此价格卖出。</dd> : null}</dl>
           <dl>
             <dt className="text-xs text-muted-foreground">模拟盈亏</dt>
             <dd className={cn(
               'mt-1 font-mono text-lg font-semibold tabular-nums',
-              record.netPnl !== null && record.netPnl > 0 && 'text-primary',
-              record.netPnl !== null && record.netPnl < 0 && 'text-destructive',
-              record.netPnl === null && 'text-muted-foreground',
-            )}>{record.netPnl === null ? '—' : `${record.netPnl > 0 ? '+' : ''}${money(record.netPnl)}`}</dd>
+              !noPosition && record.netPnl !== null && record.netPnl > 0 && 'text-primary',
+              !noPosition && record.netPnl !== null && record.netPnl < 0 && 'text-destructive',
+              noPosition || record.netPnl === null ? 'text-muted-foreground' : '',
+            )}>{noPosition || record.netPnl === null ? '—' : `${record.netPnl > 0 ? '+' : ''}${money(record.netPnl)}`}</dd>
           </dl>
           <div className="flex flex-col items-start gap-1">
             <DecisionStatusBadge state={record.state} />

@@ -135,6 +135,10 @@ describe('PaperLifecycleLive', () => {
     expect(screen.getByText('$10.00 · 52.5%')).toBeTruthy()
     expect(screen.getByText('19.05')).toBeTruthy()
     expect(screen.getByText('$11.40')).toBeTruthy()
+    expect(screen.getByText('退出参考金额')).toBeTruthy()
+    expect(
+      screen.getByText('按当前最高买价估算，未扣费用，也不保证全部份额都能按此价格卖出。'),
+    ).toBeTruthy()
     expect(screen.getByText('—')).toBeTruthy() // net P&L unset until settlement
     expect(screen.getByText('模拟持有中')).toBeTruthy()
     expect(screen.getByText('模拟交易记录')).toBeTruthy()
@@ -153,9 +157,31 @@ describe('PaperLifecycleLive', () => {
     )!
     render(<PaperLifecycleLive paper={model} />)
     expect(screen.getByText('等待买入确认')).toBeTruthy()
+    expect(screen.getByText('计划投入 / 报价均价')).toBeTruthy()
+    expect(screen.getByText('$10.00 · 52.5%')).toBeTruthy()
     // shares / current value / net P&L stay em-dashed before a fill.
     expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(3)
     expect(screen.getByText('已提交模拟买入')).toBeTruthy()
+  })
+
+  it('does not show planned amounts as spent after a missed entry', () => {
+    const model = toPaperModel(
+      snapshot(
+        positionOf({
+          status: 'missed',
+          entry_cost: '0.00',
+          shares: '0.00',
+          average_entry_price: null,
+          current_exit_value: null,
+          net_pnl: '0.00',
+        }),
+      ),
+    )!
+    render(<PaperLifecycleLive paper={model} />)
+
+    expect(screen.getByText('— · —')).toBeTruthy()
+    expect(screen.queryByText('$0.00 · —')).toBeNull()
+    expect(screen.getByText('未模拟买入')).toBeTruthy()
   })
 
   it('never claims real wagering in the ledger copy', () => {

@@ -92,6 +92,45 @@ describe('P3 match decision preview', () => {
     expect(range.value).toBe('low')
   })
 
+  it('labels pending preview entry figures as a plan, not a completed buy', () => {
+    render(
+      <MatchDecisionPage
+        initialStatus="live"
+        initialState="entry_pending"
+        initialSelection="sinner"
+        initialOverlay="none"
+        initialAnalysis="expanded"
+        initialMethodology="closed"
+        initialConfidence="high"
+      />,
+    )
+
+    expect(screen.getByText('计划投入')).toBeTruthy()
+    expect(screen.getByText('报价均价')).toBeTruthy()
+    expect(document.body.textContent).not.toContain('模拟投入')
+  })
+
+  it('does not display a missed preview entry as invested money', () => {
+    render(
+      <MatchDecisionPage
+        initialStatus="upcoming"
+        initialState="missed"
+        initialSelection="sinner"
+        initialOverlay="none"
+        initialAnalysis="expanded"
+        initialMethodology="closed"
+        initialConfidence="high"
+      />,
+    )
+
+    const lifecycle = document
+      .getElementById('paper-lifecycle-title')
+      ?.closest('[data-slot="card"]')
+    const metrics = lifecycle?.querySelectorAll('dl')
+    expect(metrics?.[0]?.textContent).toBe('模拟投入—')
+    expect(metrics?.[1]?.textContent).toBe('模拟买入均价—')
+  })
+
   it('does not expose internal stage or trading-system terminology', () => {
     render(
       <MatchDecisionPage

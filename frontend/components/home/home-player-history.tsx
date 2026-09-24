@@ -7,6 +7,7 @@ import { toHomeMatch } from '@/lib/view-models'
 import {
   historyEmptyCopy,
   historyPlayerHeading,
+  historyQualityCopy,
   historyScopeLabel,
   seasonSurfaceEntries,
   seasonWinRate,
@@ -77,6 +78,7 @@ export function HomePlayerHistory({
         if (!history) return null
         const heading = historyPlayerHeading(history)
         const scopeLabel = historyScopeLabel(history)
+        const qualityCopy = historyQualityCopy(history)
         return (
           <section
             key={`${history.player.id}-${history.scope}-${history.season ?? 'results'}-${index}`}
@@ -96,6 +98,11 @@ export function HomePlayerHistory({
               )
             ) : item.matches.length > 0 ? (
               <div className="flex flex-col gap-3">
+                {qualityCopy ? (
+                  <p role="note" className="text-xs text-muted-foreground">
+                    {qualityCopy}
+                  </p>
+                ) : null}
                 {item.matches.map((match) => (
                   <MatchResultCard
                     key={match.id}

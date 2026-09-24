@@ -2,7 +2,7 @@
 
 > 快速了解现在做到哪里、最近做完什么、接下来由谁接手。长期路线与阶段证据见 [ROADMAP.md](./ROADMAP.md)，产品定位和稳定架构见 [PROJECT.md](./PROJECT.md)。
 
-**最后更新：** 2026-09-24 20:16（北京时间）
+**最后更新：** 2026-09-25 00:43（北京时间）
 
 **当前主任务：** T98 — 全产品缺陷与字段真相审计（`in_progress`）。按用户当前 Goal，检查全部产品页面与关键数据链路，修复有证据的 bug，并查清其余字段的来源、语义、缺失规则和显示方式。当前继续使用演示/fixture 数据；用户明确选择暂不初始化，不运行 `init`、真实 API 或 LLM。
 
@@ -10,20 +10,21 @@
 
 **执行者 / 分支：** Codex / `main`；T98 起始提交 `4ccf257`。保留工作区内已存在的用户改动，未纳入 T98。
 
-**运行手册与计划：** [本地真实运行手册](docs/runbooks/local-real-runtime.md)；[T98 审计规格（待审阅）](docs/superpowers/specs/2026-09-24-tennixai-whole-product-audit.md)；[T97 审计计划](docs/superpowers/plans/2026-09-24-tennixai-t97-global-field-presentation-audit.md)；[T95–T97 字段矩阵](docs/research/2026-09-24-tennixai-t95-match-field-integrity-matrix.md)。
+**运行手册与计划：** [本地真实运行手册](docs/runbooks/local-real-runtime.md)；[T98 审计规格（按当前 Goal 执行）](docs/superpowers/specs/2026-09-24-tennixai-whole-product-audit.md)；[T97 审计计划](docs/superpowers/plans/2026-09-24-tennixai-t97-global-field-presentation-audit.md)；[T95–T98 字段矩阵](docs/research/2026-09-24-tennixai-t95-match-field-integrity-matrix.md)。
 
 ## T98 全产品缺陷与字段真相审计（`in_progress`）
 
 - **目标：** 以当前代码、测试、演示页面和官方数据契约为证据，跨 Home、Players、Match、Markets、Opportunities、Paper 及关键后端链路逐域走查；修复可复现 bug，并为每个对外字段确认来源、转换、空值/异常语义及验证证据。
 - **起始状态：** `main` / `4ccf257`，与 `origin/main` 同步；工作区现有用户改动按下方已知清单保留。
 - **边界：** 继续使用演示/fixture 数据；不运行 `init`、真实 provider/LLM 请求，不读取或修改根 `.env`，不访问 `.next`，不启停本任务之外的服务或容器。
-- **进度：** 已完成代码、路由、DTO 与既有矩阵的只读盘点；尚未改产品代码，所有 bug 候选均待回归验证。
-- **Chat 候选问题：** 后端会发出 `market_opportunities` / `match_decision` 结构化结果，但前端 `StructuredData` 未声明这两种类型，首页可能把 P3 结果误报为“没有符合条件的比赛”并丢失结构卡；流在 `done/error` 前自然 EOF 会被标成成功，部分答案还可能进入下一轮历史；同一轮多条结构化 `data` 中，首页比赛卡只读最后一条，可能漏卡。答案右侧图标的无障碍标签还固定写“包含比赛信息卡”，即使没有该卡也会播报。证据：`backend/app/chat/tools.py`、`backend/app/chat/orchestrator.py`、`frontend/lib/api/types.ts`、`frontend/components/home/home-assistant.tsx`、`frontend/hooks/use-chat-stream.ts` 及相关测试。
-- **市场结算候选问题：** [Polymarket 官方实时数据文档](https://docs.polymarket.com/market-data/realtime-data)规定原始 WS 事件名是 `market_resolved`，且需订阅时启用 `custom_feature_enabled: true`；当前主要行情 feed 未启用该开关，只接受旧名 `resolution`。后台 Gamma REST 仍每 120 秒检查结算、每轮最多 32 个目标并轮转，因此并非永不结算，但实时事件链路不通，Paper 结算可能延迟。另，公开 SSE 声明了 `resolution_delta`，前端也会消费并据此冻结盘口/触发重拉，但后端没有该事件的生产者；现有测试只手工构造前端事件，未测官方 WS 帧或后端发布。尚未修改。
-- **字段清单缺口：** 既有 T95–T97 矩阵未逐字段覆盖 Player Resolution、Match Catalog 的筛选/计数/featured 字段、全部 Chat 事件与结构化字段、P3 SSE 事件、错误信封及运行健康 DTO。继续追踪其来源、转换、空值与页面消费；没有页面消费者的字段会明确标作技术用途/未消费。
-- **其他展示/契约线索：** `/players/search` 当前返回解析对象，但未使用的旧 `getPlayers()` 客户端和单测仍把它当球员数组，属于过期契约；首页“候选球员”直接显示小写三字母国家码。Polymarket 的本地 `spread` 是有双边盘口结果价差的均值，`depth_usd` 是两种结果最佳 bid/ask 金额合计，而页面文案是“买卖价差/可交易金额”；需核对定义后再改标签。
-- **演示数据覆盖：** 当前没有全站统一的演示模式。`/players?preview=1`、`/match?status=...`、`/markets?preview=p3` 各自可看固定样例；首页 `/?preview=p3` 只控制 P3 预览，首页比赛/搜索仍走后端数据链路。因此“不初始化、继续用演示数据”可以支持局部样例走查，但不能让全站以演示数据完整运行。`frontend/next.config.mjs` 启动时会读取根 `.env`，Next 也会写入 `.next`；在本任务边界下不启动 Next/Playwright，继续使用代码与已提交视觉基线审计。
-- **审批门：** T98 规格仍为待用户审阅；在规格获批前继续只读审计，不编制实施步骤、不改产品实现。用户选择继续用演示/fixture 数据；不运行 `init`、真实 API、LLM 或交易，不读根 `.env`，不访问 `.next`。
+- **进度：** 已修复并有回归的缺陷：Chat 结构化市场机会卡缺失/多条 data 漏卡、EOF 与 `done(ok=false)` 被当成功、错误图标误报比赛卡、候选球员国家码裸露、旧 `/players/search` 客户端类型不符及畸形响应误当无结果、市场未知原因码泄漏、市场价差/最佳档金额文案不精确、持仓退出估算误称可退出金额且未披露未扣费用/未按盘口深度成交、Polymarket 结算 WS 提示未触发及时 REST 核验、未知或缺失 phase 被当成完赛/赛前、缺失的单人模型概率被伪造为 0%、待确认/未成交 Paper 行把计划报价误写成已投入/已持有、全部市场的单一模型胜率未注明对应球员，以及球员历史查询在 `unavailable` 时误说“暂无赛果”、`partial/stale` 有结果时未披露限制。另修复首次读取 Home 赛程时球员目录懒加载竞态导致排名短暂为空：目录同步完成前不再读取/覆盖比赛卡球员资料，并确保并发调用等待同一轮同步完成。完整 DTO 字段与未消费项记录在字段矩阵 T98 附录。
+- **Chat/市场结算结果：** P3 `market_opportunities` 现显示结构卡并披露截断；`match_decision` 仅 Match scope，独立工作台继续消费 REST/SSE 快照。官方 `market_resolved` 订阅带 `custom_feature_enabled: true` 后只触发 REST 核验；只有供应商 REST `FINAL` 能结算 Paper。该确认在即时提示和 120 秒兜底路径都会发布 `resolution_delta`，重复相同终态只结算、不重复广播；Markets/Home 订阅该事件后刷新，市场 hook 将终态盘口冻结。WS 本身从不决定结算结果。
+- **剩余字段范围：** 已追加 Match Catalog facets、Player Resolution、Chat 请求/事件/结构化字段、Home 市场脉搏、基础/runtime 健康、Match/P3 SSE、错误信封的来源与消费/空值规则；T95/T96/T97 已覆盖的比赛、球员、历史、市场、机会与 Paper 字段继续引用既有矩阵。任何不由普通用户页面消费的字段均标注为内部/未消费。
+- **演示数据覆盖：** 当前没有全站统一的演示模式。`/players?preview=1`、`/match?status=...`、`/markets?preview=p3` 各自可看固定样例；首页 `/?preview=p3` 只控制 P3 预览，首页比赛/搜索仍走后端数据链路。为覆盖全站交互，本次在 `/tmp` 隔离副本里运行 Next + FastAPI：`env -i`、fake provider/LLM、P3 disabled、固定时钟，不复制 `.env`，不触碰项目目录的 `.next`、数据库或真实服务。该做法只验证演示/fixture 链路，不表示真实 provider 全站可用。
+- **视觉基线核查：** 旧 Home/Markets/Players 截图已由隔离的演示环境重新生成并写回 76 张桌面/手机基线，覆盖 Home、Players、Markets、P3 Match 多状态；代表页面已人工查看。Playwright 视觉对比 `30 passed / 4 skipped`。4 项是演示模式不运行的 P2 Replay 状态；P1 Match live/upcoming 的 Redis 依赖视觉用例从本轮排除，不能据此声称实时详情页通过。
+- **验证：** 前端 Vitest `36 files / 484 passed`；隔离副本 Next production build 与其 TypeScript 检查通过；静态 source check `173 files` 通过，均未检查项目 `.next`；用户未跟踪的 `next-env.d.ts` 未纳入 source check。字段名盘点确认 `frontend/lib/api/types.ts` 的 211 个属性名、`backend/app/api/schemas.py` 的 100 个公开 DTO 属性名均已出现在矩阵。后端最新完整确定性套件以 `env -i` 运行，`1332 passed / 128 skipped`；pytest 测试启动器在导入 `app.main` 前将未显式指定的 `Settings` 环境文件设为 `None`，生产设置仍保留根 `.env` 默认路径；哨兵 `.env` 防回归测试先红后绿，证明测试不继承环境文件。API/Chat 测试使用内存 `RealtimeBundle`，无需 Redis/PostgreSQL；resolution publisher、两条 FINAL 路径和公开 SSE 透传均有测试。Playwright 功能 `80 passed`、首页问答另 `4 passed`、P1 首页结果移动端重复 `5 passed`；视觉 `30 passed / 4 skipped`。Ruff lint 与 `git diff --check` 通过；两份旧 API 测试文件的 formatter 差异均在未改动行，未做整文件重排。P1 Match live/upcoming 截图视觉用例仍因浏览器后端需要 Redis 而未计入通过；P2 Replay 视觉 4 项仍跳过。未读取根 `.env`，未调用真实 provider/LLM/Polymarket；未运行项目 `.next` 或真实运行栈。
+- **执行边界：** 当前 Goal 已授权修复可复现 bug 并查清字段；用户明确选择不初始化、继续用演示/fixture。仍不运行 `init`、真实 API/LLM/Polymarket，不读取或修改根 `.env`，不访问项目目录 `.next`，不启动/停止真实运行栈或容器。隔离临时目录中的假数据 E2E 服务按测试配置自动启停；不将 fixture 结果表述为线上验收。
+- **保留的用户改动：** `.codex/`、`.superpowers/`、`REALTIME_LATENCY_INVESTIGATION.md`、`backend/app/service.py` 中原有的 freshness 两处改动、`backend/tests/test_p3_query_freshness.py`、`frontend/next-env.d.ts`。T98 在 `service.py` 的独立 phase 代码段做了最小修复，没有覆盖原 freshness 改动。
 
 ## T97 Global Field Presentation Audit (`done`)
 

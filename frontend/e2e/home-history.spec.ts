@@ -231,7 +231,7 @@ test.describe('Home history answer', () => {
 })
 
 test.describe('Home history visual', { tag: '@visual' }, () => {
-  test('home-history-answer matches the approved T54 design', async ({ page }) => {
+  test('home-history-answer matches the current consumer UI', async ({ page }) => {
     await mockSlate(page)
     await mockChatStream(page, [
       historyFrame(

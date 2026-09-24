@@ -250,15 +250,19 @@ class TennisService:
         self._directory = directory
         self._seeder = seeder
         self._seeded = seeder is None
+        self._seed_lock = asyncio.Lock()
         # Canonical match catalog (local `api` role only). When supplied,
         # ordinary list reads come from the persisted catalog first; when
         # None every path below is unchanged.
         self._catalog = catalog
 
     async def _ensure_seeded(self) -> None:
-        if not self._seeded:
+        async with self._seed_lock:
+            if self._seeded:
+                return
+            if self._seeder is not None:
+                await self._seeder()
             self._seeded = True
-            await self._seeder()
 
     async def resolve_player(
         self,
@@ -767,6 +771,7 @@ class TennisService:
     ) -> MatchCatalog:
         if status not in {"live", "upcoming"}:
             raise AppError("invalid_request", "Status must be live or upcoming", 422)
+        await self._ensure_seeded()
         active = filters if filters is not None else MatchFilters.default()
         source = await self._list_by_player_id(status, None)
 
@@ -1269,12 +1274,14 @@ _P3_OPEN_POSITION_STATUSES = frozenset({"open", "exit_pending"})
 _P3_RECENT_POSITION_LIMIT = 10
 
 
-def _p3_phase_from_status(status: str | None) -> str:
+def _p3_phase_from_status(status: str | None) -> str | None:
     if status == "live":
         return "live"
     if status == "scheduled":
         return "prematch"
-    return "closed"
+    if status == "finished":
+        return "closed"
+    return None
 
 
 def _p3_decimal_text(value) -> str | None:
@@ -1810,8 +1817,6 @@ class P3QueryService:
             market_phase = match_facts.get("phase")
             if row.status in ("closed", "resolved"):
                 market_phase = "closed"
-            elif market_phase is None:
-                market_phase = "prematch" if row.status in ("scheduled", "open", "unknown") else "closed"
             observation = decision_by_match.get(match_id) if match_id else None
             book = hot_books.get(row.market_id)
             outcome_ids = (row.outcome_a_player_id, row.outcome_b_player_id)

@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { ChatEvent } from '@/lib/api/types'
+import type { ChatEvent, ChatRequest } from '@/lib/api/types'
 import { chatProgressLabel, chatStageLabel, useChatStream } from './use-chat-stream'
 
 const { streamChatMock } = vi.hoisted(() => ({ streamChatMock: vi.fn() }))
@@ -335,6 +335,70 @@ describe('useChatStream', () => {
 
     expect(result.current.state.phase).toBe('error')
     expect(result.current.state.error?.code).toBe('internal_error')
+  })
+
+  it('treats EOF before a terminal event as an incomplete response', async () => {
+    streamChatMock.mockImplementation(
+      scriptedStream([{ type: 'text_delta', payload: { delta: '半截答案' } }]),
+    )
+
+    const { result } = renderHook(() => useChatStream('global'))
+    await act(async () => {
+      await result.current.send('第一个问题')
+    })
+
+    expect(result.current.state.phase).toBe('error')
+    expect(result.current.state.error?.code).toBe('internal_error')
+  })
+
+  it.each([
+    ['EOF', []],
+    [
+      'error event',
+      [{ type: 'error', payload: { code: 'llm_unavailable', message: 'failed', details: {} } }],
+    ],
+  ] as const)('does not add partial text to history after %s', async (_end, ending) => {
+    streamChatMock.mockImplementation(
+      scriptedStream([
+        { type: 'text_delta', payload: { delta: '半截答案' } },
+        ...ending,
+      ]),
+    )
+
+    const { result } = renderHook(() => useChatStream('global'))
+    await act(async () => {
+      await result.current.send('第一个问题')
+    })
+
+    const requests: ChatRequest[] = []
+    streamChatMock.mockImplementation((request: ChatRequest) => {
+      requests.push(request)
+      return scriptedStream([{ type: 'done', payload: { ok: true } }])(request)
+    })
+    await act(async () => {
+      await result.current.send('第二个问题')
+    })
+
+    expect(requests[0].messages).toEqual([
+      { role: 'user', content: '第一个问题' },
+      { role: 'user', content: '第二个问题' },
+    ])
+  })
+
+  it('treats a done event with ok false as an unsuccessful response', async () => {
+    streamChatMock.mockImplementation(
+      scriptedStream([
+        { type: 'text_delta', payload: { delta: '半截答案' } },
+        { type: 'done', payload: { ok: false } },
+      ]),
+    )
+
+    const { result } = renderHook(() => useChatStream('global'))
+    await act(async () => {
+      await result.current.send('问题')
+    })
+
+    expect(result.current.state.phase).toBe('error')
   })
 
   it('aborts the previous request when a new one starts', async () => {

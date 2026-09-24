@@ -14,6 +14,12 @@ def test_default_environment_file_is_at_repository_root():
     assert Path(Settings.model_config["env_file"]) == REPOSITORY_ROOT / ".env"
 
 
+def test_pytest_application_does_not_load_repository_environment_file():
+    from app.main import app
+
+    assert app.state.settings.llm_model == "qwen3.8-max-0902"
+
+
 def test_repository_has_one_environment_example():
     assert (REPOSITORY_ROOT / ".env.example").is_file()
     assert not (REPOSITORY_ROOT / "backend/.env.example").exists()

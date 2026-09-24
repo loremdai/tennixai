@@ -2,6 +2,9 @@ import type { PlayerHistoryContextDto, PlayerSeasonRecordDto, StructuredData } f
 
 export const HISTORY_EMPTY_RESULTS_COPY = '该范围暂无赛果信息'
 export const HISTORY_SEASON_UNAVAILABLE_COPY = '该赛季战绩暂不可用'
+export const HISTORY_RESULTS_UNAVAILABLE_COPY = '赛果暂不可用'
+export const HISTORY_PARTIAL_EMPTY_COPY = '赛果数据可能不完整，暂未找到结果'
+export const HISTORY_STALE_EMPTY_COPY = '赛果数据可能已过时，暂未找到结果'
 
 export function historyScopeLabel(history: PlayerHistoryContextDto): string {
   switch (history.scope) {
@@ -29,7 +32,21 @@ export function playerHistoryTitle(data: StructuredData): string {
 }
 
 export function historyEmptyCopy(history: PlayerHistoryContextDto): string {
-  return history.scope === 'season' ? HISTORY_SEASON_UNAVAILABLE_COPY : HISTORY_EMPTY_RESULTS_COPY
+  if (history.scope === 'season' || history.empty_reason === 'season_record_unavailable') {
+    return HISTORY_SEASON_UNAVAILABLE_COPY
+  }
+  if (history.availability === 'unavailable') return HISTORY_RESULTS_UNAVAILABLE_COPY
+  if (history.availability === 'partial') return HISTORY_PARTIAL_EMPTY_COPY
+  if (history.availability === 'stale') return HISTORY_STALE_EMPTY_COPY
+  return HISTORY_EMPTY_RESULTS_COPY
+}
+
+/** A concise caveat for result rows that are present but not known to be complete/current. */
+export function historyQualityCopy(history: PlayerHistoryContextDto): string | null {
+  if (history.scope === 'season') return null
+  if (history.availability === 'partial') return '赛果数据可能不完整'
+  if (history.availability === 'stale') return '赛果数据可能已过时'
+  return null
 }
 
 /** Win rate only from supplied wins/losses; null denominator stays unknown. */

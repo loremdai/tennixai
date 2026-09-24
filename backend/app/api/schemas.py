@@ -137,6 +137,8 @@ class MarketSummaryDto(BaseModel):
     reason_code: str | None = None
     player_ids: tuple[str, str] | None = None
     player_names: tuple[str, str] | None = None
+    # Prediction probability for player_names[0]/outcome A, not a whole-match
+    # probability or a symmetric pair of probabilities.
     model_probability: float | None = None
     quote: MarketQuoteDto
     is_stale: bool = False

@@ -90,19 +90,26 @@ describe('parseSse', () => {
 })
 
 describe('REST helpers', () => {
-  it('unwraps the data envelope for player search', async () => {
+  it('unwraps the player-resolution envelope for the legacy player search helper', async () => {
+    const resolutionDto = {
+      status: 'resolved',
+      query: 'Sinner',
+      player: { id: 'ply_1', name: 'Jannik Sinner', localized_name: null, country_code: 'ita', ranking: 1 },
+      candidates: [],
+    }
     const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse({ data: [{ id: 'ply_1', name: 'Jannik Sinner', country_code: 'ita', ranking: 1 }] }),
+      jsonResponse({ data: resolutionDto }),
     )
     vi.stubGlobal('fetch', fetchMock)
 
-    const players = await getPlayers('Sinner')
+    const resolution = await getPlayers('Sinner')
 
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/players/search?q=Sinner',
       expect.objectContaining({ cache: 'no-store' }),
     )
-    expect(players[0].id).toBe('ply_1')
+    expect(resolution).toEqual(resolutionDto)
+    expect(resolution.status).toBe('resolved')
   })
 
   it('builds match list query with optional player', async () => {
@@ -218,6 +225,23 @@ describe('P2.6 player directory clients', () => {
       `/api/players/search?q=${encodeURIComponent('谢尔顿')}&limit=20`,
     )
     expect(resolution.status).toBe('not_found')
+  })
+
+  it.each([
+    ['legacy search helper', () => getPlayers('Shelton')],
+    ['directory search helper', () => searchPlayerDirectory('Shelton', 20)],
+  ])('rejects an invalid resolved-player envelope from the %s', async (_name, search) => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        data: { status: 'resolved', query: 'Shelton', player: null, candidates: [] },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(search()).rejects.toMatchObject({
+      name: 'ApiError',
+      code: 'internal_error',
+    })
   })
 
   it('encodes the player id and appends the optional season for profiles', async () => {

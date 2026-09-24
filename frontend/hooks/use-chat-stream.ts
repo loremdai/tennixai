@@ -134,6 +134,7 @@ export function useChatStream(scope: 'global' | 'match', matchId?: string): {
 
       let text = ''
       let terminated = false
+      let completedSuccessfully = false
 
       try {
         const stream = streamChat(
@@ -193,7 +194,22 @@ export function useChatStream(scope: 'global' | 'match', matchId?: string): {
               break
             case 'done':
               terminated = true
-              setState((current) => ({ ...current, phase: 'success', stage: null, progress: null }))
+              completedSuccessfully = event.payload.ok
+              setState((current) =>
+                completedSuccessfully
+                  ? { ...current, phase: 'success', stage: null, progress: null }
+                  : {
+                      ...current,
+                      phase: 'error',
+                      stage: null,
+                      progress: null,
+                      error: {
+                        code: 'internal_error',
+                        message: '回复未能完整生成，请重试。',
+                        details: {},
+                      },
+                    },
+              )
               break
           }
           if (terminated) break
@@ -201,9 +217,19 @@ export function useChatStream(scope: 'global' | 'match', matchId?: string): {
 
         if (!mountedRef.current || controller.signal.aborted) return
         if (!terminated) {
-          setState((current) => ({ ...current, phase: 'success', stage: null, progress: null }))
+          setState((current) => ({
+            ...current,
+            phase: 'error',
+            stage: null,
+            progress: null,
+            error: {
+              code: 'internal_error',
+              message: '回复未能完整生成，请重试。',
+              details: {},
+            },
+          }))
         }
-        if (text) {
+        if (completedSuccessfully && text) {
           historyRef.current = [
             ...historyRef.current,
             { role: 'assistant' as const, content: text },

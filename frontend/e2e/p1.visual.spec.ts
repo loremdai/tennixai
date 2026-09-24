@@ -14,6 +14,8 @@ const states: Array<[string, (page: Page) => Promise<void>]> = [
   ['p1-home-result', async (page) => {
     await preparePage(page, '/?q=' + encodeURIComponent('Sinner 今晚几点比赛？'))
     await page.getByRole('link', { name: /打开比赛：Sinner 对阵/ }).first().waitFor()
+    await expect(page.getByLabel('发送问题')).toBeEnabled()
+    await expect(page.getByText('正在组织回答…')).toHaveCount(0)
   }],
   ['p1-home-error', async (page) => {
     await page.route('**/api/matches**', (route) => {
@@ -53,7 +55,7 @@ const states: Array<[string, (page: Page) => Promise<void>]> = [
 
 test.describe('P1 visual baselines', { tag: '@visual' }, () => {
   for (const [name, prepare] of states) {
-    test(`${name} matches approved P1 prototype`, async ({ page }) => {
+    test(`${name} matches the current P1 interface`, async ({ page }) => {
       await prepare(page)
       await page.evaluate(() => {
         window.scrollTo(0, 0)

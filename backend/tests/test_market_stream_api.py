@@ -136,7 +136,7 @@ async def test_markets_stream_emits_ready_then_typed_deltas(env):
             assert response.headers["content-type"].startswith("text/event-stream")
             async for chunk in response.aiter_text():
                 chunks.append(chunk)
-                if sum("event: " in part for part in chunks) >= 3:
+                if sum("event: " in part for part in chunks) >= 4:
                     break
         return "".join(chunks)
 
@@ -160,6 +160,20 @@ async def test_markets_stream_emits_ready_then_typed_deltas(env):
             "action": "wait",
         },
     )
+    await redis.publish_pattern(
+        "tnx:p3:resolution:*",
+        {
+            "type": "resolution_delta",
+            "market_id": "mkt_1",
+            "status": "final",
+            "rules_version": 1,
+            "payouts": [
+                {"player_id": "ply_a", "payout_per_share": "1"},
+                {"player_id": "ply_b", "payout_per_share": "0"},
+            ],
+            "confirmed_at": "2026-09-16T16:00:00Z",
+        },
+    )
     text = await asyncio.wait_for(task, timeout=5)
 
     frames = _frames(text)
@@ -168,10 +182,14 @@ async def test_markets_stream_emits_ready_then_typed_deltas(env):
     assert frames[0][1]["availability"] == "HAS_OPPORTUNITIES"
     assert "market_delta" in events
     assert "decision_delta" in events
+    assert "resolution_delta" in events
     market_frame = next(frame for frame in frames if frame[0] == "market_delta")
     assert market_frame[2] == "12"  # event id from the market's own cursor
     decision_frame = next(frame for frame in frames if frame[0] == "decision_delta")
     assert decision_frame[2] == "5"  # decision cursor stays independent
+    resolution_frame = next(frame for frame in frames if frame[0] == "resolution_delta")
+    assert resolution_frame[1]["status"] == "final"
+    assert resolution_frame[1]["payouts"][0]["player_id"] == "ply_a"
 
 
 async def test_markets_stream_emits_independent_quote_catalog_invalidation(env):

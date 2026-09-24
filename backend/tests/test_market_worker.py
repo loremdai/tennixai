@@ -198,6 +198,7 @@ def make_worker(
     cleanup_interval_cycles: int = 50,
     on_state=None,
     on_connection=None,
+    on_resolution_hint=None,
     metrics=None,
 ) -> tuple[MarketWorker, dict]:
     parts = {
@@ -224,6 +225,7 @@ def make_worker(
         cleanup_interval_cycles=cleanup_interval_cycles,
         on_state=on_state,
         on_connection=on_connection,
+        on_resolution_hint=on_resolution_hint,
         metrics=metrics,
     )
     return worker, parts
@@ -265,6 +267,25 @@ async def test_demand_drives_subscribe_and_unsubscribe():
     demand.markets = set()
     await worker.reconcile_demand_once()
     assert worker.subscription_state(MKT_1) == "closed"
+
+
+async def test_resolution_event_queues_market_hint_for_runtime_recheck():
+    clock = FakeClock()
+    hints: list[str] = []
+    worker, _ = make_worker(clock, on_resolution_hint=hints.append)
+    await worker.reconcile_demand_once()
+
+    await worker._apply(
+        worker._subs[MKT_1],
+        RawMarketEvent(
+            event_type="resolution",
+            asset_id=TOKEN_A,
+            payload={"event_type": "market_resolved"},
+            received_at=NOW,
+        ),
+    )
+
+    assert hints == [MKT_1]
 
 
 async def test_capacity_limit_is_explicit():

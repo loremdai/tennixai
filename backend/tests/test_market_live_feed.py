@@ -88,6 +88,19 @@ def tick_frame(asset_id: str = TOKEN_A) -> str:
     )
 
 
+def market_resolved_frame() -> str:
+    return json.dumps(
+        {
+            "event_type": "market_resolved",
+            "market": "0xconditionfake",
+            "assets_ids": [TOKEN_A, TOKEN_B],
+            "winning_asset_id": TOKEN_A,
+            "winning_outcome": "Player A",
+            "timestamp": "1789999500000",
+        }
+    )
+
+
 async def collect(feed: PolymarketMarketFeed, asset_ids: tuple[str, ...], count: int):
     events = []
     async for event in feed.subscribe(asset_ids):
@@ -116,7 +129,11 @@ async def test_subscribe_frame_targets_public_market_channel_only():
     subscribe_frames = [
         json.loads(message) for message in connection.sent if message.startswith("{")
     ]
-    assert subscribe_frames[0] == {"type": "market", "assets_ids": [TOKEN_A]}
+    assert subscribe_frames[0] == {
+        "type": "market",
+        "assets_ids": [TOKEN_A],
+        "custom_feature_enabled": True,
+    }
     for frame in subscribe_frames:
         assert frame.get("type") != "user"
 
@@ -141,6 +158,21 @@ async def test_wire_messages_translate_to_typed_raw_events():
     assert all(event.asset_id == TOKEN_A for event in events)
     assert events[0].payload["hash"] == "hash_a1"
     assert all(event.received_at == NOW for event in events)
+
+
+async def test_market_resolved_is_translated_to_resolution_hint():
+    connection = FakeWebSocketConnection([market_resolved_frame()])
+    feed = PolymarketMarketFeed(
+        ws_url="wss://example.invalid/ws/market",
+        websocket_factory=lambda url: connection,
+        now_fn=lambda: NOW,
+    )
+
+    events = await asyncio.wait_for(collect(feed, (TOKEN_A, TOKEN_B), 1), timeout=0.1)
+
+    assert events[0].event_type == "resolution"
+    assert events[0].asset_id == TOKEN_A
+    assert events[0].payload["event_type"] == "market_resolved"
 
 
 async def test_pong_and_unknown_noise_frames_are_ignored():

@@ -460,6 +460,33 @@ describe('HomePage production P3', () => {
       screen.getByRole('link', { name: /查看 Jannik Sinner vs\. Casper Ruud 的模拟买入机会判断/ }),
     ).toHaveAttribute('href', '/matches/mat_live1')
   })
+
+  it('labels a held position with its current exit reference price', async () => {
+    getMarketPulseMock.mockResolvedValue({
+      data: [
+        {
+          match_id: 'mat_position',
+          market_id: 'mkt_position',
+          kind: 'position',
+          action: 'hold',
+          phase: 'live',
+          player_names: ['Jannik Sinner', 'Casper Ruud'],
+          model_probability: 0.62,
+          executable_probability: 0.55,
+          conservative_net_edge: '0.0700',
+          tournament_name: 'ATP Finals',
+          is_stale: false,
+          has_gap: false,
+          as_of: new Date().toISOString(),
+        },
+      ],
+      has_open_position: true,
+    })
+    render(<HomePage p3Enabled />)
+
+    expect(await screen.findByText('当前退出参考价')).toBeVisible()
+    expect(screen.queryByText('10 美元模拟买入价')).toBeNull()
+  })
 })
 
 describe('HomePage facets', () => {
@@ -715,6 +742,10 @@ describe('HomePage chat', () => {
       'href',
       '/players/ply_wang_b',
     )
+    expect(screen.getByRole('link', { name: /Xinyu Wang（王欣瑜）/ })).toHaveTextContent('中国')
+    expect(screen.getAllByText('中国')).toHaveLength(2)
+    expect(screen.getAllByRole('img', { name: '中国国旗' })).toHaveLength(2)
+    expect(screen.queryByText('chn')).toBeNull()
   })
 
   it('renders broad historical unsupported without a card', async () => {
@@ -727,8 +758,23 @@ describe('HomePage chat', () => {
 
     await askQuestion('Sinner 的全部历史战绩')
 
+    expect(await screen.findByRole('heading', { name: '历史结果查询暂不支持' })).toBeVisible()
     expect(await screen.findByText('目前无法查询球员的全部历史赛果，可以试试查询最近的比赛或指定赛季。')).toBeVisible()
     expect(screen.queryByRole('link', { name: /打开比赛：Sinner 对阵/ })).toBeNull()
+  })
+
+  it('does not mislabel an unavailable market tool as a historical-results limitation', async () => {
+    mockStream({
+      data: { kind: 'unsupported', matches: [], metadata: { reason: 'p3_disabled' } },
+      text: '市场功能暂未开放。',
+    })
+    render(<HomePage />)
+    await screen.findByText('Jannik Sinner')
+
+    await askQuestion('现在有哪些市场机会？')
+
+    expect(await screen.findByRole('heading', { name: '市场功能暂未开放' })).toBeVisible()
+    expect(screen.queryByRole('heading', { name: '历史结果查询暂不支持' })).toBeNull()
   })
 
   it('shows a visible stale badge for stale match data', async () => {
@@ -979,6 +1025,47 @@ describe('HomePage player history', () => {
     expect(screen.queryByText('没有符合条件的比赛')).toBeNull()
   })
 
+  it('does not claim yesterday results are empty when the provider is unavailable', async () => {
+    mockStream({
+      dataItems: [
+        playerHistoryData({
+          player: sinnerPlayer,
+          scope: 'yesterday',
+          availability: 'unavailable',
+          empty_reason: null,
+        }),
+      ],
+      text: '暂时无法获取昨日赛果。',
+    })
+    render(<HomePage />)
+    await screen.findByText('Jannik Sinner')
+
+    await askQuestion('Sinner 昨天赢了吗？')
+
+    expect(await screen.findByText('赛果暂不可用')).toBeVisible()
+    expect(screen.queryByText('该范围暂无赛果信息')).toBeNull()
+  })
+
+  it('marks a populated partial history result as potentially incomplete', async () => {
+    mockStream({
+      dataItems: [
+        playerHistoryData(
+          { player: sinnerPlayer, scope: 'recent', availability: 'partial' },
+          [finishedHistoryDto],
+        ),
+      ],
+      text: '以下结果可能不完整。',
+    })
+    render(<HomePage />)
+    await screen.findByText('Jannik Sinner')
+
+    await askQuestion('Sinner 最近赛果如何？')
+
+    const section = screen.getByTestId('player-history-section')
+    expect(within(section).getByText('赛果数据可能不完整')).toBeVisible()
+    expect(within(section).getByRole('link', { name: /打开比赛：Sinner 对阵 One/ })).toBeVisible()
+  })
+
   it('fills the follow-up prompt from a history match card', async () => {
     mockStream({
       dataItems: [
@@ -996,5 +1083,92 @@ describe('HomePage player history', () => {
 
     const input = screen.getByLabelText('继续向 Tennix 提问') as HTMLInputElement
     expect(input.value).toContain('Sinner 对阵 One')
+  })
+
+  it('renders match cards from every structured result beside history results', async () => {
+    mockStream({
+      dataItems: [
+        { kind: 'matches', matches: [upcomingDto] },
+        playerHistoryData({ player: sinnerPlayer, scope: 'recent' }, [finishedHistoryDto]),
+        { kind: 'matches', matches: [liveDto] },
+      ],
+      text: '已整理赛程和近期赛果。',
+    })
+    render(<HomePage />)
+    await screen.findByText('Jannik Sinner')
+
+    await askQuestion('Sinner 的赛程和近期赛果如何？')
+
+    expect(
+      screen.getByRole('link', { name: /打开比赛：Sinner 对阵 Alcaraz/ }),
+    ).toHaveAttribute('href', '/matches/mat_up1')
+    expect(
+      screen.getByRole('link', { name: /打开比赛：Sinner 对阵 Ruud/ }),
+    ).toHaveAttribute('href', '/matches/mat_live1')
+    expect(
+      screen.getByRole('link', { name: /打开比赛：Sinner 对阵 One/ }),
+    ).toHaveAttribute('href', '/matches/mat_hist_1')
+  })
+
+  it('does not label a market-opportunity answer as a missing match', async () => {
+    const marketData = {
+      kind: 'market_opportunities',
+      matches: [],
+      market_opportunities: { opportunities: [], truncated: false },
+    } as unknown as StructuredData
+    mockStream({ data: marketData, text: '当前没有符合条件的市场机会。' })
+    render(<HomePage />)
+    await screen.findByText('Jannik Sinner')
+
+    await askQuestion('现在有哪些市场机会？')
+
+    expect(await screen.findByRole('heading', { name: '市场机会' })).toBeVisible()
+    expect(screen.queryByRole('heading', { name: '没有符合条件的比赛' })).toBeNull()
+    expect(screen.queryByLabelText('包含比赛信息卡')).toBeNull()
+  })
+
+  it('renders structured market opportunities as navigable decision cards', async () => {
+    mockStream({
+      data: {
+        kind: 'market_opportunities',
+        matches: [],
+        market_opportunities: {
+          truncated: true,
+          opportunities: [
+            {
+              match_id: 'mat_p3_opportunity',
+              market_id: 'mkt_p3_opportunity',
+              phase: 'upcoming',
+              action: 'buy',
+              target_player_id: 'ply_sinner',
+              player_ids: ['ply_sinner', 'ply_alcaraz'],
+              player_names: ['Jannik Sinner', 'Carlos Alcaraz'],
+              model_probability: 0.72,
+              executable_probability: 0.63,
+              conservative_net_edge: '0.08',
+              max_acceptable_price: '0.65',
+              tournament_tier: 'atp',
+              tournament_name: 'Rome Open',
+              is_stale: false,
+              has_gap: false,
+              as_of: '2026-09-08T10:00:00Z',
+            },
+          ],
+        },
+      } as unknown as StructuredData,
+      text: '当前有一场符合条件的市场机会。',
+    })
+    render(<HomePage />)
+    await screen.findByText('Jannik Sinner')
+
+    await askQuestion('现在有哪些市场机会？')
+
+    const opportunity = await screen.findByRole('link', {
+      name: /Jannik Sinner vs\. Carlos Alcaraz/,
+    })
+    expect(opportunity).toHaveAttribute('href', '/matches/mat_p3_opportunity')
+    expect(screen.getByText('72.0%')).toBeVisible()
+    expect(screen.getByText('还有其他符合条件的机会，以下仅展示部分结果。')).toBeVisible()
+    expect(screen.queryByLabelText('包含比赛信息卡')).toBeNull()
   })
 })

@@ -1,5 +1,6 @@
 """PlayerDirectorySync determinism, idempotency, and failure-preservation tests."""
 
+import asyncio
 from datetime import datetime, timezone
 
 import pytest
@@ -8,7 +9,7 @@ from app.domain import Player
 from app.errors import AppError
 from app.players.models import PlayerAliasSource, RankingEntry, RankingMovement, Tour
 from app.players.repository import MemoryPlayerDirectoryRepository
-from app.players.sync import DirectorySyncReport, PlayerDirectorySync
+from app.players.sync import DirectorySeeder, DirectorySyncReport, PlayerDirectorySync
 
 NOW = datetime(2026, 9, 12, 9, 0, tzinfo=timezone.utc)
 
@@ -90,6 +91,37 @@ async def test_sync_rankings_discovers_then_updates_on_rerun() -> None:
 
     second = await sync.sync_rankings()
     assert (second.discovered, second.updated, second.failed) == (0, 3, 0)
+
+
+@pytest.mark.asyncio
+async def test_directory_seeder_concurrent_ensure_waits_for_the_active_seed() -> None:
+    class BlockingSync:
+        def __init__(self) -> None:
+            self.started = asyncio.Event()
+            self.release = asyncio.Event()
+            self.calls: list[str] = []
+
+        async def sync_rankings(self) -> None:
+            self.calls.append("rankings")
+            self.started.set()
+            await self.release.wait()
+
+        async def sync_known_player_aliases(self) -> None:
+            self.calls.append("aliases")
+
+    sync = BlockingSync()
+    seeder = DirectorySeeder(sync)  # type: ignore[arg-type]
+    first = asyncio.create_task(seeder.ensure())
+    await sync.started.wait()
+    second = asyncio.create_task(seeder.ensure())
+    await asyncio.sleep(0)
+    second_waited = not second.done()
+
+    sync.release.set()
+    await asyncio.gather(first, second)
+
+    assert second_waited
+    assert sync.calls == ["rankings", "aliases"]
 
 
 @pytest.mark.asyncio

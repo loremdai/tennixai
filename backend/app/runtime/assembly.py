@@ -464,6 +464,7 @@ def build_local_runtime_daemon(
         return external.token_ids
 
     market_bridge = MarketBridge(decision_worker=decision_worker, health=registry)
+    resolution_hints: set[str] = set()
     market_worker = MarketWorker(
         feed=market_feed,
         rest=market_provider,
@@ -475,6 +476,7 @@ def build_local_runtime_daemon(
         now=clock,
         on_state=market_bridge.on_state,
         on_connection=market_bridge.on_connection,
+        on_resolution_hint=resolution_hints.add,
         metrics=metrics,
     )
 
@@ -530,6 +532,7 @@ def build_local_runtime_daemon(
         quote_change_notifier=notify_quotes_changed,
         quote_fresh_seconds=live.market_quote_fresh_seconds,
         market_snapshot_seconds=live.market_snapshot_seconds,
+        resolution_hints=resolution_hints,
         live_catalog_seconds=live.live_catalog_seconds,
         upcoming_catalog_seconds=live.upcoming_catalog_seconds,
         ranking_seconds=live.ranking_seconds,

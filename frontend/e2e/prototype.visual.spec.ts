@@ -8,9 +8,9 @@ const states = [
   ['match-finished', '/match?status=finished'],
 ] as const
 
-test.describe('Prototype visual baselines', { tag: '@visual' }, () => {
+test.describe('Current product visual baselines', { tag: '@visual' }, () => {
   for (const [name, path] of states) {
-    test(`${name} matches approved prototype`, async ({ page }) => {
+    test(`${name} matches the current consumer UI`, async ({ page }) => {
       await page.goto(path)
       // The Next.js dev overlay (route indicator / issue badge) renders outside
       // the product UI and appears nondeterministically; exclude its host element

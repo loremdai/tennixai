@@ -55,8 +55,10 @@ test.describe('player directory', () => {
     await page.getByRole('button', { name: '清空球员搜索' }).click()
     await expect(page.getByRole('heading', { name: 'ATP 单打世界排名' })).toBeVisible()
 
-    // The 排名 201 quick chip resolves a player seeded outside the Top 200.
-    await page.getByRole('button', { name: '排名 201' }).click()
+    // The production search spans beyond the Top 200 ranking table.
+    await searchInput(page).fill('Coleman Wong')
+    await searchInput(page).press('Enter')
+    await expect(page.getByRole('heading', { name: '全目录搜索结果' })).toBeVisible()
     await expect(page.getByRole('link', { name: /Coleman Wong/ })).toBeVisible()
     await expect(page.getByText('#201')).toBeVisible()
   })

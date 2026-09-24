@@ -180,8 +180,8 @@ export function AllMarketsView({
                   </dl>
 
                   <dl className="grid grid-cols-2 gap-3">
-                    <div><dt className="text-xs text-muted-foreground">买卖价差</dt><dd className="mt-1 font-mono font-semibold">{formatPercent(market.spread)}</dd></div>
-                    <div><dt className="text-xs text-muted-foreground">可交易金额</dt><dd className="mt-1 font-mono font-semibold">${market.depth}</dd></div>
+                    <div><dt className="text-xs text-muted-foreground" title="每位球员都同时有买入价和卖出价时，才计入平均值。">平均价差</dt><dd className="mt-1 font-mono font-semibold">{formatPercent(market.spread)}</dd></div>
+                    <div><dt className="text-xs text-muted-foreground" title="双方买卖盘最优一档的金额合计，不代表整个盘口，也不保证全部可成交。">最优档金额</dt><dd className="mt-1 font-mono font-semibold">${market.depth}</dd></div>
                     <div className="col-span-2"><dt className="sr-only">报价更新时间</dt><dd className={cn('text-xs text-muted-foreground', market.stale && 'text-destructive')}>{market.freshness}</dd></div>
                   </dl>
 

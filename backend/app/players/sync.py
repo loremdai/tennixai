@@ -8,6 +8,7 @@ refreshes: it derives deterministic English aliases for exactly the given
 player IDs, with no directory-wide scan and no translator/LLM call.
 """
 
+import asyncio
 from collections.abc import Callable, Collection
 from datetime import datetime
 
@@ -33,13 +34,15 @@ class DirectorySeeder:
     def __init__(self, sync: "PlayerDirectorySync") -> None:
         self._sync = sync
         self._done = False
+        self._lock = asyncio.Lock()
 
     async def ensure(self) -> None:
-        if self._done:
-            return
-        self._done = True
-        await self._sync.sync_rankings()
-        await self._sync.sync_known_player_aliases()
+        async with self._lock:
+            if self._done:
+                return
+            await self._sync.sync_rankings()
+            await self._sync.sync_known_player_aliases()
+            self._done = True
 
 
 class PlayerDirectorySync:

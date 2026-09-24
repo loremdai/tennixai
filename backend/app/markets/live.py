@@ -21,7 +21,7 @@ from app.markets.reducer import RawMarketEvent
 DEFAULT_WS_URL = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
 DEFAULT_PING_INTERVAL_SECONDS = 10.0
 CONSUMED_EVENT_TYPES = frozenset(
-    {"book", "price_change", "tick_size_change", "resolution"}
+    {"book", "price_change", "tick_size_change", "resolution", "market_resolved"}
 )
 
 
@@ -70,7 +70,11 @@ class PolymarketMarketFeed:
         async def generator() -> AsyncIterator[RawMarketEvent]:
             async with feed._connect(feed._ws_url) as connection:  # type: ignore[operator]
                 subscribe_frame = json.dumps(
-                    {"type": "market", "assets_ids": list(asset_ids)}
+                    {
+                        "type": "market",
+                        "assets_ids": list(asset_ids),
+                        "custom_feature_enabled": True,
+                    }
                 )
                 await connection.send(subscribe_frame)
 
@@ -113,9 +117,22 @@ class PolymarketMarketFeed:
                         event_type = str(payload.get("event_type") or "")
                         if event_type not in CONSUMED_EVENT_TYPES:
                             continue
+                        asset_id = str(payload.get("asset_id") or "")
+                        if event_type == "market_resolved":
+                            resolved_assets = payload.get("assets_ids")
+                            asset_id = str(
+                                payload.get("winning_asset_id")
+                                or (
+                                    resolved_assets[0]
+                                    if isinstance(resolved_assets, list)
+                                    and resolved_assets
+                                    else ""
+                                )
+                            )
+                            event_type = "resolution"
                         yield RawMarketEvent(
                             event_type=event_type,
-                            asset_id=str(payload.get("asset_id") or ""),
+                            asset_id=asset_id,
                             payload=payload,
                             received_at=feed._now(),
                         )

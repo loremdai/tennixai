@@ -120,7 +120,16 @@ export function MarketPulse({ initialState }: { initialState: HomePulseState }) 
                     <p className="mt-1 font-mono text-lg font-semibold tabular-nums">{formatPercent(row.modelProbability)}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">10 美元模拟买入价</p>
+                    <p
+                      className="text-xs text-muted-foreground"
+                      title={row.priority === 'position' || row.priority === 'sell'
+                        ? '按当前最高买价估算；不代表整笔持仓都能按此价格退出。'
+                        : undefined}
+                    >
+                      {row.priority === 'position' || row.priority === 'sell'
+                        ? '当前退出参考价'
+                        : '10 美元模拟买入价'}
+                    </p>
                     <p className="mt-1 font-mono text-lg font-semibold tabular-nums">{formatPercent(row.executableProbability)}</p>
                   </div>
                   <div className="flex flex-col items-start gap-1">

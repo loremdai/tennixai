@@ -1,7 +1,13 @@
 import json
 from datetime import UTC, datetime
 
-from app.markets.publisher import QUOTE_CATALOG_CHANNEL, QuoteCatalogPublisher
+from p3_fakes import make_resolution
+
+from app.markets.publisher import (
+    QUOTE_CATALOG_CHANNEL,
+    MarketHotPublisher,
+    QuoteCatalogPublisher,
+)
 
 
 NOW = datetime(2026, 9, 23, 11, 30, tzinfo=UTC)
@@ -50,3 +56,25 @@ async def test_quote_catalog_publisher_emits_aggregate_private_invalidation():
         key in json.dumps(events).lower()
         for key in ("token", "condition", "provider", "wallet")
     )
+
+
+async def test_market_hot_publisher_emits_final_resolution_delta():
+    redis = FakeRedis()
+    publisher = MarketHotPublisher(redis, now_fn=lambda: NOW)
+
+    await publisher.publish_resolution(make_resolution("mkt_42"))
+
+    assert len(redis.published) == 1
+    channel, payload = redis.published[0]
+    assert channel == "tnx:p3:resolution:mkt_42"
+    assert json.loads(payload) == {
+        "type": "resolution_delta",
+        "market_id": "mkt_42",
+        "status": "final",
+        "rules_version": 1,
+        "payouts": [
+            {"player_id": "ply_a", "payout_per_share": "1"},
+            {"player_id": "ply_b", "payout_per_share": "0"},
+        ],
+        "confirmed_at": "2026-09-16T16:00:00Z",
+    }

@@ -34,7 +34,12 @@ from app.markets.mapping import (
     evaluate_link_change,
     map_market,
 )
-from app.markets.models import MarketListingScan, MarketStatus, ResolutionStatus
+from app.markets.models import (
+    MarketListingScan,
+    MarketResolution,
+    MarketStatus,
+    ResolutionStatus,
+)
 from app.markets.quotes import realtime_quote_record
 from app.persistence.market_repositories import LinkFrozenError
 from app.runtime.health import (
@@ -289,6 +294,7 @@ class LocalRuntimeDaemon:
         quote_fresh_seconds: int = 300,
         market_snapshot_seconds: int = 120,
         tick_seconds: float = 1.0,
+        resolution_hints: set[str] | None = None,
         live_catalog_seconds: int = 60,
         upcoming_catalog_seconds: int = 600,
         ranking_seconds: int = 86_400,
@@ -320,6 +326,10 @@ class LocalRuntimeDaemon:
         self._mirrored_hashes: dict[str, str] = {}
         self._tick_seconds = tick_seconds
         self._max_resolution_targets = max_resolution_targets
+        self._published_final_resolutions: dict[str, str] = {}
+        # WS resolution messages are only hints; the provider's REST final
+        # resolution remains the sole authority used for paper settlement.
+        self._resolution_hints = resolution_hints if resolution_hints is not None else set()
         self._closed_window = closed_market_window
 
         self._recently_closed: dict[str, datetime] = {}
@@ -444,7 +454,25 @@ class LocalRuntimeDaemon:
         await self._market_worker.reconcile_demand_once()
         await self._pump_markets()
         await self._jobs.run_due(self._clock())
+        await self._recheck_resolution_hints()
         await self._health.persist()
+
+    async def _recheck_resolution_hints(self) -> None:
+        targets = sorted(self._resolution_hints)[: self._max_resolution_targets]
+        if not targets:
+            return
+        self._resolution_hints.difference_update(targets)
+        failures: list[str] = []
+        for market_id in targets:
+            try:
+                resolution = await self._market_provider.get_resolution(market_id)
+            except Exception as exc:  # noqa: BLE001 - periodic recheck is fallback
+                failures.append(stable_reason_code(exc))
+                continue
+            if resolution is not None and resolution.status is ResolutionStatus.FINAL:
+                await self._apply_final_resolution(market_id, resolution)
+        if failures:
+            raise RuntimeJobError(failures[0])
 
     async def _pump_markets(self) -> None:
         """Pump every active market with strict per-market isolation.
@@ -714,14 +742,24 @@ class LocalRuntimeDaemon:
                 continue
             if resolution is not None and (resolution.status is ResolutionStatus.FINAL):
                 # Provider final resolutions route ONLY through the decision
-                # worker's settlement path.
-                await self._decision_worker.on_resolution(market_id, resolution)
+                # worker's settlement path; then notify live readers.
+                await self._apply_final_resolution(market_id, resolution)
             # Rules maintenance is best-effort re-refresh; a rules fetch
             # failure never blocks resolution routing nor aborts the batch.
             with contextlib.suppress(Exception):
                 await self._capture_rules(market_id)
         if failures:
             raise RuntimeJobError(failures[0])
+
+    async def _apply_final_resolution(
+        self, market_id: str, resolution: MarketResolution
+    ) -> None:
+        await self._decision_worker.on_resolution(market_id, resolution)
+        fingerprint = resolution.model_dump_json()
+        if self._published_final_resolutions.get(market_id) == fingerprint:
+            return
+        await self._hot_books.publish_resolution(resolution)
+        self._published_final_resolutions[market_id] = fingerprint
 
     def _select_resolution_targets(
         self, *, unsettled: set[str], closed: set[str], active: set[str]

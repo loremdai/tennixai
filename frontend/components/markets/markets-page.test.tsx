@@ -74,7 +74,62 @@ describe('P3 markets preview', () => {
     expect(document.body.textContent).not.toMatch(/BUY \+ WAIT|部分 stale|Markets · P3/)
   })
 
-  it('uses plain Chinese labels for quote spread and available market depth', async () => {
+  it('labels preview exits as reference estimates rather than guaranteed proceeds', () => {
+    render(
+      <MarketsPage
+        initialView="paper"
+        initialState="populated"
+        initialTiers={[]}
+        initialGender="all"
+        initialPhase="all"
+      />,
+    )
+
+    expect(screen.getAllByText('退出参考金额').length).toBeGreaterThan(0)
+    expect(
+      screen.getAllByText('按当前最高买价估算，未扣费用，也不保证全部份额都能按此价格卖出。').length,
+    ).toBeGreaterThan(0)
+  })
+
+  it('distinguishes planned quotes from held positions in preview records', () => {
+    render(
+      <MarketsPage
+        initialView="paper"
+        initialState="populated"
+        initialTiers={[]}
+        initialGender="all"
+        initialPhase="all"
+      />,
+    )
+
+    const pending = screen.getByRole('link', {
+      name: '查看 Aryna Sabalenka vs Coco Gauff 的模拟记录',
+    })
+    expect(pending.textContent).toContain('计划投入 / 报价均价')
+    expect(pending.textContent).toContain('预计份额')
+    expect(pending.textContent).not.toContain('持有份额')
+  })
+
+  it('does not present a missed preview entry as money spent or shares held', () => {
+    render(
+      <MarketsPage
+        initialView="paper"
+        initialState="terminal"
+        initialTiers={[]}
+        initialGender="all"
+        initialPhase="all"
+      />,
+    )
+
+    const missed = screen.getByRole('link', {
+      name: '查看 Qinwen Zheng vs Elena Rybakina 的模拟记录',
+    })
+    expect(missed.textContent).toContain('— · —')
+    expect(missed.textContent).not.toContain('$10.00 · 54.0%')
+    expect(missed.textContent).not.toContain('0.00')
+  })
+
+  it('describes the quote spread and best-level amount without implying full depth', async () => {
     render(
       <MarketsPage
         initialView="all"
@@ -86,8 +141,12 @@ describe('P3 markets preview', () => {
     )
 
     expect(await screen.findByRole('heading', { name: '比赛市场' })).toBeVisible()
-    expect(screen.getAllByText('买卖价差').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('可交易金额').length).toBeGreaterThan(0)
+    const spreadLabels = screen.getAllByText('平均价差')
+    const depthLabels = screen.getAllByText('最优档金额')
+    expect(spreadLabels.length).toBeGreaterThan(0)
+    expect(depthLabels.length).toBeGreaterThan(0)
+    expect(spreadLabels[0]).toHaveAttribute('title', '每位球员都同时有买入价和卖出价时，才计入平均值。')
+    expect(depthLabels[0]).toHaveAttribute('title', '双方买卖盘最优一档的金额合计，不代表整个盘口，也不保证全部可成交。')
     expect(document.body.textContent).not.toMatch(/\bspread\b|\bdepth\b|主巡覆盖|不伪造模型值/)
     expect(screen.getAllByText('暂不提供胜率估算').length).toBeGreaterThan(0)
   })
@@ -316,6 +375,14 @@ describe('MarketsWorkspace (production)', () => {
     ).toHaveLength(0)
   })
 
+  it('identifies which player the market-row model probability belongs to', async () => {
+    const user = userEvent.setup()
+    render(<MarketsWorkspace />)
+    await user.click(screen.getByRole('tab', { name: /全部市场/ }))
+
+    await waitFor(() => expect(screen.getByText('Alpha One 模型胜率')).toBeTruthy())
+  })
+
   it('shows challenger market-only rows without negative labels', async () => {
     listMarketsMock.mockResolvedValue({
       markets: [
@@ -477,6 +544,10 @@ describe('MarketsWorkspace (production)', () => {
     ])
     expect(screen.getAllByText('$10.00 · 52.5%')).toHaveLength(3)
     expect(screen.getByText('+$1.40')).toBeTruthy()
+    expect(screen.getAllByText('退出参考金额').length).toBeGreaterThan(0)
+    expect(
+      screen.getAllByText('按当前最高买价估算，未扣费用，也不保证全部份额都能按此价格卖出。').length,
+    ).toBeGreaterThan(0)
     expect(screen.getByText(/不会触发真实交易/)).toBeTruthy()
   })
 
@@ -534,6 +605,22 @@ describe('MarketsWorkspace (production)', () => {
     // The closed badge appears on the row (plus the phase filter chip).
     await waitFor(() => expect(screen.getAllByText('已结束').length).toBeGreaterThanOrEqual(2))
     expect(screen.getByText('暂不参与')).toBeTruthy()
+  })
+
+  it('labels markets with missing phase as unknown instead of completed', async () => {
+    listMarketsMock.mockResolvedValue({
+      markets: [summaryDto({ phase: null, status: 'unknown' })],
+      page: 1,
+      page_size: 50,
+      total: 1,
+    })
+    const user = userEvent.setup()
+    render(<MarketsWorkspace />)
+    await user.click(screen.getByRole('tab', { name: /全部市场/ }))
+
+    expect(await screen.findByText('状态未知')).toBeTruthy()
+    // Only the phase filter uses this label; the market row must not claim it ended.
+    expect(screen.getAllByText('已结束')).toHaveLength(1)
   })
 
   it('renders honest empty states per view', async () => {

@@ -311,6 +311,18 @@ describe('toMarketRow', () => {
     expect(row.phase).toBe('closed')
     expect(row.reason).toBe('评估标准更新，暂不提供判断')
   })
+
+  it('does not present a missing market phase as completed', () => {
+    expect(toMarketRow(summary({ phase: null, status: 'unknown' }), NOW).phase).toBe(
+      'unknown',
+    )
+  })
+
+  it('keeps unknown internal decision codes out of consumer copy', () => {
+    const row = toMarketRow(summary({ reason_code: 'FUTURE_INTERNAL_REASON' }), NOW)
+    expect(row.reason).toBe('暂无法提供判断原因')
+    expect(row.reason).not.toContain('FUTURE_INTERNAL_REASON')
+  })
 })
 
 describe('toPaperRow', () => {
@@ -392,6 +404,27 @@ describe('toPulseRow', () => {
       toPulseRow(pulseRow({ kind: 'position', action: 'hold', match_id: 'm4' }), NOW).priority,
     ).toBe('position')
     expect(toPulseRow(pulseRow({ phase: 'closed', match_id: 'm5' }), NOW).phase).toBe('已完赛')
+    expect(toPulseRow(pulseRow({ phase: null }), NOW).phase).toBe('比赛状态未知')
     expect(toPulseRow(pulseRow(), NOW).edgePp).toBeCloseTo(7.0)
+  })
+
+  it('does not rank an unknown match phase as an upcoming buy', () => {
+    const rows = [
+      toPulseRow(pulseRow({ phase: null, match_id: 'unknown' }), NOW),
+      toPulseRow(pulseRow({ action: 'wait', match_id: 'wait' }), NOW),
+      toPulseRow(pulseRow({ phase: 'upcoming', match_id: 'upcoming' }), NOW),
+      toPulseRow(pulseRow({ phase: 'live', match_id: 'live' }), NOW),
+    ]
+
+    expect(rows[0].priority).toBe('buy_unknown')
+    expect(selectHomePulseRows(rows).map((row) => row.id)).toEqual([
+      'opportunity:live',
+      'opportunity:upcoming',
+      'opportunity:wait',
+    ])
+    expect(selectHomePulseRows([rows[0], rows[1]]).map((row) => row.id)).toEqual([
+      'opportunity:wait',
+      'opportunity:unknown',
+    ])
   })
 })

@@ -7,7 +7,6 @@ import type {
   MatchFiltersDto,
   MatchSnapshotDto,
   MatchStreamFrame,
-  PlayerDto,
   PlayerProfileViewDto,
   PlayerResultPageDto,
   PlayerSearchResolutionDto,
@@ -62,8 +61,111 @@ async function requestJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   return body.data
 }
 
-export function getPlayers(query: string, signal?: AbortSignal): Promise<PlayerDto[]> {
-  return requestJson<PlayerDto[]>(`/api/players/search?q=${encodeURIComponent(query)}`, signal)
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function decodePlayerSearchResolution(value: unknown): PlayerSearchResolutionDto {
+  const invalid = () => new ApiError(502, 'internal_error', 'Invalid player search response')
+  if (!isRecord(value)) throw invalid()
+
+  const status = value.status
+  const query = value.query
+  const rawPlayer = value.player
+  const rawCandidates = value.candidates
+  if (
+    (status !== 'resolved' && status !== 'ambiguous' && status !== 'not_found') ||
+    typeof query !== 'string' ||
+    !Array.isArray(rawCandidates)
+  ) {
+    throw invalid()
+  }
+
+  function decodePlayer(raw: unknown) {
+    if (!isRecord(raw)) throw invalid()
+    if (
+      typeof raw.id !== 'string' ||
+      !raw.id.trim() ||
+      typeof raw.name !== 'string' ||
+      !raw.name.trim()
+    ) {
+      throw invalid()
+    }
+    const nullableString = (field: unknown) => {
+      if (field === undefined || field === null) return null
+      if (typeof field !== 'string') throw invalid()
+      return field
+    }
+    const nullableRank = (field: unknown) => {
+      if (field === undefined || field === null) return null
+      if (typeof field !== 'number' || !Number.isFinite(field)) throw invalid()
+      return field
+    }
+    const countryAlpha2 = raw.country_alpha2
+    if (countryAlpha2 !== undefined && countryAlpha2 !== null && typeof countryAlpha2 !== 'string') {
+      throw invalid()
+    }
+    return {
+      id: raw.id,
+      name: raw.name,
+      localized_name: nullableString(raw.localized_name),
+      country_code: nullableString(raw.country_code),
+      ...(countryAlpha2 === undefined ? {} : { country_alpha2: countryAlpha2 }),
+      ranking: nullableRank(raw.ranking),
+    }
+  }
+
+  const player = rawPlayer === null ? null : decodePlayer(rawPlayer)
+  const candidates = rawCandidates.map((rawCandidate) => {
+    if (!isRecord(rawCandidate)) throw invalid()
+    if (
+      typeof rawCandidate.matched_alias !== 'string' ||
+      typeof rawCandidate.alias_kind !== 'string'
+    ) {
+      throw invalid()
+    }
+    const currentRank = rawCandidate.current_rank
+    if (
+      currentRank !== null &&
+      currentRank !== undefined &&
+      (typeof currentRank !== 'number' || !Number.isFinite(currentRank))
+    ) {
+      throw invalid()
+    }
+    return {
+      player: decodePlayer(rawCandidate.player),
+      matched_alias: rawCandidate.matched_alias,
+      alias_kind: rawCandidate.alias_kind,
+      current_rank: currentRank ?? null,
+    }
+  })
+
+  if (
+    (status === 'resolved' && player === null) ||
+    (status === 'ambiguous' && (player !== null || candidates.length === 0)) ||
+    (status === 'not_found' && (player !== null || candidates.length > 0))
+  ) {
+    throw invalid()
+  }
+
+  return { status, query, player, candidates }
+}
+
+async function requestPlayerSearch(
+  path: string,
+  signal?: AbortSignal,
+): Promise<PlayerSearchResolutionDto> {
+  return decodePlayerSearchResolution(await requestJson<unknown>(path, signal))
+}
+
+export function getPlayers(
+  query: string,
+  signal?: AbortSignal,
+): Promise<PlayerSearchResolutionDto> {
+  return requestPlayerSearch(
+    `/api/players/search?q=${encodeURIComponent(query)}`,
+    signal,
+  )
 }
 
 export function getMatches(
@@ -259,7 +361,7 @@ export function searchPlayerDirectory(
   signal?: AbortSignal,
 ): Promise<PlayerSearchResolutionDto> {
   const search = new URLSearchParams({ q: query, limit: String(limit) })
-  return requestJson<PlayerSearchResolutionDto>(`/api/players/search?${search.toString()}`, signal)
+  return requestPlayerSearch(`/api/players/search?${search.toString()}`, signal)
 }
 
 export function getPlayerProfile(
