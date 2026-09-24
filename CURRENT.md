@@ -2,23 +2,22 @@
 
 > 快速了解现在做到哪里、最近做完什么、接下来由谁接手。长期路线与阶段证据见 [ROADMAP.md](./ROADMAP.md)，产品定位和稳定架构见 [PROJECT.md](./PROJECT.md)。
 
-**最后更新：** 2026-09-24 10:45 CST
+**最后更新：** 2026-09-24 12:12 CST
 
-**当前主任务：** T96 — Player History and Head-to-Head Field Audit（`in_progress`）。T94 本地运行时/浏览器复验仍因 `LOCAL_NOT_INITIALIZED` 阻塞；`init` 会初始化运行库并可能消耗 LLM 配额，尚未获准执行。
+**当前主任务：** 暂无进行中的实现任务。T96 已完成（实现 `b4acb8b`）；T94 本地运行时/浏览器复验仍因 `LOCAL_NOT_INITIALIZED` 阻塞。该复验需要先运行 `init`，它会初始化运行库并可能消耗 LLM 配额，目前尚未批准。
 
-**最近任务：** T95 — Audit Match Data Fields End-to-End (`done`)，实现提交 `3ae508c`。
+**最近任务：** T96 — Player and Historical Results Field Audit (`done`)，实现提交 `b4acb8b`。
 
 **执行者 / 分支：** Codex / `main`；T96 起始提交 `843bae4`，领取记录随本次计划提交。T94 复验起始提交 `6694c7a`，领取提交 `19e2156`；T95 起始提交 `38723c9`，领取提交 `c52ffc4`，实现提交 `3ae508c`。T94 代码已完成（`bbb7d4a`、`d302316`、`93e1243`），运行时/浏览器门等待初始化授权。
 
 **运行手册与背景计划：** [本地真实运行手册](docs/runbooks/local-real-runtime.md)；[T94 排名一致性计划](docs/superpowers/plans/2026-09-24-tennixai-t94-realtime-ranking-authority.md)；[T96 历史赛果/H2H字段审计计划](docs/superpowers/plans/2026-09-24-tennixai-t96-history-h2h-field-audit.md)。最近完成的比赛字段审计：[T95 计划](docs/superpowers/plans/2026-09-24-tennixai-t95-match-field-integrity-audit.md)；[T95 字段矩阵](docs/research/2026-09-24-tennixai-t95-match-field-integrity-matrix.md)。
 
-## T96 Player and Historical Results Field Audit (`in_progress`)
+## T96 Player and Historical Results Field Audit (`done`)
 
-- **范围：** 补查 T95/T92 未完整列出的排名快照、球员资料/赛季统计、历史赛果页和对战历史模型：`RankingEntry`、`RankingPage`、`PlayerProfileData/View`、`PlayerSeasonRecord`、`PlayerResultPage`、`PlayerResults`、`HeadToHead`、`HeadToHeadResult`。追踪 DTO/provider→目录/服务→REST/chat→前端，并把所有字段写入证据矩阵。
-- **已由 RED 回归证实：** H2H 的三组数组任何一组触及 10 条本地上限都应标记 `partial`；“昨天赛果”最近 30 天列表触及 10 条上限时不可声称完整；成功但无结果的赛季应是 available + total 0，而不是 unavailable；空排名筛选页应使用真实快照时间，无任何排名快照时 `as_of=null`；球员页下一场应按开赛时间选最早，不依赖供应商顺序。相应最小修复已在本地，尚待整组验证。
-- **官方语义：** API-Tennis 文档定义 standings/profile 与 `get_H2H` 三组结果，但没定义 H2H 排序/上限、standing 源更新时间或 `movement` 对比周期；当地十条上限与观测时间必须标为项目策略。日期/国家映射、统计赛季类型和排名权威来源均须有测试/官方依据；未知含义保持未知。
-- **边界：** 本任务不运行 `init`、不启动项目服务、不调用真实 API、不读取/修改根 `.env`，不触碰 `.next`；Colima 保持运行，但用户要求停止的其他项目容器和 Tennix 服务均保持停止。
-- **验收：** 每个已确认问题均保留 RED→GREEN 回归；运行相关 service/provider/API/chat/player-directory/profile 测试、确定性后端测试、球员 view-model Vitest 与 TypeScript 检查、改动文件 Ruff 和 `git diff --check`。准确记录因 PostgreSQL 未运行而未能执行的测试，不宣称通过。
+- **范围与结论：** 审计排名、球员资料/赛季统计、球员历史赛果与 Home Chat 历史查询，并逐字段更新证据矩阵。共修复 25 个已由回归证明的问题，包括国家名称归一化/旗帜显示、历史比分缺少逐盘行时保留明确标注的总盘数、单双打边界、日期语义与不完整历史误报。
+- **修复：** API-Tennis 国家名称通过 ISO registry 映射为 canonical alpha-3；alpha-2 仅作派生展示字段，前端使用动态旗帜资源，不维护手绘国家清单。历史比分仅在详细盘分不可用时显示供应商真实的总盘数，不臆造每盘局分。Home Chat 的 last/recent/yesterday 结果只取单打，遇到无法确定日期的供应商记录时标记为 partial。
+- **验收：** 定向后端 `161 passed`；全量确定性后端 `1314 passed, 4 failed, 103 skipped, 25 deselected`。4 个失败用例在断开的 `127.0.0.1:6379` Redis 处无法执行到断言；按本任务边界未启动 Redis。前端 Vitest `432 passed`、TypeScript、改动 Python Ruff、`uv lock --check` 与 `git diff --check` 通过。实现提交 `b4acb8b`；细节与限制见 [T96 实施计划](docs/superpowers/plans/2026-09-24-tennixai-t96-history-h2h-field-audit.md) 和 [字段矩阵](docs/research/2026-09-24-tennixai-t95-match-field-integrity-matrix.md)。
+- **边界与后续：** 未运行 `init`、未启动服务/容器、未调用真实 API/LLM、未触碰 `.env` 或 `.next`。数据库中先前已存为 null 的国家值需等下一次正常数据同步才会被供应商映射补齐；本任务未做运行中页面复验。T94 的本地浏览器复验仍待初始化授权。
 
 ## T95 范围与交接
 
@@ -78,14 +77,14 @@
 - `.env` 未读取、改写或输出；用户原有未跟踪文件均保留。
 - T95 没有启动或重启本地服务。此前现场比对发现旧 Match API 对 Martin Damm 返回 `741`，最新 standings 与 ATP 官方排名页均为 `106`；T92/T94 代码已修复，真实 standings 只读 smoke 也通过，但页面排名和后台健康状态尚未通过新进程/浏览器复验。用户已允许启用 API/服务，可在下一任务中执行该复验。
 - T93 实现与审查修复提交 `a28b971`、`fa00f46` 已完成；本文件和 ROADMAP 的最终关闭记录随本次推送。
-- T95 字段审计已完成；P4.5 只剩 T94 修复后的服务/浏览器复验。模型晋升证据链需另行设计与授权，自动下单继续 `deferred`。
+- T96 实现提交 `b4acb8b` 已完成；P4.5 的 T93–T96 代码审计均已关闭，只剩 T94 修复后的服务/浏览器复验。模型晋升证据链需另行设计与授权，自动下单继续 `deferred`。
 
 ## 最近变更
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
+| 2026-09-24 | `b4acb8b` | 完成 T96：修复球员国家名/旗帜归一化、历史总盘数缺失显示、Chat 单打与不完整历史标记；后端定向 161 passed、前端 432 passed、TypeScript 通过 |
 | 2026-09-24 | `3ae508c` | 完成 T95：新增端到端字段矩阵；修复当前盘误标、未知 PBP 标记、统计/比分校验和 freshness 持久化；后端 1289 passed、前端 422 passed，PostgreSQL round-trip 与迁移回滚守卫通过 |
 | 2026-09-24 | `93e1243` | 完成 T94：REST 排名权威修正同步至热快照/SSE，实时 worker 对临时目录故障保留 frame 并重试；全后端 1336 passed、12 skipped，PostgreSQL player directory 9 passed |
 | 2026-09-24 | `fa00f46` | 按独立审查补齐逐项统计时间显示及数值不变时的新观测时间更新 |
 | 2026-09-24 | `a28b971` | 完成 T93 主体：保留稀疏 WebSocket 帧遗漏的技术统计并标记过时 |
-| 2026-09-24 | `ec60ad8` | 领取 T93：修复稀疏 WebSocket 帧清空已有技术统计及统计时间戳误用 |

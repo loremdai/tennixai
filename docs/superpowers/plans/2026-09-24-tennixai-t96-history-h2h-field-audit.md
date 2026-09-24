@@ -1,6 +1,6 @@
 # T96 Player and Historical Results Field Audit
 
-Status: complete (2026-09-24). Implementation and field evidence are recorded in the linked [T95–T96 matrix](../../research/2026-09-24-tennixai-t95-match-field-integrity-matrix.md).
+Status: complete (2026-09-24; implementation `b4acb8b`). Implementation and field evidence are recorded in the linked [T95–T96 matrix](../../research/2026-09-24-tennixai-t95-match-field-integrity-matrix.md).
 
 ## Goal
 
