@@ -2,7 +2,7 @@
 
 > 快速了解现在做到哪里、最近做完什么、接下来由谁接手。长期路线与阶段证据见 [ROADMAP.md](./ROADMAP.md)，产品定位和稳定架构见 [PROJECT.md](./PROJECT.md)。
 
-**最后更新：** 2026-09-24 19:29（北京时间）
+**最后更新：** 2026-09-24 19:44（北京时间）
 
 **当前主任务：** T98 — 全产品缺陷与字段真相审计（`in_progress`）。按用户当前 Goal，检查全部产品页面与关键数据链路，修复有证据的 bug，并查清其余字段的来源、语义、缺失规则和显示方式。当前继续使用演示/fixture 数据；用户明确选择暂不初始化，不运行 `init`、真实 API 或 LLM。
 
@@ -17,7 +17,7 @@
 - **目标：** 以当前代码、测试、演示页面和官方数据契约为证据，跨 Home、Players、Match、Markets、Opportunities、Paper 及关键后端链路逐域走查；修复可复现 bug，并为每个对外字段确认来源、转换、空值/异常语义及验证证据。
 - **起始状态：** `main` / `4ccf257`，与 `origin/main` 同步；工作区现有用户改动按下方已知清单保留。
 - **边界：** 继续使用演示/fixture 数据；不运行 `init`、真实 provider/LLM 请求，不读取或修改根 `.env`，不访问 `.next`，不启停本任务之外的服务或容器。
-- **进度：** 已完成代码/路由/DTO/既有矩阵的只读盘点；审计规格已写入，待用户审阅确认后编制逐项执行计划。
+- **进度：** 已完成代码/路由/DTO/既有矩阵的只读盘点。发现两项需补失败测试并修复的 Chat 缺陷：① 后端会发出 `market_opportunities` / `match_decision` 结构化结果，但前端类型未包含这两种 `kind`，首页把非比赛机会结果回退显示为“没有符合条件的比赛”；② Chat 流在 `done/error` 前 EOF 会走成功分支，并把部分回答写入下一轮历史。证据位置：`backend/app/chat/tools.py`、`backend/app/chat/orchestrator.py`、`frontend/lib/api/types.ts`、`frontend/components/home/home-assistant.tsx`、`frontend/hooks/use-chat-stream.ts`。审计规格已写入，待用户审阅确认后编制逐项执行计划；以上尚未修改或以回归测试验收。
 
 ## T97 Global Field Presentation Audit (`done`)
 
