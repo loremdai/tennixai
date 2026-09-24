@@ -2,15 +2,24 @@
 
 > 快速了解现在做到哪里、最近做完什么、接下来由谁接手。长期路线与阶段证据见 [ROADMAP.md](./ROADMAP.md)，产品定位和稳定架构见 [PROJECT.md](./PROJECT.md)。
 
-**最后更新：** 2026-09-24 12:12 CST
+**最后更新：** 2026-09-24 12:31 CST
 
-**当前主任务：** 暂无进行中的实现任务。T96 已完成（实现 `b4acb8b`）；T94 本地运行时/浏览器复验仍因 `LOCAL_NOT_INITIALIZED` 阻塞。该复验需要先运行 `init`，它会初始化运行库并可能消耗 LLM 配额，目前尚未批准。
+**当前主任务：** T97 — 全站字段与展示走查（`in_progress`）。本任务把浏览器验收扩展至 Home、Players、Match、Markets、Paper 全局页面；真实运行时仍因未初始化而单独受阻，不运行可能消耗 LLM 配额的 `init`。
 
-**最近任务：** T96 — Player and Historical Results Field Audit (`done`)，实现提交 `b4acb8b`。
+**最近任务：** T97 — Global Field Presentation Audit (`in_progress`)，起始提交 `c84fa6d`。
 
-**执行者 / 分支：** Codex / `main`；T96 起始提交 `843bae4`，领取记录随本次计划提交。T94 复验起始提交 `6694c7a`，领取提交 `19e2156`；T95 起始提交 `38723c9`，领取提交 `c52ffc4`，实现提交 `3ae508c`。T94 代码已完成（`bbb7d4a`、`d302316`、`93e1243`），运行时/浏览器门等待初始化授权。
+**执行者 / 分支：** Codex / `main`；T97 起始提交 `c84fa6d`，领取记录由本次计划提交。T96 实现 `b4acb8b`。T94 代码已完成（`bbb7d4a`、`d302316`、`93e1243`），本地真实运行时/浏览器门因 `LOCAL_NOT_INITIALIZED` 等待初始化授权。保留所有既有未跟踪文件。
 
-**运行手册与背景计划：** [本地真实运行手册](docs/runbooks/local-real-runtime.md)；[T94 排名一致性计划](docs/superpowers/plans/2026-09-24-tennixai-t94-realtime-ranking-authority.md)；[T96 历史赛果/H2H字段审计计划](docs/superpowers/plans/2026-09-24-tennixai-t96-history-h2h-field-audit.md)。最近完成的比赛字段审计：[T95 计划](docs/superpowers/plans/2026-09-24-tennixai-t95-match-field-integrity-audit.md)；[T95 字段矩阵](docs/research/2026-09-24-tennixai-t95-match-field-integrity-matrix.md)。
+**运行手册与计划：** [本地真实运行手册](docs/runbooks/local-real-runtime.md)；[T97 全站字段与展示审计计划](docs/superpowers/plans/2026-09-24-tennixai-t97-global-field-presentation-audit.md)；[T94 排名一致性计划](docs/superpowers/plans/2026-09-24-tennixai-t94-realtime-ranking-authority.md)；[T95–T96 字段矩阵](docs/research/2026-09-24-tennixai-t95-match-field-integrity-matrix.md)。
+
+## T97 Global Field Presentation Audit (`in_progress`)
+
+- **目标：** 按全站页面核对字段可见性与表达是否准确，不把真实供应商缺项误报为 UI bug，也不把测试夹具通过当成真实数据通过。
+- **范围：** Home/全局搜索与结构化回答、Players 排名目录/球员主页/历史结果、Match 详情（比分/时间/球员/赛事/统计/PBP/momentum/chat/决策）、Markets（两侧报价/深度/时间/模型状态/机会原因）、Paper ledger，以及桌面/窄屏布局、缺省/错误/partial/stale 状态、北京时区和供应商字段隔离。
+- **起始状态：** `main` / `c84fa6d`，工作区只有已知用户未跟踪文件；服务栈停止，`./scripts/tennix-live up` 之前返回 `LOCAL_NOT_INITIALIZED`。不读取或修改根 `.env`，不运行 LLM 消耗型 `init`，不手工迁移数据库。
+- **证据方法：** 复用 T95–T96 canonical 字段矩阵和现有 E2E/fixtures；打开实际页面检查完整用户可见字段，按供应商能力、映射/数据、传输/缓存、展示层分层记录；每个确认缺陷必须有复现样例和回归测试。
+- **验收门：** 全部列出页面至少有浏览器或 E2E 实际覆盖证据；真实运行时无法启动则单独列为阻塞，不声称真实数据通过；修复已证实问题并更新矩阵；运行受影响测试、前端测试/typecheck、相关 Playwright、改动文件 lint 和 `git diff --check`；最终提交并推送。
+- **当前进度：** 计划已建立；页面/字段清单在整理。实现与全站浏览器检查尚未开始。
 
 ## T96 Player and Historical Results Field Audit (`done`)
 
