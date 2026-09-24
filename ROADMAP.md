@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-24 10:35 CST
+**最后更新：** 2026-09-24 10:45 CST
 
-**总体状态：** `in_progress`（P4 持续打磨；T93–T95 的实时统计、排名权威性和比赛字段审计代码均已完成。T94 本地服务/浏览器复验被 `LOCAL_NOT_INITIALIZED` 阻塞，等待用户批准可能消耗 LLM 配额的初始化。此前用户批准的 B 边界保持：所有活跃网球胜者市场展示供应商真实名称/报价，未映射/双打不进入模型或 Paper。模型未晋升时机会页继续诚实为空；模型晋升另行排期）
+**总体状态：** `in_progress`（P4 持续打磨；T93–T95 的实时统计、排名权威性和比赛字段审计代码均已完成，T96 正补审历史赛果/H2H字段。T94 本地服务/浏览器复验被 `LOCAL_NOT_INITIALIZED` 阻塞，等待用户批准可能消耗 LLM 配额的初始化。此前用户批准的 B 边界保持：所有活跃网球胜者市场展示供应商真实名称/报价，未映射/双打不进入模型或 Paper。模型未晋升时机会页继续诚实为空；模型晋升另行排期）
 
-**当前里程碑：** P3 已关闭；P4.0–P4.4 已完成（T72–T92）；P4.5 的 T93–T95 代码任务已完成，运行时复验仍是待办。
+**当前里程碑：** P3 已关闭；P4.0–P4.4 已完成（T72–T92）；P4.5 的 T93–T95 代码任务已完成，T96 补充字段审计进行中；T94 运行时复验仍待初始化授权。
 
-**当前阶段：** T95 — Audit Match Data Fields End-to-End 已完成（`3ae508c`），唯一交接状态见 [CURRENT.md](./CURRENT.md)。T93 — Preserve Live Statistics Across Sparse WebSocket Updates 已完成（`a28b971`+`fa00f46`）；T94 — Keep Match Rankings Consistent in REST and Realtime Snapshots 已完成（`bbb7d4a`、`d302316`、`93e1243`）：REST 与实时快照均严格使用最新 standings，缺失排名置空；REST 修正同步发布 Redis/SSE，目录暂时不可用时 worker 保留 frame 并重试。T94 运行时复验发现本地栈未初始化，`up` 明确拒绝启动；`init` 可能消耗 LLM 配额，等待用户批准。P4.5 运行时复验完成后再关闭。模型未晋升时机会页仍为空；模型晋升证据链另行排期；自动下单继续 `deferred`。
+**当前阶段：** T96 — Player History and Head-to-Head Field Audit 正在进行；唯一交接状态见 [CURRENT.md](./CURRENT.md)。T95 — Audit Match Data Fields End-to-End 已完成（`3ae508c`）。T93 — Preserve Live Statistics Across Sparse WebSocket Updates 已完成（`a28b971`+`fa00f46`）；T94 — Keep Match Rankings Consistent in REST and Realtime Snapshots 已完成（`bbb7d4a`、`d302316`、`93e1243`）：REST 与实时快照均严格使用最新 standings，缺失排名置空；REST 修正同步发布 Redis/SSE，目录暂时不可用时 worker 保留 frame 并重试。T94 运行时复验发现本地栈未初始化，`up` 明确拒绝启动；`init` 可能消耗 LLM 配额，等待用户批准。模型未晋升时机会页仍为空；模型晋升证据链另行排期；自动下单继续 `deferred`。
 
 ## 状态说明
 
@@ -150,7 +150,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | P4.2 — Launcher Reliability | `done` | 让根目录 `./scripts/tennix-live up` 不依赖当前 shell 解析到的 pnpm 版本 | T82 已完成（`2cea490`）：TDD 先红后绿；`up` 直接执行 `frontend/node_modules/.bin/next`，缺失时在其他子进程启动前报 `LOCAL_FRONTEND_MISSING`；真实无环境覆盖 `up` exit 0，API health 200、前端 HTTP 200，进程树无 pnpm；随后 `down` exit 0 且数据保留 |
 | P4.3 — Market Data Truthfulness & Coverage | `done` | 修复市场—比赛 read model 脱节，建立全市场可信报价覆盖与实时决策双通道，并让 Markets/Opportunities 如实表达数据与模型状态 | T83 规格经用户 2026-09-22 书面确认；T84–T89 全部 `done` 并逐项提交（2026-09-23）。交付：active-link 唯一 read truth、reversible `0006` latest-quote projection、有界 120s 批量快照覆盖车道（`POST /books`，只读、零凭据）、七个显式 quote 状态、显式 `model_availability`/真实 `decision_action`、按真实原因解释的机会空态、覆盖率健康与 runbook。模型晋升、自动下单和虚构机会均不属于本阶段，均未触碰 |
 | P4.4 — Host Environment Resilience | `done` | 消除项目 HTTP 客户端对宿主 `HTTP(S)_PROXY` / `NO_PROXY` 环境的非确定性继承，避免 IPv6 loopback 排除项导致应用与测试在导入阶段失败 | T90（`b3ef97d`）完成：所有项目自建 HTTPX 客户端显式 `trust_env=False`、WebSocket 显式 `proxy=None`；launcher 保留宿主环境但客户端不再隐式读取代理配置。回归在含 `::1` 的环境中通过，确定性后端 `1200 passed, 114 deselected`，无 API/LLM/交易调用，根 `.env` 未改 |
-| P4.5 — Live Match Data Integrity | `in_progress` | 逐项核对实时比赛数据从供应商事件、canonical reducer、API 到 UI 的字段与时间语义，修复已验证的数据丢失或误标 | T93（稀疏统计）、T94（排名权威性）和 T95（全字段审计）代码均已完成。T95 字段矩阵与复验见下方任务记录；仅剩 T94 修复后的本地服务/浏览器运行时确认，用户已允许启用 API/服务。 |
+| P4.5 — Live Match Data Integrity | `in_progress` | 逐项核对实时比赛数据从供应商事件、canonical reducer、API 到 UI 的字段与时间语义，修复已验证的数据丢失或误标 | T93（稀疏统计）、T94（排名权威性）和 T95（比赛字段审计）代码均已完成；T96 补查历史赛果/H2H 字段。T94 修复后的本地服务/浏览器运行时确认仍被初始化授权阻塞。 |
 
 > **后验核验记录（2026-09-18）：** T80 的 `110 passed / 44 skipped / 0 failed` 是当时真实通过的历史证据。控制者随后在无影响路径产品代码变更的 `2270049` 上两次复跑当前完整 Playwright，均得到 `109 passed / 44 skipped / 1 failed`；唯一失败为 mobile `prototype.visual` 的 `home-answer`，265 像素差异。该用例单独以 `--workers=1 --repeat-each=10` 则 10/10 通过，故 T81 以两条顺序 CLI lane 消除跨文件 worker 并发，而非改动视觉真相。
 
@@ -184,6 +184,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | T93 | P4.5 | Preserve Live Statistics Across Sparse WebSocket Updates | `done` | `a28b971` + `fa00f46` | 领取 `ec60ad8`（起始 `86a6812`）。按 `(name, period)` 合并：新行更新对应指标，缺失旧行保留原值/时间并标 stale；全旧时 capability=`stale`，新旧并存时=`partial`。独立审查后补齐每个旧指标自己的时间显示，并让数值未变的新观测更新时间戳且触发归约更新；重复空帧仍为 no-op。最终验证：focused reducer/provider `71 passed`；全量确定性 backend `1241 passed/127 deselected`；前端统计卡 `7 passed`、全 Vitest `416 passed`、`tsc --noEmit` 通过；Ruff lint、`git diff --check` 通过。Ruff format 对两个旧 Python 文件仍有历史 formatter 差异，仅改动区保持格式；build/Playwright 未触碰共享 `.next`，服务未重启、`.env` 未动。一个 custom-provider 缺质量元数据的边缘情况 deferred。计划与完整审查记录见 [T93](./docs/superpowers/plans/2026-09-24-tennixai-t93-live-statistics-preservation.md) |
 | T94 | P4.5 | Keep Match Rankings Consistent in REST and Realtime Snapshots | `done` | `bbb7d4a`、`d302316`、`93e1243` | 领取前现场复现：Martin Damm 比赛/资料接口 rank=741；本地 standings rank=106（`as_of=2026-09-23T13:32:20Z`），ATP 官方排名页同为 106；搜索 rank=null。REST hydration 与 reducer 现在严格服从 standings，缺失为 `null`；realtime worker 按内部 player ID 投影相同权威，旧 rank 不会在恢复或稀疏 frame 中重现。独立审查后修复 REST 排名纠正未发布热快照/SSE、目录读取失败可能丢 frame 两项：现发布热快照并 rebasing，临时目录异常保留 frame、1 秒后重试。最终全后端 `1336 passed, 12 skipped, 25 deselected`；PostgreSQL player-directory `9 passed`；改动文件 Ruff 和 `git diff --check` 通过。无 provider/API/UI/schema/config 变更，未重启共享服务；用户之后已允许启用服务，运行时浏览器复验仍待执行。领取 `e85226f`、补充 `21fad96`。计划与审查边界见 [T94](./docs/superpowers/plans/2026-09-24-tennixai-t94-realtime-ranking-authority.md) |
 | T95 | P4.5 | Audit Match Data Fields End-to-End | `done` | `3ae508c` | 领取起点 `38723c9`、领取提交 `c52ffc4`。建立全 canonical 比赛字段矩阵，核对 API-Tennis 官方 REST/WS 文档、DTO→provider→reducer/PostgreSQL→REST/SSE→UI；未知供应商语义明确保留 null。修复当前盘标签/高亮误判、未文档化 PBP 标记误判为 false、统计/比分值和单位问题、freshness 持久化丢失；`0007`/`0008` 迁移新增安全数据守卫。验证：后端确定性 `1289 passed, 128 deselected`；前端 `422 passed`、TypeScript 通过；改动 Python Ruff、`git diff --check` 通过；PostgreSQL current-set round-trip `1 passed`，有 freshness 时真实 downgrade 被拒绝且版本/列/数据保留；API-Tennis standings 真实只读 smoke `1 passed`。不触碰根 `.env`/`.next`，不启动应用；T94 页面与后台健康状态仍待独立运行时复验。矩阵：[T95 证据矩阵](./docs/research/2026-09-24-tennixai-t95-match-field-integrity-matrix.md)，计划：[T95](./docs/superpowers/plans/2026-09-24-tennixai-t95-match-field-integrity-audit.md) |
+| T96 | P4.5 | Audit Player History and Head-to-Head Fields | `in_progress` | — | 领取起点 `843bae4`。补审 canonical `HeadToHead` 与服务结果包装对象，从 API-Tennis 三组 H2H 列表追踪至映射、截断/availability、REST、chat 和球员结果 UI；先用回归确认“个人近期列表达到上限但 aggregate 仍标 available”的疑点。计划：[T96](./docs/superpowers/plans/2026-09-24-tennixai-t96-history-h2h-field-audit.md)。 |
 
 ## P4.1 Completion Gate 核验摘要（2026-09-18，逐条实际核验）
 

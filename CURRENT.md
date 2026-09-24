@@ -2,15 +2,23 @@
 
 > 快速了解现在做到哪里、最近做完什么、接下来由谁接手。长期路线与阶段证据见 [ROADMAP.md](./ROADMAP.md)，产品定位和稳定架构见 [PROJECT.md](./PROJECT.md)。
 
-**最后更新：** 2026-09-24 10:35 CST
+**最后更新：** 2026-09-24 10:45 CST
 
-**当前主任务：** T94 本地运行时/浏览器复验（`blocked`）。`up` 报 `LOCAL_NOT_INITIALIZED`；继续前需用户批准 `init`，因为它会初始化本地运行库并可能消耗 LLM 配额。
+**当前主任务：** T96 — Player History and Head-to-Head Field Audit（`in_progress`）。T94 本地运行时/浏览器复验仍因 `LOCAL_NOT_INITIALIZED` 阻塞；`init` 会初始化运行库并可能消耗 LLM 配额，尚未获准执行。
 
 **最近任务：** T95 — Audit Match Data Fields End-to-End (`done`)，实现提交 `3ae508c`。
 
-**执行者 / 分支：** Codex / `main`；T94 复验起始提交 `6694c7a`，领取提交 `19e2156`；T95 起始提交 `38723c9`，领取提交 `c52ffc4`，实现提交 `3ae508c`。T94 代码已完成（`bbb7d4a`、`d302316`、`93e1243`），运行时/浏览器门等待初始化授权。
+**执行者 / 分支：** Codex / `main`；T96 起始提交 `843bae4`，领取记录随本次计划提交。T94 复验起始提交 `6694c7a`，领取提交 `19e2156`；T95 起始提交 `38723c9`，领取提交 `c52ffc4`，实现提交 `3ae508c`。T94 代码已完成（`bbb7d4a`、`d302316`、`93e1243`），运行时/浏览器门等待初始化授权。
 
-**运行手册与背景计划：** [本地真实运行手册](docs/runbooks/local-real-runtime.md)；[T94 排名一致性计划](docs/superpowers/plans/2026-09-24-tennixai-t94-realtime-ranking-authority.md)。最近完成的字段审计：[T95 计划](docs/superpowers/plans/2026-09-24-tennixai-t95-match-field-integrity-audit.md)；[T95 字段矩阵](docs/research/2026-09-24-tennixai-t95-match-field-integrity-matrix.md)。
+**运行手册与背景计划：** [本地真实运行手册](docs/runbooks/local-real-runtime.md)；[T94 排名一致性计划](docs/superpowers/plans/2026-09-24-tennixai-t94-realtime-ranking-authority.md)；[T96 历史赛果/H2H字段审计计划](docs/superpowers/plans/2026-09-24-tennixai-t96-history-h2h-field-audit.md)。最近完成的比赛字段审计：[T95 计划](docs/superpowers/plans/2026-09-24-tennixai-t95-match-field-integrity-audit.md)；[T95 字段矩阵](docs/research/2026-09-24-tennixai-t95-match-field-integrity-matrix.md)。
+
+## T96 Player History and Head-to-Head Field Audit (`in_progress`)
+
+- **范围：** 补查 T95 未覆盖的 canonical `HeadToHead` 与 service 层 `HeadToHeadResult`、`PlayerResults`，从 API-Tennis DTO/provider 映射追踪至服务缓存、REST/chat 和球员结果 UI；补齐矩阵中每个字段的来源、顺序/身份、空值、截断、freshness 和消费者。
+- **待验证疑点：** 服务仅在 `meetings` 达到内部十条上限时标记 aggregate `partial`，但 provider 也会分别把 `first_player_recent`、`second_player_recent` 截到十条。先用回归测试确认，再决定是否修复。
+- **官方语义：** API-Tennis 文档说明 `get_H2H` 返回 `H2H`、`firstPlayerResults`、`secondPlayerResults` 三组结果，但没有声明最大条数；十条限制是本项目的本地上限。未知含义不得猜测。
+- **边界：** 本任务不运行 `init`、不启动项目服务、不调用真实 API、不读取/修改根 `.env`，不触碰 `.next`；Colima 保持运行，但用户要求停止的其他项目容器和 Tennix 服务均保持停止。
+- **验收：** 先看到回归测试按预期失败；若证实缺陷则最小修复并测试各列表上限/未截断边界。运行相关 service/provider/API/chat/player-results 测试、可运行的确定性后端测试、改动文件 Ruff 与 `git diff --check`。准确记录因 PostgreSQL 未运行而未能执行的测试，不宣称通过。
 
 ## T95 范围与交接
 
