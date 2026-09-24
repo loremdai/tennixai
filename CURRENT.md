@@ -2,15 +2,15 @@
 
 > 快速了解现在做到哪里、最近做完什么、接下来由谁接手。长期路线与阶段证据见 [ROADMAP.md](./ROADMAP.md)，产品定位和稳定架构见 [PROJECT.md](./PROJECT.md)。
 
-**最后更新：** 2026-09-24 10:33 CST
+**最后更新：** 2026-09-24 10:35 CST
 
-**当前主任务：** T94 本地运行时/浏览器复验（`in_progress`）。仅启动项目 `up`，不运行 `init`；若 schema 落后需执行可能消耗 LLM 配额的 `init`，先停下询问用户。
+**当前主任务：** T94 本地运行时/浏览器复验（`blocked`）。`up` 报 `LOCAL_NOT_INITIALIZED`；继续前需用户批准 `init`，因为它会初始化本地运行库并可能消耗 LLM 配额。
 
 **最近任务：** T95 — Audit Match Data Fields End-to-End (`done`)，实现提交 `3ae508c`。
 
-**执行者 / 分支：** Codex / `main`；T94 复验起始提交 `6694c7a`；T95 起始提交 `38723c9`，领取提交 `c52ffc4`，实现提交 `3ae508c`。T94 代码已完成（`bbb7d4a`、`d302316`、`93e1243`），现在执行新进程与浏览器验收。
+**执行者 / 分支：** Codex / `main`；T94 复验起始提交 `6694c7a`，领取提交 `19e2156`；T95 起始提交 `38723c9`，领取提交 `c52ffc4`，实现提交 `3ae508c`。T94 代码已完成（`bbb7d4a`、`d302316`、`93e1243`），运行时/浏览器门等待初始化授权。
 
-**实施计划：** [T95 端到端字段审计计划](docs/superpowers/plans/2026-09-24-tennixai-t95-match-field-integrity-audit.md)（完成）。字段证据：[T95 字段矩阵](docs/research/2026-09-24-tennixai-t95-match-field-integrity-matrix.md)。
+**运行手册与背景计划：** [本地真实运行手册](docs/runbooks/local-real-runtime.md)；[T94 排名一致性计划](docs/superpowers/plans/2026-09-24-tennixai-t94-realtime-ranking-authority.md)。最近完成的字段审计：[T95 计划](docs/superpowers/plans/2026-09-24-tennixai-t95-match-field-integrity-audit.md)；[T95 字段矩阵](docs/research/2026-09-24-tennixai-t95-match-field-integrity-matrix.md)。
 
 ## T95 范围与交接
 
@@ -22,11 +22,13 @@
 - **验证：** 后端确定性 `1289 passed, 128 deselected`；前端 Vitest `422 passed`；TypeScript、改动 Python 文件 Ruff 与 `git diff --check` 通过。真实 PostgreSQL round-trip `1 passed`；迁移 `0008` 在有 freshness 数据时安全拒绝回滚，实测版本仍为 `0008`、数据和列均保留。API-Tennis standings 真实只读 smoke `1 passed`。
 - **运行边界：** 未运行项目 `init/up`、未触碰 `.env` 或 `.next`，未做浏览器/运行服务复验。真实 standings API 映射已单独验证，但当前页面是否已刷新排名、后台健康状态是否恢复，仍须启动服务后确认。其他项目的 Supabase 容器和本次 T95 临时 PostgreSQL/Redis 容器均已停止，未删除容器卷或数据；Colima 保持运行。
 
-## T94 本地运行时/浏览器复验（进行中）
+## T94 本地运行时/浏览器复验（阻塞：等待用户批准初始化）
 
 - 用户已授权启用本地 API/服务；其他项目自动启动的容器按用户选择已停止。
-- 仅使用 `./scripts/tennix-live up`，不运行 `init`。`init` 会迁移本地运行数据库并可能调用 LLM 批量补中文名；若 `up` 因 schema 未初始化/落后而拒绝启动，先停下征求用户决定。
-- 验收排名页是否显示最新 standings、比赛页/球员页是否清除旧排名，并确认 `runtime/health` 的赛程/排名状态和成功时间；完成后关闭 Tennix 服务，不删除任何 Docker volume。
+- `./scripts/tennix-live up` 已尝试，明确拒绝并返回 `LOCAL_NOT_INITIALIZED`；API、runtime、frontend 没有启动。
+- 启动依赖容器后读到的持久健康快照生成于 `2026-09-23T22:26:54Z`（约 4 小时旧），当时 schedule/rankings 标为 `ok`；这不是本次运行的刷新证明。数据库停着时健康快照不可读，因此之前显示 `unknown`。
+- 下一步必须运行 `./scripts/tennix-live init` 才能初始化专用运行库并继续；按 runbook，此步骤会同步赛程/排名，且可能通过 LLM 批量补齐中文名、消耗配额。等待用户明确批准，不绕过 `init` 或改用手工迁移。
+- 已执行 `./scripts/tennix-live down`；Tennix PostgreSQL/Redis 与其他项目自动启动的 Supabase 容器均已停止，未删除容器或 Docker volume；最终 `docker ps` 为空，Colima 保持运行。
 
 ## T94 调查结论与验收
 

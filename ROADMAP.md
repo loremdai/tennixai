@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-24 10:23 CST
+**最后更新：** 2026-09-24 10:35 CST
 
-**总体状态：** `in_progress`（P4 持续打磨；T93–T95 的实时统计、排名权威性和比赛字段审计代码均已完成。T94 修复后的本地服务/浏览器复验仍待执行。此前用户批准的 B 边界保持：所有活跃网球胜者市场展示供应商真实名称/报价，未映射/双打不进入模型或 Paper。模型未晋升时机会页继续诚实为空；模型晋升另行排期）
+**总体状态：** `in_progress`（P4 持续打磨；T93–T95 的实时统计、排名权威性和比赛字段审计代码均已完成。T94 本地服务/浏览器复验被 `LOCAL_NOT_INITIALIZED` 阻塞，等待用户批准可能消耗 LLM 配额的初始化。此前用户批准的 B 边界保持：所有活跃网球胜者市场展示供应商真实名称/报价，未映射/双打不进入模型或 Paper。模型未晋升时机会页继续诚实为空；模型晋升另行排期）
 
 **当前里程碑：** P3 已关闭；P4.0–P4.4 已完成（T72–T92）；P4.5 的 T93–T95 代码任务已完成，运行时复验仍是待办。
 
-**当前阶段：** 无任务正在执行；T95 — Audit Match Data Fields End-to-End 已完成（`3ae508c`），唯一交接状态见 [CURRENT.md](./CURRENT.md)。T93 — Preserve Live Statistics Across Sparse WebSocket Updates 已完成（`a28b971`+`fa00f46`）；T94 — Keep Match Rankings Consistent in REST and Realtime Snapshots 已完成（`bbb7d4a`、`d302316`、`93e1243`）：REST 与实时快照均严格使用最新 standings，缺失排名置空；REST 修正同步发布 Redis/SSE，目录暂时不可用时 worker 保留 frame 并重试。T94 本地页面是否已从旧排名进程恢复，尚未用新进程和浏览器确认。T95 全字段矩阵及实现/测试已收口；P4.5 运行时复验完成后再关闭。模型未晋升时机会页仍为空；模型晋升证据链另行排期；自动下单继续 `deferred`。
+**当前阶段：** T95 — Audit Match Data Fields End-to-End 已完成（`3ae508c`），唯一交接状态见 [CURRENT.md](./CURRENT.md)。T93 — Preserve Live Statistics Across Sparse WebSocket Updates 已完成（`a28b971`+`fa00f46`）；T94 — Keep Match Rankings Consistent in REST and Realtime Snapshots 已完成（`bbb7d4a`、`d302316`、`93e1243`）：REST 与实时快照均严格使用最新 standings，缺失排名置空；REST 修正同步发布 Redis/SSE，目录暂时不可用时 worker 保留 frame 并重试。T94 运行时复验发现本地栈未初始化，`up` 明确拒绝启动；`init` 可能消耗 LLM 配额，等待用户批准。P4.5 运行时复验完成后再关闭。模型未晋升时机会页仍为空；模型晋升证据链另行排期；自动下单继续 `deferred`。
 
 ## 状态说明
 
