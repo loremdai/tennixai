@@ -39,10 +39,10 @@
 - **调查范围：** 检查 API-Tennis 官方数据契约与多个真实不完整/完整样本；区分“供应商确实未提供”与“本地解析、归约、持久化、缓存、序列化或展示丢失”；覆盖球员历史列表和共享比赛详情路径；确认已落库空值能否通过正常有限重取恢复，以及不可恢复时的诚实呈现。
 - **已验证根因（2026-09-26）：** 本地真实 `get_fixtures` 返回抢七盘分为 `score_first="6.7"`、`score_second="7.9"`（另有 `7.7` / `6.2`）；当前 `parse_non_negative_int()` 只接受纯数字字符串，因而把两侧都转成 `null`。同一响应保留 `event_final_result="3 - 1"`，所以盘数在、含抢七的逐盘局分缺失；普通数字分如 `6` / `3` 正常通过。球员赛果 API 与比赛详情 API 都能复现。两盘 PBP 最终比分分别是 `7–9`、`7–2`，与小数点后数字相符。比赛详情的已存快照也保留缺值（`as_of=2026-09-25T16:29:48Z`），故需要兼顾旧快照按需刷新。官方文档说明 fixtures 内联提供 `scores` 与 `pointbypoint`，但未写明点号编码；参考：[REST fixtures](https://api-tennis.com/documentation)，[WebSocket score payload](https://api-tennis.com/documentation_websocket)。
 - **设计与计划：** [T103 比分完整性设计](./docs/superpowers/specs/2026-09-26-tennixai-t103-score-integrity-design.md) 与 [T103 实施计划](./docs/superpowers/plans/2026-09-26-tennixai-t103-score-integrity-implementation.md)；用户已确认方案，正在按计划实施。范围限于严格解析、稀疏快照合并、已结束不完整比分的按需修复、前端真实展示与验收；无 schema migration、批量历史抓取或 `.env` 读取。
-- **已完成切片：** `f22d19d` 为 canonical `SetScore` 增加向后兼容的抢七分字段，并严格解析供应商 `games.tiebreak_points` 格式（如 `6.7` → 局数 6、抢七分 7）；普通局分与无效值继续按原有语义处理。
-- **切片验证：** 新增解析、无效输入、set 顺序及旧 JSON 兼容测试；provider/domain 聚焦套件 `100 passed`，改动文件 Ruff 通过，`git diff --check` 通过。后端全量测试结果 `1423 passed, 37 skipped, 16 failed`；16 例是本机既有集成测试库 schema 不匹配（缺少 `match_state_snapshots.freshness` 列及 `point_events.is_break_point` 非空约束不满足），不是本次四个文件所改的解析器路径。未迁移或重置数据库；最终确定性套件仍待按计划执行。
+- **已完成切片：** `f22d19d` 为 canonical `SetScore` 增加向后兼容的抢七分字段，并严格解析供应商 `games.tiebreak_points` 格式（如 `6.7` → 局数 6、抢七分 7）；`02b614f` 在同一比赛、同一球员顺序下按盘号合并稀疏局分，已知值不被空值覆盖，非空新值可以修正旧值。
+- **切片验证：** provider/domain 聚焦套件 `100 passed`；reducer/realtime worker `40 passed`；对应 Ruff 与 `git diff --check` 通过。后端全量测试结果 `1423 passed, 37 skipped, 16 failed`；16 例是本机既有集成测试库 schema 不匹配（缺少 `match_state_snapshots.freshness` 列及 `point_events.is_break_point` 非空约束不满足），不是本次解析/归并路径。未迁移或重置数据库；最终确定性套件仍待按计划执行。
 - **执行边界：** 真实字段缺失继续未知；不依据胜负、胜盘数或 PBP 反推局分，不做周期轮询或批量历史抓取；只在查看已结束且比分不完整的比赛时按需刷新，并复用现有缓存。
-- **当前下一步：** T1 抢七解析/领域字段已提交；继续 T2 稀疏比分归并，再做已结束比赛缺失快照的按需修复和前端展示。
+- **当前下一步：** T1 解析和 T2 稀疏比分归并已提交；继续实现已结束比赛缺失快照的按需修复，再补前端展示。
 - **验收门：** 至少包含供应商有完整比分、仅有部分比分、确实无比分三类样本；证明有值时端到端不丢、空值不造；修复必须有先失败后通过的测试，覆盖 provider/service/存储/API/UI 中实际受影响层；后端确定性套件、前端相关与全量测试、TypeScript、改动文件 Ruff、`git diff --check` 通过；真实页面/API 用安全脱敏的内部 ID 和比分字段复核。未经必要性确认不迁移 schema、不执行 `init`、不重置数据库。
 - **安全与现场：** 不直接查看或输出根 `.env` 文件内容；允许通过应用现有配置对象安全读取凭据，进行有界只读 API 核验。任何 API key、查询凭据、无关供应商 payload 均不得打印或落盘。优先复用已运行本地服务，当前服务/数据保持运行。`backend/app/service.py` 的两处既有 P3 freshness 修改及 `.codex/`、`.superpowers/`、`REALTIME_LATENCY_INVESTIGATION.md`、`backend/tests/test_p3_query_freshness.py`、`frontend/next-env.d.ts` 均为用户已有改动，不纳入 T103 提交。
 
@@ -164,11 +164,11 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
-| 2026-09-26 | `f22d19d` | T103 首个代码切片：严格解析抢七局分并增加可选领域字段；聚焦测试 100 passed、Ruff 通过。全量 16 个失败均指向本机既有测试库 schema 不匹配，尚待最终确定性测试复核。 |
+| 2026-09-26 | `02b614f` | T103 稀疏比分归并：空字段或缺失盘行不再覆盖已知值，按比赛/有序球员/盘号隔离；reducer 与 realtime worker 40 passed。 |
+| 2026-09-26 | `f22d19d` | T103 抢七解析与可选领域字段；provider/domain 聚焦测试 100 passed、Ruff 通过。 |
 | 2026-09-26 | `de5badb` | T103 修复方案已整理为逐层实施计划，现按计划推进。 |
 | 2026-09-26 | `1c47cc3` | T103 规格记录真实根因、抢七解码、旧快照按需刷新与跨层验收；随后获用户确认。根因原始证据在 `cadc5d0`。 |
 | 2026-09-26 | `a885a6a` | T102 球员详情页修复与回归测试提交；2026 赛季展示逐项标注来源的已收录单打赛果，官方可用统计继续优先显示。 |
-| 2026-09-25 | `5c8e998` | T101 实现与三份总控收口已推送；工作区现有 P3 修改与未跟踪文件继续保留。 |
 | 2026-09-25 | `2b6e217` | 完成 T101：共用读取过滤过期当前比赛，首页显示北京日期；后端非 integration 1334 passed、前端 485 passed、真实浏览器 6 passed，服务同步健康。 |
 | 2026-09-25 | `105a487` | 关闭 T100 只读调查；只更新项目总控并推送，未动产品代码或用户已有改动。 |
 | 2026-09-25 | `c81c222` | T100 确认首页过期比赛根因：过期目录行未退役、API 不按时间/观测时间过滤、freshness 默认值掩盖陈旧记录；真实服务保持运行，未改产品代码。 |

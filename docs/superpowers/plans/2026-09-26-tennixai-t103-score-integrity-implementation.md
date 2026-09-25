@@ -90,16 +90,16 @@
 - `reduce_live_snapshot(previous, candidate, ...)` remains the public reducer API.
 - A private score merge combines `SetScore` rows only when match IDs and ordered player IDs match; each candidate non-null field wins, while a candidate null or omitted set row retains the previous known value.
 
-- [ ] **Step 1: Add failing reducer tests.** Cover: same set with incoming `None` retains prior games/tiebreak points; incoming non-null values replace prior values; a missing set row is retained; adjacent set numbers and reversed player identity do not receive the old row's values.
-- [ ] **Step 2: Run the new reducer tests and confirm they fail** because the current reducer accepts the candidate score as-is.
-- [ ] **Step 3: Implement the smallest private merge helper** before reducer fingerprints/events are computed. Preserve all non-score candidate state and do not merge `sets_won`, point score, server, metadata, or data across a different match/player identity.
-- [ ] **Step 4: Run reducer tests plus the existing score/realtime tests.**
+- [x] **Step 1: Add failing reducer tests.** Covered: same-set null retention and non-null correction, omitted row retention, adjacent set isolation, and match/player identity isolation.
+- [x] **Step 2: Run the new reducer tests and confirm they fail** because the current reducer accepts the candidate score as-is. Confirmed RED: `2 failed, 2 passed` across the new sparse-score cases.
+- [x] **Step 3: Implement the smallest private merge helper** before reducer fingerprints/events are computed. Preserves candidate `sets_won` and point score and does not merge across a different match/player identity.
+- [x] **Step 4: Run reducer tests plus the existing score/realtime tests.** `40 passed`; Ruff and `git diff --check` passed.
 
   Run: `cd backend && uv run pytest tests/test_live_reducer.py tests/test_realtime_worker.py -q`
 
   Expected: new sparse-score cases and existing realtime reduction cases pass.
 
-- [ ] **Step 5: Commit the reducer slice.**
+- [x] **Step 5: Commit the reducer slice.** Commit `02b614f` (`fix: preserve known set scores on sparse updates`).
 
   ```bash
   git add backend/app/realtime/reducer.py backend/tests/test_live_reducer.py
