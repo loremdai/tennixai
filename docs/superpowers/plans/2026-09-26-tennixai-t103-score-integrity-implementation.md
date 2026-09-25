@@ -125,19 +125,19 @@
 - Existing callers retain default surface enrichment. API-Tennis skips `_draw_surface` only when `include_surface=False`; other providers accept the option and retain their current snapshot behavior.
 - Service refresh eligibility: match status is `FINISHED` and the snapshot has no score, a score row with either games value unknown, or a missing expected set row from `1..sum(sets_won)`.
 
-- [ ] **Step 1: Add a provider test** that calls API-Tennis `get_match_snapshot(..., include_surface=False)` and asserts it requests `get_fixtures` for that match but does not request `get_draw`; assert the default call still permits existing surface enrichment.
-- [ ] **Step 2: Add failing service tests** using a stored finished snapshot and `MemorySnapshotStore`. Verify an incomplete score triggers one refresh, returns and persists the score, and a second read within the existing cache TTL makes no second provider request. Also cover fully scored, live, upcoming, and provider-error cases; none may erase stored values. Add an API test asserting `/api/v1/matches/{match_id}` includes both tiebreak fields.
-- [ ] **Step 3: Run the focused tests and confirm the new service/provider cases fail** before implementation.
-- [ ] **Step 4: Add the optional provider keyword** to the protocol, four production providers, and listed test doubles. Keep all old one-argument calls valid through the default.
-- [ ] **Step 5: Extend the existing cached metadata refresh path.** Detect metadata and score needs independently; use `include_surface=False` only when scores need repair and metadata is already complete; reuse `match-metadata:<match_id>` and the existing `reduce_live_snapshot` → repository save → hot snapshot publish flow. If refresh fails or remains incomplete, return and retain the known snapshot unchanged.
-- [ ] **Step 6: Verify provider and service regressions.**
+- [x] **Step 1: Add a provider test** that calls API-Tennis `get_match_snapshot(..., include_surface=False)` and asserts it requests `get_fixtures` for that match but does not request `get_draw`; the existing default-call surface test remains green.
+- [x] **Step 2: Add failing service tests** using a stored finished snapshot and `MemorySnapshotStore`. Verified cached refresh, persistence/publication, complete/live/upcoming skips, error/incomplete safety, and REST serialization of both tiebreak fields.
+- [x] **Step 3: Run the focused tests and confirm the new service/provider cases fail** before implementation. RED: service `3 failed, 1 passed`; provider call failed on unsupported `include_surface` keyword.
+- [x] **Step 4: Add the optional provider keyword** to the protocol, four production providers, and listed test doubles. Old one-argument calls remain valid through the default.
+- [x] **Step 5: Extend the existing cached metadata refresh path.** Score completeness is checked only for finished matches; score-only refresh sets `include_surface=False`; the existing cache and reduce/save/publish path are reused. Provider error/still-incomplete data preserves existing score.
+- [x] **Step 6: Verify provider and service regressions.** Provider/service/API tests: `142 passed`; adapter/worker/chat acceptance regressions: `90 passed`; changed-file Ruff and `git diff --check` passed.
 
   Run: `cd backend && uv run pytest tests/test_api_tennis_provider.py tests/test_service.py tests/test_api.py -q`
 
   Expected: targeted tests pass; stored-score refresh makes one bounded provider call and persists the recovered fields.
 
-- [ ] **Step 7: Stage only T103 changes in `backend/app/service.py`.** Use `git add -p backend/app/service.py`, selecting only the score-refresh hunk; inspect `git diff --cached -- backend/app/service.py` and confirm the pre-existing P3 freshness edits remain unstaged and unchanged.
-- [ ] **Step 8: Commit provider/service refresh.**
+- [x] **Step 7: Stage only T103 changes in `backend/app/service.py`.** Used `git add -p`; inspected staged diff. The two pre-existing P3 freshness changes remain unstaged and unchanged.
+- [x] **Step 8: Commit provider/service refresh.** Commit `321917d` (`fix: repair incomplete finished match scores on read`).
 
   ```bash
   git add backend/app/providers/base.py backend/app/providers/api_tennis.py backend/app/providers/livetennis.py backend/app/providers/fake.py backend/app/providers/replay.py backend/tests/realtime_fakes.py backend/tests/test_runtime_api_role.py backend/tests/test_service.py backend/tests/test_p1_acceptance.py backend/tests/test_chat_orchestrator.py backend/tests/test_momentum_calibration.py backend/tests/test_api_tennis_provider.py backend/tests/test_api.py
