@@ -430,6 +430,10 @@ class TennisService:
             ]
             if upcoming:
                 current_match = min(upcoming, key=scheduled_order)
+        if current_match is not None:
+            current_match = (
+                await self._hydrate_matches_from_directory((current_match,))
+            )[0]
         return PlayerProfileView(
             profile=profile,
             ranking=current_ranking,
@@ -456,6 +460,45 @@ class TennisService:
         if outcome.value is _UNSUPPORTED:
             raise AppError("not_found", "Player not found", 404)
         return cast(PlayerProfileData, outcome.value)
+
+    async def _hydrate_matches_from_directory(
+        self, matches: tuple[Match, ...]
+    ) -> tuple[Match, ...]:
+        if self._directory is None or not matches:
+            return matches
+        player_ids = tuple(
+            dict.fromkeys(player.id for match in matches for player in match.players)
+        )
+        directory_players = await self._directory.get_players(player_ids)
+        hydrated: list[Match] = []
+        for match in matches:
+            players = tuple(
+                player.model_copy(
+                    update={
+                        "name": (
+                            directory_player.player.name
+                            if directory_player is not None
+                            and directory_player.player.name != "Unknown player"
+                            else player.name
+                        ),
+                        "localized_name": (
+                            directory_player.player.localized_name
+                            or player.localized_name
+                            if directory_player is not None
+                            else player.localized_name
+                        ),
+                        "country_code": (
+                            directory_player.player.country_code or player.country_code
+                            if directory_player is not None
+                            else player.country_code
+                        ),
+                    }
+                )
+                for player in match.players
+                for directory_player in (directory_players.get(player.id),)
+            )
+            hydrated.append(match.model_copy(update={"players": players}))
+        return tuple(hydrated)
 
     async def get_player_result_page(
         self,
@@ -502,6 +545,9 @@ class TennisService:
         )
         page_size = 20
         start = (max(1, page) - 1) * page_size
+        page_matches = await self._hydrate_matches_from_directory(
+            tuple(filtered[start : start + page_size])
+        )
         if player is None:
             player = (
                 singles_results[0].players[0]
@@ -516,7 +562,7 @@ class TennisService:
             page=page,
             page_size=page_size,
             total=len(filtered),
-            matches=tuple(filtered[start : start + page_size]),
+            matches=page_matches,
             availability=(
                 CapabilityStatus.PARTIAL
                 if any(match.scheduled_at is None for match in singles_results)

@@ -218,7 +218,6 @@ export function PlayerProfileLive({ playerId }: { playerId: string }) {
 
         <PlayerResults
           playerName={preview.name}
-          playerTour={preview.tour}
           results={resultPreviews}
           historyState={historyState}
           season={season}

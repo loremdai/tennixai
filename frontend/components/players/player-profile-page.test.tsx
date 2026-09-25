@@ -121,7 +121,7 @@ describe('PlayerProfilePage season summary', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: 'Bryan Shelton' })).toBeVisible()
     expect(screen.getByText('暂无当前排名')).toBeVisible()
-    expect(screen.getByText('该赛季统计暂不可用')).toBeVisible()
+    expect(screen.getByText('赛季汇总暂缺；逐场赛果见下方')).toBeVisible()
     expect(screen.getAllByText('暂无').length).toBeGreaterThanOrEqual(7)
     expect(screen.queryByText('0–0')).not.toBeInTheDocument()
   })

@@ -460,6 +460,62 @@ describe('toResultPreview', () => {
     expect(toResultPreview(result, 'ply_self', 2026).score).toBe('2–0 盘')
   })
 
+  it('shows known set count and reported games without inventing blank set scores', () => {
+    const result = matchFixture({
+      live_state: {
+        score: {
+          sets_won: [3, 1],
+          sets: [
+            { number: 1, player1_games: null, player2_games: null },
+            { number: 2, player1_games: null, player2_games: null },
+            { number: 3, player1_games: 6, player2_games: 3 },
+            { number: 4, player1_games: 6, player2_games: 4 },
+          ],
+          points: [null, null],
+          is_tiebreak: null,
+        },
+        server_player_id: null,
+      },
+    })
+
+    expect(toResultPreview(result, 'ply_self', 2026).score).toBe(
+      '3–1 盘 · 部分局分：6–3 6–4',
+    )
+    expect(toResultPreview(result, 'ply_opp', 2026).score).toBe(
+      '1–3 盘 · 部分局分：3–6 4–6',
+    )
+  })
+
+  it('keeps the reported set count when missing set rows are omitted', () => {
+    const result = matchFixture({
+      live_state: {
+        score: {
+          sets_won: [3, 1],
+          sets: [
+            { number: 3, player1_games: 6, player2_games: 3 },
+            { number: 4, player1_games: 6, player2_games: 4 },
+          ],
+          points: [null, null],
+          is_tiebreak: null,
+        },
+        server_player_id: null,
+      },
+    })
+
+    expect(toResultPreview(result, 'ply_self', 2026).score).toBe(
+      '3–1 盘 · 部分局分：6–3 6–4',
+    )
+  })
+
+  it('removes a duplicated tournament and tour prefix from the round label', () => {
+    const result = matchFixture({
+      tournament: { id: 'trn_wimbledon', name: 'Wimbledon', tour: 'atp', circuit: 'atp' },
+      round: 'ATP Wimbledon - Final',
+    })
+
+    expect(toResultPreview(result, 'ply_self', 2026).round).toBe('Final')
+  })
+
   it('maps tier and surface values, keeping unknown ones truthful', () => {
     const challenger = matchFixture({
       tournament: { id: 'trn_c', name: 'Fake CH Event', tour: 'atp', circuit: 'challenger' },

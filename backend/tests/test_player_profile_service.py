@@ -18,6 +18,7 @@ from app.domain import (
 )
 from app.errors import AppError
 from app.players.models import (
+    LocalizedNameUpdate,
     PlayerProfileData,
     PlayerSeasonRecord,
     RankingEntry,
@@ -385,6 +386,52 @@ async def test_profile_current_match_excludes_doubles(seeded_directory) -> None:
 
 
 @pytest.mark.asyncio
+async def test_profile_current_match_uses_canonical_opponent_identity(
+    seeded_directory,
+) -> None:
+    provider = ProfileProvider()
+    provider.upcoming = [
+        _finished_match(100, 2026, "wta", True).model_copy(
+            update={
+                "status": MatchStatus.SCHEDULED,
+                "players": (ZHENG, Player(id=OPPONENT.id, name="O. One")),
+                "winner_player_id": None,
+                "scheduled_at": NOW_UTC + timedelta(hours=1),
+            }
+        )
+    ]
+    await seeded_directory.save_ranking_snapshot(
+        (
+            RankingEntry(
+                player=Player(
+                    id=OPPONENT.id,
+                    name="Opponent Full Name",
+                    country_code="gbr",
+                ),
+                tour=Tour.ATP,
+                rank=40,
+                points=500,
+                movement=RankingMovement.UNKNOWN,
+                ranking_date=(NOW_UTC + timedelta(days=1)).date(),
+                fetched_at=NOW_UTC + timedelta(days=1),
+            ),
+        )
+    )
+    await seeded_directory.save_localized_names(
+        (LocalizedNameUpdate(player_id=OPPONENT.id, localized_name="对手中文名"),)
+    )
+    service = build_service(provider, seeded_directory)
+
+    view = await service.get_player_profile_view(ZHENG.id, season=2026)
+
+    assert view.current_match is not None
+    opponent = view.current_match.players[1]
+    assert opponent.name == "Opponent Full Name"
+    assert opponent.localized_name == "对手中文名"
+    assert opponent.country_code == "gbr"
+
+
+@pytest.mark.asyncio
 async def test_profile_unknown_player_is_not_found(seeded_directory) -> None:
     service = build_service(ProfileProvider(), seeded_directory)
     with pytest.raises(AppError) as failure:
@@ -425,6 +472,54 @@ async def test_result_page_paginates_and_filters(seeded_directory) -> None:
         ZHENG.id, season=2026, tiers=(), outcome=ResultOutcome.ALL, page=1
     )
     assert provider.calls["results"] == before
+
+
+@pytest.mark.asyncio
+async def test_result_page_enriches_provider_abbreviations_from_player_directory(
+    seeded_directory,
+) -> None:
+    provider = ProfileProvider()
+    abbreviated_opponent = Player(id=OPPONENT.id, name="O. One")
+    provider._finished = (
+        provider._finished[0].model_copy(
+            update={
+                "players": (ZHENG, abbreviated_opponent),
+                "scheduled_at": NOW_UTC - timedelta(minutes=5),
+            }
+        ),
+        *provider._finished[1:],
+    )
+    await seeded_directory.save_ranking_snapshot(
+        (
+            RankingEntry(
+                player=Player(
+                    id=OPPONENT.id,
+                    name="Opponent Full Name",
+                    country_code="gbr",
+                ),
+                tour=Tour.ATP,
+                rank=40,
+                points=500,
+                movement=RankingMovement.UNKNOWN,
+                ranking_date=(NOW_UTC + timedelta(days=1)).date(),
+                fetched_at=NOW_UTC + timedelta(days=1),
+            ),
+        )
+    )
+    await seeded_directory.save_localized_names(
+        (LocalizedNameUpdate(player_id=OPPONENT.id, localized_name="对手中文名"),)
+    )
+    service = build_service(provider, seeded_directory)
+
+    results = await service.get_player_result_page(
+        ZHENG.id, season=2026, tiers=(), outcome=ResultOutcome.ALL, page=1
+    )
+
+    opponent = results.matches[0].players[1]
+    assert opponent.id == OPPONENT.id
+    assert opponent.name == "Opponent Full Name"
+    assert opponent.localized_name == "对手中文名"
+    assert opponent.country_code == "gbr"
 
 
 @pytest.mark.asyncio

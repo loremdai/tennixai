@@ -178,7 +178,6 @@ export function PlayerProfilePage({
         <PlayerResults
           key={`${scenario.profile.id}-results`}
           playerName={scenario.profile.name}
-          playerTour={scenario.profile.tour}
           results={scenario.results}
           historyState={historyState}
           season={season}

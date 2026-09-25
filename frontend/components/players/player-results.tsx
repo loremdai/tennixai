@@ -19,7 +19,6 @@ import type {
   MatchOutcome,
   PlayerHistoryState,
   PlayerResultPreview,
-  TourKey,
 } from '@/components/players/player-preview-data'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -145,7 +144,6 @@ function formatDate(value: string) {
 
 export function PlayerResults({
   playerName,
-  playerTour,
   results,
   historyState,
   season,
@@ -161,7 +159,6 @@ export function PlayerResults({
   total,
 }: {
   playerName: string
-  playerTour: TourKey | null
   results: PlayerResultPreview[]
   historyState: PlayerHistoryState
   season: number
@@ -273,10 +270,6 @@ export function PlayerResults({
               重置赛果筛选
             </Button>
           ) : null}
-          <p className="text-xs leading-relaxed text-muted-foreground md:ml-auto">
-            {playerTour ?? ''}
-            {playerTour ? ' 档案 · 不提供场地筛选' : '档案 · 不提供场地筛选'}
-          </p>
         </div>
 
         {historyState === 'partial' ? (

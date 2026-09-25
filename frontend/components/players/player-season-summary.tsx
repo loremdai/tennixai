@@ -61,7 +61,7 @@ export function PlayerSeasonSummary({ summary }: { summary: PlayerSeasonSummaryP
         <Metric label="红土胜负" value={recordOrUnavailable(summary.clay)} />
         <Metric label="草地胜负" value={recordOrUnavailable(summary.grass)} />
         <div className="flex items-center rounded-xl bg-secondary/55 p-3 text-xs leading-relaxed text-muted-foreground">
-          {hasData ? '仅统计单打正式比赛' : '该赛季统计暂不可用'}
+          {hasData ? '仅统计单打正式比赛' : '赛季汇总暂缺；逐场赛果见下方'}
         </div>
       </CardContent>
     </Card>

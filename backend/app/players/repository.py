@@ -46,6 +46,11 @@ class PlayerDirectoryRepository(Protocol):
     async def get_player(self, player_id: str) -> DirectoryPlayer | None:
         raise NotImplementedError
 
+    async def get_players(
+        self, player_ids: tuple[str, ...]
+    ) -> dict[str, DirectoryPlayer]:
+        raise NotImplementedError
+
     async def get_current_ranking(self, player_id: str) -> RankingEntry | None:
         raise NotImplementedError
 
@@ -218,6 +223,28 @@ class MemoryPlayerDirectoryRepository:
                 )
             }
         )
+
+    async def get_players(
+        self, player_ids: tuple[str, ...]
+    ) -> dict[str, DirectoryPlayer]:
+        requested = tuple(dict.fromkeys(player_ids))
+        if not requested:
+            return {}
+        current = await self.get_current_rankings(requested)
+        result: dict[str, DirectoryPlayer] = {}
+        for player_id in requested:
+            player = self._players.get(player_id)
+            if player is None:
+                continue
+            ranking = current.get(player_id)
+            result[player_id] = player.model_copy(
+                update={
+                    "player": player.player.model_copy(
+                        update={"ranking": ranking.rank if ranking else None}
+                    )
+                }
+            )
+        return result
 
     async def get_current_ranking(self, player_id: str) -> RankingEntry | None:
         return (await self.get_current_rankings((player_id,))).get(player_id)

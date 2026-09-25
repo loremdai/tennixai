@@ -11,7 +11,6 @@ describe('PlayerResults server-driven empty states', () => {
     render(
       <PlayerResults
         playerName="Ben Shelton"
-        playerTour="ATP"
         results={[]}
         historyState="empty"
         season={2026}
@@ -29,6 +28,7 @@ describe('PlayerResults server-driven empty states', () => {
 
     expect(screen.getByText('暂无可显示的逐场赛果')).toBeVisible()
     expect(screen.getByText(/赛季统计可能仍可查看/)).toBeVisible()
+    expect(screen.queryByText(/不提供场地筛选/)).not.toBeInTheDocument()
   })
 
   it('explains an empty active filter and lets the user clear it', async () => {
@@ -40,7 +40,6 @@ describe('PlayerResults server-driven empty states', () => {
     render(
       <PlayerResults
         playerName="Ben Shelton"
-        playerTour="ATP"
         results={[]}
         historyState="empty"
         season={2026}

@@ -331,6 +331,37 @@ class PostgresPlayerDirectoryRepository:
             }
         )
 
+    async def get_players(
+        self, player_ids: tuple[str, ...]
+    ) -> dict[str, DirectoryPlayer]:
+        requested = set(player_ids)
+        if not requested:
+            return {}
+        async with self._database.session() as session:
+            rows = (
+                await session.execute(
+                    select(PlayerRow).where(PlayerRow.id.in_(requested))
+                )
+            ).scalars()
+            players = {row.id: _directory_player(row) for row in rows}
+            current = await _latest_ranking_rows(session, requested)
+        return {
+            player_id: player.model_copy(
+                update={
+                    "player": player.player.model_copy(
+                        update={
+                            "ranking": (
+                                current[player_id].rank
+                                if player_id in current
+                                else None
+                            )
+                        }
+                    )
+                }
+            )
+            for player_id, player in players.items()
+        }
+
     async def get_current_ranking(self, player_id: str) -> RankingEntry | None:
         return (await self.get_current_rankings((player_id,))).get(player_id)
 

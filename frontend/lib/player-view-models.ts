@@ -233,27 +233,53 @@ function opponentOf(match: MatchDto, playerId: string): MatchDto['players'][numb
   return match.players.find((player) => player.id !== playerId) ?? match.players[1] ?? match.players[0]
 }
 
+function displayRoundLabel(round: string | null, tournament: string): string | null {
+  const label = round?.trim()
+  const tournamentName = tournament.trim()
+  if (!label || !tournamentName) return label || null
+
+  const separator = label.indexOf(' - ')
+  if (separator < 0) return label
+
+  const eventLabel = label.slice(0, separator).trim()
+  const prefixLength = eventLabel.length - tournamentName.length
+  if (prefixLength < 0) return label
+  if (eventLabel.slice(prefixLength).toLocaleLowerCase() !== tournamentName.toLocaleLowerCase()) {
+    return label
+  }
+
+  const tourLabel = eventLabel.slice(0, prefixLength).trim()
+  if (tourLabel && !/^(?:ATP|WTA|ITF|Challenger(?:\s+(?:Men|Women))?)$/i.test(tourLabel)) {
+    return label
+  }
+  return label.slice(separator + 3).trim() || label
+}
+
 /** Formats set (and live point) scores from the profiled player's perspective. */
 export function formatMatchScore(match: MatchDto, playerId: string): string | null {
   const score = match.live_state?.score
   if (!score) return null
   const side = match.players[1]?.id === playerId ? 2 : 1
   const other = side === 1 ? 2 : 1
-  const hasPerSetGames = score.sets.some(
-    (set) => set.player1_games !== null || set.player2_games !== null,
-  )
   const hasSetCount = score.sets_won !== null && score.sets_won.some((sets) => sets > 0)
-  const sets = hasPerSetGames
-    ? score.sets
-        .map((set) => {
-          const selfGames = side === 1 ? set.player1_games : set.player2_games
-          const otherGames = side === 1 ? set.player2_games : set.player1_games
-          return `${selfGames ?? '-'}–${otherGames ?? '-'}`
-        })
-        .join(' ')
-    : hasSetCount
-      ? `${score.sets_won![side - 1]}–${score.sets_won![other - 1]} 盘`
-      : ''
+  const reportedGames = score.sets.flatMap((set) => {
+    const selfGames = side === 1 ? set.player1_games : set.player2_games
+    const otherGames = side === 1 ? set.player2_games : set.player1_games
+    return selfGames === null || otherGames === null ? [] : [`${selfGames}–${otherGames}`]
+  })
+  const setCount = hasSetCount
+    ? `${score.sets_won![side - 1]}–${score.sets_won![other - 1]} 盘`
+    : ''
+  const knownSetCount = score.sets_won?.reduce((total, sets) => total + sets, 0) ?? 0
+  const hasMissingSetScores = reportedGames.length < Math.max(score.sets.length, knownSetCount)
+  const gamesLabel =
+    match.status === 'finished' && hasMissingSetScores && reportedGames.length > 0
+      ? `部分局分：${reportedGames.join(' ')}`
+      : reportedGames.join(' ')
+  const sets =
+    setCount && hasMissingSetScores
+      ? [setCount, gamesLabel || null].filter(Boolean).join(' · ')
+      : gamesLabel || setCount
   const selfPoint = score.points[side - 1]
   const otherPoint = score.points[other - 1]
   if (match.status === 'live' && selfPoint && otherPoint) {
@@ -275,7 +301,7 @@ export function toResultPreview(match: MatchDto, playerId: string, fallbackSeaso
     tournamentZh: null,
     tier: TIER_LABELS[match.tournament.circuit ?? ''] ?? 'Other',
     surface: match.surface ? (SURFACE_LABELS[match.surface] ?? match.surface) : null,
-    round: match.round,
+    round: displayRoundLabel(match.round, match.tournament.name),
     opponent: {
       name: opponentPlayer.name,
       nameZh: opponentPlayer.localized_name ?? null,
@@ -322,7 +348,7 @@ export function toCurrentStatus(
     nameZh: opponentPlayer.localized_name ?? null,
     ...countryPresentation(opponentPlayer.country_code, opponentPlayer.country_alpha2 ?? null),
   }
-  const round = match.round ?? MISSING_ROUND_LABEL
+  const round = displayRoundLabel(match.round, match.tournament.name) ?? MISSING_ROUND_LABEL
 
   if (match.status === 'live') {
     const serverId = match.live_state?.server_player_id ?? null
