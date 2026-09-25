@@ -2,13 +2,13 @@
 
 > 快速了解现在做到哪里、最近做完什么、接下来由谁接手。长期路线与阶段证据见 [ROADMAP.md](./ROADMAP.md)，产品定位和稳定架构见 [PROJECT.md](./PROJECT.md)。
 
-**最后更新：** 2026-09-25 19:42（北京时间）
+**最后更新：** 2026-09-25 19:55（北京时间）
 
-**当前主任务：** 无。T99 — 初始化并启动本地真实服务（`done`）；本地服务保持运行，等待下一项任务。
+**当前主任务：** T100 — 排查首页展示过期比赛（`in_progress`）。只读核对页面、catalog API、筛选和日期语义，不先改代码。
 
-**最近任务：** T99 — 初始化并启动本地真实服务（`done`），原始起始提交 `8ee0807`，领取记录 `9ca0e62`，最近续接 `e31c623`，运行验收记录 `4d1289a`。
+**最近任务：** T100 — 排查首页展示过期比赛（`in_progress`），起始 HEAD `45a4308`。
 
-**执行者 / 分支：** Codex / `main`；本次续接基线 `89b6d78`。保留工作区内已存在的用户改动，不纳入本任务。
+**执行者 / 分支：** Codex / `main`；T100 起始 HEAD `45a4308`。保留工作区内已存在的用户改动，不纳入本任务。
 
 **运行手册与证据：** [本地真实运行手册](docs/runbooks/local-real-runtime.md)；[T98 审计规格与完成证据](docs/superpowers/specs/2026-09-24-tennixai-whole-product-audit.md)；[T97 审计计划](docs/superpowers/plans/2026-09-24-tennixai-t97-global-field-presentation-audit.md)；[T95–T98 字段矩阵](docs/research/2026-09-24-tennixai-t95-match-field-integrity-matrix.md)。
 
@@ -22,6 +22,12 @@
 - **此前状态：** `./scripts/tennix-live status` 显示 PostgreSQL、Redis healthy；runtime、API、frontend 均 stopped，故真实服务尚未启动。此前 `up` 因本地 launcher 初始化成功标记被失败的 `init` 清除而拒绝。
 - **本次续接与完成提交：** 用户报告已更新根目录 `.env` 中的 API key 并要求重试；领取记录 `e31c623`，`.env` 内容未读取或输出。验收证据提交 `4d1289a`：`init` exit 0（`revision=0008 players=3976 matches=185`）；`up` exit 0；随后 `status` 显示 PostgreSQL、Redis、sports stream、schedule、rankings、Polymarket 全为 `healthy/ok`，runtime/API/frontend 三进程均 running，`paper_only` / `model not_promoted` 保持原状。首页和 API health 均为 200。`init` 含离线中文名补齐，可能使用 LLM 配额；启动器没有报告实际翻译批次数，无法据此核算。未执行浏览器视觉测试或额外 provider/LLM 核验。
 - **安全与范围：** 没有重置既有数据、没有绕过初始化标记、没有碰其他项目容器，也没有输出或提交任何凭据。真实服务保持运行；浏览器视觉/全站内容验收不属于本次启动任务。
+
+## T100 排查首页展示过期比赛（`in_progress`）
+
+- **目标：** 查明首页为什么显示已经结束的旧比赛，区分是 API 源数据、查询范围/排序、日期时区、前端过滤还是缓存导致。
+- **起始状态：** `main` / `45a4308`，与 `origin/main` 同步；TennixAI 本地真实服务正在运行。已知工作区改动均为用户所有，本任务只读，不修改产品代码。
+- **边界：** 只读取当前浏览器页面、本机应用的只读 HTTP 响应和相关实现；不读取根 `.env`，不发起供应商/LLM 请求，不重启或关闭服务，不改数据库数据，不改任何代码。完成后报告证据与根因；如需修复，另行授权。
 
 ## T98 全产品缺陷与字段真相审计（`done`）
 
@@ -121,8 +127,8 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
+| 2026-09-25 | `45a4308` 起 | T100 只读调查首页过期比赛；真实服务保持运行，不发供应商请求、不改产品代码。 |
 | 2026-09-25 | `4d1289a` | T99 重试初始化并启动真实服务：`init`、`up` 均成功；数据库/Redis、实时流、赛程、排名、Polymarket 状态通过，首页/API health HTTP 200；服务保持运行。 |
-| 2026-09-25 | `9ca0e62`、`730502d` | T99 初始化迁移至 `0008`，standings 引导被 API-Tennis 错误响应阻塞；重试 `up` 返回 `LOCAL_NOT_INITIALIZED`，应用未启动；未调用 LLM。 |
 | 2026-09-24 | `b4acb8b` | 完成 T96：修复球员国家名/旗帜归一化、历史总盘数缺失显示、Chat 单打与不完整历史标记；后端定向 161 passed、前端 432 passed、TypeScript 通过 |
 | 2026-09-24 | `3ae508c` | 完成 T95：新增端到端字段矩阵；修复当前盘误标、未知 PBP 标记、统计/比分校验和 freshness 持久化；后端 1289 passed、前端 422 passed，PostgreSQL round-trip 与迁移回滚守卫通过 |
 | 2026-09-24 | `93e1243` | 完成 T94：REST 排名权威修正同步至热快照/SSE，实时 worker 对临时目录故障保留 frame 并重试；全后端 1336 passed、12 skipped，PostgreSQL player directory 9 passed |

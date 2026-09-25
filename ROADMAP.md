@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-25 19:42（北京时间）
+**最后更新：** 2026-09-25 19:55（北京时间）
 
-**总体状态：** `in_progress`（P4 持续打磨；T93–T98 的实现与全产品审计已完成。T99 已完成本地真实运行初始化并启动服务，基础 health 与 HTTP 检查通过；尚未执行浏览器视觉验收。此前用户批准的 B 边界保持：所有活跃网球胜者市场展示供应商真实名称/报价，未映射/双打不进入模型或 Paper。模型未晋升时机会页继续诚实为空；模型晋升另行排期）
+**总体状态：** `in_progress`（P4 持续打磨；T93–T99 已完成。T99 初始化并启动本地真实服务；T100 正只读调查首页出现过期比赛的原因，结论尚待现场数据与代码对照。此前用户批准的 B 边界保持：所有活跃网球胜者市场展示供应商真实名称/报价，未映射/双打不进入模型或 Paper。模型未晋升时机会页继续诚实为空；模型晋升另行排期）
 
 **当前里程碑：** P3 已关闭；P4.0–P4.4 已完成（T72–T92）；P4.5 的 T93–T99 实现/审计及本地服务启动任务已完成。真实服务当前保持运行。
 
-**当前阶段：** 当前没有进行中的主任务；T99 已完成，下一项由用户决定。T99 已初始化并启动本地真实服务，基础 health 和首页/API HTTP 检查均通过；全站浏览器验收如需执行应另行领取。模型未晋升时机会页仍为空；模型晋升证据链另行排期；自动下单继续 `deferred`。
+**当前阶段：** T100 — 调查首页过期比赛，唯一执行状态见 [CURRENT.md](./CURRENT.md)。本任务限只读核对本机真实数据、接口响应与日期/筛选逻辑，不读取凭据、不调用外部 API/LLM、不改代码。模型未晋升时机会页仍为空；模型晋升证据链另行排期；自动下单继续 `deferred`。
 
 ## 状态说明
 
@@ -150,7 +150,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | P4.2 — Launcher Reliability | `done` | 让根目录 `./scripts/tennix-live up` 不依赖当前 shell 解析到的 pnpm 版本 | T82 已完成（`2cea490`）：TDD 先红后绿；`up` 直接执行 `frontend/node_modules/.bin/next`，缺失时在其他子进程启动前报 `LOCAL_FRONTEND_MISSING`；真实无环境覆盖 `up` exit 0，API health 200、前端 HTTP 200，进程树无 pnpm；随后 `down` exit 0 且数据保留 |
 | P4.3 — Market Data Truthfulness & Coverage | `done` | 修复市场—比赛 read model 脱节，建立全市场可信报价覆盖与实时决策双通道，并让 Markets/Opportunities 如实表达数据与模型状态 | T83 规格经用户 2026-09-22 书面确认；T84–T89 全部 `done` 并逐项提交（2026-09-23）。交付：active-link 唯一 read truth、reversible `0006` latest-quote projection、有界 120s 批量快照覆盖车道（`POST /books`，只读、零凭据）、七个显式 quote 状态、显式 `model_availability`/真实 `decision_action`、按真实原因解释的机会空态、覆盖率健康与 runbook。模型晋升、自动下单和虚构机会均不属于本阶段，均未触碰 |
 | P4.4 — Host Environment Resilience | `done` | 消除项目 HTTP 客户端对宿主 `HTTP(S)_PROXY` / `NO_PROXY` 环境的非确定性继承，避免 IPv6 loopback 排除项导致应用与测试在导入阶段失败 | T90（`b3ef97d`）完成：所有项目自建 HTTPX 客户端显式 `trust_env=False`、WebSocket 显式 `proxy=None`；launcher 保留宿主环境但客户端不再隐式读取代理配置。回归在含 `::1` 的环境中通过，确定性后端 `1200 passed, 114 deselected`，无 API/LLM/交易调用，根 `.env` 未改 |
-| P4.5 — Global Data Integrity & Field Presentation | `in_progress` | 核对结构化网球数据从供应商/API 到全站 UI 的字段和值语义；修复已验证的数据丢失、误标和展示缺陷 | T93–T97 已完成代码与消费者界面走查，T97 实现见 `12403b9`。T98 正按全产品、全字段目标继续审计；用户选择当前使用演示数据，不执行首次初始化，真实运行时证据明确留空。 |
+| P4.5 — Global Data Integrity & Field Presentation | `in_progress` | 核对结构化网球数据从供应商/API 到全站 UI 的字段和值语义；修复已验证的数据丢失、误标和展示缺陷 | T93–T99 已完成；T100 正调查真实运行时中首页出现旧比赛的问题，避免将未验证的假设当成修复。 |
 
 > **后验核验记录（2026-09-18）：** T80 的 `110 passed / 44 skipped / 0 failed` 是当时真实通过的历史证据。控制者随后在无影响路径产品代码变更的 `2270049` 上两次复跑当前完整 Playwright，均得到 `109 passed / 44 skipped / 1 failed`；唯一失败为 mobile `prototype.visual` 的 `home-answer`，265 像素差异。该用例单独以 `--workers=1 --repeat-each=10` 则 10/10 通过，故 T81 以两条顺序 CLI lane 消除跨文件 worker 并发，而非改动视觉真相。
 
@@ -188,6 +188,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | T97 | P4.5 | Global Field Presentation Audit | `done` | `12403b9` | 起始 HEAD `c84fa6d`。按已批准简报完成全站消费者文案与信息层级调整：Home 移除阶段切换、重复入口和虚构概率；Players/Match/Markets/Opportunities/Paper 统一自然中文状态；补齐排名“北京时间”与未知内部原因安全回退；P3 市场报价与模拟交易语义未改。更新字段矩阵。验证：Vitest `454 passed`、TypeScript 通过、Playwright mocked desktop/mobile `60 passed`、问答文案后端 `2 passed`、`git diff --check` 通过；宽范围 Chat 测试 `53 passed/1 failed`，失败因本机 Redis 未启动。前端 lint 工具不可用。用户选择暂不初始化真实运行栈；实时数据验收未通过也未声称通过。计划：[T97](./docs/superpowers/plans/2026-09-24-tennixai-t97-global-field-presentation-audit.md)；设计：[brief](./docs/superpowers/specs/2026-09-24-tennixai-consumer-frontend-design.md) |
 | T98 | P4.5 | Whole Product Bug and Field Truth Audit | `done` | `ad3edb9` | 领取提交 `189250e`，起始 HEAD `4ccf257`。Goal 授权的全产品缺陷与字段审计已按演示/fixture 模式收口，用户选择不执行 init。修复 Home Chat 结构化结果、流终态和卡片误报，球员国家展示、搜索响应契约、机会截断提示、未知决策码、报价/退出金额语义、REST 结算核验及漏发 `resolution_delta`、未知比赛阶段误推、缺失模型概率伪造为 0%、Paper 待确认/未成交语义、模型胜率未注明对应球员、历史结果质量误报，以及 Home 首读球员目录懒加载竞态。FINAL 由 REST 权威确认；WS 只作提示；Markets SSE 现在把终态及时送达前端并冻结盘口，重复终态广播去重。验证：Vitest `36 files/484 passed`、隔离 production build/TypeScript 通过；`env -i` 后端完整确定性套件 `1332 passed/128 skipped`，publisher、daemon 即时/定时路径及 SSE 契约测试通过；DTO 矩阵 TS 211/Pydantic 100 属性全部归档；Playwright 功能 `80+4 passed`、移动首页复测 `5 passed`、视觉 `30 passed/4 skipped`，76 张演示截图基线重生成。Ruff 与 `git diff --check` 通过。边界：不初始化、不读取根 `.env`、不调用真实 API/LLM/Polymarket、不使用项目 `.next`；128 个 opt-in/基础设施测试、P1 Match live/upcoming 的 Redis 截图检查和 4 个 P2 Replay 视觉态未验证，故本任务证明的是代码/fixture 与演示 UI，不是已初始化真实运行栈。 |
 | T99 | P4.5 | Initialize and Start Local Real Runtime | `done` | `4d1289a`（运行验收证据） | 用户更新根 `.env` API key 后重试成功：`init` exit 0（schema `0008`，3976 players、185 matches）；`up` exit 0，`status` 中数据库/Redis、实时流、赛程、排名、Polymarket 均 healthy/ok，runtime/API/frontend running；首页与 API health 均 HTTP 200。未做浏览器视觉验收。详见 `CURRENT.md`。 |
+| T100 | P4.5 | Investigate Expired Matches on Home | `in_progress` | — | 只读比对真实首页、catalog API、过滤/排序/日期逻辑和缓存；当前根因待调查。不得改代码或发外部 API 请求。 |
 
 ## P4.1 Completion Gate 核验摘要（2026-09-18，逐条实际核验）
 
