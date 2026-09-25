@@ -374,6 +374,12 @@ export type PlayerProfileViewDto = {
   current_match: MatchDto | null
 }
 
+export type PlayerResultSummaryDto = {
+  matches: number
+  matches_won: number
+  matches_lost: number
+}
+
 export type PlayerResultPageDto = {
   player: PlayerSummaryDto
   season: number
@@ -384,6 +390,7 @@ export type PlayerResultPageDto = {
   total: number
   matches: MatchDto[]
   availability: CapabilityStatus
+  season_summary: PlayerResultSummaryDto | null
 }
 
 // ---------------------------------------------------------------------------

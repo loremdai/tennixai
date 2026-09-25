@@ -44,6 +44,7 @@ from app.players.models import (
     PlayerResolution,
     PlayerResolutionStatus,
     PlayerResultPage,
+    PlayerResultSummary,
     PlayerSeasonRecord,
     RankingPage,
     ResultOutcome,
@@ -525,6 +526,26 @@ class TennisService:
             for match in raw
             if match.tournament.discipline is Discipline.SINGLES
         )
+        availability = (
+            CapabilityStatus.PARTIAL
+            if any(match.scheduled_at is None for match in singles_results)
+            else CapabilityStatus.AVAILABLE
+        )
+        result_summary = None
+        if singles_results and availability is CapabilityStatus.AVAILABLE and all(
+            match.status is MatchStatus.FINISHED
+            and player_id in {player.id for player in match.players}
+            and match.winner_player_id in {player.id for player in match.players}
+            for match in singles_results
+        ):
+            matches_won = sum(
+                match.winner_player_id == player_id for match in singles_results
+            )
+            result_summary = PlayerResultSummary(
+                matches=len(singles_results),
+                matches_won=matches_won,
+                matches_lost=len(singles_results) - matches_won,
+            )
         filtered = [
             match
             for match in singles_results
@@ -563,11 +584,8 @@ class TennisService:
             page_size=page_size,
             total=len(filtered),
             matches=page_matches,
-            availability=(
-                CapabilityStatus.PARTIAL
-                if any(match.scheduled_at is None for match in singles_results)
-                else CapabilityStatus.AVAILABLE
-            ),
+            availability=availability,
+            season_summary=result_summary,
         )
 
     async def _load_season_results(self, player_id: str, season: int) -> tuple[Match, ...]:

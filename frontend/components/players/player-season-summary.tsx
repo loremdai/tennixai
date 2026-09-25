@@ -8,61 +8,81 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 
-function valueOrUnavailable(value: number | null, suffix = '') {
-  return value === null ? '暂无' : `${value}${suffix}`
-}
-
-function recordOrUnavailable(record: SurfaceRecordPreview | null) {
-  return record === null
-    ? '暂无'
-    : `${valueOrUnavailable(record.won)}–${valueOrUnavailable(record.lost)}`
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({
+  label,
+  value,
+  source,
+}: {
+  label: string
+  value: string
+  source?: string
+}) {
   return (
     <div className="rounded-xl bg-muted/55 p-3">
       <p className="text-xs leading-relaxed text-muted-foreground">{label}</p>
       <p className="mt-1.5 font-mono text-lg font-semibold tabular-nums">{value}</p>
+      {source ? <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">{source}</p> : null}
     </div>
   )
 }
 
+function hasCompleteSurfaceRecord(
+  record: SurfaceRecordPreview | null,
+): record is { won: number; lost: number } {
+  return record !== null
+    && record.won !== null
+    && record.lost !== null
+}
+
+export function hasSeasonSummaryMetrics(summary: PlayerSeasonSummaryPreview) {
+  return summary.matches !== null
+    || (summary.wins !== null && summary.losses !== null)
+    || summary.winRate !== null
+    || summary.titles !== null
+    || hasCompleteSurfaceRecord(summary.hard)
+    || hasCompleteSurfaceRecord(summary.clay)
+    || hasCompleteSurfaceRecord(summary.grass)
+}
+
 export function PlayerSeasonSummary({ summary }: { summary: PlayerSeasonSummaryPreview }) {
-  const hasData = [
-    summary.matches,
-    summary.wins,
-    summary.losses,
-    summary.titles,
-    summary.hard?.won,
-    summary.hard?.lost,
-    summary.clay?.won,
-    summary.clay?.lost,
-    summary.grass?.won,
-    summary.grass?.lost,
-  ].some((value) => value !== null && value !== undefined)
+  if (!hasSeasonSummaryMetrics(summary)) return null
+
+  const recordedResultSource = summary.resultBasis === 'recorded_results'
+    ? '按收录单打赛果计算'
+    : undefined
+  const metrics: { label: string; value: string; source?: string }[] = []
+  if (summary.matches !== null) {
+    metrics.push({ label: '比赛场次', value: String(summary.matches), source: recordedResultSource })
+  }
+  if (summary.wins !== null && summary.losses !== null) {
+    metrics.push({ label: '胜–负', value: `${summary.wins}–${summary.losses}`, source: recordedResultSource })
+  }
+  if (summary.winRate !== null) {
+    metrics.push({ label: '胜率', value: `${summary.winRate}%`, source: recordedResultSource })
+  }
+  if (summary.titles !== null) {
+    metrics.push({ label: '冠军数', value: String(summary.titles) })
+  }
+  for (const [label, record] of [
+    ['硬地胜负', summary.hard],
+    ['红土胜负', summary.clay],
+    ['草地胜负', summary.grass],
+  ] as const) {
+    if (hasCompleteSurfaceRecord(record)) {
+      metrics.push({ label, value: `${record.won}–${record.lost}` })
+    }
+  }
+
   return (
     <Card aria-labelledby="season-summary-title">
       <CardHeader>
         <div>
           <CardTitle><h2 id="season-summary-title">赛季摘要</h2></CardTitle>
-          <p className="mt-1 text-sm text-muted-foreground">切换年份后，赛季数据和历史赛果会一起更新。</p>
         </div>
         <CardAction><Badge variant="outline">{summary.season}</Badge></CardAction>
       </CardHeader>
       <CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Metric label="比赛场次" value={valueOrUnavailable(summary.matches)} />
-        <Metric
-          label="胜–负"
-          value={summary.wins === null || summary.losses === null ? '暂无' : `${summary.wins}–${summary.losses}`}
-        />
-        <Metric label="胜率" value={valueOrUnavailable(summary.winRate, '%')} />
-        <Metric label="冠军数" value={valueOrUnavailable(summary.titles)} />
-        <Metric label="硬地胜负" value={recordOrUnavailable(summary.hard)} />
-        <Metric label="红土胜负" value={recordOrUnavailable(summary.clay)} />
-        <Metric label="草地胜负" value={recordOrUnavailable(summary.grass)} />
-        <div className="flex items-center rounded-xl bg-secondary/55 p-3 text-xs leading-relaxed text-muted-foreground">
-          {hasData ? '仅统计单打正式比赛' : '赛季汇总暂缺；逐场赛果见下方'}
-        </div>
+        {metrics.map((metric) => <Metric key={metric.label} {...metric} />)}
       </CardContent>
     </Card>
   )

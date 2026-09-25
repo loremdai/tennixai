@@ -64,6 +64,7 @@ export type PlayerSeasonSummaryPreview = {
   hard: SurfaceRecordPreview | null
   clay: SurfaceRecordPreview | null
   grass: SurfaceRecordPreview | null
+  resultBasis?: 'recorded_results'
 }
 
 export type PlayerResultPreview = {

@@ -13,7 +13,7 @@ import type {
 } from '@/components/players/player-preview-data'
 import { PlayerProfileHeader } from '@/components/players/player-profile-header'
 import { PlayerResults } from '@/components/players/player-results'
-import { PlayerSeasonSummary } from '@/components/players/player-season-summary'
+import { hasSeasonSummaryMetrics, PlayerSeasonSummary } from '@/components/players/player-season-summary'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { ApiError, getPlayerProfile, getPlayerResults } from '@/lib/api/client'
 import { userFacingApiError } from '@/lib/api/user-facing-errors'
@@ -185,7 +185,14 @@ export function PlayerProfileLive({ playerId }: { playerId: string }) {
   const view = profile.view
   const preview = toProfilePreview(view)
   const seasonRecord = view.profile.seasons.find((record) => record.season === season) ?? null
-  const summary = toSeasonSummary(season, seasonRecord)
+  const recordedSummary =
+    results.phase === 'ready'
+      && results.page.season === season
+      && results.page.availability === 'available'
+      ? results.page.season_summary
+      : null
+  const summary = toSeasonSummary(season, seasonRecord, recordedSummary)
+  const hasSeasonSummary = hasSeasonSummaryMetrics(summary)
   const currentStatus = toCurrentStatus(view.current_match, view.profile.player.id)
   const seasons = playerResultSeasons(view.selected_season)
 
@@ -211,8 +218,8 @@ export function PlayerProfileLive({ playerId }: { playerId: string }) {
 
         <PlayerProfileHeader profile={preview} />
 
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(20rem,0.75fr)]">
-          <PlayerSeasonSummary summary={summary} />
+        <div className={`grid gap-5 ${hasSeasonSummary ? 'lg:grid-cols-[minmax(0,1.45fr)_minmax(20rem,0.75fr)]' : ''}`}>
+          {hasSeasonSummary ? <PlayerSeasonSummary summary={summary} /> : null}
           <PlayerCurrentStatus status={currentStatus} profileName={preview.name} />
         </div>
 

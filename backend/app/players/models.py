@@ -171,6 +171,12 @@ class RankingPage(FrozenModel):
     availability: CapabilityStatus
 
 
+class PlayerResultSummary(FrozenModel):
+    matches: int = Field(ge=0)
+    matches_won: int = Field(ge=0)
+    matches_lost: int = Field(ge=0)
+
+
 class PlayerResultPage(FrozenModel):
     player: Player
     season: int
@@ -181,3 +187,4 @@ class PlayerResultPage(FrozenModel):
     total: int
     matches: tuple[Match, ...]
     availability: CapabilityStatus
+    season_summary: PlayerResultSummary | None = None

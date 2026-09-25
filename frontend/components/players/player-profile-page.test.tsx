@@ -113,7 +113,7 @@ describe('PlayerProfilePage season summary', () => {
     expect(screen.getByRole('button', { name: '赛季：2025 赛季' })).toBeVisible()
   })
 
-  it('keeps surface records unavailable without faking 0–0', async () => {
+  it('hides the season summary when the selected player has no summary data', async () => {
     const user = userEvent.setup()
     renderPage()
 
@@ -121,8 +121,7 @@ describe('PlayerProfilePage season summary', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: 'Bryan Shelton' })).toBeVisible()
     expect(screen.getByText('暂无当前排名')).toBeVisible()
-    expect(screen.getByText('赛季汇总暂缺；逐场赛果见下方')).toBeVisible()
-    expect(screen.getAllByText('暂无').length).toBeGreaterThanOrEqual(7)
+    expect(screen.queryByRole('heading', { name: '赛季摘要' })).not.toBeInTheDocument()
     expect(screen.queryByText('0–0')).not.toBeInTheDocument()
   })
 })

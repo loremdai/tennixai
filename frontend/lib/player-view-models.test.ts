@@ -361,6 +361,67 @@ describe('toSeasonSummary', () => {
       grass: null,
     })
   })
+
+  it('uses recorded season results for missing overall stats and marks their source', () => {
+    expect(
+      toSeasonSummary(
+        2026,
+        seasonRecordFixture({
+          matches_won: null,
+          matches_lost: null,
+          titles: null,
+          hard: null,
+          clay: null,
+          grass: null,
+        }),
+        { matches: 47, matches_won: 44, matches_lost: 3 },
+      ),
+    ).toMatchObject({
+      season: 2026,
+      matches: 47,
+      wins: 44,
+      losses: 3,
+      winRate: 93.6,
+      titles: null,
+      hard: null,
+      clay: null,
+      grass: null,
+      resultBasis: 'recorded_results',
+    })
+  })
+
+  it('shows recorded results when the provider has no row for the selected season', () => {
+    expect(
+      toSeasonSummary(2026, null, { matches: 47, matches_won: 44, matches_lost: 3 }),
+    ).toMatchObject({
+      season: 2026,
+      matches: 47,
+      wins: 44,
+      losses: 3,
+      winRate: 93.6,
+      titles: null,
+      hard: null,
+      clay: null,
+      grass: null,
+      resultBasis: 'recorded_results',
+    })
+  })
+
+  it('prefers a complete provider win-loss record over recorded results', () => {
+    const summary = toSeasonSummary(
+      2026,
+      seasonRecordFixture(),
+      { matches: 47, matches_won: 44, matches_lost: 3 },
+    )
+
+    expect(summary).toMatchObject({
+      matches: 40,
+      wins: 30,
+      losses: 10,
+      winRate: 75,
+    })
+    expect(summary.resultBasis).toBeUndefined()
+  })
 })
 
 describe('toResultPreview', () => {
@@ -625,6 +686,7 @@ describe('resultsHistoryState', () => {
       total: 3,
       matches: [],
       availability: 'available',
+      season_summary: null,
       ...overrides,
     }
   }

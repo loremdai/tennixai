@@ -475,6 +475,44 @@ async def test_result_page_paginates_and_filters(seeded_directory) -> None:
 
 
 @pytest.mark.asyncio
+async def test_result_page_season_summary_uses_all_singles_results_before_filters(
+    seeded_directory,
+) -> None:
+    provider = ProfileProvider()
+    doubles = _finished_match(2, 2026, "atp", True).model_copy(
+        update={
+            "id": "mat_doubles_summary",
+            "tournament": _finished_match(2, 2026, "atp", True).tournament.model_copy(
+                update={"discipline": Discipline.DOUBLES}
+            ),
+        }
+    )
+    provider._finished = (
+        _finished_match(0, 2026, "atp", True),
+        _finished_match(1, 2026, "wta", False),
+        _finished_match(3, 2026, "atp", True),
+        doubles,
+    )
+    service = build_service(provider, seeded_directory)
+
+    page = await service.get_player_result_page(
+        ZHENG.id,
+        season=2026,
+        tiers=(CircuitTier.ATP,),
+        outcome=ResultOutcome.LOST,
+        page=2,
+    )
+
+    assert page.matches == ()
+    assert page.season_summary is not None
+    assert page.season_summary.model_dump() == {
+        "matches": 3,
+        "matches_won": 2,
+        "matches_lost": 1,
+    }
+
+
+@pytest.mark.asyncio
 async def test_result_page_enriches_provider_abbreviations_from_player_directory(
     seeded_directory,
 ) -> None:
@@ -574,6 +612,7 @@ async def test_successful_empty_season_results_are_available_not_unavailable(
     assert result.availability is CapabilityStatus.AVAILABLE
     assert result.total == 0
     assert result.matches == ()
+    assert result.season_summary is None
 
 
 @pytest.mark.asyncio
@@ -595,6 +634,26 @@ async def test_result_page_marks_undated_matches_partial() -> None:
 
     assert result.availability is CapabilityStatus.PARTIAL
     assert [match.id for match in result.matches] == ["mat_undated"]
+    assert result.season_summary is None
+
+
+@pytest.mark.asyncio
+async def test_result_page_does_not_derive_summary_when_any_winner_is_unknown(
+    seeded_directory,
+) -> None:
+    provider = ProfileProvider()
+    known = _finished_match(0, 2026, "wta", True)
+    unknown = _finished_match(1, 2026, "wta", False).model_copy(
+        update={"winner_player_id": None}
+    )
+    provider._finished = (known, unknown)
+    service = build_service(provider, seeded_directory)
+
+    result = await service.get_player_result_page(
+        ZHENG.id, season=2026, tiers=(), outcome=ResultOutcome.ALL, page=1
+    )
+
+    assert result.season_summary is None
 
 
 @pytest.mark.asyncio

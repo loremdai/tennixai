@@ -14,7 +14,7 @@ import {
 } from '@/components/players/player-preview-data'
 import { PlayerProfileHeader } from '@/components/players/player-profile-header'
 import { PlayerResults } from '@/components/players/player-results'
-import { PlayerSeasonSummary } from '@/components/players/player-season-summary'
+import { hasSeasonSummaryMetrics, PlayerSeasonSummary } from '@/components/players/player-season-summary'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import {
@@ -76,6 +76,7 @@ export function PlayerProfilePage({
     [bundle.scenarios, selectedPlayerId],
   )
   const summary = scenario.seasonSummaries.find((item) => item.season === season) ?? scenario.seasonSummaries[0]
+  const hasSeasonSummary = hasSeasonSummaryMetrics(summary)
   const currentStatus = currentStatusFor(scenario.profile, statusKey)
 
   function selectProfile(playerId: string) {
@@ -170,8 +171,8 @@ export function PlayerProfilePage({
 
         <PlayerProfileHeader key={`${scenario.profile.id}-profile`} profile={scenario.profile} />
 
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(20rem,0.75fr)]">
-          <PlayerSeasonSummary summary={summary} />
+        <div className={`grid gap-5 ${hasSeasonSummary ? 'lg:grid-cols-[minmax(0,1.45fr)_minmax(20rem,0.75fr)]' : ''}`}>
+          {hasSeasonSummary ? <PlayerSeasonSummary summary={summary} /> : null}
           <PlayerCurrentStatus status={currentStatus} profileName={scenario.profile.name} />
         </div>
 

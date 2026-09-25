@@ -3,6 +3,7 @@ import type {
   MatchDto,
   PlayerProfileViewDto,
   PlayerResultPageDto,
+  PlayerResultSummaryDto,
   PlayerSearchResolutionDto,
   PlayerSeasonRecordDto,
   PlayerSummaryDto,
@@ -172,35 +173,37 @@ export function searchResolutionToEntries(resolution: PlayerSearchResolutionDto)
 export function toSeasonSummary(
   season: number,
   record: PlayerSeasonRecordDto | null,
+  recordedResults: PlayerResultSummaryDto | null = null,
 ): PlayerSeasonSummaryPreview {
-  if (!record) {
-    return {
-      season,
-      matches: null,
-      wins: null,
-      losses: null,
-      winRate: null,
-      titles: null,
-      hard: null,
-      clay: null,
-      grass: null,
-    }
-  }
-  const matches = record.matches_won === null || record.matches_lost === null
-    ? null
-    : record.matches_won + record.matches_lost
+  const hasCompleteProviderRecord =
+    record !== null
+    && record.matches_won !== null
+    && record.matches_lost !== null
+  const useRecordedResults = !hasCompleteProviderRecord && recordedResults !== null
+  const wins = useRecordedResults && recordedResults
+    ? recordedResults.matches_won
+    : record?.matches_won ?? null
+  const losses = useRecordedResults && recordedResults
+    ? recordedResults.matches_lost
+    : record?.matches_lost ?? null
+  const matches = useRecordedResults
+    ? recordedResults?.matches ?? null
+    : wins === null || losses === null
+      ? null
+      : wins + losses
   return {
-    season: record.season,
+    season: record?.season ?? season,
     matches,
-    wins: record.matches_won,
-    losses: record.matches_lost,
-    winRate: matches !== null && matches > 0
-      ? Number(((record.matches_won! / matches) * 100).toFixed(1))
+    wins,
+    losses,
+    winRate: matches !== null && matches > 0 && wins !== null
+      ? Number(((wins / matches) * 100).toFixed(1))
       : null,
-    titles: record.titles,
-    hard: record.hard ? { won: record.hard.won, lost: record.hard.lost } : null,
-    clay: record.clay ? { won: record.clay.won, lost: record.clay.lost } : null,
-    grass: record.grass ? { won: record.grass.won, lost: record.grass.lost } : null,
+    titles: record?.titles ?? null,
+    hard: record?.hard ? { won: record.hard.won, lost: record.hard.lost } : null,
+    clay: record?.clay ? { won: record.clay.won, lost: record.clay.lost } : null,
+    grass: record?.grass ? { won: record.grass.won, lost: record.grass.lost } : null,
+    ...(useRecordedResults ? { resultBasis: 'recorded_results' as const } : {}),
   }
 }
 
