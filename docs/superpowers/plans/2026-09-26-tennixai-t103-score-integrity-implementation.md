@@ -58,22 +58,22 @@
 - `SetScore` adds `player1_tiebreak_points: int | None = None` and `player2_tiebreak_points: int | None = None`.
 - A provider parsing helper returns `(games, tiebreak_points)`; an invalid input returns `(None, None)`.
 
-- [ ] **Step 1: Add failing provider cases** for `6.7` / `7.9`, ordinary `6` / `4`, `-`, empty, negative, and malformed dotted forms. Assert the decoded set has games `(6, 7)` and tiebreak points `(7, 9)` for the first case, and invalid values stay unknown.
-- [ ] **Step 2: Run the focused test and verify the defect is reproduced.**
+- [x] **Step 1: Add failing provider cases** for `6.7` / `7.9`, ordinary `6` / `4`, `-`, empty, negative, and malformed dotted forms. Assert the decoded set has games `(6, 7)` and tiebreak points `(7, 9)` for the first case, and invalid values stay unknown.
+- [x] **Step 2: Run the focused test and verify the defect is reproduced.** Confirmed RED: `8 failed, 6 passed, 77 deselected`; dotted game values were parsed as unknown.
 
   Run: `cd backend && uv run pytest tests/test_api_tennis_provider.py -k 'tiebreak or score' -q`
 
   Expected: the new tiebreak test fails because current parsing returns `None` for dotted values.
 
-- [ ] **Step 3: Add optional canonical fields and a strict parser.** Use a full-string match equivalent to `r"(\d+)(?:\.(\d+))?"`; do not extract a numeric prefix from malformed input. Map each parsed side to the same player side already used by `score_first` / `score_second`.
-- [ ] **Step 4: Add backward-compatibility assertions.** Validate a legacy `SetScore` JSON object without either new field and assert both fields are `None`; serialize and validate a new score to prove the values round-trip.
-- [ ] **Step 5: Run focused tests and lint.**
+- [x] **Step 3: Add optional canonical fields and a strict parser.** Used a full-string match equivalent to `r"(\d+)(?:\.(\d+))?"`; malformed values are not truncated. Player-side mapping follows `score_first` / `score_second`.
+- [x] **Step 4: Add backward-compatibility assertions.** Legacy JSON defaults both fields to `None`; new fields round-trip.
+- [x] **Step 5: Run focused tests and lint.** `100 passed`; Ruff passed; `git diff --check` passed. The later broad backend run found 16 pre-existing local integration schema failures (1423 passed, 37 skipped); no migration/reset was performed.
 
   Run: `cd backend && uv run pytest tests/test_api_tennis_provider.py tests/test_domain.py -q && uv run ruff check app/domain.py app/providers/api_tennis.py tests/test_api_tennis_provider.py tests/test_domain.py`
 
   Expected: all focused tests pass and Ruff reports no issues.
 
-- [ ] **Step 6: Commit the parser/model slice.**
+- [x] **Step 6: Commit the parser/model slice.** Commit `f22d19d` (`fix: preserve tiebreak set scores`).
 
   ```bash
   git add backend/app/domain.py backend/app/providers/api_tennis.py backend/tests/test_api_tennis_provider.py backend/tests/test_domain.py
