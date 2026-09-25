@@ -117,6 +117,23 @@ def supplier_snapshot(
     )
 
 
+def match_with_score(
+    score: MatchScore | None,
+    *,
+    match_id: str = "mat_live",
+    players: tuple[Player, Player] | None = None,
+) -> Match:
+    match = base_match()
+    assert match.live_state is not None
+    return match.model_copy(
+        update={
+            "id": match_id,
+            "players": players or match.players,
+            "live_state": match.live_state.model_copy(update={"score": score}),
+        }
+    )
+
+
 def seven_point_history() -> list[PointEvent]:
     return [
         point(i, 3, 1, i, ("15", "0") if i % 2 else ("0", "15"))
@@ -207,6 +224,128 @@ def test_feed_updates_preserve_hydrated_player_metadata() -> None:
     ]
     assert [player.ranking for player in later.snapshot.match.players] == [3, 8]
     assert later.snapshot.match.players[1].localized_name == "田沼涼太"
+
+
+def test_sparse_score_merge_preserves_known_fields_and_missing_set_rows() -> None:
+    previous_score = MatchScore(
+        sets_won=(1, 1),
+        sets=(
+            SetScore(
+                number=1,
+                player1_games=6,
+                player2_games=7,
+                player1_tiebreak_points=7,
+                player2_tiebreak_points=9,
+            ),
+            SetScore(number=2, player1_games=6, player2_games=4),
+            SetScore(number=3, player1_games=6, player2_games=3),
+        ),
+        points=("30", "15"),
+    )
+    previous = reduce_live_snapshot(
+        None, supplier_snapshot(match=match_with_score(previous_score))
+    ).snapshot
+    candidate_score = MatchScore(
+        sets_won=(0, 0),
+        sets=(
+            SetScore(
+                number=1,
+                player1_games=None,
+                player2_games=7,
+                player1_tiebreak_points=None,
+                player2_tiebreak_points=10,
+            ),
+            SetScore(number=3, player1_games=7, player2_games=3),
+        ),
+        points=("40", "Ad"),
+    )
+
+    reduction = reduce_live_snapshot(
+        previous,
+        supplier_snapshot(match=match_with_score(candidate_score)),
+    )
+
+    score = reduction.snapshot.match.live_state.score
+    assert score is not None
+    by_number = {item.number: item for item in score.sets}
+    assert by_number[1] == SetScore(
+        number=1,
+        player1_games=6,
+        player2_games=7,
+        player1_tiebreak_points=7,
+        player2_tiebreak_points=10,
+    )
+    assert by_number[2] == SetScore(number=2, player1_games=6, player2_games=4)
+    assert by_number[3] == SetScore(number=3, player1_games=7, player2_games=3)
+    assert score.sets_won == (0, 0)
+    assert score.points == ("40", "Ad")
+
+
+def test_sparse_score_merge_does_not_copy_values_to_adjacent_set_numbers() -> None:
+    previous_score = MatchScore(
+        sets_won=(0, 0),
+        sets=(SetScore(number=1, player1_games=6, player2_games=4),),
+        points=(None, None),
+    )
+    previous = reduce_live_snapshot(
+        None, supplier_snapshot(match=match_with_score(previous_score))
+    ).snapshot
+    candidate_score = MatchScore(
+        sets_won=(0, 0),
+        sets=(SetScore(number=2, player1_games=None, player2_games=None),),
+        points=(None, None),
+    )
+
+    reduction = reduce_live_snapshot(
+        previous,
+        supplier_snapshot(match=match_with_score(candidate_score)),
+    )
+
+    score = reduction.snapshot.match.live_state.score
+    assert score is not None
+    by_number = {item.number: item for item in score.sets}
+    assert by_number[1] == SetScore(number=1, player1_games=6, player2_games=4)
+    assert by_number[2] == SetScore(number=2, player1_games=None, player2_games=None)
+
+
+@pytest.mark.parametrize("identity_mismatch", ["different_match", "reversed_players"])
+def test_sparse_score_merge_does_not_cross_match_or_player_identity(
+    identity_mismatch: str,
+) -> None:
+    previous_score = MatchScore(
+        sets_won=(0, 0),
+        sets=(
+            SetScore(
+                number=1,
+                player1_games=6,
+                player2_games=4,
+                player1_tiebreak_points=7,
+                player2_tiebreak_points=5,
+            ),
+        ),
+        points=(None, None),
+    )
+    previous = reduce_live_snapshot(
+        None, supplier_snapshot(match=match_with_score(previous_score))
+    ).snapshot
+    candidate_score = MatchScore(
+        sets_won=(0, 0),
+        sets=(SetScore(number=1, player1_games=None, player2_games=None),),
+        points=(None, None),
+    )
+    if identity_mismatch == "different_match":
+        candidate_match = match_with_score(candidate_score, match_id="mat_other")
+    else:
+        candidate_match = match_with_score(
+            candidate_score,
+            players=(Player(id=PLY_B, name="Player B"), Player(id=PLY_A, name="Player A")),
+        )
+
+    reduction = reduce_live_snapshot(previous, supplier_snapshot(match=candidate_match))
+
+    score = reduction.snapshot.match.live_state.score
+    assert score is not None
+    assert score.sets == (SetScore(number=1, player1_games=None, player2_games=None),)
 
 
 def test_localized_name_correction_advances_version() -> None:

@@ -17,6 +17,7 @@ from app.domain import (
     MatchSnapshot,
     MomentumObservation,
     PointEvent,
+    SetScore,
 )
 from app.momentum.engine import RecentControlEngine
 from app.realtime.models import (
@@ -158,6 +159,67 @@ def _preserve_player_metadata(
     )
 
 
+def _merge_sparse_set_scores(previous: Match, candidate: Match) -> Match:
+    if previous.id != candidate.id or tuple(
+        player.id for player in previous.players
+    ) != tuple(player.id for player in candidate.players):
+        return candidate
+
+    previous_live = previous.live_state
+    candidate_live = candidate.live_state
+    if (
+        previous_live is None
+        or candidate_live is None
+        or previous_live.score is None
+        or candidate_live.score is None
+    ):
+        return candidate
+
+    previous_by_set = {item.number: item for item in previous_live.score.sets}
+    candidate_set_numbers = {item.number for item in candidate_live.score.sets}
+    merged_by_set: dict[int, SetScore] = {}
+    for incoming in candidate_live.score.sets:
+        stored = previous_by_set.get(incoming.number)
+        if stored is None:
+            merged_by_set[incoming.number] = incoming
+            continue
+        merged_by_set[incoming.number] = incoming.model_copy(
+            update={
+                "player1_games": (
+                    incoming.player1_games
+                    if incoming.player1_games is not None
+                    else stored.player1_games
+                ),
+                "player2_games": (
+                    incoming.player2_games
+                    if incoming.player2_games is not None
+                    else stored.player2_games
+                ),
+                "player1_tiebreak_points": (
+                    incoming.player1_tiebreak_points
+                    if incoming.player1_tiebreak_points is not None
+                    else stored.player1_tiebreak_points
+                ),
+                "player2_tiebreak_points": (
+                    incoming.player2_tiebreak_points
+                    if incoming.player2_tiebreak_points is not None
+                    else stored.player2_tiebreak_points
+                ),
+            }
+        )
+
+    for stored in previous_live.score.sets:
+        if stored.number not in candidate_set_numbers:
+            merged_by_set[stored.number] = stored
+
+    score = candidate_live.score.model_copy(
+        update={"sets": tuple(merged_by_set[number] for number in sorted(merged_by_set))}
+    )
+    return candidate.model_copy(
+        update={"live_state": candidate_live.model_copy(update={"score": score})}
+    )
+
+
 def _preferred_player_name(stored: str, incoming: str) -> str:
     """Keep a hydrated full name when a live row regresses to an initial."""
     if _name_quality(incoming) >= _name_quality(stored):
@@ -268,6 +330,7 @@ def reduce_live_snapshot(
             match,
             rankings_authoritative=rankings_authoritative,
         )
+        match = _merge_sparse_set_scores(previous.match, match)
     match_id = match.id
 
     if previous is None:
