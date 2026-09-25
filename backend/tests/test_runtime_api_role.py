@@ -125,7 +125,9 @@ class RecordingProvider:
     async def get_player(self, player_id: str) -> Player:
         self._record("get_player")
 
-    async def get_match_snapshot(self, match_id: str) -> Any:
+    async def get_match_snapshot(
+        self, match_id: str, *, include_surface: bool = True
+    ) -> Any:
         self._record("get_match_snapshot")
 
 

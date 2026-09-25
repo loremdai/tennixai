@@ -56,7 +56,9 @@ class TennisDataProvider(Protocol):
     async def get_match(self, match_id: str) -> Match:
         raise NotImplementedError
 
-    async def get_match_snapshot(self, match_id: str) -> MatchSnapshot:
+    async def get_match_snapshot(
+        self, match_id: str, *, include_surface: bool = True
+    ) -> MatchSnapshot:
         raise NotImplementedError
 
     async def get_recent_results(self, player_id: str, *, limit: int) -> list[Match]:

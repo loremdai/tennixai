@@ -73,8 +73,10 @@ class CountingProvider:
         self.profiles = profiles or {}
         self.snapshots = snapshots or {}
         self.calls: Counter[str] = Counter()
+        self.snapshot_options: list[bool] = []
         self.list_failure: AppError | None = None
         self.detail_failure: AppError | None = None
+        self.snapshot_failure: AppError | None = None
 
     async def search_players(self, query: str) -> list[Player]:
         self.calls["search_players"] += 1
@@ -111,8 +113,13 @@ class CountingProvider:
             raise AppError("not_found", "Player not found", 404)
         return profile
 
-    async def get_match_snapshot(self, match_id: str) -> MatchSnapshot:
+    async def get_match_snapshot(
+        self, match_id: str, *, include_surface: bool = True
+    ) -> MatchSnapshot:
         self.calls["get_match_snapshot"] += 1
+        self.snapshot_options.append(include_surface)
+        if self.snapshot_failure is not None:
+            raise self.snapshot_failure
         snapshot = self.snapshots.get(match_id)
         if snapshot is None:
             raise AppError("not_found", "Match not found", 404)
@@ -188,6 +195,17 @@ def build_match(
         freshness=DataFreshness(
             provider="fake", observed_at=scheduled_at or NOW_UTC
         ),
+    )
+
+
+def finished_match_with_score(match_id: str, score: MatchScore) -> Match:
+    match = build_match(match_id, MatchStatus.FINISHED, NOW_UTC)
+    return match.model_copy(
+        update={
+            "round": "Final",
+            "surface": "hard",
+            "live_state": LiveMatchState(score=score, server_player_id=None),
+        }
     )
 
 
@@ -496,6 +514,139 @@ async def test_match_snapshot_refreshes_and_persists_missing_match_metadata() ->
     assert provider.calls["get_match_snapshot"] == 1
     assert len(store.saved) == 1
     assert store.saved[0].snapshot.match.surface == "hard"
+
+
+@pytest.mark.asyncio
+async def test_finished_match_score_repair_is_cached_persisted_and_published() -> None:
+    match_id = "mat_finished_score_repair"
+    stored_match = finished_match_with_score(
+        match_id,
+        MatchScore(
+            sets_won=(2, 0),
+            sets=(SetScore(number=1, player1_games=6, player2_games=4),),
+            points=(None, None),
+        ),
+    )
+    stored = MatchSnapshot(match=stored_match, state_version=0, as_of=NOW_UTC)
+    provider_snapshot = MatchSnapshot(
+        match=finished_match_with_score(
+            match_id,
+            MatchScore(
+                sets_won=(2, 0),
+                sets=(
+                    SetScore(
+                        number=1,
+                        player1_games=6,
+                        player2_games=4,
+                        player1_tiebreak_points=7,
+                        player2_tiebreak_points=5,
+                    ),
+                    SetScore(number=2, player1_games=6, player2_games=3),
+                ),
+                points=(None, None),
+            ),
+        ),
+        state_version=0,
+        as_of=NOW_UTC + timedelta(seconds=1),
+    )
+    provider = CountingProvider(snapshots={match_id: provider_snapshot})
+    store = MemorySnapshotStore(stored)
+    publisher = MemorySnapshotPublisher(stored)
+    service, _, _ = build_service(
+        provider, snapshots=store, publisher=publisher
+    )
+
+    first = await service.resolve_match_snapshot(match_id)
+    second = await service.resolve_match_snapshot(match_id)
+
+    score = first.match.live_state.score
+    assert score is not None
+    assert score.sets[0].player1_tiebreak_points == 7
+    assert score.sets[0].player2_tiebreak_points == 5
+    assert [(item.player1_games, item.player2_games) for item in score.sets] == [
+        (6, 4),
+        (6, 3),
+    ]
+    assert second.match.live_state.score == score
+    assert provider.calls["get_match_snapshot"] == 1
+    assert provider.snapshot_options == [False]
+    assert len(store.saved) == 1
+    assert len(publisher.events) == 1
+
+
+@pytest.mark.asyncio
+async def test_score_repair_skips_complete_live_and_upcoming_matches() -> None:
+    complete_finished = finished_match_with_score(
+        "mat_complete_finished",
+        MatchScore(
+            sets_won=(2, 0),
+            sets=(
+                SetScore(number=1, player1_games=6, player2_games=4),
+                SetScore(number=2, player1_games=6, player2_games=3),
+            ),
+            points=(None, None),
+        ),
+    )
+    incomplete_live = build_match("mat_live_no_repair", MatchStatus.LIVE, NOW_UTC)
+    incomplete_live = incomplete_live.model_copy(
+        update={"round": "R1", "surface": "hard"}
+    )
+    upcoming = build_match("mat_upcoming_no_repair", MatchStatus.SCHEDULED, NOW_UTC)
+    upcoming = upcoming.model_copy(update={"round": "R1", "surface": "hard"})
+
+    for match in (complete_finished, incomplete_live, upcoming):
+        stored = MatchSnapshot(match=match, state_version=0, as_of=NOW_UTC)
+        provider = CountingProvider()
+        service, _, _ = build_service(provider, snapshots=MemorySnapshotStore(stored))
+
+        await service.resolve_match_snapshot(match.id)
+
+        assert provider.calls["get_match_snapshot"] == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("provider_result", ["error", "incomplete"])
+async def test_failed_or_incomplete_score_repair_keeps_stored_score(
+    provider_result: str,
+) -> None:
+    match_id = f"mat_score_repair_{provider_result}"
+    stored_match = finished_match_with_score(
+        match_id,
+        MatchScore(
+            sets_won=(2, 0),
+            sets=(SetScore(number=1, player1_games=6, player2_games=4),),
+            points=(None, None),
+        ),
+    )
+    stored = MatchSnapshot(match=stored_match, state_version=0, as_of=NOW_UTC)
+    provider = CountingProvider(
+        snapshots={
+            match_id: MatchSnapshot(
+                match=finished_match_with_score(
+                    match_id,
+                    MatchScore(
+                        sets_won=(2, 0),
+                        sets=(
+                            SetScore(number=1, player1_games=6, player2_games=None),
+                        ),
+                        points=(None, None),
+                    ),
+                ),
+                state_version=0,
+                as_of=NOW_UTC + timedelta(seconds=1),
+            )
+        }
+    )
+    if provider_result == "error":
+        provider.snapshot_failure = AppError("provider_unavailable", "offline", 503)
+    service, _, _ = build_service(provider, snapshots=MemorySnapshotStore(stored))
+
+    resolved = await service.resolve_match_snapshot(match_id)
+
+    score = resolved.match.live_state.score
+    assert score is not None
+    assert score.sets == (SetScore(number=1, player1_games=6, player2_games=4),)
+    assert provider.calls["get_match_snapshot"] == 1
 
 
 @pytest.mark.asyncio

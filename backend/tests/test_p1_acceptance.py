@@ -100,9 +100,11 @@ class CountingProviderWrapper:
         self.calls += 1
         return await self.inner.get_score(match_id)
 
-    async def get_match_snapshot(self, match_id: str):
+    async def get_match_snapshot(self, match_id: str, *, include_surface: bool = True):
         self.calls += 1
-        return await self.inner.get_match_snapshot(match_id)
+        return await self.inner.get_match_snapshot(
+            match_id, include_surface=include_surface
+        )
 
     async def get_recent_results(self, player_id: str, *, limit: int):
         self.calls += 1

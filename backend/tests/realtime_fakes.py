@@ -239,7 +239,9 @@ class FakeRestProvider:
         self._snapshots = list(snapshots)
         self.calls = 0
 
-    async def get_match_snapshot(self, match_id: str) -> MatchSnapshot:
+    async def get_match_snapshot(
+        self, match_id: str, *, include_surface: bool = True
+    ) -> MatchSnapshot:
         self.calls += 1
         if not self._snapshots:
             raise AssertionError("no scripted REST snapshot left")

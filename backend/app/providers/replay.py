@@ -12,9 +12,8 @@ import asyncio
 import copy
 import inspect
 import json
-from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
@@ -28,8 +27,6 @@ from app.domain import (
     MatchSnapshot,
     MatchStatus,
     Player,
-    PointEvent,
-    Tournament,
 )
 from app.errors import AppError
 from app.identity import IdentityRepository, MemoryIdentityRepository
@@ -344,7 +341,9 @@ class ReplayTennisProvider:
         external = await self._resolve_external(match_id)
         return self._current[external].match
 
-    async def get_match_snapshot(self, match_id: str) -> MatchSnapshot:
+    async def get_match_snapshot(
+        self, match_id: str, *, include_surface: bool = True
+    ) -> MatchSnapshot:
         external = await self._resolve_external(match_id)
         return self._current[external]
 

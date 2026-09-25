@@ -22,6 +22,7 @@ from app.domain import (
     Discipline,
     Gender,
     HeadToHead,
+    LiveMatchState,
     Match,
     MatchSnapshot,
     MatchStatus,
@@ -224,6 +225,26 @@ def tonight_window(now_local: datetime) -> tuple[datetime, datetime]:
         start_day = day
     start = datetime.combine(start_day, time(18), tzinfo=now_local.tzinfo)
     return start, start + timedelta(hours=12)
+
+
+def _finished_match_score_is_incomplete(match: Match) -> bool:
+    if match.status is not MatchStatus.FINISHED:
+        return False
+    live_state = match.live_state
+    score = live_state.score if live_state is not None else None
+    if score is None:
+        return True
+    if any(
+        item.player1_games is None or item.player2_games is None
+        for item in score.sets
+    ):
+        return True
+    if score.sets_won is None:
+        return False
+    present_sets = {item.number for item in score.sets}
+    return any(
+        number not in present_sets for number in range(1, sum(score.sets_won) + 1)
+    )
 
 
 class TennisService:
@@ -1197,15 +1218,17 @@ class TennisService:
     async def _persist_snapshot_upgrade(
         self, previous: MatchSnapshot, candidate: MatchSnapshot
     ) -> MatchSnapshot:
-        if candidate == previous or self._snapshots is None:
-            return candidate
+        if candidate == previous:
+            return previous
         reduction = reduce_live_snapshot(
             previous,
             candidate,
             rankings_authoritative=self._directory is not None,
         )
         if not reduction.changed:
-            return candidate
+            return reduction.snapshot
+        if self._snapshots is None:
+            return reduction.snapshot
         await self._snapshots.save_reduction(reduction)
         publish_delta = getattr(self._publisher, "publish_delta", None)
         if callable(publish_delta):
@@ -1220,19 +1243,23 @@ class TennisService:
         # Fixture/draw responses can fill these three canonical fields. The
         # current API does not expose indoor/format, so those stay null rather
         # than triggering a request that cannot improve the snapshot.
-        if not any(
+        needs_metadata = any(
             value is None
             for value in (
                 normalized.match.scheduled_at,
                 normalized.match.round,
                 normalized.match.surface,
             )
-        ):
+        )
+        needs_score = _finished_match_score_is_incomplete(normalized.match)
+        if not needs_metadata and not needs_score:
             return normalized
 
         async def load_optional_metadata() -> object:
             try:
-                return await self._provider.get_match_snapshot(normalized.match.id)
+                return await self._provider.get_match_snapshot(
+                    normalized.match.id, include_surface=needs_metadata
+                )
             except AppError:
                 # Existing canonical data remains usable when optional
                 # enrichment is unavailable or the provider plan omits the
@@ -1264,6 +1291,24 @@ class TennisService:
                 "format": current_match.format or provider_match.format,
             }
         )
+        provider_state = provider_match.live_state
+        if (
+            needs_score
+            and provider_match.id == current_match.id
+            and provider_match.status is MatchStatus.FINISHED
+            and tuple(player.id for player in provider_match.players)
+            == tuple(player.id for player in current_match.players)
+            and provider_state is not None
+            and provider_state.score is not None
+        ):
+            current_state = current_match.live_state or LiveMatchState()
+            merged_match = merged_match.model_copy(
+                update={
+                    "live_state": current_state.model_copy(
+                        update={"score": provider_state.score}
+                    )
+                }
+            )
         merged = normalized.model_copy(
             update={
                 "match": merged_match,

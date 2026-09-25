@@ -50,9 +50,11 @@ class RecordingProvider:
         self.calls["get_match"] += 1
         return await self.inner.get_match(match_id)
 
-    async def get_match_snapshot(self, match_id: str):
+    async def get_match_snapshot(self, match_id: str, *, include_surface: bool = True):
         self.calls["get_match_snapshot"] += 1
-        return await self.inner.get_match_snapshot(match_id)
+        return await self.inner.get_match_snapshot(
+            match_id, include_surface=include_surface
+        )
 
     async def get_recent_results(self, player_id: str, *, limit: int):
         self.calls["get_recent_results"] += 1
@@ -153,8 +155,10 @@ class MixedOutcomeBusinessTools(ConcurrentBusinessTools):
 
 
 class UnknownFormatRecordingProvider(RecordingProvider):
-    async def get_match_snapshot(self, match_id: str):
-        snapshot = await super().get_match_snapshot(match_id)
+    async def get_match_snapshot(self, match_id: str, *, include_surface: bool = True):
+        snapshot = await super().get_match_snapshot(
+            match_id, include_surface=include_surface
+        )
         return snapshot.model_copy(
             update={
                 "match": snapshot.match.model_copy(update={"format": None}),

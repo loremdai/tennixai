@@ -5,9 +5,15 @@ from httpx import ASGITransport, AsyncClient
 
 from app.config import Settings
 from app.domain import (
+    DataFreshness,
     LiveMatchState,
     Match,
+    MatchScore,
+    MatchSnapshot,
+    MatchStatus,
     Player,
+    SetScore,
+    Tournament,
 )
 from app.errors import AppError
 from app.identity import MemoryIdentityRepository
@@ -27,17 +33,30 @@ class StubProvider:
         live: list[Match] | None = None,
         upcoming: list[Match] | None = None,
         matches: dict[str, Match] | None = None,
+        snapshots: dict[str, MatchSnapshot] | None = None,
         list_error: AppError | None = None,
     ) -> None:
         self.players = players or []
         self.live = live or []
         self.upcoming = upcoming or []
         self.matches = matches or {}
+        self.snapshots = snapshots or {}
         self.list_error = list_error
 
     async def search_players(self, query: str) -> list[Player]:
         normalized = query.strip().casefold()
         return [p for p in self.players if normalized in p.name.casefold()]
+
+    async def get_player(self, player_id: str) -> Player:
+        available = [*self.players]
+        for match in [*self.live, *self.upcoming, *self.matches.values()]:
+            available.extend(match.players)
+        for snapshot in self.snapshots.values():
+            available.extend(snapshot.match.players)
+        player = next((item for item in available if item.id == player_id), None)
+        if player is None:
+            raise AppError("not_found", "Player not found", 404)
+        return player
 
     async def get_live_matches(self, *, player_id: str | None = None) -> list[Match]:
         if self.list_error is not None:
@@ -54,6 +73,14 @@ class StubProvider:
         if match is None:
             raise AppError("not_found", "Match not found", 404)
         return match
+
+    async def get_match_snapshot(
+        self, match_id: str, *, include_surface: bool = True
+    ) -> MatchSnapshot:
+        snapshot = self.snapshots.get(match_id)
+        if snapshot is None:
+            raise AppError("not_found", "Match not found", 404)
+        return snapshot
 
     async def get_score(self, match_id: str) -> LiveMatchState:
         match = await self.get_match(match_id)
@@ -156,6 +183,54 @@ async def test_match_detail_round_trip(client: AsyncClient) -> None:
     assert body["data"]["match"]["surface"] == "hard"
     assert body["data"]["state_version"] >= 0
     assert body["data"]["as_of"]
+
+
+@pytest.mark.asyncio
+async def test_match_detail_serializes_set_tiebreak_points() -> None:
+    match_id = "mat_tiebreak_api"
+    observed_at = datetime.fromisoformat(FIXED_NOW.replace("Z", "+00:00"))
+    match = Match(
+        id=match_id,
+        status=MatchStatus.FINISHED,
+        players=(Player(id="ply_s", name="Jannik Sinner"), Player(id="ply_a", name="Carlos Alcaraz")),
+        tournament=Tournament(id="trn_atp", name="ATP Finals"),
+        scheduled_at=observed_at,
+        round="Final",
+        surface="hard",
+        winner_player_id="ply_s",
+        live_state=LiveMatchState(
+            score=MatchScore(
+                sets_won=(2, 0),
+                sets=(
+                    SetScore(
+                        number=1,
+                        player1_games=7,
+                        player2_games=6,
+                        player1_tiebreak_points=7,
+                        player2_tiebreak_points=5,
+                    ),
+                    SetScore(number=2, player1_games=6, player2_games=4),
+                ),
+                points=(None, None),
+            )
+        ),
+        freshness=DataFreshness(provider="api_tennis", observed_at=observed_at),
+    )
+    provider = StubProvider(
+        snapshots={
+            match_id: MatchSnapshot(match=match, state_version=0, as_of=observed_at)
+        }
+    )
+
+    async with await stub_client(provider) as client:
+        response = await client.get(f"/api/v1/matches/{match_id}")
+
+    assert response.status_code == 200
+    sets = response.json()["data"]["match"]["live_state"]["score"]["sets"]
+    assert sets[0]["player1_tiebreak_points"] == 7
+    assert sets[0]["player2_tiebreak_points"] == 5
+    assert "player1_tiebreak_points" in sets[1]
+    assert sets[1]["player1_tiebreak_points"] is None
 
 
 @pytest.mark.asyncio

@@ -1360,6 +1360,21 @@ async def test_match_snapshot_enriches_surface_from_official_draw_metadata(provi
 
 
 @pytest.mark.asyncio
+async def test_match_snapshot_can_skip_surface_lookup_for_score_only_repair(provider) -> None:
+    built, seen = provider
+    live = await built.get_live_matches()
+    rich = next(match for match in live if match.round == "Tulln - 1/8-finals")
+    seen.clear()
+
+    snapshot = await built.get_match_snapshot(rich.id, include_surface=False)
+
+    methods = [item.url.params.get("method") for item in seen]
+    assert methods[0] == "get_fixtures"
+    assert "get_draw" not in methods
+    assert snapshot.match.surface is None
+
+
+@pytest.mark.asyncio
 async def test_match_snapshot_keeps_match_when_draw_metadata_is_unavailable() -> None:
     built, seen, client, _directory = build_provider(draw_unavailable_handler)
     try:

@@ -217,7 +217,7 @@ class RecordingProvider:
             for index in range(min(limit, self.matches_per_player))
         ]
 
-    async def get_match_snapshot(self, match_id: str):
+    async def get_match_snapshot(self, match_id: str, *, include_surface: bool = True):
         self.snapshot_calls += 1
         return self._snapshot(self._match(int(match_id.split("_")[1])))
 

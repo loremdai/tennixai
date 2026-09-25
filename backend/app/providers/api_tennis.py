@@ -1059,7 +1059,9 @@ class ApiTennisProvider:
             raise AppError("not_found", "Match not found", 404)
         return match
 
-    async def get_match_snapshot(self, match_id: str) -> MatchSnapshot:
+    async def get_match_snapshot(
+        self, match_id: str, *, include_surface: bool = True
+    ) -> MatchSnapshot:
         external_id = await self._identities.external_id(
             "match", PROVIDER_NAME, match_id
         )
@@ -1074,7 +1076,7 @@ class ApiTennisProvider:
             )
         if not rows:
             raise AppError("not_found", "Match not found", 404)
-        surface = await self._draw_surface(rows[0])
+        surface = await self._draw_surface(rows[0]) if include_surface else None
         snapshot = await map_livescore_row_to_snapshot(
             rows[0], self._identities, self._now, surface=surface
         )

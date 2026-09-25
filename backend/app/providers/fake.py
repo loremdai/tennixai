@@ -340,7 +340,9 @@ class FakeTennisProvider:
             raise AppError("not_found", "Match not found", 404)
         return match
 
-    async def get_match_snapshot(self, match_id: str) -> MatchSnapshot:
+    async def get_match_snapshot(
+        self, match_id: str, *, include_surface: bool = True
+    ) -> MatchSnapshot:
         match = await self.get_match(match_id)
         live_state = match.live_state
         observed_at = match.freshness.observed_at
