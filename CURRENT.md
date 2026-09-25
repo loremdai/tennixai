@@ -2,22 +2,24 @@
 
 > 快速了解现在做到哪里、最近做完什么、接下来由谁接手。长期路线与阶段证据见 [ROADMAP.md](./ROADMAP.md)，产品定位和稳定架构见 [PROJECT.md](./PROJECT.md)。
 
-**最后更新：** 2026-09-25 21:22（北京时间）
+**最后更新：** 2026-09-25 21:44（北京时间）
 
-**当前主任务：** T101 — 修复过期比赛误入当前列表（`in_progress`）。
+**当前主任务：** 无。T101 已完成；下一主任务待用户指定。
 
-**最近任务：** T100 — 排查首页展示过期比赛（`done`），起始 HEAD `45a4308`，调查证据提交 `c81c222`，收口提交 `105a487`。
+**最近任务：** T101 — 修复过期比赛误入当前列表（`done`），起始 HEAD `5af1b49`，领取提交 `785e9e9`，实现提交 `2b6e217`。
 
-**执行者 / 分支：** Codex / `main`；T101 起始 HEAD `5af1b49`。保留工作区内已存在的用户改动，不纳入本任务。
+**执行者 / 分支：** Codex / `main`；T101 已交接，工作区内原有用户改动仍保留且未纳入提交。
 
 **运行手册与证据：** [本地真实运行手册](docs/runbooks/local-real-runtime.md)；[T98 审计规格与完成证据](docs/superpowers/specs/2026-09-24-tennixai-whole-product-audit.md)；[T97 审计计划](docs/superpowers/plans/2026-09-24-tennixai-t97-global-field-presentation-audit.md)；[T95–T98 字段矩阵](docs/research/2026-09-24-tennixai-t95-match-field-integrity-matrix.md)。
 
-## T101 修复过期比赛误入当前列表（`in_progress`）
+## T101 修复过期比赛误入当前列表（`done`）
 
 - **领取：** 2026-09-25 21:22 CST，Codex，`main`，起始 HEAD `5af1b49`；用户已授权修复并要求复核方案。
 - **目标：** 当前直播和近期赛程只展示可确认的有效比赛，首页与比赛列表/问答使用一致的时间语义；多日赛程注明北京日期。
 - **边界：** 保留历史 canonical 行，不根据时间推定最终赛果；不变更供应商、数据库 schema、市场、模型或 paper。先做确定性回归，再用运行中的本地真实服务复核；不读取或输出根 `.env`。
 - **现场保护：** `backend/app/service.py` 中 P3QueryService 的两处用户已有修改及 `.codex/`、`.superpowers/`、`REALTIME_LATENCY_INVESTIGATION.md`、`backend/tests/test_p3_query_freshness.py`、`frontend/next-env.d.ts` 均不纳入本任务提交。
+- **实现：** `2b6e217`。当前直播按最后观测时间限制为 5 倍同步间隔、近期赛程为 3 倍同步间隔且必须有未来开赛时间；使用真实 `age_seconds/is_stale`，配置变更时窗口随同步间隔变化。过滤放在共用 TennisService 读取处，覆盖 Home、目录、列表、球员当前比赛和 Chat，不删除历史行、不推断结束比分。Home 将多日赛程命名为「近期赛程」，展示北京日期与时间，并修正空态和旧市场浏览器验收文案。
+- **验证：** 目录/Chat/首页回归先红后绿；后端非 integration 测试文件 `1334 passed`，前端 Vitest `36 files / 485 passed`、TypeScript 与 Next production build 通过；真实本地桌面/手机 Playwright `6 passed`。重启后状态为数据库/Redis healthy，sports stream、schedule、rankings、Polymarket 均 `ok`，runtime/API/frontend 运行中；真实 Home 从旧的默认 44 场直播/186 场赛程收敛为 3 场有效直播/17 场未来赛程，页面核对显示北京日期。包含旧 integration 库的粗跑为 `1409 passed / 16 failed / 12 skipped / 25 deselected`，16 例因本机旧测试库 schema 缺列/约束不符，未把这次运行声称为全绿；未修改或重置该测试库。用户既有 P3 代码与未跟踪文件保留，根 `.env` 未输出或提交；真实服务继续运行。
 
 ## T99 初始化并启动本地真实服务（`done`）
 
@@ -137,11 +139,8 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
+| 2026-09-25 | `2b6e217` | 完成 T101：共用读取过滤过期当前比赛，首页显示北京日期；后端非 integration 1334 passed、前端 485 passed、真实浏览器 6 passed，服务同步健康。 |
+| 2026-09-25 | `785e9e9` | 领取 T101，确认与保留已有用户改动，开始修复。 |
 | 2026-09-25 | `105a487` | 关闭 T100 只读调查；只更新项目总控并推送，未动产品代码或用户已有改动。 |
 | 2026-09-25 | `c81c222` | T100 确认首页过期比赛根因：过期目录行未退役、API 不按时间/观测时间过滤、freshness 默认值掩盖陈旧记录；真实服务保持运行，未改产品代码。 |
-| 2026-09-25 | `45a4308` 起 | T100 只读调查首页过期比赛；真实服务保持运行，不发供应商请求、不改产品代码。 |
 | 2026-09-25 | `4d1289a` | T99 重试初始化并启动真实服务：`init`、`up` 均成功；数据库/Redis、实时流、赛程、排名、Polymarket 状态通过，首页/API health HTTP 200；服务保持运行。 |
-| 2026-09-24 | `b4acb8b` | 完成 T96：修复球员国家名/旗帜归一化、历史总盘数缺失显示、Chat 单打与不完整历史标记；后端定向 161 passed、前端 432 passed、TypeScript 通过 |
-| 2026-09-24 | `3ae508c` | 完成 T95：新增端到端字段矩阵；修复当前盘误标、未知 PBP 标记、统计/比分校验和 freshness 持久化；后端 1289 passed、前端 422 passed，PostgreSQL round-trip 与迁移回滚守卫通过 |
-| 2026-09-24 | `93e1243` | 完成 T94：REST 排名权威修正同步至热快照/SSE，实时 worker 对临时目录故障保留 frame 并重试；全后端 1336 passed、12 skipped，PostgreSQL player directory 9 passed |
-| 2026-09-24 | `fa00f46` | 按独立审查补齐逐项统计时间显示及数值不变时的新观测时间更新 |

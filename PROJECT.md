@@ -51,7 +51,7 @@ LLM 负责理解意图、选择业务工具和组织表达，不是网球事实�
 
 ### Home Page
 
-承担 Discovery、Search、Schedule、Live Now、Following，以及未来具备数据能力后的 Recent Results。P3 将现有市场情报占位升级为最多三行的「市场脉搏」：有开放 paper position 时为其保留一行并优先异常或需动作状态，其余按赛中 `BUY` → 赛前 `BUY` → 最强 `WAIT` 选取。每行只显示比赛、模型概率、可执行市场概率、当前动作与 freshness；点击进入 Match Page，“查看全部”进入 `/markets`。Home 不承载交易按钮、轨迹或详细 ledger，无机会时显示诚实空态。典型查询输出仍是：简短回答 + Structured Match Card + Open Match。
+承担 Discovery、Search、Schedule、Live Now、Following，以及未来具备数据能力后的 Recent Results。当前直播只展示仍在有效观测窗口内的比赛；近期赛程只展示尚未开赛且观测有效的比赛，并明确显示北京时间日期与时刻。旧目录记录继续保留，但不能假装是当前比赛，也不能仅凭时间推断最终赛果。P3 将现有市场情报占位升级为最多三行的「市场脉搏」：有开放 paper position 时为其保留一行并优先异常或需动作状态，其余按赛中 `BUY` → 赛前 `BUY` → 最强 `WAIT` 选取。每行只显示比赛、模型概率、可执行市场概率、当前动作与 freshness；点击进入 Match Page，“查看全部”进入 `/markets`。Home 不承载交易按钮、轨迹或详细 ledger，无机会时显示诚实空态。典型查询输出仍是：简短回答 + Structured Match Card + Open Match。
 
 ### Match Page
 
