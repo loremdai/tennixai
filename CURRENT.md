@@ -2,15 +2,22 @@
 
 > 快速了解现在做到哪里、最近做完什么、接下来由谁接手。长期路线与阶段证据见 [ROADMAP.md](./ROADMAP.md)，产品定位和稳定架构见 [PROJECT.md](./PROJECT.md)。
 
-**最后更新：** 2026-09-25 20:06（北京时间）
+**最后更新：** 2026-09-25 21:22（北京时间）
 
-**当前主任务：** 无。T100 只读调查已完成；首页过期比赛的产品修复尚未开始。
+**当前主任务：** T101 — 修复过期比赛误入当前列表（`in_progress`）。
 
 **最近任务：** T100 — 排查首页展示过期比赛（`done`），起始 HEAD `45a4308`，调查证据提交 `c81c222`，收口提交 `105a487`。
 
-**执行者 / 分支：** Codex / `main`；T100 起始 HEAD `45a4308`。保留工作区内已存在的用户改动，不纳入本任务。
+**执行者 / 分支：** Codex / `main`；T101 起始 HEAD `5af1b49`。保留工作区内已存在的用户改动，不纳入本任务。
 
 **运行手册与证据：** [本地真实运行手册](docs/runbooks/local-real-runtime.md)；[T98 审计规格与完成证据](docs/superpowers/specs/2026-09-24-tennixai-whole-product-audit.md)；[T97 审计计划](docs/superpowers/plans/2026-09-24-tennixai-t97-global-field-presentation-audit.md)；[T95–T98 字段矩阵](docs/research/2026-09-24-tennixai-t95-match-field-integrity-matrix.md)。
+
+## T101 修复过期比赛误入当前列表（`in_progress`）
+
+- **领取：** 2026-09-25 21:22 CST，Codex，`main`，起始 HEAD `5af1b49`；用户已授权修复并要求复核方案。
+- **目标：** 当前直播和近期赛程只展示可确认的有效比赛，首页与比赛列表/问答使用一致的时间语义；多日赛程注明北京日期。
+- **边界：** 保留历史 canonical 行，不根据时间推定最终赛果；不变更供应商、数据库 schema、市场、模型或 paper。先做确定性回归，再用运行中的本地真实服务复核；不读取或输出根 `.env`。
+- **现场保护：** `backend/app/service.py` 中 P3QueryService 的两处用户已有修改及 `.codex/`、`.superpowers/`、`REALTIME_LATENCY_INVESTIGATION.md`、`backend/tests/test_p3_query_freshness.py`、`frontend/next-env.d.ts` 均不纳入本任务提交。
 
 ## T99 初始化并启动本地真实服务（`done`）
 

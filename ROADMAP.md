@@ -5,11 +5,11 @@
 
 **最后更新：** 2026-09-25 20:06（北京时间）
 
-**总体状态：** `in_progress`（P4 持续打磨；T93–T99 已完成。T100 已确认首页旧比赛来自未清理的本地目录记录及缺少日期/新鲜度过滤；调查只读完成，产品修复另行授权。此前用户批准的 B 边界保持：所有活跃网球胜者市场展示供应商真实名称/报价，未映射/双打不进入模型或 Paper。模型未晋升时机会页继续诚实为空；模型晋升另行排期）
+**总体状态：** `in_progress`（P4 持续打磨；T100 已定位首页旧比赛根因，T101 正修复当前比赛列表。此前用户批准的 B 边界保持：所有活跃网球胜者市场展示供应商真实名称/报价，未映射/双打不进入模型或 Paper。模型未晋升时机会页继续诚实为空；模型晋升另行排期）
 
 **当前里程碑：** P3 已关闭；P4.0–P4.4 已完成（T72–T92）；P4.5 的 T93–T99 实现/审计及本地服务启动任务已完成。真实服务当前保持运行。
 
-**当前阶段：** T100 首页过期比赛只读调查已完成，产品修复尚未开始，见 [CURRENT.md](./CURRENT.md)。模型未晋升时机会页仍为空；模型晋升证据链另行排期；自动下单继续 `deferred`。
+**当前阶段：** T101 正修复首页、比赛列表与问答中的过期比赛误报，见 [CURRENT.md](./CURRENT.md)。模型未晋升时机会页仍为空；模型晋升证据链另行排期；自动下单继续 `deferred`。
 
 ## 状态说明
 
@@ -150,7 +150,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | P4.2 — Launcher Reliability | `done` | 让根目录 `./scripts/tennix-live up` 不依赖当前 shell 解析到的 pnpm 版本 | T82 已完成（`2cea490`）：TDD 先红后绿；`up` 直接执行 `frontend/node_modules/.bin/next`，缺失时在其他子进程启动前报 `LOCAL_FRONTEND_MISSING`；真实无环境覆盖 `up` exit 0，API health 200、前端 HTTP 200，进程树无 pnpm；随后 `down` exit 0 且数据保留 |
 | P4.3 — Market Data Truthfulness & Coverage | `done` | 修复市场—比赛 read model 脱节，建立全市场可信报价覆盖与实时决策双通道，并让 Markets/Opportunities 如实表达数据与模型状态 | T83 规格经用户 2026-09-22 书面确认；T84–T89 全部 `done` 并逐项提交（2026-09-23）。交付：active-link 唯一 read truth、reversible `0006` latest-quote projection、有界 120s 批量快照覆盖车道（`POST /books`，只读、零凭据）、七个显式 quote 状态、显式 `model_availability`/真实 `decision_action`、按真实原因解释的机会空态、覆盖率健康与 runbook。模型晋升、自动下单和虚构机会均不属于本阶段，均未触碰 |
 | P4.4 — Host Environment Resilience | `done` | 消除项目 HTTP 客户端对宿主 `HTTP(S)_PROXY` / `NO_PROXY` 环境的非确定性继承，避免 IPv6 loopback 排除项导致应用与测试在导入阶段失败 | T90（`b3ef97d`）完成：所有项目自建 HTTPX 客户端显式 `trust_env=False`、WebSocket 显式 `proxy=None`；launcher 保留宿主环境但客户端不再隐式读取代理配置。回归在含 `::1` 的环境中通过，确定性后端 `1200 passed, 114 deselected`，无 API/LLM/交易调用，根 `.env` 未改 |
-| P4.5 — Global Data Integrity & Field Presentation | `in_progress` | 核对结构化网球数据从供应商/API 到全站 UI 的字段和值语义；修复已验证的数据丢失、误标和展示缺陷 | T93–T99 已完成；T100 正调查真实运行时中首页出现旧比赛的问题，避免将未验证的假设当成修复。 |
+| P4.5 — Global Data Integrity & Field Presentation | `in_progress` | 核对结构化网球数据从供应商/API 到全站 UI 的字段和值语义；修复已验证的数据丢失、误标和展示缺陷 | T93–T100 已完成；T101 修复已确认的首页和共用当前比赛查询误报。 |
 
 > **后验核验记录（2026-09-18）：** T80 的 `110 passed / 44 skipped / 0 failed` 是当时真实通过的历史证据。控制者随后在无影响路径产品代码变更的 `2270049` 上两次复跑当前完整 Playwright，均得到 `109 passed / 44 skipped / 1 failed`；唯一失败为 mobile `prototype.visual` 的 `home-answer`，265 像素差异。该用例单独以 `--workers=1 --repeat-each=10` 则 10/10 通过，故 T81 以两条顺序 CLI lane 消除跨文件 worker 并发，而非改动视觉真相。
 
@@ -189,6 +189,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | T98 | P4.5 | Whole Product Bug and Field Truth Audit | `done` | `ad3edb9` | 领取提交 `189250e`，起始 HEAD `4ccf257`。Goal 授权的全产品缺陷与字段审计已按演示/fixture 模式收口，用户选择不执行 init。修复 Home Chat 结构化结果、流终态和卡片误报，球员国家展示、搜索响应契约、机会截断提示、未知决策码、报价/退出金额语义、REST 结算核验及漏发 `resolution_delta`、未知比赛阶段误推、缺失模型概率伪造为 0%、Paper 待确认/未成交语义、模型胜率未注明对应球员、历史结果质量误报，以及 Home 首读球员目录懒加载竞态。FINAL 由 REST 权威确认；WS 只作提示；Markets SSE 现在把终态及时送达前端并冻结盘口，重复终态广播去重。验证：Vitest `36 files/484 passed`、隔离 production build/TypeScript 通过；`env -i` 后端完整确定性套件 `1332 passed/128 skipped`，publisher、daemon 即时/定时路径及 SSE 契约测试通过；DTO 矩阵 TS 211/Pydantic 100 属性全部归档；Playwright 功能 `80+4 passed`、移动首页复测 `5 passed`、视觉 `30 passed/4 skipped`，76 张演示截图基线重生成。Ruff 与 `git diff --check` 通过。边界：不初始化、不读取根 `.env`、不调用真实 API/LLM/Polymarket、不使用项目 `.next`；128 个 opt-in/基础设施测试、P1 Match live/upcoming 的 Redis 截图检查和 4 个 P2 Replay 视觉态未验证，故本任务证明的是代码/fixture 与演示 UI，不是已初始化真实运行栈。 |
 | T99 | P4.5 | Initialize and Start Local Real Runtime | `done` | `4d1289a`（运行验收证据） | 用户更新根 `.env` API key 后重试成功：`init` exit 0（schema `0008`，3976 players、185 matches）；`up` exit 0，`status` 中数据库/Redis、实时流、赛程、排名、Polymarket 均 healthy/ok，runtime/API/frontend running；首页与 API health 均 HTTP 200。未做浏览器视觉验收。详见 `CURRENT.md`。 |
 | T100 | P4.5 | Investigate Expired Matches on Home | `done` | `c81c222`（调查证据），`105a487`（收口） | 只读调查确认根因：catalog upsert 不退役消失记录，查询按 status 而非时间/最后观测筛选，Home 直接展示全部结果；陈旧记录 freshness 默认仍显示 fresh。北京时间 2026-09-25 20:01 的本机 API：43/43 live 开赛时间已过；187 场 upcoming 中 168 场已过。后台目录同步健康，非 API key/服务停止。只完成诊断，产品修复需要另开明确任务；不得删除历史记录来掩盖问题。 |
+| T101 | P4.5 | Exclude Expired Matches from Active Reads | `in_progress` | — | 共用当前比赛读取按未来开赛时间与最后观测时间筛选，Home 多日赛程显示北京日期；保留历史行与真实赛果未知语义。验收：先红后绿的目录/Chat/首页回归、类型检查及运行中真实服务复核。 |
 
 ## P4.1 Completion Gate 核验摘要（2026-09-18，逐条实际核验）
 
