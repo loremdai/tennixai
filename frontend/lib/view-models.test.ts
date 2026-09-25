@@ -93,6 +93,32 @@ describe('toHomeMatch', () => {
     })
   })
 
+  it('carries both players’ tiebreak points into the Home score rows', () => {
+    const view = toHomeMatch(liveMatch({
+      live_state: {
+        score: {
+          sets_won: [0, 0],
+          sets: [
+            {
+              number: 1,
+              player1_games: 7,
+              player2_games: 6,
+              player1_tiebreak_points: 7,
+              player2_tiebreak_points: 5,
+            },
+            { number: 2, player1_games: 4, player2_games: 6 },
+          ],
+          points: ['0', '0'],
+          is_tiebreak: false,
+        },
+        server_player_id: 'ply_1',
+      },
+    }))
+
+    expect(view.score?.rows[0].sets).toEqual(['7（7）', '4'])
+    expect(view.score?.rows[1].sets).toEqual(['6（5）', '6'])
+  })
+
   it('renders unavailable copy for null fields', () => {
     const view = toHomeMatch(
       baseMatch({ round: null, surface: null, indoor: null, scheduled_at: null }),

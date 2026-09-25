@@ -277,6 +277,42 @@ async function askQuestion(question: string) {
 }
 
 describe('HomePage slate', () => {
+  it('shows tiebreak points alongside each player’s set score', async () => {
+    getMatchCatalogMock.mockImplementation(async (status: 'live' | 'upcoming') =>
+      makeCatalog(
+        status,
+        status === 'live'
+          ? [
+              {
+                ...liveDto,
+                live_state: {
+                  ...liveDto.live_state!,
+                  score: {
+                    ...liveDto.live_state!.score!,
+                    sets: [
+                      {
+                        number: 1,
+                        player1_games: 7,
+                        player2_games: 6,
+                        player1_tiebreak_points: 7,
+                        player2_tiebreak_points: 5,
+                      },
+                      { number: 2, player1_games: 4, player2_games: 6 },
+                    ],
+                  },
+                },
+              },
+            ]
+          : [upcomingDto],
+      ),
+    )
+
+    render(<HomePage />)
+
+    await waitFor(() => expect(screen.getAllByText(/7（7）/).length).toBeGreaterThan(0))
+    expect(screen.getAllByText(/6（5）/).length).toBeGreaterThan(0)
+  })
+
   it('labels the multi-day schedule and shows Beijing dates with start times', async () => {
     render(<HomePage />)
 

@@ -111,9 +111,16 @@ function FeaturedScore({ match }: { match: MatchViewModel }) {
           ))}
           <span className="font-mono text-xs text-muted-foreground">局分</span>
           {match.players.map((player, index) => {
-            const games = score.sets.map((set) =>
-              String(index === 0 ? set.player1_games ?? '-' : set.player2_games ?? '-'),
-            )
+            const games = score.sets.map((set) => {
+              const games = index === 0 ? set.player1_games ?? '-' : set.player2_games ?? '-'
+              const hasTiebreak =
+                set.player1_tiebreak_points != null &&
+                set.player2_tiebreak_points != null
+              const tiebreak = index === 0
+                ? set.player1_tiebreak_points
+                : set.player2_tiebreak_points
+              return `${games}${hasTiebreak ? `（${tiebreak}）` : ''}`
+            })
             const serving = match.serverPlayerId === player.id
             return (
               <div key={player.id} className="contents">

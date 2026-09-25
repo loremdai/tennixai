@@ -345,6 +345,42 @@ describe('production match page', () => {
     expect(screen.getAllByText('胜者').length).toBeGreaterThan(0)
   })
 
+  it('shows tiebreak points in both finished match scoreboards', async () => {
+    nextMatch = makeMatch({
+      status: 'finished',
+      winner_player_id: 'ply_1',
+      live_state: {
+        current_set_number: null,
+        score: {
+          sets_won: [2, 0],
+          sets: [
+            {
+              number: 1,
+              player1_games: 7,
+              player2_games: 6,
+              player1_tiebreak_points: 7,
+              player2_tiebreak_points: 5,
+            },
+            { number: 2, player1_games: 6, player2_games: 4 },
+          ],
+          points: [null, null],
+          is_tiebreak: false,
+        },
+        server_player_id: null,
+      },
+    })
+
+    render(<MatchPage matchId="mat_1" />)
+
+    const heroTable = await screen.findByRole('table', { name: '最终比赛比分' })
+    expect(within(heroTable).getByText('7（7）')).toBeVisible()
+    expect(within(heroTable).getByText('6（5）')).toBeVisible()
+    const detailTable = screen.getByRole('table', { name: '最终详细比分' })
+    expect(within(detailTable).getByText('7（7）')).toBeVisible()
+    expect(within(detailTable).getByText('6（5）')).toBeVisible()
+    expect(screen.getAllByText(/最终比分 7–6（7–5）/).length).toBeGreaterThan(0)
+  })
+
   it('shows unavailable copy for missing round, surface, and server', async () => {
     nextMatch =
       makeMatch({ round: null, surface: null, indoor: null, live_state: { score: null, server_player_id: null } })

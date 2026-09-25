@@ -28,7 +28,13 @@ export type TournamentDto = {
   gender?: Gender
   discipline?: Discipline
 }
-export type SetScoreDto = { number: number; player1_games: number | null; player2_games: number | null }
+export type SetScoreDto = {
+  number: number
+  player1_games: number | null
+  player2_games: number | null
+  player1_tiebreak_points?: number | null
+  player2_tiebreak_points?: number | null
+}
 export type MatchScoreDto = {
   sets_won: [number, number] | null
   sets: SetScoreDto[]

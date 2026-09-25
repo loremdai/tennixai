@@ -488,6 +488,56 @@ describe('toResultPreview', () => {
     expect(toResultPreview(won, 'ply_opp', 2026).outcome).toBe('loss')
   })
 
+  it('includes each player’s own tiebreak points in historical set scores', () => {
+    const result = matchFixture({
+      live_state: {
+        score: {
+          sets_won: [2, 0],
+          sets: [
+            {
+              number: 1,
+              player1_games: 6,
+              player2_games: 7,
+              player1_tiebreak_points: 7,
+              player2_tiebreak_points: 9,
+            },
+            { number: 2, player1_games: 3, player2_games: 6 },
+          ],
+          points: [null, null],
+          is_tiebreak: false,
+        },
+        server_player_id: null,
+      },
+    })
+
+    expect(toResultPreview(result, 'ply_self', 2026).score).toBe('6–7（7–9） 3–6')
+    expect(toResultPreview(result, 'ply_opp', 2026).score).toBe('7–6（9–7） 6–3')
+  })
+
+  it('omits partial tiebreak detail instead of displaying a one-sided value', () => {
+    const result = matchFixture({
+      live_state: {
+        score: {
+          sets_won: [0, 1],
+          sets: [
+            {
+              number: 1,
+              player1_games: 6,
+              player2_games: 7,
+              player1_tiebreak_points: 7,
+              player2_tiebreak_points: null,
+            },
+          ],
+          points: [null, null],
+          is_tiebreak: false,
+        },
+        server_player_id: null,
+      },
+    })
+
+    expect(toResultPreview(result, 'ply_self', 2026).score).toBe('6–7')
+  })
+
   it('shows a truthful set-count fallback when historic per-set games are absent', () => {
     const result = matchFixture({
       live_state: {

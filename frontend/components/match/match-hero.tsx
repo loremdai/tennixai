@@ -157,6 +157,15 @@ function scoreRows(match: MatchViewModel, score: MatchScoreDto) {
     sets: score.sets.map((set) =>
       index === 0 ? set.player1_games ?? null : set.player2_games ?? null,
     ),
+    tiebreakPoints: score.sets.map((set) => {
+      if (
+        set.player1_tiebreak_points == null ||
+        set.player2_tiebreak_points == null
+      ) {
+        return null
+      }
+      return index === 0 ? set.player1_tiebreak_points : set.player2_tiebreak_points
+    }),
     points: score.points[index] ?? null,
   }))
 }
@@ -223,7 +232,7 @@ function LiveScore({
               </th>
               {row.sets.map((games, index) => (
                 <td key={`${row.player.id}-${index}`} className={cn('py-2', score.sets[index]?.number === currentSetNumber && 'text-primary')}>
-                  {games ?? '-'}
+                  {games ?? '-'}{row.tiebreakPoints[index] != null ? `（${row.tiebreakPoints[index]}）` : ''}
                 </td>
               ))}
               <td className="py-2 text-foreground">{row.points ?? ''}</td>
@@ -269,7 +278,15 @@ function FinishedScore({
   const rows = scoreRows(match, score)
   const winner = match.players.find((player) => player.id === match.winnerPlayerId)
   const setsSummary = rows[0].sets
-    .map((games, index) => `${games ?? '-'}–${rows[1].sets[index] ?? '-'}`)
+    .map((games, index) => {
+      const firstTiebreak = rows[0].tiebreakPoints[index]
+      const secondTiebreak = rows[1].tiebreakPoints[index]
+      const tiebreak =
+        firstTiebreak != null && secondTiebreak != null
+          ? `（${firstTiebreak}–${secondTiebreak}）`
+          : ''
+      return `${games ?? '-'}–${rows[1].sets[index] ?? '-'}${tiebreak}`
+    })
     .join('、')
 
   return (
@@ -304,7 +321,9 @@ function FinishedScore({
                 {row.player.shortName}
               </th>
               {row.sets.map((games, index) => (
-                <td key={`${row.player.id}-${index}`} className="py-2">{games ?? '-'}</td>
+                <td key={`${row.player.id}-${index}`} className="py-2">
+                  {games ?? '-'}{row.tiebreakPoints[index] != null ? `（${row.tiebreakPoints[index]}）` : ''}
+                </td>
               ))}
             </tr>
           ))}

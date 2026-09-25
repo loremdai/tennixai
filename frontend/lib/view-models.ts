@@ -292,13 +292,25 @@ export function toHomeMatch(match: MatchDto): HomeMatchViewModel {
       rows: [
         {
           player: shortName(match.players[0].name),
-          sets: score.sets.map((set) => String(set.player1_games ?? '-')),
+          sets: score.sets.map((set) => {
+            const games = set.player1_games ?? '-'
+            const hasTiebreak =
+              set.player1_tiebreak_points != null &&
+              set.player2_tiebreak_points != null
+            return `${games}${hasTiebreak ? `（${set.player1_tiebreak_points}）` : ''}`
+          }),
           points: score.points[0] ?? '',
           serving: serverId === match.players[0].id,
         },
         {
           player: shortName(match.players[1].name),
-          sets: score.sets.map((set) => String(set.player2_games ?? '-')),
+          sets: score.sets.map((set) => {
+            const games = set.player2_games ?? '-'
+            const hasTiebreak =
+              set.player1_tiebreak_points != null &&
+              set.player2_tiebreak_points != null
+            return `${games}${hasTiebreak ? `（${set.player2_tiebreak_points}）` : ''}`
+          }),
           points: score.points[1] ?? '',
           serving: serverId === match.players[1].id,
         },

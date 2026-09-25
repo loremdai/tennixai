@@ -268,7 +268,18 @@ export function formatMatchScore(match: MatchDto, playerId: string): string | nu
   const reportedGames = score.sets.flatMap((set) => {
     const selfGames = side === 1 ? set.player1_games : set.player2_games
     const otherGames = side === 1 ? set.player2_games : set.player1_games
-    return selfGames === null || otherGames === null ? [] : [`${selfGames}–${otherGames}`]
+    const selfTiebreak = side === 1
+      ? set.player1_tiebreak_points
+      : set.player2_tiebreak_points
+    const otherTiebreak = side === 1
+      ? set.player2_tiebreak_points
+      : set.player1_tiebreak_points
+    if (selfGames === null || otherGames === null) return []
+    const tiebreak =
+      selfTiebreak != null && otherTiebreak != null
+        ? `（${selfTiebreak}–${otherTiebreak}）`
+        : ''
+    return [`${selfGames}–${otherGames}${tiebreak}`]
   })
   const setCount = hasSetCount
     ? `${score.sets_won![side - 1]}–${score.sets_won![other - 1]} 盘`

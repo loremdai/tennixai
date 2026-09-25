@@ -138,6 +138,7 @@ type ScoreRowView = {
   playerId: string
   shortName: string
   sets: Array<number | null>
+  tiebreakPoints?: Array<number | null>
   points?: string | null
   serving?: boolean
   winner?: boolean
@@ -184,7 +185,7 @@ function ScoreTable({
             </th>
             {row.sets.map((set, index) => (
               <td key={`${row.playerId}-${index}`} className={cn('text-center', setNumberAt(index) === highlightedSetNumber && 'text-primary')}>
-                {set ?? '-'}
+                {set ?? '-'}{row.tiebreakPoints?.[index] != null ? `（${row.tiebreakPoints[index]}）` : ''}
               </td>
             ))}
             {showPoints ? <td className="text-center text-xl">{row.points ?? ''}</td> : null}
@@ -204,6 +205,15 @@ function rowsFromMatch(match: MatchViewModel): [ScoreRowView, ScoreRowView] | nu
     sets: score.sets.map((set) =>
       index === 0 ? set.player1_games : set.player2_games,
     ),
+    tiebreakPoints: score.sets.map((set) => {
+      if (
+        set.player1_tiebreak_points == null ||
+        set.player2_tiebreak_points == null
+      ) {
+        return null
+      }
+      return index === 0 ? set.player1_tiebreak_points : set.player2_tiebreak_points
+    }),
     points: score.points[index],
     serving: match.serverPlayerId === match.players[index].id,
     winner: match.winnerPlayerId === match.players[index].id,
@@ -304,7 +314,15 @@ export function ScoreProgressCard({ match, preview, highlight }: Pick<MainColumn
                   {match.winnerPlayerId ? ' 获胜' : ''}
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  最终比分 {rows[0].sets.map((games, index) => `${games ?? '-'}–${rows[1].sets[index] ?? '-'}`).join('、')}
+                  最终比分 {rows[0].sets.map((games, index) => {
+                    const firstTiebreak = rows[0].tiebreakPoints?.[index]
+                    const secondTiebreak = rows[1].tiebreakPoints?.[index]
+                    const tiebreak =
+                      firstTiebreak != null && secondTiebreak != null
+                        ? `（${firstTiebreak}–${secondTiebreak}）`
+                        : ''
+                    return `${games ?? '-'}–${rows[1].sets[index] ?? '-'}${tiebreak}`
+                  }).join('、')}
                 </p>
               </div>
               <Badge variant="secondary">{preview ? previewMatchMeta.finalDuration : `结果 · ${match.freshnessLabel}`}</Badge>
