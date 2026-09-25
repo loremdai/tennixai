@@ -2,23 +2,25 @@
 
 > 快速了解现在做到哪里、最近做完什么、接下来由谁接手。长期路线与阶段证据见 [ROADMAP.md](./ROADMAP.md)，产品定位和稳定架构见 [PROJECT.md](./PROJECT.md)。
 
-**最后更新：** 2026-09-25 10:16（北京时间）
+**最后更新：** 2026-09-25 10:28（北京时间）
 
-**当前主任务：** T99 — 初始化并启动本地真实服务（`in_progress`）。用户已批准初始化；按运行手册只操作 TennixAI 自有服务。
+**当前主任务：** T99 — 初始化并启动本地真实服务（`blocked`）。初始化迁移成功，但 API-Tennis 排名请求返回错误响应；等待核实账户/订阅或更新本地凭据。
 
-**最近任务：** T99 — 初始化并启动本地真实服务（`in_progress`），起始提交 `8ee0807`。
+**最近任务：** T99 — 初始化并启动本地真实服务（`blocked`），起始提交 `8ee0807`，领取记录 `9ca0e62`。
 
 **执行者 / 分支：** Codex / `main`；T99 起始提交 `8ee0807`。保留工作区内已存在的用户改动，不纳入本任务。
 
 **运行手册与证据：** [本地真实运行手册](docs/runbooks/local-real-runtime.md)；[T98 审计规格与完成证据](docs/superpowers/specs/2026-09-24-tennixai-whole-product-audit.md)；[T97 审计计划](docs/superpowers/plans/2026-09-24-tennixai-t97-global-field-presentation-audit.md)；[T95–T98 字段矩阵](docs/research/2026-09-24-tennixai-t95-match-field-integrity-matrix.md)。
 
-## T99 初始化并启动本地真实服务（`in_progress`）
+## T99 初始化并启动本地真实服务（`blocked`）
 
 - **目标：** 经用户批准运行一次 `./scripts/tennix-live init`，随后启动真实本地服务并检查健康状态。
-- **起始状态：** `main` / `8ee0807`，与 `origin/main` 同步；Tennix 运行栈停止、数据库尚未初始化。工作区内既有用户修改和未跟踪文件全部保留。
+- **起始状态：** `main` / `8ee0807`，与 `origin/main` 同步；PostgreSQL/Redis 容器停止。启动后发现保留的数据卷已有数据库（迁移前 `0006`、已有目录数据和历史 init 标记），没有删除或重置数据。工作区内既有用户修改和未跟踪文件全部保留。
 - **边界：** 仅通过根目录运行手册和 `./scripts/tennix-live` 操作；不输出或提交 `.env` 凭据；只操作 TennixAI 自有容器/进程，不触碰其他项目容器。初始化可能同步目录并消耗 LLM 配额；用户已明确批准。
-- **验证门：** 记录 init 结果；`up` 后用 `status` 确认受管服务与健康记录。若启动失败，按脱敏状态/日志定位，不打印密钥或原始凭据。
-- **完成记录：** 待执行。
+- **执行结果：** `init` 将 schema 从 `0006` 迁移至 `0008`，之后在目录排名引导阶段失败（启动器只报告脱敏的 `AppError`）。ATP/WTA 最新排名仍为 `2026-09-23T13:32:27Z`；初始化顺序证明失败发生在中文别名 LLM enrichment 之前，因此本次没有调用 LLM。目录聚合计数：5028 球员、3933 中文名、34467 别名；旧目录和数据均保留。
+- **供应商核验：** 按官方文档使用大写 `ATP`/`WTA` 的 `get_standings` 请求，均返回 HTTP 200，但响应含 `error` 字段、缺少文档成功响应的 `success` 字段，未返回可用排名。错误正文未输出；官方文档说明 standings 数据取决于当前订阅计划：[API-Tennis 文档](https://api-tennis.com/documentation)。具体账户/套餐原因尚不能从脱敏结果确定。
+- **当前状态：** `./scripts/tennix-live status` 显示 PostgreSQL、Redis healthy；runtime、API、frontend 均 stopped，故真实服务尚未启动。未执行 `up`（本地 launcher 的初始化成功标记已被失败的 `init` 清除，`up` 会拒绝）。
+- **解除阻塞：** 用户检查 API-Tennis 账户/套餐是否授权 ATP/WTA standings；若需更新 key，请只在仓库根 `.env` 本地更新，然后告知可重试。不得在聊天或文档中发送 key。修复前不重跑 `init`，避免无效 API 请求。
 
 ## T98 全产品缺陷与字段真相审计（`done`）
 
@@ -118,8 +120,8 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
+| 2026-09-25 | `9ca0e62` | 领取 T99 真实运行栈启动任务。初始化迁移至 `0008`，但 standings 引导阶段被 API-Tennis 错误响应阻塞；ATP/WTA 快照仍旧，未调用 LLM、未启动应用服务。 |
 | 2026-09-24 | `b4acb8b` | 完成 T96：修复球员国家名/旗帜归一化、历史总盘数缺失显示、Chat 单打与不完整历史标记；后端定向 161 passed、前端 432 passed、TypeScript 通过 |
 | 2026-09-24 | `3ae508c` | 完成 T95：新增端到端字段矩阵；修复当前盘误标、未知 PBP 标记、统计/比分校验和 freshness 持久化；后端 1289 passed、前端 422 passed，PostgreSQL round-trip 与迁移回滚守卫通过 |
 | 2026-09-24 | `93e1243` | 完成 T94：REST 排名权威修正同步至热快照/SSE，实时 worker 对临时目录故障保留 frame 并重试；全后端 1336 passed、12 skipped，PostgreSQL player directory 9 passed |
 | 2026-09-24 | `fa00f46` | 按独立审查补齐逐项统计时间显示及数值不变时的新观测时间更新 |
-| 2026-09-24 | `a28b971` | 完成 T93 主体：保留稀疏 WebSocket 帧遗漏的技术统计并标记过时 |
