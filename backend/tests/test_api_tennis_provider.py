@@ -345,6 +345,55 @@ async def test_set_game_scores_trim_whitespace_and_reject_negative_values(provid
 
 
 @pytest.mark.asyncio
+async def test_set_scores_decode_tiebreak_points_without_losing_set_order(provider) -> None:
+    built, _ = provider
+    row = dict(load("livescore.json")["result"][0])
+    row["scores"] = [
+        {"score_set": "2", "score_first": "6.7", "score_second": "7.9"},
+        {"score_set": "1", "score_first": "7.7", "score_second": "6.2"},
+        {"score_set": "3", "score_first": "6", "score_second": "4"},
+    ]
+
+    snapshot = await map_livescore_row_to_snapshot(
+        MatchDto.model_validate(row), built._identities, built._now
+    )
+
+    assert snapshot is not None
+    score = snapshot.match.live_state.score
+    assert score is not None
+    assert [
+        (item.number, item.player1_games, item.player2_games)
+        for item in score.sets
+    ] == [(2, 6, 7), (1, 7, 6), (3, 6, 4)]
+    assert [
+        (item.player1_tiebreak_points, item.player2_tiebreak_points)
+        for item in score.sets
+    ] == [(7, 9), (7, 2), (None, None)]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("invalid", ["-", "", " ", "-1", "6.x", "6.7.9", "6."])
+async def test_invalid_dotted_set_score_stays_unknown(provider, invalid: str) -> None:
+    built, _ = provider
+    row = dict(load("livescore.json")["result"][0])
+    row["scores"] = [
+        {"score_set": "1", "score_first": invalid, "score_second": "7.8"}
+    ]
+
+    snapshot = await map_livescore_row_to_snapshot(
+        MatchDto.model_validate(row), built._identities, built._now
+    )
+
+    assert snapshot is not None
+    score = snapshot.match.live_state.score
+    assert score is not None
+    assert score.sets[0].player1_games is None
+    assert score.sets[0].player2_games == 7
+    assert score.sets[0].player1_tiebreak_points is None
+    assert score.sets[0].player2_tiebreak_points == 8
+
+
+@pytest.mark.asyncio
 async def test_missing_game_numbers_restart_at_one_for_each_set(provider) -> None:
     built, _ = provider
     row = dict(load("livescore.json")["result"][0])

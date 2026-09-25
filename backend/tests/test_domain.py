@@ -118,6 +118,23 @@ def test_set_score_number_is_one_based() -> None:
         SetScore(number=0, player1_games=0, player2_games=0)
 
 
+def test_set_score_tiebreak_fields_default_for_legacy_data_and_round_trip() -> None:
+    legacy = SetScore.model_validate(
+        {"number": 1, "player1_games": 6, "player2_games": 7}
+    )
+    assert legacy.player1_tiebreak_points is None
+    assert legacy.player2_tiebreak_points is None
+
+    tiebreak = SetScore(
+        number=1,
+        player1_games=6,
+        player2_games=7,
+        player1_tiebreak_points=7,
+        player2_tiebreak_points=9,
+    )
+    assert SetScore.model_validate(tiebreak.model_dump(mode="json")) == tiebreak
+
+
 def test_match_status_values() -> None:
     assert [status.value for status in MatchStatus] == [
         "scheduled",

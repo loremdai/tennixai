@@ -145,6 +145,8 @@ class SetScore(FrozenModel):
     number: int = Field(ge=1)
     player1_games: int | None = None
     player2_games: int | None = None
+    player1_tiebreak_points: int | None = Field(default=None, ge=0)
+    player2_tiebreak_points: int | None = Field(default=None, ge=0)
 
 
 class MatchScore(FrozenModel):

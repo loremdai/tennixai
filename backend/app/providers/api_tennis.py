@@ -232,6 +232,17 @@ def parse_non_negative_int(raw: int | str | None) -> int | None:
     return int(text) if text.isdigit() else None
 
 
+def parse_set_score_component(
+    raw: int | str | None,
+) -> tuple[int | None, int | None]:
+    if isinstance(raw, int):
+        return (raw, None) if raw >= 0 else (None, None)
+    match = re.fullmatch(r"(\d+)(?:\.(\d+))?", (raw or "").strip())
+    if match is None:
+        return None, None
+    return int(match.group(1)), int(match.group(2)) if match.group(2) else None
+
+
 def parse_int_pair(raw: str | None) -> tuple[int, int] | None:
     if not raw:
         return None
@@ -342,14 +353,23 @@ def map_live_state(
         else None
     )
     sets_won = parse_int_pair(dto.event_final_result)
-    set_rows = [
-        SetScore(
-            number=parse_positive_int(row.score_set) or index + 1,
-            player1_games=parse_non_negative_int(row.score_first),
-            player2_games=parse_non_negative_int(row.score_second),
+    set_rows = []
+    for index, row in enumerate(dto.scores):
+        player1_games, player1_tiebreak_points = parse_set_score_component(
+            row.score_first
         )
-        for index, row in enumerate(dto.scores)
-    ]
+        player2_games, player2_tiebreak_points = parse_set_score_component(
+            row.score_second
+        )
+        set_rows.append(
+            SetScore(
+                number=parse_positive_int(row.score_set) or index + 1,
+                player1_games=player1_games,
+                player2_games=player2_games,
+                player1_tiebreak_points=player1_tiebreak_points,
+                player2_tiebreak_points=player2_tiebreak_points,
+            )
+        )
     points = parse_point_pair(dto.event_game_result)
     if status not in {MatchStatus.LIVE, MatchStatus.FINISHED}:
         # The vendor pre-seeds 0-0 set rows for scheduled matches; only a
