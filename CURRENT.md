@@ -2,7 +2,7 @@
 
 > 快速了解现在做到哪里、最近做完什么、接下来由谁接手。长期路线与阶段证据见 [ROADMAP.md](./ROADMAP.md)，产品定位和稳定架构见 [PROJECT.md](./PROJECT.md)。
 
-**最后更新：** 2026-09-25 19:17（北京时间）
+**最后更新：** 2026-09-25 19:40（北京时间）
 
 **当前主任务：** T99 — 初始化并启动本地真实服务（`in_progress`）。用户已更新根目录 `.env` 中的 API key 并要求重试；先运行 `init`，成功后再 `up` 与 `status`。
 
@@ -20,7 +20,7 @@
 - **执行结果：** `init` 将 schema 从 `0006` 迁移至 `0008`，之后在目录排名引导阶段失败（启动器只报告脱敏的 `AppError`）。ATP/WTA 最新排名仍为 `2026-09-23T13:32:27Z`；初始化顺序证明失败发生在中文别名 LLM enrichment 之前，因此本次没有调用 LLM。目录聚合计数：5028 球员、3933 中文名、34467 别名；旧目录和数据均保留。
 - **供应商核验：** 按官方文档使用大写 `ATP`/`WTA` 的 `get_standings` 请求，均返回 HTTP 200，但响应含 `error` 字段、缺少文档成功响应的 `success` 字段，未返回可用排名。错误正文未输出；官方文档说明 standings 数据取决于当前订阅计划：[API-Tennis 文档](https://api-tennis.com/documentation)。具体账户/套餐原因尚不能从脱敏结果确定。
 - **此前状态：** `./scripts/tennix-live status` 显示 PostgreSQL、Redis healthy；runtime、API、frontend 均 stopped，故真实服务尚未启动。此前 `up` 因本地 launcher 初始化成功标记被失败的 `init` 清除而拒绝。
-- **本次续接：** 用户报告已更新根目录 `.env` 中的 API key，并再次要求启动。于 `89b6d78` 续接；`.env` 内容未读取或输出。获准重试 `init`；若成功再运行 `up` 和 `status`。不运行额外真实 API/LLM 验证或浏览器测试。
+- **本次续接结果：** 用户报告已更新根目录 `.env` 中的 API key 并要求重试；续接领取提交 `e31c623`，`.env` 内容未读取或输出。`init` exit 0：`revision=0008 players=3976 matches=185`；随后 `up` exit 0，runtime/API/frontend 均由 launcher 启动。首次状态含短暂启动恢复；约 2 分钟后再次检查，PostgreSQL、Redis、sports stream、schedule、rankings、Polymarket 全为 `healthy/ok`，3 个应用进程均 running，`paper_only` / `model not_promoted` 保持原状。首页与 API health HTTP 均为 200。没有执行浏览器视觉测试或额外 provider/LLM 核验。
 - **边界：** 若重试仍因 standings 被拒绝，不重复调用供应商或绕过初始化标记；记录脱敏错误码并请用户核实 API-Tennis 账户/套餐。不得在聊天或文档中发送 key。
 
 ## T98 全产品缺陷与字段真相审计（`done`）
