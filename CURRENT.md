@@ -2,15 +2,23 @@
 
 > 快速了解现在做到哪里、最近做完什么、接下来由谁接手。长期路线与阶段证据见 [ROADMAP.md](./ROADMAP.md)，产品定位和稳定架构见 [PROJECT.md](./PROJECT.md)。
 
-**最后更新：** 2026-09-25 01:16（北京时间）
+**最后更新：** 2026-09-25 10:16（北京时间）
 
-**当前主任务：** 无。T98 全产品缺陷与字段真相审计已完成（实现提交 `ad3edb9`）；保持演示/fixture 验收，未初始化真实运行栈。
+**当前主任务：** T99 — 初始化并启动本地真实服务（`in_progress`）。用户已批准初始化；按运行手册只操作 TennixAI 自有服务。
 
-**最近任务：** T98 — 全产品缺陷与字段真相审计（`done`），起始提交 `4ccf257`，完成提交 `ad3edb9`。
+**最近任务：** T99 — 初始化并启动本地真实服务（`in_progress`），起始提交 `8ee0807`。
 
-**执行者 / 分支：** Codex / `main`；T98 起始提交 `4ccf257`。保留工作区内已存在的用户改动，未纳入 T98。
+**执行者 / 分支：** Codex / `main`；T99 起始提交 `8ee0807`。保留工作区内已存在的用户改动，不纳入本任务。
 
 **运行手册与证据：** [本地真实运行手册](docs/runbooks/local-real-runtime.md)；[T98 审计规格与完成证据](docs/superpowers/specs/2026-09-24-tennixai-whole-product-audit.md)；[T97 审计计划](docs/superpowers/plans/2026-09-24-tennixai-t97-global-field-presentation-audit.md)；[T95–T98 字段矩阵](docs/research/2026-09-24-tennixai-t95-match-field-integrity-matrix.md)。
+
+## T99 初始化并启动本地真实服务（`in_progress`）
+
+- **目标：** 经用户批准运行一次 `./scripts/tennix-live init`，随后启动真实本地服务并检查健康状态。
+- **起始状态：** `main` / `8ee0807`，与 `origin/main` 同步；Tennix 运行栈停止、数据库尚未初始化。工作区内既有用户修改和未跟踪文件全部保留。
+- **边界：** 仅通过根目录运行手册和 `./scripts/tennix-live` 操作；不输出或提交 `.env` 凭据；只操作 TennixAI 自有容器/进程，不触碰其他项目容器。初始化可能同步目录并消耗 LLM 配额；用户已明确批准。
+- **验证门：** 记录 init 结果；`up` 后用 `status` 确认受管服务与健康记录。若启动失败，按脱敏状态/日志定位，不打印密钥或原始凭据。
+- **完成记录：** 待执行。
 
 ## T98 全产品缺陷与字段真相审计（`done`）
 
