@@ -162,21 +162,21 @@
 - `SetScoreDto` gains two optional nullable properties, `player1_tiebreak_points?: number | null` and `player2_tiebreak_points?: number | null`, so a new frontend can consume an older API response.
 - A side's score cell renders `games（tiebreak_points）` only when both values exist; normal sets remain unchanged. Player history renders the pair from the profiled player's perspective, e.g. `6–7（7–9）`.
 
-- [ ] **Step 1: Add failing player-history assertions** for both player perspectives and a normal set beside a tiebreak set. Expected: `6–7（7–9） 6–3` for one side and `7–6（9–7） 3–6` for the other.
-- [ ] **Step 2: Add failing assertions** for `toHomeMatch` data shaping and the Match-detail/Home components showing `6（7）` / `7（9）`, and proving a normal set still shows only its game count.
-- [ ] **Step 3: Run the focused Vitest tests and confirm the new assertions fail.**
+- [x] **Step 1: Add failing player-history assertions** for both player perspectives and a normal set beside a tiebreak set. Expected: `6–7（7–9） 6–3` for one side and `7–6（9–7） 3–6` for the other.
+- [x] **Step 2: Add failing assertions** for `toHomeMatch` data shaping and the Match-detail/Home components showing `6（7）` / `7（9）`, and proving a normal set still shows only its game count.
+- [x] **Step 3: Run the focused Vitest tests and confirm the new assertions fail.** In a disposable source copy with the new assertions and pre-T4 UI/view-model code, RED was `4 failed, 138 passed, 142 total`; each failure was a missing tiebreak display/value. On the implemented checkout, GREEN was `142 passed`.
 
   Run: `cd frontend && pnpm exec vitest run lib/player-view-models.test.ts lib/view-models.test.ts components/match-page.test.tsx components/home-page.test.tsx`
 
-- [ ] **Step 4: Add the nullable DTO fields and carry them through the Home view model.** Format only known per-player values; preserve the existing `-`, partial-score, and no-score behavior for unknown values.
-- [ ] **Step 5: Render tiebreak details in both Match score tables and Home's featured score rows.** Leave regular set cells and current-point display unchanged.
-- [ ] **Step 6: Run focused and full frontend checks.**
+- [x] **Step 4: Add the nullable DTO fields and carry them through the Home view model.** Format only known per-player values; preserve the existing `-`, partial-score, and no-score behavior for unknown values.
+- [x] **Step 5: Render tiebreak details in both Match score tables and Home's featured score rows.** Leave regular set cells and current-point display unchanged.
+- [x] **Step 6: Run focused and full frontend checks.** Focused tests: `142 passed`; full Vitest: `37 files / 499 passed`; `tsc --noEmit` passed. Used the installed Vitest binary after pnpm's guarded dependency cleanup attempt aborted; dependencies were not changed.
 
   Run: `cd frontend && pnpm exec vitest run lib/player-view-models.test.ts lib/view-models.test.ts components/match-page.test.tsx components/home-page.test.tsx && pnpm test && pnpm typecheck`
 
   Expected: all frontend tests and TypeScript checks pass.
 
-- [ ] **Step 7: Commit the frontend slice.**
+- [x] **Step 7: Commit the frontend slice.** Commit `e47b5e1` (`fix: show tiebreak points across score views`).
 
   ```bash
   git add frontend/lib/api/types.ts frontend/lib/view-models.ts frontend/lib/player-view-models.ts frontend/components/match/match-hero.tsx frontend/components/match/match-main.tsx frontend/components/home/home-match-sections.tsx frontend/lib/player-view-models.test.ts frontend/lib/view-models.test.ts frontend/components/match-page.test.tsx frontend/components/home-page.test.tsx
@@ -189,12 +189,12 @@
 - Update: `CURRENT.md`, `ROADMAP.md`, and the implementation-plan checkboxes with actual results.
 - Do not modify: root `.env`, database schema/data by manual scripts, approved visual baselines, or existing unrelated user changes.
 
-- [ ] Run the deterministic backend suite using the repository's configured non-live test defaults; record actual pass/skip/failure counts.
-- [ ] Run changed-file Ruff, full frontend Vitest, TypeScript, and `git diff --check`.
-- [ ] Confirm the existing local runtime state before using it. Reuse it if healthy; do not run `init`, reset data, or stop services. If a code reload/restart is required for runtime verification, first report that requirement rather than silently interrupting the running stack.
-- [ ] Read-only verify the same known finished-match sample through player-history API and match-detail API/browser. Assert games and tiebreak points are present and oriented correctly. Keep output restricted to internal match/player IDs, score fields, HTTP status, and freshness; never print credentials or raw supplier payloads.
-- [ ] Review the final diff and status. Confirm the unrelated `backend/app/service.py` freshness hunks and all existing untracked user files remain outside T103 commits.
-- [ ] Update T103 completion evidence in `CURRENT.md` and `ROADMAP.md` only after actual gates pass, then commit and push the control update to `origin/main`.
+- [x] Run the deterministic backend suite using the repository's configured non-live test defaults; record actual pass/skip/failure counts: `1358 passed, 37 skipped, 91 deselected`.
+- [x] Run changed-file Ruff, full frontend Vitest, TypeScript, and `git diff --check`: Ruff passed; Vitest `499 passed`; TypeScript and both committed/worktree diff checks passed.
+- [x] Confirm the existing local runtime state before using it. Stack health is good; API process PID `98511` started before T103 implementation commits. No service was stopped or reset. The required app-process restart has been reported and awaits user approval.
+- [ ] Read-only verify the same known finished-match sample through player-history API and match-detail API/browser. Attempted with internal match `mat_127f7e0acb5c443ba79e4fb90bf8471b`; both routes returned HTTP 200, but the running old process returned missing games and no tiebreak fields. Repeat after approved app-process restart. Output was restricted to IDs, score/freshness fields and status.
+- [x] Review the final diff and status. The unrelated `backend/app/service.py` P3 freshness hunks and all listed untracked user files remain outside T103 commits.
+- [ ] After runtime verification passes, update T103 completion evidence in `CURRENT.md` and `ROADMAP.md`, then commit and push the final control update to `origin/main`. Current progress checkpoint records that live verification is pending; it does not mark T103 complete.
 
 ## Plan Self-Review
 
@@ -202,3 +202,4 @@
 - **Placeholder scan:** no `TBD`, `TODO`, deferred implementation step, or unspecified test gate remains.
 - **Type consistency:** provider protocol and all production/test adapters use the same keyword-only `include_surface: bool = True`; canonical/API field names are `player1_tiebreak_points` and `player2_tiebreak_points`.
 - **Review-focus coverage:** malformed input and legacy serialization are in Task 1; sparse/corrected identity-safe rows are in Task 2; bounded/no-op/error refresh cases are in Task 3; player perspective and all score surfaces are in Task 4.
+- **Task 4 ruling:** the plan's illustrative second-set orientation differs from the committed perspective test; the test still asserts correctly swapped player-side set/tiebreak values. The test fixture's `sets_won` also conflicts with its per-set game values; deferred as a non-production test-data quality issue.
