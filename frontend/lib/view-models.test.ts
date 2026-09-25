@@ -67,6 +67,7 @@ describe('toHomeMatch', () => {
     expect(view.tournament).toBe('ATP Finals')
     expect(view.round).toBe('Semifinal')
     expect(view.surface).toBe('室内硬地')
+    expect(view.scheduledDate).toBe('9月8日')
     expect(view.time).toBe('20:30')
     expect(view.players).toEqual(['Sinner', 'Alcaraz'])
     expect(view.isStale).toBe(false)

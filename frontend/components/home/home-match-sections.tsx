@@ -248,7 +248,7 @@ export function FeaturedMatchSection({
             <div className="flex min-h-40 flex-col items-center justify-center gap-2 rounded-xl bg-background/45 p-4 text-center">
               <Clock3 aria-hidden="true" className="size-4 text-primary" />
               <p className="text-sm text-muted-foreground">
-                {state === 'loading' ? '正在加载重点比赛…' : '当前没有正在直播或即将开始的比赛'}
+                {state === 'loading' ? '正在加载重点比赛…' : '暂无可展示的比赛信息'}
               </p>
             </div>
           </CardContent>
@@ -368,7 +368,7 @@ export function LiveNowSection({
           </div>
         ) : (
           <p className="rounded-xl border border-dashed bg-muted/15 p-5 text-sm text-muted-foreground">
-            暂无直播比赛
+            暂无可显示的直播比赛信息，请稍后刷新
           </p>
         )
       ) : (
@@ -396,24 +396,18 @@ export function UpcomingSection({
       <SectionHeading
         headingId="upcoming-title"
         eyebrow="即将开赛"
-        title="今晚比赛"
-        description="已换算为北京时间。"
-        action={
-          <Link href="#upcoming" className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground">
-            查看完整赛程
-            <ArrowRight aria-hidden="true" className="size-4" />
-          </Link>
-        }
+        title="近期赛程"
+        description="以下时间均为北京时间。"
       />
       {state === 'loading' ? (
         <p className="rounded-xl border border-dashed bg-muted/15 p-5 text-sm text-muted-foreground">
-          正在加载今晚赛程…
+          正在加载近期赛程…
         </p>
       ) : state === 'error' ? (
-        <SlateSectionError title="今晚赛程" code={errorCode} onRetry={onRefresh} />
+        <SlateSectionError title="近期赛程" code={errorCode} onRetry={onRefresh} />
       ) : matches.length === 0 ? (
         <p className="rounded-xl border border-dashed bg-muted/15 p-5 text-sm text-muted-foreground">
-          今晚暂无待开赛比赛
+          暂无可显示的近期比赛信息，请稍后刷新
         </p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
@@ -432,7 +426,7 @@ export function UpcomingSection({
                   <CardAction>
                     <Badge variant="outline">
                       <Clock3 data-icon="inline-start" aria-hidden="true" />
-                      {match.time}
+                      {match.scheduledDate} {match.time}
                     </Badge>
                   </CardAction>
                 </CardHeader>

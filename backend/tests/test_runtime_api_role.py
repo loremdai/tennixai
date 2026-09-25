@@ -6,7 +6,7 @@ The API role must never construct a realtime worker, a live feed, or any
 background discovery object — those belong to the `runtime` role (T77/T78).
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from typing import Any
 
@@ -32,6 +32,7 @@ from app.runtime.models import (
     RuntimeSourceHealth,
     RuntimeSourceStatus,
 )
+from app.service import MatchTimeScope
 
 UTC = timezone.utc
 FIXED_NOW = "2026-09-08T10:00:00Z"
@@ -234,6 +235,126 @@ async def test_local_api_role_live_list_reads_canonical_status(env):
     assert [match["id"] for match in response.json()["data"]] == [env.live.id]
     assert env.catalog.calls == [(MatchStatus.LIVE, None)]
     assert env.provider.calls == []
+
+
+async def test_current_match_reads_exclude_old_catalog_rows_without_erasing_them(env):
+    old_live = catalog_match("mat_old_live", MatchStatus.LIVE).model_copy(
+        update={
+            "freshness": DataFreshness(
+                provider="catalog", observed_at=NOW - timedelta(minutes=6)
+            )
+        }
+    )
+    past_fixture = catalog_match("mat_past_fixture").model_copy(
+        update={"scheduled_at": NOW - timedelta(minutes=1)}
+    )
+    old_future_fixture = catalog_match("mat_old_future_fixture").model_copy(
+        update={
+            "freshness": DataFreshness(
+                provider="catalog", observed_at=NOW - timedelta(minutes=31)
+            )
+        }
+    )
+    undated_fixture = catalog_match("mat_undated_fixture").model_copy(
+        update={"scheduled_at": None}
+    )
+    env.catalog.matches.extend(
+        [old_live, past_fixture, old_future_fixture, undated_fixture]
+    )
+
+    live_catalog = (await env.client.get(
+        "/api/v1/matches/catalog", params={"status": "live"}
+    )).json()["data"]
+    upcoming_catalog = (await env.client.get(
+        "/api/v1/matches/catalog", params={"status": "upcoming"}
+    )).json()["data"]
+    live_list = (await env.client.get(
+        "/api/v1/matches", params={"status": "live"}
+    )).json()["data"]
+    player_matches = await env.app.state.tennis_service.find_player_matches_by_id(
+        "ply_a", MatchTimeScope.TODAY
+    )
+
+    assert [match["id"] for match in live_catalog["matches"]] == [env.live.id]
+    assert [match["id"] for match in upcoming_catalog["matches"]] == [env.upcoming.id]
+    assert [match["id"] for match in live_list] == [env.live.id]
+    assert [match.id for match in player_matches] == [env.live.id, env.upcoming.id]
+    assert live_catalog["facet_counts"]["circuits"]["atp"] == 1
+    assert upcoming_catalog["featured_match_id"] == env.upcoming.id
+    assert {match.id for match in env.catalog.matches} >= {
+        old_live.id, past_fixture.id, old_future_fixture.id, undated_fixture.id
+    }
+    assert env.provider.calls == []
+
+
+async def test_current_match_reads_keep_records_at_existing_freshness_limits(env):
+    live_edge = catalog_match("mat_live_edge", MatchStatus.LIVE).model_copy(
+        update={
+            "freshness": DataFreshness(
+                provider="catalog", observed_at=NOW - timedelta(seconds=300)
+            )
+        }
+    )
+    fixture_edge = catalog_match("mat_fixture_edge").model_copy(
+        update={
+            "freshness": DataFreshness(
+                provider="catalog", observed_at=NOW - timedelta(seconds=1800)
+            )
+        }
+    )
+    env.catalog.matches = [live_edge, fixture_edge]
+
+    live_catalog = (await env.client.get(
+        "/api/v1/matches/catalog", params={"status": "live"}
+    )).json()["data"]
+    upcoming_catalog = (await env.client.get(
+        "/api/v1/matches/catalog", params={"status": "upcoming"}
+    )).json()["data"]
+
+    assert [match["id"] for match in live_catalog["matches"]] == [live_edge.id]
+    assert live_catalog["matches"][0]["freshness"]["age_seconds"] == 300
+    assert live_catalog["matches"][0]["freshness"]["is_stale"] is True
+    assert [match["id"] for match in upcoming_catalog["matches"]] == [fixture_edge.id]
+    assert upcoming_catalog["matches"][0]["freshness"]["age_seconds"] == 1800
+    assert upcoming_catalog["matches"][0]["freshness"]["is_stale"] is True
+
+
+async def test_catalog_freshness_windows_follow_configured_sync_intervals():
+    provider = RecordingProvider()
+    catalog = FakeCatalog([
+        catalog_match("mat_slow_live", MatchStatus.LIVE).model_copy(
+            update={
+                "freshness": DataFreshness(
+                    provider="catalog", observed_at=NOW - timedelta(seconds=500)
+                )
+            }
+        ),
+        catalog_match("mat_slow_fixture").model_copy(
+            update={
+                "freshness": DataFreshness(
+                    provider="catalog", observed_at=NOW - timedelta(seconds=2000)
+                )
+            }
+        ),
+    ])
+    app = create_app(
+        local_api_settings(
+            local_runtime_live_catalog_seconds=120,
+            local_runtime_upcoming_catalog_seconds=900,
+        ),
+        local_runtime=make_assembly(catalog=catalog, state=FakeState(), provider=provider),
+    )
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        live = (await client.get(
+            "/api/v1/matches/catalog", params={"status": "live"}
+        )).json()["data"]["matches"]
+        upcoming = (await client.get(
+            "/api/v1/matches/catalog", params={"status": "upcoming"}
+        )).json()["data"]["matches"]
+
+    assert [match["id"] for match in live] == ["mat_slow_live"]
+    assert [match["id"] for match in upcoming] == ["mat_slow_fixture"]
+    assert provider.calls == []
 
 
 # ---------------------------------------------------------------------------

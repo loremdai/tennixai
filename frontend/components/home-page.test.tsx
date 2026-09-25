@@ -277,6 +277,13 @@ async function askQuestion(question: string) {
 }
 
 describe('HomePage slate', () => {
+  it('labels the multi-day schedule and shows Beijing dates with start times', async () => {
+    render(<HomePage />)
+
+    expect(await screen.findByRole('heading', { name: '近期赛程' })).toBeVisible()
+    expect(screen.getByText('9月8日 20:30')).toBeVisible()
+  })
+
   it('presents one consumer-facing question entry without roadmap controls', async () => {
     render(<HomePage />)
 
@@ -321,10 +328,10 @@ describe('HomePage slate', () => {
 
     render(<HomePage />)
 
-    expect(await screen.findByText('暂无直播比赛')).toBeVisible()
-    expect(screen.getByText('今晚暂无待开赛比赛')).toBeVisible()
+    expect(await screen.findByText('暂无可显示的直播比赛信息，请稍后刷新')).toBeVisible()
+    expect(screen.getByText('暂无可显示的近期比赛信息，请稍后刷新')).toBeVisible()
     expect(screen.getByRole('heading', { name: '正在直播' })).toBeVisible()
-    expect(screen.getByRole('heading', { name: '今晚比赛' })).toBeVisible()
+    expect(screen.getByRole('heading', { name: '近期赛程' })).toBeVisible()
   })
 
   it('keeps match discovery primary without repeating the main navigation as quick-link cards', async () => {
@@ -335,7 +342,7 @@ describe('HomePage slate', () => {
     expect(screen.getByRole('navigation', { name: '主导航' })).toBeInTheDocument()
     expect(screen.queryByRole('navigation', { name: '快速浏览' })).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '正在直播' })).toBeVisible()
-    expect(screen.getByRole('heading', { name: '今晚比赛' })).toBeVisible()
+    expect(screen.getByRole('heading', { name: '近期赛程' })).toBeVisible()
   })
 
   it('shows flags on Home match cards without adding country names', async () => {
@@ -369,7 +376,7 @@ describe('HomePage slate', () => {
     render(<HomePage />)
 
     expect(await screen.findByText('比赛信息暂时无法加载，请稍后重试。')).toBeVisible()
-    expect(screen.getByRole('heading', { name: '今晚比赛' })).toBeVisible()
+    expect(screen.getByRole('heading', { name: '近期赛程' })).toBeVisible()
     expect(screen.getByText('Carlos Alcaraz')).toBeVisible()
     expect(screen.queryByText(/provider_unavailable/)).toBeNull()
   })
@@ -552,7 +559,7 @@ describe('HomePage facets', () => {
       })
     })
     // Filtered-empty shows the empty state; the filters stay exactly as chosen.
-    expect(await screen.findByText('暂无直播比赛')).toBeVisible()
+    expect(await screen.findByText('暂无可显示的直播比赛信息，请稍后刷新')).toBeVisible()
     expect(screen.getByRole('button', { name: /女子/ })).toHaveAttribute('aria-pressed', 'true')
     const lastFilters = getMatchCatalogMock.mock.calls.at(-1)?.[1]
     expect(lastFilters).toEqual({

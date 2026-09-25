@@ -233,6 +233,10 @@ def create_app(
         directory=directory,
         seeder=seeder.ensure if seeder is not None else None,
         catalog=local_assembly.catalog if local_assembly is not None else None,
+        catalog_sync_intervals=(
+            settings.local_runtime_live_catalog_seconds,
+            settings.local_runtime_upcoming_catalog_seconds,
+        ),
     )
 
     # P3 read-only market provider. Assembled only when explicitly enabled;

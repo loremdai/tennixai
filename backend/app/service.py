@@ -239,6 +239,7 @@ class TennisService:
         directory=None,
         seeder=None,
         catalog=None,
+        catalog_sync_intervals: tuple[int, int] = (60, 600),
     ) -> None:
         self._provider = provider
         self._cache = cache
@@ -255,6 +256,7 @@ class TennisService:
         # ordinary list reads come from the persisted catalog first; when
         # None every path below is unchanged.
         self._catalog = catalog
+        self._catalog_sync_intervals = catalog_sync_intervals
 
     async def _ensure_seeded(self) -> None:
         async with self._seed_lock:
@@ -639,29 +641,55 @@ class TennisService:
     async def _list_by_player_id(self, status: str, player_id: str | None) -> list[Match]:
         if status not in {"live", "upcoming"}:
             raise AppError("invalid_request", "Status must be live or upcoming", 422)
+        fresh_ttl = (
+            self._catalog_sync_intervals[0 if status == "live" else 1]
+            if self._catalog is not None
+            else (60 if status == "live" else 600)
+        )
+        stale_limit = fresh_ttl * (5 if status == "live" else 3)
         if self._catalog is not None:
             # Canonical-first ordinary list read (local `api` role). The
             # bounded user-driven provider fallback in
             # `resolve_match_snapshot` is deliberately not routed through
             # this branch.
-            return await self._catalog.list_matches(
+            matches = await self._catalog.list_matches(
                 _status_for(status), player_id=player_id
             )
+        else:
+            async def load() -> object:
+                if status == "live":
+                    return await self._provider.get_live_matches(player_id=player_id)
+                return await self._provider.get_fixtures(player_id=player_id)
 
-        async def load() -> object:
-            if status == "live":
-                return await self._provider.get_live_matches(player_id=player_id)
-            return await self._provider.get_fixtures(player_id=player_id)
+            outcome = await self._cache.get_or_load(
+                f"matches:{status}:{player_id or 'all'}",
+                load,
+                ttl=lambda value: 30 if not cast(list[Match], value) else fresh_ttl,
+                stale_ttl=lambda value: 0 if not cast(list[Match], value) else stale_limit,
+            )
+            matches = self._mark_matches(outcome)
 
-        fresh_ttl = 60 if status == "live" else 600
-        stale_limit = 300 if status == "live" else 1800
-        outcome = await self._cache.get_or_load(
-            f"matches:{status}:{player_id or 'all'}",
-            load,
-            ttl=lambda value: 30 if not cast(list[Match], value) else fresh_ttl,
-            stale_ttl=lambda value: 0 if not cast(list[Match], value) else stale_limit,
-        )
-        return self._mark_matches(outcome)
+        now = self._now()
+        current: list[Match] = []
+        for match in matches:
+            age = max(
+                match.freshness.age_seconds,
+                max(0, int((now - match.freshness.observed_at).total_seconds())),
+            )
+            if age > stale_limit:
+                continue
+            if status == "upcoming" and (
+                match.scheduled_at is None or match.scheduled_at < now
+            ):
+                continue
+            freshness = match.freshness.model_copy(
+                update={
+                    "age_seconds": age,
+                    "is_stale": match.freshness.is_stale or age > fresh_ttl,
+                }
+            )
+            current.append(match.model_copy(update={"freshness": freshness}))
+        return current
 
     async def list_matches(self, status: str, player_name: str | None = None) -> list[Match]:
         player = await self._resolve_player(player_name) if player_name else None

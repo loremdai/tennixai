@@ -44,6 +44,13 @@ class CatalogFakeProvider(FakeTennisProvider):
     async def _post_build(self) -> None:
         identities = self._identities
         now = self._now
+        # This is an upcoming fixture relative to P2_NOW, not an old catalog row.
+        self.sinner_alcaraz = self.sinner_alcaraz.model_copy(
+            update={
+                "scheduled_at": datetime(2026, 9, 9, 14, 0, tzinfo=timezone.utc)
+            }
+        )
+        self._matches[self.sinner_alcaraz.id] = self.sinner_alcaraz
 
         swiatek = Player(
             id=await identities.get_or_create("player", "fake", "fake-swiatek"),

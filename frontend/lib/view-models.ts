@@ -23,6 +23,7 @@ export type HomeMatchViewModel = {
   status: 'upcoming' | 'live' | 'finished' | 'unavailable'
   tournament: string
   round: string
+  scheduledDate: string
   time: string
   surface: string
   players: [string, string]
@@ -276,6 +277,7 @@ export function toHomeMatch(match: MatchDto): HomeMatchViewModel {
     status: toVisualStatus(match.status),
     tournament: match.tournament.name,
     round: match.round ?? OFFICIAL_MISSING_ROUND,
+    scheduledDate: formatDate(match.scheduled_at),
     time: match.status === 'live' ? '进行中' : formatTime(match.scheduled_at),
     surface: surfaceLabel(match.surface, match.indoor),
     players: [playerDetails[0].shortName, playerDetails[1].shortName],

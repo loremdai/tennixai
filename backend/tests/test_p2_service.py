@@ -150,7 +150,7 @@ async def test_catalog_sort_is_tier_then_live_then_time_then_id(
     )
     ids = [match.id for match in upcoming_catalog.matches]
     assert ids == [
-        catalog_provider.sinner_alcaraz.id,  # atp, 09-08
+        catalog_provider.sinner_alcaraz.id,  # atp, 09-09
         catalog_provider.wta_upcoming.id,  # wta, 09-10
         catalog_provider.challenger_upcoming.id,  # challenger, 09-11
         catalog_provider.itf_doubles_upcoming.id,  # itf, 09-12

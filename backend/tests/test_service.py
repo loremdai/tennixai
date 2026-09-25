@@ -219,7 +219,9 @@ def build_service(
 @pytest.fixture()
 def selection_provider() -> CountingProvider:
     m_past = build_match("mat_past", MatchStatus.SCHEDULED, datetime(2026, 9, 8, 2, 0, tzinfo=UTC))
-    m_live = build_match("mat_live", MatchStatus.LIVE, datetime(2026, 9, 8, 10, 0, tzinfo=UTC))
+    m_live = build_match(
+        "mat_live", MatchStatus.LIVE, datetime(2026, 9, 8, 10, 0, tzinfo=UTC)
+    ).model_copy(update={"freshness": DataFreshness(provider="fake", observed_at=NOW_UTC)})
     m_tonight = build_match("mat_tonight", MatchStatus.SCHEDULED, datetime(2026, 9, 8, 14, 0, tzinfo=UTC))
     m_tomorrow = build_match("mat_tomorrow", MatchStatus.SCHEDULED, datetime(2026, 9, 9, 12, 0, tzinfo=UTC))
     return CountingProvider(
@@ -725,7 +727,7 @@ async def test_resolve_player_uses_injected_resolver_without_provider_search() -
     live_match = build_match(
         "mat_ben_live", MatchStatus.LIVE, datetime(2026, 9, 8, 10, 0, tzinfo=UTC),
         players=(ben, ALCARAZ),
-    )
+    ).model_copy(update={"freshness": DataFreshness(provider="fake", observed_at=NOW_UTC)})
     next_match = build_match(
         "mat_ben_next", MatchStatus.SCHEDULED, NOW_UTC + timedelta(hours=2),
         players=(ben, ALCARAZ),

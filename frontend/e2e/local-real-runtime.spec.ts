@@ -200,10 +200,10 @@ test.describe('T80 local real runtime browser acceptance', () => {
       // rows carry the real quotes this acceptance still has to exercise.
       await expect(
         page.getByRole('heading', {
-          name: /模型尚未完成验证|当前没有机会|暂无可评估市场|决策数据恢复中|暂无符合门槛的机会/,
+          name: /模型仍在验证中|模型尚未完成验证|当前没有机会|暂无可评估市场|决策数据恢复中|暂无符合门槛的机会/,
         }),
       ).toBeVisible()
-      await page.getByRole('button', { name: '查看全部市场' }).click()
+      await page.getByRole('button', { name: /查看所有比赛报价|查看全部市场/ }).click()
       await page.waitForTimeout(2500)
       await scanPage(page)
     }
