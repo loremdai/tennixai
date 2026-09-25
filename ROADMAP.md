@@ -9,7 +9,7 @@
 
 **当前里程碑：** P3 已关闭；P4.0–P4.4 已完成（T72–T92）；P4.5 的 T93–T99 实现/审计及本地服务启动任务已完成。真实服务当前保持运行。
 
-**当前阶段：** T100 — 首页过期比赛只读调查已确认根因，收口状态见 [CURRENT.md](./CURRENT.md)。模型未晋升时机会页仍为空；模型晋升证据链另行排期；自动下单继续 `deferred`。
+**当前阶段：** T100 首页过期比赛只读调查已完成，产品修复尚未开始，见 [CURRENT.md](./CURRENT.md)。模型未晋升时机会页仍为空；模型晋升证据链另行排期；自动下单继续 `deferred`。
 
 ## 状态说明
 
@@ -188,7 +188,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | T97 | P4.5 | Global Field Presentation Audit | `done` | `12403b9` | 起始 HEAD `c84fa6d`。按已批准简报完成全站消费者文案与信息层级调整：Home 移除阶段切换、重复入口和虚构概率；Players/Match/Markets/Opportunities/Paper 统一自然中文状态；补齐排名“北京时间”与未知内部原因安全回退；P3 市场报价与模拟交易语义未改。更新字段矩阵。验证：Vitest `454 passed`、TypeScript 通过、Playwright mocked desktop/mobile `60 passed`、问答文案后端 `2 passed`、`git diff --check` 通过；宽范围 Chat 测试 `53 passed/1 failed`，失败因本机 Redis 未启动。前端 lint 工具不可用。用户选择暂不初始化真实运行栈；实时数据验收未通过也未声称通过。计划：[T97](./docs/superpowers/plans/2026-09-24-tennixai-t97-global-field-presentation-audit.md)；设计：[brief](./docs/superpowers/specs/2026-09-24-tennixai-consumer-frontend-design.md) |
 | T98 | P4.5 | Whole Product Bug and Field Truth Audit | `done` | `ad3edb9` | 领取提交 `189250e`，起始 HEAD `4ccf257`。Goal 授权的全产品缺陷与字段审计已按演示/fixture 模式收口，用户选择不执行 init。修复 Home Chat 结构化结果、流终态和卡片误报，球员国家展示、搜索响应契约、机会截断提示、未知决策码、报价/退出金额语义、REST 结算核验及漏发 `resolution_delta`、未知比赛阶段误推、缺失模型概率伪造为 0%、Paper 待确认/未成交语义、模型胜率未注明对应球员、历史结果质量误报，以及 Home 首读球员目录懒加载竞态。FINAL 由 REST 权威确认；WS 只作提示；Markets SSE 现在把终态及时送达前端并冻结盘口，重复终态广播去重。验证：Vitest `36 files/484 passed`、隔离 production build/TypeScript 通过；`env -i` 后端完整确定性套件 `1332 passed/128 skipped`，publisher、daemon 即时/定时路径及 SSE 契约测试通过；DTO 矩阵 TS 211/Pydantic 100 属性全部归档；Playwright 功能 `80+4 passed`、移动首页复测 `5 passed`、视觉 `30 passed/4 skipped`，76 张演示截图基线重生成。Ruff 与 `git diff --check` 通过。边界：不初始化、不读取根 `.env`、不调用真实 API/LLM/Polymarket、不使用项目 `.next`；128 个 opt-in/基础设施测试、P1 Match live/upcoming 的 Redis 截图检查和 4 个 P2 Replay 视觉态未验证，故本任务证明的是代码/fixture 与演示 UI，不是已初始化真实运行栈。 |
 | T99 | P4.5 | Initialize and Start Local Real Runtime | `done` | `4d1289a`（运行验收证据） | 用户更新根 `.env` API key 后重试成功：`init` exit 0（schema `0008`，3976 players、185 matches）；`up` exit 0，`status` 中数据库/Redis、实时流、赛程、排名、Polymarket 均 healthy/ok，runtime/API/frontend running；首页与 API health 均 HTTP 200。未做浏览器视觉验收。详见 `CURRENT.md`。 |
-| T100 | P4.5 | Investigate Expired Matches on Home | `in_progress` | — | 只读调查已确认根因：catalog upsert 不退役消失记录，查询按 status 而非时间/最后观测筛选，Home 直接展示全部结果；陈旧记录 freshness 默认仍显示 fresh。真实本机 API：43/43 live 开赛时间已过；187 场 upcoming 中 168 场已过。后台同步健康，非 API key/服务停止。产品修复另开授权任务。 |
+| T100 | P4.5 | Investigate Expired Matches on Home | `done` | `c81c222` | 只读调查确认根因：catalog upsert 不退役消失记录，查询按 status 而非时间/最后观测筛选，Home 直接展示全部结果；陈旧记录 freshness 默认仍显示 fresh。北京时间 2026-09-25 20:01 的本机 API：43/43 live 开赛时间已过；187 场 upcoming 中 168 场已过。后台目录同步健康，非 API key/服务停止。只完成诊断，产品修复需要另开明确任务；不得删除历史记录来掩盖问题。 |
 
 ## P4.1 Completion Gate 核验摘要（2026-09-18，逐条实际核验）
 
