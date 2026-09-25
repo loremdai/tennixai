@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-25 20:06（北京时间）
+**最后更新：** 2026-09-25 22:04（北京时间）
 
-**总体状态：** `in_progress`（P4 持续打磨；T100 已定位首页旧比赛根因，T101 正修复当前比赛列表。此前用户批准的 B 边界保持：所有活跃网球胜者市场展示供应商真实名称/报价，未映射/双打不进入模型或 Paper。模型未晋升时机会页继续诚实为空；模型晋升另行排期）
+**总体状态：** `in_progress`（P4 持续打磨；T101 已修复首页过期比赛，T102 正逐字段检查球员详情页。此前用户批准的 B 边界保持：所有活跃网球胜者市场展示供应商真实名称/报价，未映射/双打不进入模型或 Paper。模型未晋升时机会页继续诚实为空；模型晋升另行排期）
 
-**当前里程碑：** P3 已关闭；P4.0–P4.4 已完成（T72–T92）；P4.5 的 T93–T99 实现/审计及本地服务启动任务已完成。真实服务当前保持运行。
+**当前里程碑：** P3 已关闭；P4.0–P4.4 已完成（T72–T92）；P4.5 的 T93–T101 实现/审计及本地服务启动、过期比赛修复任务已完成。真实服务当前保持运行。
 
-**当前阶段：** T101 正修复首页、比赛列表与问答中的过期比赛误报，见 [CURRENT.md](./CURRENT.md)。模型未晋升时机会页仍为空；模型晋升证据链另行排期；自动下单继续 `deferred`。
+**当前阶段：** T102 正逐字段走查球员详情页，见 [CURRENT.md](./CURRENT.md)。模型未晋升时机会页仍为空；模型晋升证据链另行排期；自动下单继续 `deferred`。
 
 ## 状态说明
 
@@ -190,6 +190,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | T99 | P4.5 | Initialize and Start Local Real Runtime | `done` | `4d1289a`（运行验收证据） | 用户更新根 `.env` API key 后重试成功：`init` exit 0（schema `0008`，3976 players、185 matches）；`up` exit 0，`status` 中数据库/Redis、实时流、赛程、排名、Polymarket 均 healthy/ok，runtime/API/frontend running；首页与 API health 均 HTTP 200。未做浏览器视觉验收。详见 `CURRENT.md`。 |
 | T100 | P4.5 | Investigate Expired Matches on Home | `done` | `c81c222`（调查证据），`105a487`（收口） | 只读调查确认根因：catalog upsert 不退役消失记录，查询按 status 而非时间/最后观测筛选，Home 直接展示全部结果；陈旧记录 freshness 默认仍显示 fresh。北京时间 2026-09-25 20:01 的本机 API：43/43 live 开赛时间已过；187 场 upcoming 中 168 场已过。后台目录同步健康，非 API key/服务停止。只完成诊断，产品修复需要另开明确任务；不得删除历史记录来掩盖问题。 |
 | T101 | P4.5 | Exclude Expired Matches from Active Reads | `done` | `2b6e217`（实现与回归） | 共用当前比赛读取按未来开赛时间与最后观测时间筛选，目录、列表、球员当前比赛与 Chat 一致；Home 多日赛程显示北京日期，旧行保留且不推断赛果。后端非 integration `1334 passed`、前端 `485 passed`、TypeScript/build、真实浏览器桌面/手机 `6 passed`；真实服务同步健康，页面仅显示有效比赛。含旧 integration 库的粗跑另有 16 例因既有 schema 不匹配失败，不计入通过。详见 `CURRENT.md`。 |
+| T102 | P4.5 | Audit and Repair Every Field on a Player Profile | `in_progress` | — | 实际检查 Jannik Sinner 球员详情页。初见 2026 赛季摘要为空而历史记录共 47 场、首条比分显示空盘占位符；待追踪真实接口、canonical mapping 与 view model 后确认并逐项修复。验收要覆盖页面全部字段、结果筛选/分页及桌面/手机。 |
 
 ## P4.1 Completion Gate 核验摘要（2026-09-18，逐条实际核验）
 

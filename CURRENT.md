@@ -2,13 +2,13 @@
 
 > 快速了解现在做到哪里、最近做完什么、接下来由谁接手。长期路线与阶段证据见 [ROADMAP.md](./ROADMAP.md)，产品定位和稳定架构见 [PROJECT.md](./PROJECT.md)。
 
-**最后更新：** 2026-09-25 21:44（北京时间）
+**最后更新：** 2026-09-25 22:04（北京时间）
 
-**当前主任务：** 无。T101 已完成；下一主任务待用户指定。
+**当前主任务：** T102 — 逐字段走查并修复球员详情页（`in_progress`）。
 
-**最近任务：** T101 — 修复过期比赛误入当前列表（`done`），起始 HEAD `5af1b49`，领取提交 `785e9e9`，实现提交 `2b6e217`。
+**最近任务：** T102 — 逐字段走查并修复球员详情页（`in_progress`），起始 HEAD `5c8e998`。
 
-**执行者 / 分支：** Codex / `main`；T101 已交接，工作区内原有用户改动仍保留且未纳入提交。
+**执行者 / 分支：** Codex / `main`；T102 起始 HEAD `5c8e998`。保留工作区已有 P3 修改与未跟踪文件，不纳入本任务。
 
 **运行手册与证据：** [本地真实运行手册](docs/runbooks/local-real-runtime.md)；[T98 审计规格与完成证据](docs/superpowers/specs/2026-09-24-tennixai-whole-product-audit.md)；[T97 审计计划](docs/superpowers/plans/2026-09-24-tennixai-t97-global-field-presentation-audit.md)；[T95–T98 字段矩阵](docs/research/2026-09-24-tennixai-t95-match-field-integrity-matrix.md)。
 
@@ -20,6 +20,14 @@
 - **现场保护：** `backend/app/service.py` 中 P3QueryService 的两处用户已有修改及 `.codex/`、`.superpowers/`、`REALTIME_LATENCY_INVESTIGATION.md`、`backend/tests/test_p3_query_freshness.py`、`frontend/next-env.d.ts` 均不纳入本任务提交。
 - **实现：** `2b6e217`。当前直播按最后观测时间限制为 5 倍同步间隔、近期赛程为 3 倍同步间隔且必须有未来开赛时间；使用真实 `age_seconds/is_stale`，配置变更时窗口随同步间隔变化。过滤放在共用 TennisService 读取处，覆盖 Home、目录、列表、球员当前比赛和 Chat，不删除历史行、不推断结束比分。Home 将多日赛程命名为「近期赛程」，展示北京日期与时间，并修正空态和旧市场浏览器验收文案。
 - **验证：** 目录/Chat/首页回归先红后绿；后端非 integration 测试文件 `1334 passed`，前端 Vitest `36 files / 485 passed`、TypeScript 与 Next production build 通过；真实本地桌面/手机 Playwright `6 passed`。重启后状态为数据库/Redis healthy，sports stream、schedule、rankings、Polymarket 均 `ok`，runtime/API/frontend 运行中；真实 Home 从旧的默认 44 场直播/186 场赛程收敛为 3 场有效直播/17 场未来赛程，页面核对显示北京日期。包含旧 integration 库的粗跑为 `1409 passed / 16 failed / 12 skipped / 25 deselected`，16 例因本机旧测试库 schema 缺列/约束不符，未把这次运行声称为全绿；未修改或重置该测试库。用户既有 P3 代码与未跟踪文件保留，根 `.env` 未输出或提交；真实服务继续运行。
+
+## T102 逐字段走查并修复球员详情页（`in_progress`）
+
+- **领取：** 2026-09-25 22:04 CST，Codex，`main`，起始 HEAD `5c8e998`。
+- **目标：** 对 `/players/ply_44ff6e422d48462aa51b5a06b8d72fdc` 的真实页面逐字段核对数据来源、API 响应、转换和呈现，修复确认的问题，并验证同一路径上的筛选、分页和桌面/手机视口。
+- **范围：** 英文/中文名、赛事属性、国籍/旗帜、生日/年龄、排名/积分/变化/时间、赛季摘要、当前比赛、历史记录筛选与表格各字段、空值/错误态。根据证据区分上游未提供与本地映射/展示错误；不推测真实数据，不增加供应商能力。
+- **初始观察（待根因核验）：** 页面排名/档案可见；2026 赛季摘要全部为“暂无”，同时历史记录标示共 47 场；首条比分含空盘占位符。仅此 DOM/截图不足以判定数据源或页面责任。
+- **环境与保护：** 复用已运行本地真实服务；不运行 `init`、不读根 `.env`；保留 `backend/app/service.py` 中两处既有 P3 修改及 `.codex/`、`.superpowers/`、`REALTIME_LATENCY_INVESTIGATION.md`、`backend/tests/test_p3_query_freshness.py`、`frontend/next-env.d.ts`，不纳入本任务提交。
 
 ## T99 初始化并启动本地真实服务（`done`）
 
@@ -139,8 +147,8 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
+| 2026-09-25 | `5c8e998` | T101 实现与三份总控收口已推送；工作区现有 P3 修改与未跟踪文件继续保留。 |
 | 2026-09-25 | `2b6e217` | 完成 T101：共用读取过滤过期当前比赛，首页显示北京日期；后端非 integration 1334 passed、前端 485 passed、真实浏览器 6 passed，服务同步健康。 |
-| 2026-09-25 | `785e9e9` | 领取 T101，确认与保留已有用户改动，开始修复。 |
 | 2026-09-25 | `105a487` | 关闭 T100 只读调查；只更新项目总控并推送，未动产品代码或用户已有改动。 |
 | 2026-09-25 | `c81c222` | T100 确认首页过期比赛根因：过期目录行未退役、API 不按时间/观测时间过滤、freshness 默认值掩盖陈旧记录；真实服务保持运行，未改产品代码。 |
 | 2026-09-25 | `4d1289a` | T99 重试初始化并启动真实服务：`init`、`up` 均成功；数据库/Redis、实时流、赛程、排名、Polymarket 状态通过，首页/API health HTTP 200；服务保持运行。 |
