@@ -9,7 +9,7 @@
 
 **当前里程碑：** P3 已关闭；P4.0–P4.4 已完成（T72–T92）；P4.5 的 T93–T102 实现/审计及本地服务启动、过期比赛修复任务已完成。真实服务当前保持运行。
 
-**当前阶段：** P4 持续打磨，暂无已领取任务；最近完成的 T102 见 [CURRENT.md](./CURRENT.md)。模型未晋升时机会页仍为空；模型晋升证据链另行排期；自动下单继续 `deferred`。
+**当前阶段：** P4.5 的 T103 正在彻查历史赛果盘分/局分缺失，见 [CURRENT.md](./CURRENT.md)。模型未晋升时机会页仍为空；模型晋升证据链另行排期；自动下单继续 `deferred`。
 
 ## 状态说明
 
@@ -150,7 +150,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | P4.2 — Launcher Reliability | `done` | 让根目录 `./scripts/tennix-live up` 不依赖当前 shell 解析到的 pnpm 版本 | T82 已完成（`2cea490`）：TDD 先红后绿；`up` 直接执行 `frontend/node_modules/.bin/next`，缺失时在其他子进程启动前报 `LOCAL_FRONTEND_MISSING`；真实无环境覆盖 `up` exit 0，API health 200、前端 HTTP 200，进程树无 pnpm；随后 `down` exit 0 且数据保留 |
 | P4.3 — Market Data Truthfulness & Coverage | `done` | 修复市场—比赛 read model 脱节，建立全市场可信报价覆盖与实时决策双通道，并让 Markets/Opportunities 如实表达数据与模型状态 | T83 规格经用户 2026-09-22 书面确认；T84–T89 全部 `done` 并逐项提交（2026-09-23）。交付：active-link 唯一 read truth、reversible `0006` latest-quote projection、有界 120s 批量快照覆盖车道（`POST /books`，只读、零凭据）、七个显式 quote 状态、显式 `model_availability`/真实 `decision_action`、按真实原因解释的机会空态、覆盖率健康与 runbook。模型晋升、自动下单和虚构机会均不属于本阶段，均未触碰 |
 | P4.4 — Host Environment Resilience | `done` | 消除项目 HTTP 客户端对宿主 `HTTP(S)_PROXY` / `NO_PROXY` 环境的非确定性继承，避免 IPv6 loopback 排除项导致应用与测试在导入阶段失败 | T90（`b3ef97d`）完成：所有项目自建 HTTPX 客户端显式 `trust_env=False`、WebSocket 显式 `proxy=None`；launcher 保留宿主环境但客户端不再隐式读取代理配置。回归在含 `::1` 的环境中通过，确定性后端 `1200 passed, 114 deselected`，无 API/LLM/交易调用，根 `.env` 未改 |
-| P4.5 — Global Data Integrity & Field Presentation | `in_progress` | 核对结构化网球数据从供应商/API 到全站 UI 的字段和值语义；修复已验证的数据丢失、误标和展示缺陷 | T93–T100 已完成；T101 修复已确认的首页和共用当前比赛查询误报。 |
+| P4.5 — Global Data Integrity & Field Presentation | `in_progress` | 核对结构化网球数据从供应商/API 到全站 UI 的字段和值语义；修复已验证的数据丢失、误标和展示缺陷 | T93–T102 已完成；T103 正追查历史赛果盘分/局分从上游到 UI 的丢失边界。 |
 
 > **后验核验记录（2026-09-18）：** T80 的 `110 passed / 44 skipped / 0 failed` 是当时真实通过的历史证据。控制者随后在无影响路径产品代码变更的 `2270049` 上两次复跑当前完整 Playwright，均得到 `109 passed / 44 skipped / 1 failed`；唯一失败为 mobile `prototype.visual` 的 `home-answer`，265 像素差异。该用例单独以 `--workers=1 --repeat-each=10` 则 10/10 通过，故 T81 以两条顺序 CLI lane 消除跨文件 worker 并发，而非改动视觉真相。
 
@@ -191,6 +191,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | T100 | P4.5 | Investigate Expired Matches on Home | `done` | `c81c222`（调查证据），`105a487`（收口） | 只读调查确认根因：catalog upsert 不退役消失记录，查询按 status 而非时间/最后观测筛选，Home 直接展示全部结果；陈旧记录 freshness 默认仍显示 fresh。北京时间 2026-09-25 20:01 的本机 API：43/43 live 开赛时间已过；187 场 upcoming 中 168 场已过。后台目录同步健康，非 API key/服务停止。只完成诊断，产品修复需要另开明确任务；不得删除历史记录来掩盖问题。 |
 | T101 | P4.5 | Exclude Expired Matches from Active Reads | `done` | `2b6e217`（实现与回归） | 共用当前比赛读取按未来开赛时间与最后观测时间筛选，目录、列表、球员当前比赛与 Chat 一致；Home 多日赛程显示北京日期，旧行保留且不推断赛果。后端非 integration `1334 passed`、前端 `485 passed`、TypeScript/build、真实浏览器桌面/手机 `6 passed`；真实服务同步健康，页面仅显示有效比赛。含旧 integration 库的粗跑另有 16 例因既有 schema 不匹配失败，不计入通过。详见 `CURRENT.md`。 |
 | T102 | P4.5 | Audit and Repair Every Field on a Player Profile | `done` | `a885a6a`（实现/回归） | 已修复球员页字段、比分/轮次展示、对手目录补全及消费者文案。赛季摘要优先使用完整 API-Tennis stats；缺失时只按可验证的已收录单打赛果派生场数/胜负/胜率，并只在派生指标上标注来源；不推算未知冠军数或场地成绩，不完整结果集不生成摘要。真实页面：2026 已收录 47 场、44–3、93.6%；2025 供应商 stats 为 64 场、58–6、90.6%、6 冠及完整场地记录。整栈重启后数据库/Redis/API/frontend 和同步状态正常；后端确定性 `1338 passed`、前端 Vitest `37 files / 494 passed`、TypeScript、Ruff、P3 freshness 回归及真实桌面/手机检查通过。用户已有 P3 差异与未跟踪文件保留且未纳入任务提交；详见 `CURRENT.md`。 |
+| T103 | P4.5 | Investigate and Repair Missing Set/Game Scores in Historical Results | `in_progress` | 领取提交待记录 | 端到端追查 API-Tennis 返回值→provider→canonical `Match/SetScore`→持久化→REST/view model→球员历史与比赛详情。先用完整、部分、确实缺失三类样本定位确切丢失边界，再按证据修复；不反推、不补造、不增加无界抓取。验收计划、用户已有工作区保护和当前本地服务边界见 `CURRENT.md`。 |
 
 ## P4.1 Completion Gate 核验摘要（2026-09-18，逐条实际核验）
 

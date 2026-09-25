@@ -4,11 +4,11 @@
 
 **最后更新：** 2026-09-26（北京时间）
 
-**当前主任务：** 无；最近完成 T102 — 逐字段走查并修复球员详情页。
+**当前主任务：** T103 — 彻查并修复历史赛果盘分/局分丢失（`in_progress`）。
 
-**最近任务：** T102 — 逐字段走查并修复球员详情页（`done`）；本次收口起始 HEAD `92290e0`。
+**最近任务：** T103 — 彻查并修复历史赛果盘分/局分丢失（`in_progress`），起始 HEAD `0d63c48`。
 
-**执行者 / 分支：** Codex / `main`；本次收口起始 HEAD `92290e0`。保留工作区已有 P3 修改与未跟踪文件，不纳入本任务。
+**执行者 / 分支：** Codex / `main`；T103 起始 HEAD `0d63c48`。保留工作区已有 P3 修改与未跟踪文件，不纳入本任务。
 
 **运行手册与证据：** [本地真实运行手册](docs/runbooks/local-real-runtime.md)；[T98 审计规格与完成证据](docs/superpowers/specs/2026-09-24-tennixai-whole-product-audit.md)；[T97 审计计划](docs/superpowers/plans/2026-09-24-tennixai-t97-global-field-presentation-audit.md)；[T95–T98 字段矩阵](docs/research/2026-09-24-tennixai-t95-match-field-integrity-matrix.md)。
 
@@ -31,6 +31,15 @@
 - **验证：** 真实浏览器检查目标球员 profile、结果筛选/重置/分页以及桌面和 390px 手机视口。重启后 2026 赛季显示已收录单打赛果 47 场、44 胜 3 负、胜率 93.6%，没有推算冠军数/场地数据；2025 年使用 API-Tennis 统计，显示 64 场、58–6、90.6%、6 冠及硬地 39–3 / 红土 11–2 / 草地 8–1。历史对手显示完整姓名、中文名和国籍。`./scripts/tennix-live down` / `up` 均成功，数据卷保留且未运行 `init`；数据库、Redis、runtime、API、frontend 与同步状态均正常。后端确定性测试 `1338 passed`；前端 Vitest `37 files / 494 passed`；TypeScript、球员专项测试、P3 查询新鲜度回归、Ruff 与 `git diff --check` 通过。未读取或输出根 `.env`。
 - **完成提交：** 实现与回归测试 `a885a6a`；本任务不包含用户已有 P3 工作区差异。总控关闭记录随下一提交。
 - **环境与保护：** 复用已运行本地真实服务；不运行 `init`、不读根 `.env`；保留 `backend/app/service.py` 中两处既有 P3 修改及 `.codex/`、`.superpowers/`、`REALTIME_LATENCY_INVESTIGATION.md`、`backend/tests/test_p3_query_freshness.py`、`frontend/next-env.d.ts`，不纳入本任务提交。
+
+## T103 彻查并修复历史赛果盘分/局分丢失（`in_progress`）
+
+- **领取：** 2026-09-26，Codex，`main`，起始 HEAD `0d63c48`。
+- **目标：** 查清为什么历史赛果中经常缺少盘分或每盘局分，逐层比较供应商原始返回、provider 解析、canonical `Match/SetScore`、存储读回、REST DTO、前端 view model 与最终页面；修复实际丢失数据的根因，而不是只调整空值文案。
+- **调查范围：** 检查 API-Tennis 官方数据契约与多个真实不完整/完整样本；区分“供应商确实未提供”与“本地解析、归约、持久化、缓存、序列化或展示丢失”；覆盖球员历史列表和共享比赛详情路径；确认已落库空值能否通过正常有限重取恢复，以及不可恢复时的诚实呈现。
+- **执行顺序：** 先建立同一批比赛的逐层证据矩阵与可重复回归，再根据实际故障边界写出实现计划；不猜测缺失比分、不依据胜负反推局分、不改变供应商请求频率或抓取无限历史。
+- **验收门：** 至少包含供应商有完整比分、仅有部分比分、确实无比分三类样本；证明有值时端到端不丢、空值不造；修复必须有先失败后通过的测试，覆盖 provider/service/存储/API/UI 中实际受影响层；后端确定性套件、前端相关与全量测试、TypeScript、改动文件 Ruff、`git diff --check` 通过；真实页面/API 用安全脱敏的内部 ID 和比分字段复核。未经必要性确认不迁移 schema、不执行 `init`、不重置数据库。
+- **安全与现场：** 根 `.env` 不读取、不输出；不打印 API key、URL 查询凭据或无关供应商 payload。优先对已运行本地服务做只读检查；当前服务/数据保持运行。`backend/app/service.py` 的两处既有 P3 freshness 修改及 `.codex/`、`.superpowers/`、`REALTIME_LATENCY_INVESTIGATION.md`、`backend/tests/test_p3_query_freshness.py`、`frontend/next-env.d.ts` 均为用户已有改动，不纳入 T103 提交。
 
 ## T99 初始化并启动本地真实服务（`done`）
 
@@ -150,6 +159,7 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
+| 2026-09-26 | 领取提交待记录 | 开始 T103：追查历史赛果盘分和每盘局分从数据源到页面的全链路，先定位丢失边界，不预判根因。 |
 | 2026-09-26 | `a885a6a` | T102 球员详情页修复与回归测试提交；2026 赛季展示逐项标注来源的已收录单打赛果，官方可用统计继续优先显示。 |
 | 2026-09-25 | `5c8e998` | T101 实现与三份总控收口已推送；工作区现有 P3 修改与未跟踪文件继续保留。 |
 | 2026-09-25 | `2b6e217` | 完成 T101：共用读取过滤过期当前比赛，首页显示北京日期；后端非 integration 1334 passed、前端 485 passed、真实浏览器 6 passed，服务同步健康。 |
