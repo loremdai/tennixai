@@ -39,7 +39,7 @@
 - **调查范围：** 检查 API-Tennis 官方数据契约与多个真实不完整/完整样本；区分“供应商确实未提供”与“本地解析、归约、持久化、缓存、序列化或展示丢失”；覆盖球员历史列表和共享比赛详情路径；确认已落库空值能否通过正常有限重取恢复，以及不可恢复时的诚实呈现。
 - **执行顺序：** 先建立同一批比赛的逐层证据矩阵与可重复回归，再根据实际故障边界写出实现计划；不猜测缺失比分、不依据胜负反推局分、不改变供应商请求频率或抓取无限历史。
 - **验收门：** 至少包含供应商有完整比分、仅有部分比分、确实无比分三类样本；证明有值时端到端不丢、空值不造；修复必须有先失败后通过的测试，覆盖 provider/service/存储/API/UI 中实际受影响层；后端确定性套件、前端相关与全量测试、TypeScript、改动文件 Ruff、`git diff --check` 通过；真实页面/API 用安全脱敏的内部 ID 和比分字段复核。未经必要性确认不迁移 schema、不执行 `init`、不重置数据库。
-- **安全与现场：** 根 `.env` 不读取、不输出；不打印 API key、URL 查询凭据或无关供应商 payload。优先对已运行本地服务做只读检查；当前服务/数据保持运行。`backend/app/service.py` 的两处既有 P3 freshness 修改及 `.codex/`、`.superpowers/`、`REALTIME_LATENCY_INVESTIGATION.md`、`backend/tests/test_p3_query_freshness.py`、`frontend/next-env.d.ts` 均为用户已有改动，不纳入 T103 提交。
+- **安全与现场：** 不直接查看或输出根 `.env` 文件内容；允许通过应用现有配置对象安全读取凭据，进行有界只读 API 核验。任何 API key、查询凭据、无关供应商 payload 均不得打印或落盘。优先复用已运行本地服务，当前服务/数据保持运行。`backend/app/service.py` 的两处既有 P3 freshness 修改及 `.codex/`、`.superpowers/`、`REALTIME_LATENCY_INVESTIGATION.md`、`backend/tests/test_p3_query_freshness.py`、`frontend/next-env.d.ts` 均为用户已有改动，不纳入 T103 提交。
 
 ## T99 初始化并启动本地真实服务（`done`）
 
