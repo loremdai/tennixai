@@ -74,7 +74,7 @@ test('live directory - Chinese search resolves Ben Shelton and opens the profile
   await expect(shelton).toBeVisible({ timeout: 60_000 })
   await shelton.click()
 
-  await expect(page.getByRole('heading', { level: 1, name: 'Ben Shelton' })).toBeVisible({ timeout: 60_000 })
+  await expect(page.getByRole('heading', { level: 1, name: /Ben Shelton/ })).toBeVisible({ timeout: 60_000 })
   await expect(page.getByRole('heading', { name: '赛季摘要' })).toBeVisible({ timeout: 60_000 })
   await expect(page.getByRole('heading', { name: '当前比赛状态' })).toBeVisible()
 
@@ -89,7 +89,7 @@ test('live directory - season filters, pagination and finished match navigation'
   await page.locator('#player-directory-search').fill('Ben Shelton')
   await page.locator('#player-directory-search').press('Enter')
   await page.getByRole('link', { name: /Ben Shelton/ }).first().click()
-  await expect(page.getByRole('heading', { level: 1, name: 'Ben Shelton' })).toBeVisible({ timeout: 60_000 })
+  await expect(page.getByRole('heading', { level: 1, name: /Ben Shelton/ })).toBeVisible({ timeout: 60_000 })
 
   const results = page.getByRole('region', { name: 'Ben Shelton 历史赛果列表' })
   await expect(results).toBeVisible({ timeout: 60_000 })

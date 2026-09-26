@@ -105,14 +105,20 @@ describe('P3 markets preview', () => {
 
     const market = screen.getByRole('link', { name: '查看 Jannik Sinner vs Carlos Alcaraz 市场' })
     expect(market.querySelectorAll('[data-slot="avatar"]')).toHaveLength(2)
+    expect(market.textContent).toContain('扬尼克·辛纳')
+    expect(market.textContent).toContain('卡洛斯·阿尔卡拉斯')
 
     await user.click(screen.getByRole('tab', { name: /机会/ }))
     const opportunity = screen.getByRole('link', { name: /Jannik Sinner vs Carlos Alcaraz/ })
     expect(opportunity.querySelectorAll('[data-slot="avatar"]')).toHaveLength(2)
+    expect(opportunity.textContent).toContain('扬尼克·辛纳')
+    expect(opportunity.textContent).toContain('卡洛斯·阿尔卡拉斯')
 
     await user.click(screen.getByRole('tab', { name: /^模拟记录/ }))
     const paper = screen.getByRole('link', { name: '查看 Jannik Sinner vs Carlos Alcaraz 的模拟记录' })
     expect(paper.querySelectorAll('[data-slot="avatar"]')).toHaveLength(2)
+    expect(paper.textContent).toContain('扬尼克·辛纳')
+    expect(paper.textContent).toContain('卡洛斯·阿尔卡拉斯')
   })
 
   it('distinguishes planned quotes from held positions in preview records', () => {
@@ -366,24 +372,63 @@ describe('MarketsWorkspace (production)', () => {
     const user = userEvent.setup()
     render(<MarketsWorkspace />)
 
-    await waitFor(() => expect(screen.getByText('Alpha One vs. Beta Two')).toBeTruthy())
+    await waitFor(() => expect(screen.getAllByText('Alpha One').length).toBeGreaterThan(0))
     const rows = screen.getAllByRole('link', { name: /查看 .* 的(模拟买入机会|等待更好价格)决策/ })
     expect(rows.map((row) => row.getAttribute('href'))).toEqual([
       '/matches/mat_1',
       '/matches/mat_2',
     ])
-    expect(screen.getByText('方向：Beta Two')).toBeTruthy()
-    expect(screen.getByText('方向：Gamma Three')).toBeTruthy()
+    expect(rows[0].textContent).toContain('方向：Beta Two')
+    expect(rows[1].textContent).toContain('方向：Gamma Three')
     expect(screen.getByText('模拟买入机会')).toBeTruthy()
     expect(screen.getByText('等待更好价格')).toBeTruthy()
     expect(screen.getByText('+7.0 个百分点')).toBeTruthy()
     expect(screen.getByText('最高买入价 55.0%')).toBeTruthy()
   })
 
+  it('shows bilingual names in opportunities, all markets, and paper rows', async () => {
+    const localized: [string | null, string | null] = ['阿尔法选手', '贝塔选手']
+    listMarketOpportunitiesMock.mockResolvedValue({
+      rows: [opportunityDto({ player_localized_names: localized })],
+      availability: { reason: 'HAS_OPPORTUNITIES', model_status: 'unknown' },
+    })
+    listMarketsMock.mockResolvedValue({
+      markets: [summaryDto({ player_localized_names: localized })],
+      page: 1,
+      page_size: 50,
+      total: 1,
+    })
+    getPaperPositionsMock.mockResolvedValue({
+      open: [positionDto({ player_localized_names: localized })],
+      recent: [],
+    })
+
+    const user = userEvent.setup()
+    render(<MarketsWorkspace />)
+
+    const opportunity = await screen.findByRole('link', { name: /查看 .* 的模拟买入机会决策/ })
+    expect(opportunity.textContent).toContain('Beta Two')
+    expect(opportunity.textContent).toContain('贝塔选手')
+
+    await user.click(screen.getByRole('tab', { name: /全部市场/ }))
+    const market = await screen.findByRole('link', { name: /查看 .* 市场/ })
+    expect(market.textContent).toContain('Alpha One')
+    expect(market.textContent).toContain('阿尔法选手')
+    expect(market.textContent).toContain('Beta Two')
+    expect(market.textContent).toContain('贝塔选手')
+
+    await user.click(screen.getByRole('tab', { name: /模拟记录/ }))
+    const paper = await screen.findByRole('link', { name: /查看 .* 的模拟记录/ })
+    expect(paper.textContent).toContain('Alpha One')
+    expect(paper.textContent).toContain('阿尔法选手')
+    expect(paper.textContent).toContain('Beta Two')
+    expect(paper.textContent).toContain('贝塔选手')
+  })
+
   it('keeps every row link internal and exposes no trade buttons', async () => {
     const user = userEvent.setup()
     render(<MarketsWorkspace />)
-    await waitFor(() => expect(screen.getByText('Alpha One vs. Beta Two')).toBeTruthy())
+    await waitFor(() => expect(screen.getAllByText('Alpha One').length).toBeGreaterThan(0))
 
     for (const link of screen.getAllByRole('link')) {
       const href = link.getAttribute('href') ?? ''
@@ -596,7 +641,7 @@ describe('MarketsWorkspace (production)', () => {
       availability: { reason: 'HAS_OPPORTUNITIES', model_status: 'unknown' },
     })
     await user.click(screen.getByRole('button', { name: /重试加载/ }))
-    await waitFor(() => expect(screen.getByText('Alpha One vs. Beta Two')).toBeTruthy())
+    await waitFor(() => expect(screen.getAllByText('Alpha One').length).toBeGreaterThan(0))
   })
 
   it('keeps stale decision rows visible without marking a fresh quote stale', async () => {

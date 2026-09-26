@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { MatchDecisionPage } from './match-decision-page'
@@ -10,6 +10,34 @@ vi.mock('next/navigation', () => ({
 afterEach(cleanup)
 
 describe('P3 match decision preview', () => {
+  it('shows available preview player names bilingually in the score and decision regions', () => {
+    render(
+      <MatchDecisionPage
+        initialStatus="live"
+        initialState="hold"
+        initialSelection="sinner"
+        initialOverlay="none"
+        initialAnalysis="expanded"
+        initialMethodology="closed"
+        initialConfidence="high"
+      />,
+    )
+
+    const score = screen.getByRole('table', { name: '实时比赛比分' })
+    const sinnerRow = within(score).getByRole('row', { name: /Sinner/ })
+    expect(within(sinnerRow).getByText('Jannik Sinner')).toBeVisible()
+    expect(within(sinnerRow).getByText('扬尼克·辛纳')).toBeVisible()
+
+    const focusedPlayer = screen.getByText('关注球员').closest('dl')!
+    expect(within(focusedPlayer).getByText('Jannik Sinner')).toBeVisible()
+    expect(within(focusedPlayer).getByText('扬尼克·辛纳')).toBeVisible()
+    expect(within(focusedPlayer).getByText('胜出')).toBeVisible()
+
+    const trajectory = screen.getByLabelText('球员胜率与价格')
+    expect(within(trajectory).getByText('Carlos Alcaraz')).toBeVisible()
+    expect(within(trajectory).getByText('卡洛斯·阿尔卡拉斯')).toBeVisible()
+  })
+
   it('keeps the frozen mobile reading order in the DOM', () => {
     render(
       <MatchDecisionPage

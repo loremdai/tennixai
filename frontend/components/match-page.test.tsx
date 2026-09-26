@@ -169,7 +169,7 @@ afterEach(() => {
 describe('production match page', () => {
   it('keeps the current match context out of the user prompt', async () => {
     render(<MatchPage matchId="mat_1" />)
-    await screen.findByText('Jannik Sinner')
+    await screen.findAllByText('Jannik Sinner')
 
     await userEvent.type(screen.getByLabelText('向 Tennix 询问本场比赛'), '谁在发球？')
     await userEvent.keyboard('{Enter}')
@@ -245,7 +245,7 @@ describe('production match page', () => {
   it('maps live hero state with server highlighting', async () => {
     render(<MatchPage matchId="mat_1" />)
 
-    await screen.findByText('Jannik Sinner')
+    await screen.findAllByText('Jannik Sinner')
     const badges = Array.from(document.querySelectorAll('[role="status"]'))
     expect(badges.some((badge) => badge.textContent?.includes('直播'))).toBe(true)
     const server = document.getElementById('server-indicator')
@@ -273,7 +273,7 @@ describe('production match page', () => {
 
     render(<MatchPage matchId="mat_1" />)
 
-    await screen.findByText('Jannik Sinner')
+    await screen.findAllByText('Jannik Sinner')
     expect(screen.getAllByText('第 3 盘')).toHaveLength(2)
     expect(screen.queryAllByText('第 2 盘')).toHaveLength(0)
     const liveTable = screen.getByRole('table', { name: '实时比赛比分' })
@@ -299,7 +299,7 @@ describe('production match page', () => {
 
     render(<MatchPage matchId="mat_1" />)
 
-    await screen.findByText('Jannik Sinner')
+    await screen.findAllByText('Jannik Sinner')
     expect(screen.getByText('盘数暂未提供')).toBeVisible()
     expect(screen.queryAllByText('第 2 盘')).toHaveLength(0)
     const liveTable = screen.getByRole('table', { name: '实时比赛比分' })
@@ -313,7 +313,7 @@ describe('production match page', () => {
 
     render(<MatchPage matchId="mat_1" />)
 
-    await screen.findByText('Jannik Sinner')
+    await screen.findAllByText('Jannik Sinner')
     expect(screen.queryAllByText('接发球')).toHaveLength(0)
     expect(screen.getAllByText('发球方暂未提供')).toHaveLength(2)
   })
@@ -333,7 +333,7 @@ describe('production match page', () => {
 
     render(<MatchPage matchId="mat_1" />)
 
-    await screen.findByText('Jannik Sinner')
+    await screen.findAllByText('Jannik Sinner')
     expect(screen.getByText('当前局 15–0')).toBeVisible()
     expect(screen.queryAllByText(/第\s*0\s*盘/)).toHaveLength(0)
     expect(screen.queryByText(/第-盘|第\d+盘 -–-/)).toBeNull()
@@ -407,7 +407,7 @@ describe('production match page', () => {
 
     render(<MatchPage matchId="mat_1" />)
 
-    await screen.findByText('Jannik Sinner')
+    await screen.findAllByText('Jannik Sinner')
     expect(screen.getAllByText(/暂未提供|暂缺|暂无/).length).toBeGreaterThan(0)
   })
 
@@ -432,7 +432,7 @@ describe('production match page', () => {
 
   it('refresh reloads the match exactly once more', async () => {
     render(<MatchPage matchId="mat_1" />)
-    await screen.findByText('Jannik Sinner')
+    await screen.findAllByText('Jannik Sinner')
     expect(getMatchSnapshotMock).toHaveBeenCalledTimes(1)
 
     await userEvent.click(screen.getByRole('button', { name: '刷新比赛数据' }))
@@ -519,7 +519,7 @@ describe('production match page', () => {
     }))
 
     render(<MatchPage matchId="mat_1" />)
-    await screen.findByText('Jannik Sinner')
+    await screen.findAllByText('Jannik Sinner')
 
     expect(screen.getByText(/ACE 球/)).toBeVisible()
     expect(screen.getByRole('button', { name: /第 1 盘/ })).toBeVisible()
@@ -528,7 +528,7 @@ describe('production match page', () => {
 
   it('keeps honest missing copy when the snapshot carries no statistics or points', async () => {
     render(<MatchPage matchId="mat_1" />)
-    await screen.findByText('Jannik Sinner')
+    await screen.findAllByText('Jannik Sinner')
 
     expect(screen.getByText(/本场比赛暂未提供技术统计/)).toBeVisible()
     expect(screen.getByText(/本场比赛暂无逐分记录/)).toBeVisible()
@@ -539,7 +539,7 @@ describe('production match page', () => {
 
   it('renders contextual prose from the stream without inventing cards', async () => {
     render(<MatchPage matchId="mat_1" />)
-    await screen.findByText('Jannik Sinner')
+    await screen.findAllByText('Jannik Sinner')
 
     await userEvent.type(screen.getByLabelText('向 Tennix 询问本场比赛'), '谁在发球？')
     await userEvent.keyboard('{Enter}')
@@ -553,7 +553,7 @@ describe('production match page', () => {
       text: '本场比赛分析已完成。',
     })
     render(<MatchPage matchId="mat_1" />)
-    await screen.findByText('Jannik Sinner')
+    await screen.findAllByText('Jannik Sinner')
 
     const question = '根据本场数据分析趋势。'
     await userEvent.type(screen.getByLabelText('向 Tennix 询问本场比赛'), question)
@@ -573,7 +573,7 @@ describe('production match page', () => {
       warningMessage: '球员背景资料暂未提供。',
     })
     render(<MatchPage matchId="mat_1" />)
-    await screen.findByText('Jannik Sinner')
+    await screen.findAllByText('Jannik Sinner')
 
     await userEvent.type(screen.getByLabelText('向 Tennix 询问本场比赛'), '分析当前比赛和球员特点')
     await userEvent.keyboard('{Enter}')
@@ -599,7 +599,7 @@ describe('production match page', () => {
     })
 
     render(<MatchPage matchId="mat_1" />)
-    await screen.findByText('Jannik Sinner')
+    await screen.findAllByText('Jannik Sinner')
 
     await userEvent.type(screen.getByLabelText('向 Tennix 询问本场比赛'), '当前比分是多少？')
     await userEvent.keyboard('{Enter}')
@@ -615,7 +615,7 @@ describe('production match page', () => {
       text: '当前比赛为 **ATP Finals**。\n\n- **场地**：硬地\n- **赛制**：BO3',
     })
     render(<MatchPage matchId="mat_1" />)
-    await screen.findByText('Jannik Sinner')
+    await screen.findAllByText('Jannik Sinner')
 
     await userEvent.type(screen.getByLabelText('向 Tennix 询问本场比赛'), '这是什么赛事？')
     await userEvent.keyboard('{Enter}')
@@ -631,7 +631,7 @@ describe('prototype preview route', () => {
   it('still renders the original prototype preview with sample data', async () => {
     render(<MatchPage previewMatch={buildPreviewMatch('live')} preview />)
 
-    expect(await screen.findByText('Jannik Sinner')).toBeVisible()
+    expect(await screen.findAllByText('Jannik Sinner')).not.toHaveLength(0)
     expect(screen.getByText('比赛状态预览')).toBeVisible()
     expect(screen.getByText('一发成功率')).toBeVisible()
     expect(screen.getByText(/Sinner 最近 7 个短回合中赢下 5 分/)).toBeVisible()
@@ -640,7 +640,7 @@ describe('prototype preview route', () => {
 
   it('switches preview status without touching the backend', async () => {
     render(<MatchPage previewMatch={buildPreviewMatch('live')} preview />)
-    await screen.findByText('Jannik Sinner')
+    await screen.findAllByText('Jannik Sinner')
 
     await userEvent.click(screen.getByRole('button', { name: '即将开始' }))
 
@@ -747,6 +747,29 @@ describe('production decision workbench (T69)', () => {
     await userEvent.click(screen.getByText('查看判断细节'))
     expect(screen.queryByText('prematch-elo-v1')).toBeNull()
     expect(screen.getByText(/本次判断时间/)).toBeVisible()
+  })
+
+  it('shows the selected player bilingually in the live score and decision summary', async () => {
+    const match = makeMatch({
+      players: [
+        { id: 'ply_1', name: 'Jannik Sinner', localized_name: '扬尼克·辛纳', country_code: 'ita', ranking: 1 },
+        { id: 'ply_2', name: 'Carlos Alcaraz', localized_name: '卡洛斯·阿尔卡拉斯', country_code: 'esp', ranking: 2 },
+      ],
+    })
+    nextMatch = match
+    mockStream({ data: { kind: 'match', matches: [match] } })
+    getMatchDecisionMock.mockResolvedValue(workbenchDecision())
+
+    render(<MatchPage matchId="mat_1" />)
+
+    const score = await screen.findByRole('table', { name: '实时比赛比分' })
+    const sinnerRow = within(score).getByRole('row', { name: /Sinner/ })
+    expect(within(sinnerRow).getByText('Jannik Sinner')).toBeVisible()
+    expect(within(sinnerRow).getByText('扬尼克·辛纳')).toBeVisible()
+
+    const focusedPlayer = screen.getByText('关注球员').closest('dl')!
+    expect(within(focusedPlayer).getByText('Jannik Sinner')).toBeVisible()
+    expect(within(focusedPlayer).getByText('扬尼克·辛纳')).toBeVisible()
   })
 
   it('follows the frozen mobile DOM order inside the content grid', async () => {

@@ -149,16 +149,25 @@ export function MatchPage({ matchId, previewMatch, preview = false }: MatchPageP
   const playerNameById: Record<string, string> = Object.fromEntries(
     (stream.snapshot?.match.players ?? []).map((player) => [player.id, player.name]),
   )
+  const playerLocalizedNameById: Record<string, string | null> = Object.fromEntries(
+    (stream.snapshot?.match.players ?? []).map((player) => [player.id, player.localized_name?.trim() || null]),
+  )
   const selectionName =
     decision?.target_player_id != null
       ? (playerNameById[decision.target_player_id] ?? null)
       : null
+  const selectionLocalizedName =
+    decision?.target_player_id != null
+      ? (playerLocalizedNameById[decision.target_player_id] ?? null)
+      : null
   const summaryModel = decision
-    ? toDecisionSummaryModel(decision, selectionName, new Date())
+    ? toDecisionSummaryModel(decision, selectionName, new Date(), selectionLocalizedName)
     : null
   const evidenceModel = decision ? toEvidenceModel(decision) : null
   const paperModel = decision ? toPaperModel(decision) : null
-  const chartSides = decision ? toChartSides(decision, playerNameById) : []
+  const chartSides = decision
+    ? toChartSides(decision, playerNameById, playerLocalizedNameById)
+    : []
   const hasWorkbench = !isPreview && decision !== null && activeViewModel !== null
 
   return (

@@ -2,6 +2,7 @@ import { ArrowDown, ArrowUp, CalendarDays, Minus } from 'lucide-react'
 
 import { PlayerCountry } from '@/components/player-country'
 import { PlayerAvatar } from '@/components/player-avatar'
+import { PlayerName } from '@/components/player-name'
 import type { PlayerProfilePreview, RankMovement } from '@/components/players/player-preview-data'
 import { Badge } from '@/components/ui/badge'
 import { formatAsOf } from '@/lib/view-models'
@@ -49,8 +50,14 @@ export function PlayerProfileHeader({ profile }: { profile: PlayerProfilePreview
         <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
           <PlayerAvatar name={profile.name} imageUrl={profile.avatarUrl} className="!size-20 md:!size-24" />
           <div className="min-w-0 flex-1">
-            <h1 id="player-profile-name" className="text-balance text-3xl font-semibold tracking-tight md:text-4xl">{profile.name}</h1>
-            {profile.nameZh ? <p className="mt-1 text-lg text-muted-foreground">{profile.nameZh}</p> : null}
+            <h1 id="player-profile-name" className="text-balance text-3xl font-semibold tracking-tight md:text-4xl">
+              <PlayerName
+                name={profile.name}
+                localizedName={profile.nameZh}
+                primaryClassName="text-3xl font-semibold tracking-tight md:text-4xl"
+                secondaryClassName="mt-1 text-lg font-normal tracking-normal"
+              />
+            </h1>
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
               <span className="inline-flex items-center gap-2 text-foreground">
                 <PlayerCountry player={profile} />

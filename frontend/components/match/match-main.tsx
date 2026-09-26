@@ -18,6 +18,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { PlayerAvatar } from '@/components/player-avatar'
+import { PlayerName } from '@/components/player-name'
 import {
   Card,
   CardAction,
@@ -138,6 +139,7 @@ export function OverviewCard({ match, preview }: Pick<MainColumnProps, 'match' |
 type ScoreRowView = {
   playerId: string
   playerName: string
+  localizedName: string | null
   avatarUrl: string | null
   shortName: string
   sets: Array<number | null>
@@ -184,7 +186,7 @@ function ScoreTable({
               <span className="flex items-center gap-2">
                 <PlayerAvatar name={row.playerName} imageUrl={row.avatarUrl} className="size-6" />
                 {row.serving ? <span className="size-2 rounded-full bg-primary" aria-label="发球方" /> : null}
-                {row.shortName}
+                <PlayerName name={row.shortName} localizedName={row.localizedName} className="min-w-0" primaryClassName="text-sm font-medium" />
               </span>
             </th>
             {row.sets.map((set, index) => (
@@ -206,6 +208,7 @@ function rowsFromMatch(match: MatchViewModel): [ScoreRowView, ScoreRowView] | nu
   return [0, 1].map((index) => ({
     playerId: match.players[index].id,
     playerName: match.players[index].name,
+    localizedName: match.players[index].nameZh ?? null,
     avatarUrl: match.players[index].avatarUrl ?? null,
     shortName: match.players[index].shortName,
     sets: score.sets.map((set) =>
@@ -232,13 +235,14 @@ export function ScoreProgressCard({ match, preview, highlight }: Pick<MainColumn
     ? (visualStatus === 'finished'
         ? previewFinishedScore.rows.map((row) => {
             const player = getPreviewPlayer(row.playerId)
-            return { playerId: row.playerId, playerName: player.name, avatarUrl: null, shortName: player.shortName, sets: row.sets, points: row.points, serving: row.serving, winner: row.winner }
+            return { playerId: row.playerId, playerName: player.name, localizedName: player.nameZh, avatarUrl: null, shortName: player.shortName, sets: row.sets, points: row.points, serving: row.serving, winner: row.winner }
           }) as [ScoreRowView, ScoreRowView]
         : previewLiveScore.rows.map((row) => {
             const player = getPreviewPlayer(row.playerId)
-            return { playerId: row.playerId, playerName: player.name, avatarUrl: null, shortName: player.shortName, sets: row.sets, points: row.points, serving: row.serving, winner: row.winner }
+            return { playerId: row.playerId, playerName: player.name, localizedName: player.nameZh, avatarUrl: null, shortName: player.shortName, sets: row.sets, points: row.points, serving: row.serving, winner: row.winner }
           }) as [ScoreRowView, ScoreRowView])
     : rowsFromMatch(match)
+  const winner = match.players.find((player) => player.id === match.winnerPlayerId)
 
   return (
     <Card
@@ -291,7 +295,7 @@ export function ScoreProgressCard({ match, preview, highlight }: Pick<MainColumn
             <div className="grid grid-cols-3 items-center rounded-lg bg-muted/30 p-4 text-center">
               <div>
                 <p className="font-mono text-2xl font-semibold">{rows[0].points ?? '–'}</p>
-                <p className="text-sm text-muted-foreground">{rows[0].shortName}</p>
+                <PlayerName name={rows[0].shortName} localizedName={rows[0].localizedName} className="text-sm text-muted-foreground" />
               </div>
               <div className="flex flex-col items-center gap-1">
                 <Badge>实时比分</Badge>
@@ -301,7 +305,7 @@ export function ScoreProgressCard({ match, preview, highlight }: Pick<MainColumn
               </div>
               <div>
                 <p className="font-mono text-2xl font-semibold">{rows[1].points ?? '–'}</p>
-                <p className="text-sm text-muted-foreground">{rows[1].shortName}</p>
+                <PlayerName name={rows[1].shortName} localizedName={rows[1].localizedName} className="text-sm text-muted-foreground" />
               </div>
             </div>
           </div>
@@ -316,8 +320,12 @@ export function ScoreProgressCard({ match, preview, highlight }: Pick<MainColumn
             <div className="flex flex-col gap-2 rounded-lg bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="font-semibold">
-                  {match.players.find((player) => player.id === match.winnerPlayerId)?.name ?? '比赛已结束'}
-                  {match.winnerPlayerId ? ' 获胜' : ''}
+                  {winner ? (
+                    <span className="inline-flex items-center gap-2">
+                      <PlayerName name={winner.name} localizedName={winner.nameZh} />
+                      <span>获胜</span>
+                    </span>
+                  ) : '比赛已结束'}
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   最终比分 {rows[0].sets.map((games, index) => {
@@ -402,8 +410,8 @@ export function StatsCard({ match, preview, highlight, snapshot }: Pick<MainColu
         ) : preview ? (
           <div>
             <div className="grid grid-cols-2 border-b pb-3 text-sm font-medium">
-              <span>{match.players[0].shortName}</span>
-              <span className="text-right">{match.players[1].shortName}</span>
+              <PlayerName name={match.players[0].shortName} localizedName={match.players[0].nameZh} />
+              <PlayerName name={match.players[1].shortName} localizedName={match.players[1].nameZh} className="text-right" />
             </div>
             <div className="divide-y">
               {previewMatchStats.map((stat) => (

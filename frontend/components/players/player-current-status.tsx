@@ -3,6 +3,7 @@ import { CalendarClock, ChevronRight, CircleDot, Info } from 'lucide-react'
 
 import { PlayerCountry } from '@/components/player-country'
 import { PlayerAvatar } from '@/components/player-avatar'
+import { PlayerName } from '@/components/player-name'
 import type { PlayerCurrentStatusPreview } from '@/components/players/player-preview-data'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
@@ -64,8 +65,11 @@ export function PlayerCurrentStatus({
             <PlayerAvatar name={status.opponent.name} imageUrl={status.opponent.avatarUrl} className="size-10" />
             <PlayerCountry player={status.opponent} />
             <div className="min-w-0">
-              <p className="truncate font-medium">{status.opponent.name}</p>
-              {status.opponent.nameZh ? <p className="text-xs text-muted-foreground">{status.opponent.nameZh}</p> : null}
+              <PlayerName
+                name={status.opponent.name}
+                localizedName={status.opponent.nameZh}
+                className="font-medium"
+              />
             </div>
           </div>
         </div>

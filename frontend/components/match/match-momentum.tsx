@@ -11,6 +11,7 @@ import {
 import { Trophy } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
+import { PlayerName } from '@/components/player-name'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   ChartContainer,
@@ -28,6 +29,7 @@ import { type MatchHighlight } from './match-data'
 import {
   previewMatchMeta,
   previewMomentumData,
+  previewPlayers,
   previewRecentPoints,
 } from './match-preview-data'
 import { MatchPointsTimeline } from './match-points'
@@ -50,10 +52,6 @@ function formatIndex(value: number): string {
   const rounded = Math.round(value * 10) / 10
   if (rounded === 0) return '0'
   return rounded > 0 ? `+${rounded}` : String(rounded)
-}
-
-function leaderName(match: MatchViewModel, playerId: string | null): string {
-  return match.players.find((player) => player.id === playerId)?.shortName ?? '双方'
 }
 
 function keyPointLabel(point: MatchSnapshotDto['points'][number]): string {
@@ -90,12 +88,16 @@ function RecentControlPanel({
   }
 
   const asOf = formatAsOf(latest.as_of)
+  const leader = match.players.find((player) => player.id === latest.leader_player_id)
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="text-sm font-medium">{leaderName(match, latest.leader_player_id)} {formatIndex(latest.value)}</p>
+          <p className="flex items-center gap-1 text-sm font-medium">
+            {leader ? <PlayerName name={leader.shortName} localizedName={leader.nameZh} /> : <span>双方</span>}
+            <span>{formatIndex(latest.value)}</span>
+          </p>
           <p className="text-xs text-muted-foreground">
             最近 {chart.length} 分 · {asOf ? `更新于 ${asOf}` : '更新时间暂不可用'}
           </p>
@@ -224,7 +226,12 @@ export function MatchMomentumCard({
                 </div>
               </div>
               <dl className="grid grid-cols-2 gap-3 border-t pt-4 sm:grid-cols-3">
-                <div><dt className="text-xs text-muted-foreground">胜者</dt><dd className="mt-1 font-medium">Jannik Sinner</dd></div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">胜者</dt>
+                  <dd className="mt-1 font-medium">
+                    <PlayerName name={previewPlayers[0].name} localizedName={previewPlayers[0].nameZh} />
+                  </dd>
+                </div>
                 <div><dt className="text-xs text-muted-foreground">时长</dt><dd className="mt-1 font-medium">{previewMatchMeta.finalDuration}</dd></div>
                 <div><dt className="text-xs text-muted-foreground">决胜盘</dt><dd className="mt-1 font-mono font-semibold text-primary">6–3</dd></div>
               </dl>

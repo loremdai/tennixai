@@ -1,6 +1,7 @@
 import { AlertTriangle, Clock3, Sparkles } from 'lucide-react'
 
 import { DecisionStatusBadge } from '@/components/p3/decision-status'
+import { PlayerName } from '@/components/player-name'
 import type { DecisionPreview } from '@/components/p3/p3-preview-data'
 import { Button } from '@/components/ui/button'
 import {
@@ -12,6 +13,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
+import { previewPlayers } from './match-preview-data'
 
 function percent(value: number | null): string {
   return value === null ? '—' : `${(value * 100).toFixed(1)}%`
@@ -28,6 +30,8 @@ export function DecisionSummary({
   decision: DecisionPreview
   onAsk: () => void
 }) {
+  const selectedPlayer = decision.selection === 'sinner' ? previewPlayers[0] : previewPlayers[1]
+  const selectionSuffix = decision.selectionLabel.endsWith(' 胜出') ? '胜出' : null
   const quoteLabel = decision.quoteSide === 'ask'
     ? '10 美元模拟买入均价'
     : decision.quoteSide === 'bid'
@@ -71,7 +75,10 @@ export function DecisionSummary({
           <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border sm:grid-cols-3 lg:grid-cols-4">
             <dl className="min-h-24 bg-card p-4">
               <dt className="text-xs text-muted-foreground">关注球员</dt>
-              <dd className="mt-2 text-sm font-semibold">{decision.selectionLabel}</dd>
+              <dd className="mt-2 flex items-start gap-1 text-sm font-semibold">
+                <PlayerName name={selectedPlayer.name} localizedName={selectedPlayer.nameZh} />
+                {selectionSuffix ? <span className="mt-0.5 shrink-0">{selectionSuffix}</span> : null}
+              </dd>
             </dl>
             <dl className="min-h-24 bg-card p-4">
               <dt className="text-xs text-muted-foreground">模型估算胜率</dt>

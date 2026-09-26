@@ -13,6 +13,7 @@ import {
 import { SectionHeading } from '@/components/home/section-heading'
 import { PlayerCountry } from '@/components/player-country'
 import { PlayerAvatar } from '@/components/player-avatar'
+import { PlayerName } from '@/components/player-name'
 import { userFacingApiError } from '@/lib/api/user-facing-errors'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -70,7 +71,13 @@ function FeaturedPlayer({
           <PlayerCountry player={player} />
           {player.ranking !== null ? <Badge variant="outline">#{player.ranking}</Badge> : null}
         </div>
-        <h3 className="mt-2 text-balance text-base font-semibold leading-tight tracking-tight">{player.name}</h3>
+        <h3 className="mt-2 text-balance text-base font-semibold leading-tight tracking-tight">
+          <PlayerName
+            name={player.name}
+            localizedName={player.nameZh}
+            className={align === 'right' ? 'items-end text-right' : undefined}
+          />
+        </h3>
         {isLive ? (
           serving ? (
             <p className={cn('mt-3 flex items-center gap-2 text-xs font-medium text-primary', align === 'right' && 'justify-end')}>
@@ -91,6 +98,7 @@ function FeaturedPlayer({
 function FeaturedScore({ match }: { match: MatchViewModel }) {
   const score = match.score
   const setCount = score?.sets.length ?? 0
+  const serverPlayer = match.players.find((player) => player.id === match.serverPlayerId)
 
   return (
     <div className="flex flex-col gap-3 rounded-xl bg-background/45 p-4">
@@ -124,7 +132,11 @@ function FeaturedScore({ match }: { match: MatchViewModel }) {
               <div key={player.id} className="contents">
                 <span className="flex min-w-0 items-center gap-2 text-left text-sm font-medium">
                   {serving ? <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-label="发球方" /> : null}
-                  <span className="truncate">{player.shortName}</span>
+                  <PlayerName
+                    name={player.shortName}
+                    localizedName={player.nameZh}
+                    className="text-left text-sm font-medium"
+                  />
                 </span>
                 {games.map((game, setIndex) => (
                   <span key={`${player.id}-${setIndex}`} className="font-mono text-xl font-semibold tabular-nums">{game}</span>
@@ -138,9 +150,16 @@ function FeaturedScore({ match }: { match: MatchViewModel }) {
         </div>
       ) : null}
       <p className="border-t pt-3 text-center text-xs text-muted-foreground">
-        {match.serverPlayerId
-          ? `${match.players.find((player) => player.id === match.serverPlayerId)?.shortName ?? ''} 发球`
-          : '发球方暂未提供'}
+        {match.serverPlayerId ? (
+          <span className="inline-flex items-center gap-1">
+            <PlayerName
+              name={serverPlayer?.shortName ?? ''}
+              localizedName={serverPlayer?.nameZh}
+              primaryClassName="text-xs"
+            />
+            <span>发球</span>
+          </span>
+        ) : '发球方暂未提供'}
       </p>
     </div>
   )
@@ -155,6 +174,8 @@ export function FeaturedMatchSection({
   state: SlateState
   onAsk: () => void
 }) {
+  const serverPlayer = match?.players.find((player) => player.id === match.serverPlayerId)
+
   return (
     <section aria-labelledby="featured-match-title">
       <Card data-tone="featured">
@@ -218,9 +239,16 @@ export function FeaturedMatchSection({
                     <span>{match.surface}</span>
                     <span aria-hidden="true">·</span>
                     <span className="text-primary">
-                      {match.serverPlayerId
-                        ? `${match.players.find((player) => player.id === match.serverPlayerId)?.shortName ?? ''} 发球`
-                        : '发球方暂未提供'}
+                      {match.serverPlayerId ? (
+                        <span className="inline-flex items-center gap-1">
+                          <PlayerName
+                            name={serverPlayer?.shortName ?? ''}
+                            localizedName={serverPlayer?.nameZh}
+                            primaryClassName="text-xs"
+                          />
+                          <span>发球</span>
+                        </span>
+                      ) : '发球方暂未提供'}
                     </span>
                   </>
                 ) : (
@@ -288,7 +316,11 @@ function CompactLiveCard({ match }: { match: HomeMatchViewModel }) {
                     <PlayerCountry player={match.playerDetails[index]} />
                     <PlayerAvatar name={match.playerDetails[index].name} imageUrl={match.playerDetails[index].avatarUrl} className="size-7" />
                     {row.serving ? <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-label="发球方" /> : <span className="size-1.5 shrink-0" aria-hidden="true" />}
-                    <span className="truncate text-sm font-medium">{row.player}</span>
+                    <PlayerName
+                      name={row.player}
+                      localizedName={match.playerDetails[index].nameZh}
+                      className="text-sm font-medium"
+                    />
                   </div>
                   <span className="font-mono text-sm font-semibold">{row.sets.join(' ')}</span>
                   <span className="min-w-6 text-right font-mono font-semibold text-primary">{row.points}</span>
@@ -299,7 +331,7 @@ function CompactLiveCard({ match }: { match: HomeMatchViewModel }) {
                   <PlayerCountry player={player} />
                   <PlayerAvatar name={player.name} imageUrl={player.avatarUrl} className="size-7" />
                   <span className="size-1.5 shrink-0" aria-hidden="true" />
-                  <span className="truncate text-sm font-medium">{player.shortName}</span>
+                  <PlayerName name={player.shortName} localizedName={player.nameZh} className="text-sm font-medium" />
                 </div>
               ))}
           <div className="flex items-center justify-between gap-3 border-t pt-3 text-xs text-muted-foreground">
@@ -442,7 +474,7 @@ export function UpcomingSection({
                     <div key={player.id} className="flex min-w-0 items-center gap-2">
                       <PlayerAvatar name={player.name} imageUrl={player.avatarUrl} className="size-7" />
                       <PlayerCountry player={player} />
-                      <span className="truncate font-medium">{player.shortName}</span>
+                      <PlayerName name={player.shortName} localizedName={player.nameZh} className="font-medium" />
                     </div>
                   ))}
                   <div className="flex items-center justify-between gap-3 border-t pt-3 text-xs text-muted-foreground">

@@ -225,6 +225,7 @@ export function PlayerProfileLive({ playerId }: { playerId: string }) {
 
         <PlayerResults
           playerName={preview.name}
+          playerLocalizedName={preview.nameZh}
           results={resultPreviews}
           historyState={historyState}
           season={season}

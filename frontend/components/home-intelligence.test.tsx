@@ -130,7 +130,10 @@ describe('LiveMarketPulse', () => {
     const onAvailability = vi.fn()
     render(<LiveMarketPulse onAvailability={onAvailability} />)
 
-    await waitFor(() => expect(screen.getByText('Alpha One vs. Beta Two')).toBeTruthy())
+    await waitFor(() => {
+      expect(screen.getByText('Alpha One')).toBeTruthy()
+      expect(screen.getByText('Beta Two')).toBeTruthy()
+    })
     expect(onAvailability).toHaveBeenCalledWith(true)
     expect(screen.getByText('62.0%')).toBeTruthy()
     expect(screen.getByText('55.0%')).toBeTruthy()
@@ -199,6 +202,9 @@ describe('LiveMarketPulse', () => {
 
     getMarketPulseMock.mockResolvedValue({ data: [pulseRow()], has_open_position: false })
     await user.click(screen.getByRole('button', { name: '重试' }))
-    await waitFor(() => expect(screen.getByText('Alpha One vs. Beta Two')).toBeTruthy())
+    await waitFor(() => {
+      expect(screen.getByText('Alpha One')).toBeTruthy()
+      expect(screen.getByText('Beta Two')).toBeTruthy()
+    })
   })
 })

@@ -1,6 +1,7 @@
 import { AlertTriangle, Clock3, Sparkles } from 'lucide-react'
 
 import { DecisionStatusBadge } from '@/components/p3/decision-status'
+import { PlayerName } from '@/components/player-name'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
@@ -72,7 +73,9 @@ export function DecisionSummaryLive({
           <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border sm:grid-cols-3 lg:grid-cols-5">
             <dl className="min-h-24 bg-card p-4">
               <dt className="text-xs text-muted-foreground">关注球员</dt>
-              <dd className="mt-2 text-sm font-semibold">{decision.selectionLabel}</dd>
+              <dd className="mt-2 text-sm font-semibold">
+                <PlayerName name={decision.selectionLabel} localizedName={decision.selectionLocalizedName} />
+              </dd>
             </dl>
             <dl className="min-h-24 bg-card p-4">
               <dt className="text-xs text-muted-foreground">模型估算胜率</dt>

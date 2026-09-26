@@ -15,6 +15,7 @@ import {
 
 import { PlayerCountry } from '@/components/player-country'
 import { PlayerAvatar } from '@/components/player-avatar'
+import { PlayerName } from '@/components/player-name'
 import type {
   CompetitionTier,
   MatchOutcome,
@@ -145,6 +146,7 @@ function formatDate(value: string) {
 
 export function PlayerResults({
   playerName,
+  playerLocalizedName,
   results,
   historyState,
   season,
@@ -160,6 +162,7 @@ export function PlayerResults({
   total,
 }: {
   playerName: string
+  playerLocalizedName?: string | null
   results: PlayerResultPreview[]
   historyState: PlayerHistoryState
   season: number
@@ -240,7 +243,10 @@ export function PlayerResults({
       <CardHeader className="border-b">
         <div>
           <CardTitle><h2 id="player-results-title">历史赛果</h2></CardTitle>
-          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{playerName} · 最近五个赛季单打记录</p>
+          <div className="mt-1 flex flex-col gap-1 text-sm leading-relaxed text-muted-foreground">
+            <PlayerName name={playerName} localizedName={playerLocalizedName} />
+            <span>最近五个赛季单打记录</span>
+          </div>
         </div>
         <CardAction><Badge variant="outline">20 / 页</Badge></CardAction>
       </CardHeader>
@@ -366,8 +372,11 @@ export function PlayerResults({
                       <PlayerAvatar name={result.opponent.name} imageUrl={result.opponent.avatarUrl} className="size-8" />
                       <PlayerCountry player={result.opponent} />
                       <div className="min-w-0">
-                        <p className="truncate text-sm">{result.opponent.name}</p>
-                        {result.opponent.nameZh ? <p className="truncate text-xs text-muted-foreground">{result.opponent.nameZh}</p> : null}
+                        <PlayerName
+                          name={result.opponent.name}
+                          localizedName={result.opponent.nameZh}
+                          className="text-sm"
+                        />
                       </div>
                     </div>
                     <Badge

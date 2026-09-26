@@ -12,6 +12,7 @@ import {
 } from 'recharts'
 
 import type { AnalysisState, DecisionPreview } from '@/components/p3/p3-preview-data'
+import { PlayerName } from '@/components/player-name'
 import { Badge } from '@/components/ui/badge'
 import {
   Card,
@@ -26,6 +27,7 @@ import {
   type ChartConfig,
 } from '@/components/ui/chart'
 import { cn } from '@/lib/utils'
+import { previewPlayers } from './match-preview-data'
 
 const chartConfig = {
   model: { label: '模型估算胜率', color: 'var(--primary)' },
@@ -80,14 +82,22 @@ export function ProbabilityMarketTrajectory({
           <div className="grid grid-cols-2 gap-2" aria-label="球员胜率与价格">
             <div className={cn('rounded-lg border p-3', decision.selection === 'sinner' ? 'border-primary/35 bg-primary/8' : 'bg-muted/20')}>
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-semibold">Jannik Sinner</p>
+                <PlayerName
+                  name={previewPlayers[0].name}
+                  localizedName={previewPlayers[0].nameZh}
+                  primaryClassName="text-sm font-semibold"
+                />
                 {decision.selection === 'sinner' ? <Badge variant="secondary">当前选择</Badge> : null}
               </div>
               <p className="mt-2 font-mono text-lg font-semibold">胜率 64.0% <span className="text-muted-foreground">/</span> 买入价 50.4%</p>
             </div>
             <div className={cn('rounded-lg border p-3', decision.selection === 'alcaraz' ? 'border-primary/35 bg-primary/8' : 'bg-muted/20')}>
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-semibold">Carlos Alcaraz</p>
+                <PlayerName
+                  name={previewPlayers[1].name}
+                  localizedName={previewPlayers[1].nameZh}
+                  primaryClassName="text-sm font-semibold"
+                />
                 {decision.selection === 'alcaraz' ? <Badge variant="secondary">当前选择</Badge> : null}
               </div>
               <p className="mt-2 font-mono text-lg font-semibold">胜率 36.0% <span className="text-muted-foreground">/</span> 买入价 50.8%</p>

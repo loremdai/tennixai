@@ -12,6 +12,10 @@ import { toChartSides, type TrajectoryPointModel } from '@/lib/p3-workbench-mode
 afterEach(cleanup)
 
 const names: Record<string, string> = { ply_a: 'Alpha One', ply_b: 'Beta Two' }
+const localizedNames: Record<string, string | null> = {
+  ply_a: '阿尔法选手',
+  ply_b: '贝塔选手',
+}
 
 function snapshot(overrides: Partial<DecisionSnapshotDto> = {}): DecisionSnapshotDto {
   return {
@@ -82,6 +86,21 @@ describe('toChartSides', () => {
 })
 
 describe('ProbabilityMarketChart', () => {
+  it('shows each player English first with the mapped localized name below', () => {
+    render(
+      <ProbabilityMarketChart
+        sides={toChartSides(snapshot(), names, localizedNames)}
+        trajectory={[]}
+        overlay="none"
+      />,
+    )
+
+    expect(screen.getByText('Alpha One')).toBeVisible()
+    expect(screen.getByText('阿尔法选手')).toBeVisible()
+    expect(screen.getByText('Beta Two')).toBeVisible()
+    expect(screen.getByText('贝塔选手')).toBeVisible()
+  })
+
   it('renders per-side server values and a textual summary', () => {
     render(
       <ProbabilityMarketChart sides={toChartSides(snapshot(), names)} trajectory={trajectory} overlay="none" />,

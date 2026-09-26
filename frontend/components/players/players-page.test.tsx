@@ -66,8 +66,10 @@ describe('PlayersPage rankings mode', () => {
     const list = screen.getByRole('region', { name: 'ATP 世界排名列表' })
     const rows = within(list).getAllByRole('listitem')
     expect(rows).toHaveLength(50)
-    expect(within(rows[0]).getByText('Jannik Sinner')).toBeVisible()
-    expect(within(rows[0]).getByText('扬尼克·辛纳')).toBeVisible()
+    const englishName = within(rows[0]).getByText('Jannik Sinner')
+    const nameStack = englishName.closest('span.inline-flex')
+    expect(nameStack).not.toBeNull()
+    expect(nameStack).toContainElement(within(rows[0]).getByText('扬尼克·辛纳'))
     expect(screen.getByText('1–50 / 共 200 位')).toBeVisible()
     expect(screen.getByRole('button', { name: '上一页' })).toBeDisabled()
     expect(screen.getByRole('button', { name: '第 4 页' })).toBeVisible()
@@ -174,6 +176,10 @@ describe('PlayersPage search mode', () => {
     const link = screen.getByRole('link', { name: /打开 Qinwen Zheng，郑钦文 的球员资料/ })
     expect(link).toHaveAttribute('href', '/players/plr_wta_qinwen_zheng')
     expect(within(link as HTMLElement).getByText('WTA')).toBeVisible()
+    const englishName = within(link as HTMLElement).getByText('Qinwen Zheng')
+    const nameStack = englishName.closest('span.inline-flex')
+    expect(nameStack).not.toBeNull()
+    expect(nameStack).toContainElement(within(link as HTMLElement).getByText('郑钦文'))
   })
 
   it('finds Ben Shelton while the WTA tab is selected', async () => {

@@ -14,6 +14,7 @@ import { MatchResultCard } from '@/components/home/home-match-result-card'
 import { HomePlayerHistory } from '@/components/home/home-player-history'
 import { PlayerCountry } from '@/components/player-country'
 import { PlayerAvatar } from '@/components/player-avatar'
+import { PlayerName } from '@/components/player-name'
 import { OpportunityRow } from '@/components/markets/opportunity-row'
 import { ChatWarnings } from '@/components/chat-warnings'
 import { MarkdownAnswer } from '@/components/markdown-answer'
@@ -40,7 +41,7 @@ import type { HomeMatchViewModel } from '@/lib/view-models'
 import { countryPresentation, toHomeMatch } from '@/lib/view-models'
 import { toOpportunityRow } from '@/lib/p3-view-models'
 import { getChatAnswerLabel } from '@/lib/chat-answer'
-import { playerHistoryTitle } from '@/lib/player-history-view'
+import { historyScopeLabel } from '@/lib/player-history-view'
 
 function historyItemsOf(chat: ChatViewState): StructuredData[] {
   return chat.dataItems.filter((item) => item.kind === 'player_history')
@@ -48,20 +49,13 @@ function historyItemsOf(chat: ChatViewState): StructuredData[] {
 
 function answerTitle(
   chat: ChatViewState,
-  cards: HomeMatchViewModel[],
   historyItems: StructuredData[],
 ): string {
-  if (historyItems.length === 1) {
-    return playerHistoryTitle(historyItems[0])
-  }
   if (historyItems.length > 1) {
     return '球员赛果与战绩'
   }
   if (chat.data?.kind === 'market_opportunities') return '市场机会'
   if (chat.data?.kind === 'match_decision') return '本场判断结果'
-  if (cards.length > 0) {
-    return `${cards[0].players[0]} 对阵 ${cards[0].players[1]}`
-  }
   if (chat.data?.kind === 'unsupported') {
     const reason = chat.data.metadata?.reason
     if (reason === 'p3_disabled') return '市场功能暂未开放'
@@ -131,6 +125,7 @@ export function HomeAssistant({
   }
 
   const historyItems = historyItemsOf(chat)
+  const singleHistory = historyItems.length === 1 ? historyItems[0].player_history : null
   const cards = [
     ...new Map(
       chat.dataItems
@@ -209,7 +204,29 @@ export function HomeAssistant({
                     <CheckCircle2 aria-label="包含比赛信息卡" className="size-4 text-muted-foreground" />
                   )}
                 </div>
-                <h3 className="mt-2 text-balance text-lg font-semibold">{answerTitle(chat, cards, historyItems)}</h3>
+                <h3 className="mt-2 text-balance text-lg font-semibold">
+                  {singleHistory ? (
+                    <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 align-middle">
+                      <PlayerName
+                        name={singleHistory.player.name}
+                        localizedName={singleHistory.player.localized_name}
+                      />
+                      <span>· {historyScopeLabel(singleHistory)}</span>
+                    </span>
+                  ) : cards.length > 0 ? (
+                    <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 align-middle">
+                      <PlayerName
+                        name={cards[0].players[0]}
+                        localizedName={cards[0].playerDetails[0].nameZh}
+                      />
+                      <span>对阵</span>
+                      <PlayerName
+                        name={cards[0].players[1]}
+                        localizedName={cards[0].playerDetails[1].nameZh}
+                      />
+                    </span>
+                  ) : answerTitle(chat, historyItems)}
+                </h3>
                 {summary ? <MarkdownAnswer content={summary} /> : null}
                 <ChatWarnings warnings={chat.warnings} />
                 {chat.phase === 'loading' || chat.phase === 'streaming' ? (
@@ -258,11 +275,11 @@ export function HomeAssistant({
                       >
                         <span className="flex min-w-0 items-center gap-3">
                           <PlayerAvatar name={candidate.player.name} imageUrl={candidate.player.image_url} className="size-10" />
-                          <span className="truncate font-medium">
-                            {candidate.player.localized_name
-                              ? `${candidate.player.name}（${candidate.player.localized_name}）`
-                              : candidate.player.name}
-                          </span>
+                          <PlayerName
+                            name={candidate.player.name}
+                            localizedName={candidate.player.localized_name}
+                            className="min-w-0 flex-1 font-medium"
+                          />
                         </span>
                         <span className="flex items-center gap-2 text-xs text-muted-foreground">
                           <PlayerCountry player={country} />

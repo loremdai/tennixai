@@ -46,10 +46,24 @@ describe('PlayerProfilePage header and current status', () => {
   it('shows the English primary name, Chinese secondary name and current ranking', () => {
     renderPage()
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Ben Shelton' })).toBeVisible()
-    expect(screen.getByText('本·谢尔顿')).toBeVisible()
+    const heading = screen.getByRole('heading', { level: 1, name: /Ben Shelton/ })
+    expect(heading).toBeVisible()
+    const nameStack = within(heading).getByText('Ben Shelton').closest('span.inline-flex')
+    expect(nameStack).not.toBeNull()
+    expect(nameStack).toContainElement(within(heading).getByText('本·谢尔顿'))
     expect(screen.getByText('#5')).toBeVisible()
     expect(screen.getByText('5,200')).toBeVisible()
+  })
+
+  it('shows current opponents in the same English-primary name stack', () => {
+    renderPage()
+
+    const status = screen.getByRole('heading', { level: 2, name: '当前比赛状态' }).closest('[data-slot="card"]')
+    expect(status).not.toBeNull()
+    const englishName = within(status as HTMLElement).getByText('Alex de Minaur')
+    const nameStack = englishName.closest('span.inline-flex')
+    expect(nameStack).not.toBeNull()
+    expect(nameStack).toContainElement(within(status as HTMLElement).getByText('亚历克斯·德米纳尔'))
   })
 
   it('shows the ranking update in Beijing time without exposing UTC', () => {
@@ -119,7 +133,7 @@ describe('PlayerProfilePage season summary', () => {
 
     await user.click(screen.getByRole('button', { name: '资料缺失' }))
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Bryan Shelton' })).toBeVisible()
+    expect(screen.getByRole('heading', { level: 1, name: /Bryan Shelton/ })).toBeVisible()
     expect(screen.getByText('暂无当前排名')).toBeVisible()
     expect(screen.queryByRole('heading', { name: '赛季摘要' })).not.toBeInTheDocument()
     expect(screen.queryByText('0–0')).not.toBeInTheDocument()
@@ -144,6 +158,10 @@ describe('PlayerProfilePage history results', () => {
 
     const links = within(resultsRegion()).getAllByRole('link')
     expect(links[0]).toHaveAttribute('href', '/matches/mtch_atp_2026_001')
+    const englishName = within(links[0]).getByText('Carlos Alcaraz')
+    const nameStack = englishName.closest('span.inline-flex')
+    expect(nameStack).not.toBeNull()
+    expect(nameStack).toContainElement(within(links[0]).getByText('卡洛斯·阿尔卡拉斯'))
     for (const link of links) {
       expect(link.getAttribute('href')).toMatch(/^\/matches\/mtch_/)
     }
@@ -245,7 +263,7 @@ describe('PlayerProfilePage scenarios', () => {
 
     await user.click(screen.getByRole('button', { name: 'WTA 档案' }))
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Qinwen Zheng' })).toBeVisible()
+    expect(screen.getByRole('heading', { level: 1, name: /Qinwen Zheng/ })).toBeVisible()
     const link = screen.getByRole('link', { name: '查看 Qinwen Zheng 的下一场比赛' })
     expect(link).toHaveAttribute('href', '/matches/mtch_next_plr_wta_qinwen_zheng')
   })

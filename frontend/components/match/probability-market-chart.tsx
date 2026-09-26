@@ -3,6 +3,7 @@ import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts'
 
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { PlayerName } from '@/components/player-name'
 import {
   ChartContainer,
   ChartTooltip,
@@ -65,7 +66,11 @@ export function ProbabilityMarketChart({
                 className={cn('rounded-lg border p-3', side.selected ? 'border-primary/35 bg-primary/8' : 'bg-muted/20')}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <p className="truncate text-sm font-semibold">{side.name}</p>
+                  <PlayerName
+                    name={side.name}
+                    localizedName={side.localizedName}
+                    primaryClassName="text-sm font-semibold"
+                  />
                   {side.selected ? <Badge variant="secondary">当前选择</Badge> : null}
                 </div>
                 <p className="mt-2 font-mono text-lg font-semibold">胜率 {percent(side.modelProbability)} <span className="text-muted-foreground">/</span> 买入价 {percent(side.ask)}</p>

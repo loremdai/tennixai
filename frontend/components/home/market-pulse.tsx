@@ -6,6 +6,7 @@ import { ArrowRight, CircleAlert, Radar, ShieldCheck } from 'lucide-react'
 
 import { DecisionStatusBadge } from '@/components/p3/decision-status'
 import { PlayerAvatar } from '@/components/player-avatar'
+import { PlayerName } from '@/components/player-name'
 import { P3PreviewControls } from '@/components/p3/p3-preview-controls'
 import {
   getHomePulseRows,
@@ -116,7 +117,9 @@ export function MarketPulse({ initialState }: { initialState: HomePulseState }) 
                       <div className="flex flex-wrap items-center gap-2">
                         <div className="flex min-w-0 items-center gap-2">
                           <PlayerAvatar name={playerOne} className="size-8" />
-                          <p className="truncate font-semibold">{row.match}</p>
+                          <PlayerName name={playerOne} localizedName={row.playerLocalizedNames?.[0]} className="min-w-0 font-semibold" />
+                          <span className="shrink-0 text-xs text-muted-foreground">vs.</span>
+                          <PlayerName name={playerTwo} localizedName={row.playerLocalizedNames?.[1]} className="min-w-0 font-semibold" />
                           <PlayerAvatar name={playerTwo} className="size-8" />
                         </div>
                         <Badge variant="outline">{row.phase}</Badge>

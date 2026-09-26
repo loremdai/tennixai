@@ -3,6 +3,7 @@ import { ArrowRight } from 'lucide-react'
 
 import { DecisionStatusBadge, decisionStateLabels } from '@/components/p3/decision-status'
 import { PlayerAvatar } from '@/components/player-avatar'
+import { PlayerName } from '@/components/player-name'
 import type { DecisionOverlay } from '@/components/p3/p3-preview-data'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -13,6 +14,9 @@ export type OpportunityRowData = {
   tournament: string
   phase: 'live' | 'upcoming'
   selection: string
+  selectionLocalizedName?: string | null
+  playerNames?: [string, string] | null
+  playerLocalizedNames?: [string | null, string | null] | null
   selectionImageUrl?: string | null
   modelProbability: number | null
   executableProbability: number | null
@@ -42,14 +46,23 @@ export function OpportunityRow({ opportunity }: { opportunity: OpportunityRowDat
         <CardContent className="grid min-h-28 grid-cols-2 items-center gap-4 py-1 md:grid-cols-[minmax(15rem,1.5fr)_minmax(8rem,0.7fr)_minmax(8rem,0.7fr)_minmax(8rem,0.7fr)_auto_auto]">
           <div className="col-span-2 min-w-0 md:col-span-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="truncate font-semibold">{opportunity.match}</h3>
+              <h3 className="flex min-w-0 items-center gap-1 font-semibold">
+                {opportunity.playerNames ? (
+                  <>
+                    <PlayerName name={opportunity.playerNames[0]} localizedName={opportunity.playerLocalizedNames?.[0]} className="min-w-0" />
+                    <span className="shrink-0 text-xs text-muted-foreground">vs.</span>
+                    <PlayerName name={opportunity.playerNames[1]} localizedName={opportunity.playerLocalizedNames?.[1]} className="min-w-0" />
+                  </>
+                ) : opportunity.match}
+              </h3>
               <Badge variant="outline">{opportunity.phase === 'live' ? '直播' : '即将开始'}</Badge>
             </div>
             <p className="mt-1 truncate text-sm text-muted-foreground">{opportunity.tournament}</p>
-            <p className="mt-2 flex items-center gap-2 text-xs font-medium text-primary">
+            <div className="mt-2 flex items-center gap-2 text-xs font-medium text-primary">
               <PlayerAvatar name={opportunity.selection} imageUrl={opportunity.selectionImageUrl} className="size-7" />
-              方向：{opportunity.selection}
-            </p>
+              <span>方向：</span>
+              <PlayerName name={opportunity.selection} localizedName={opportunity.selectionLocalizedName} />
+            </div>
           </div>
 
           <dl>

@@ -3,6 +3,7 @@ import { ArrowRight, FilterX, Landmark, RotateCcw } from 'lucide-react'
 
 import { DecisionStatusBadge } from '@/components/p3/decision-status'
 import { PlayerAvatar } from '@/components/player-avatar'
+import { PlayerName } from '@/components/player-name'
 import {
   filterMarketListings,
   marketListingFixtures,
@@ -167,14 +168,20 @@ export function AllMarketsView({
                     <div>
                       <dt className="flex min-w-0 items-center gap-1.5 truncate text-xs text-muted-foreground">
                         <PlayerAvatar name={market.playerOne} className="size-6" />
-                        <span className="truncate">{market.playerOne} 买入价</span>
+                        <span className="flex min-w-0 flex-col">
+                          <PlayerName name={market.playerOne} localizedName={market.playerLocalizedNames?.[0]} />
+                          <span>买入价</span>
+                        </span>
                       </dt>
                       <dd className="mt-1 font-mono text-lg font-semibold tabular-nums">{formatPercent(market.playerOneAsk)}</dd>
                     </div>
                     <div>
                       <dt className="flex min-w-0 items-center gap-1.5 truncate text-xs text-muted-foreground">
                         <PlayerAvatar name={market.playerTwo} className="size-6" />
-                        <span className="truncate">{market.playerTwo} 买入价</span>
+                        <span className="flex min-w-0 flex-col">
+                          <PlayerName name={market.playerTwo} localizedName={market.playerLocalizedNames?.[1]} />
+                          <span>买入价</span>
+                        </span>
                       </dt>
                       <dd className="mt-1 font-mono text-lg font-semibold tabular-nums">{formatPercent(market.playerTwoAsk)}</dd>
                     </div>

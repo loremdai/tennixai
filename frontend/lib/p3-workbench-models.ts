@@ -18,6 +18,7 @@ export type DecisionSummaryModel = {
   description: string
   reason: string
   selectionLabel: string
+  selectionLocalizedName: string | null
   modelProbability: number | null
   executableProbability: number | null
   edgePp: number | null
@@ -72,6 +73,7 @@ export type PaperModel = {
 export type ChartSideModel = {
   playerId: string
   name: string
+  localizedName: string | null
   modelProbability: number | null
   ask: number | null
   bid: number | null
@@ -266,6 +268,7 @@ export function toDecisionSummaryModel(
   snapshot: DecisionSnapshotDto,
   selectionName: string | null,
   now: Date,
+  selectionLocalizedName: string | null = null,
 ): DecisionSummaryModel {
   const state = deriveWorkbenchState(snapshot)
   const modelProbability =
@@ -324,6 +327,7 @@ export function toDecisionSummaryModel(
         ? (REASON_LABELS[snapshot.reason_code] ?? '系统暂未提供更多判断原因')
         : STATE_FALLBACK_REASON[state],
     selectionLabel: selectionName ?? '—',
+    selectionLocalizedName,
     modelProbability,
     executableProbability,
     edgePp,
@@ -497,10 +501,12 @@ export function toPaperModel(snapshot: DecisionSnapshotDto): PaperModel | null {
 export function toChartSides(
   snapshot: DecisionSnapshotDto,
   playerNameById: Record<string, string>,
+  playerLocalizedNameById: Record<string, string | null> = {},
 ): ChartSideModel[] {
   return snapshot.outcome_levels.map((level) => ({
     playerId: level.player_id,
     name: playerNameById[level.player_id] ?? level.player_id,
+    localizedName: playerLocalizedNameById[level.player_id] ?? null,
     modelProbability: snapshot.model_probabilities
       ? (snapshot.model_probabilities[level.player_id] ?? null)
       : null,

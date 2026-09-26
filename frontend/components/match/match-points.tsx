@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
+import { PlayerName } from '@/components/player-name'
 import type { PlayerDto, PointEventDto } from '@/lib/api/types'
 import { cn } from '@/lib/utils'
 
@@ -199,9 +200,13 @@ export function MatchPointsTimeline({
                                   className="flex items-center justify-between gap-2 px-3 py-2 text-sm"
                                 >
                                   <span className="flex min-w-0 items-center gap-2">
-                                    <span className="truncate font-medium">
-                                      {winner ? shortName(winner.name) : '胜者待定'}
-                                    </span>
+                                    {winner ? (
+                                      <PlayerName
+                                        name={shortName(winner.name)}
+                                        localizedName={winner.localized_name}
+                                        primaryClassName="font-medium"
+                                      />
+                                    ) : <span className="truncate font-medium">胜者待定</span>}
                                     {badges.map((badge) => (
                                       <Badge key={badge} variant="outline">
                                         {badge}

@@ -124,7 +124,10 @@ describe('MatchMomentumCard', () => {
       />,
     )
 
-    expect(screen.getByText('Sinner +16')).toBeVisible()
+    const momentum = document.getElementById('momentum')
+    expect(momentum).not.toBeNull()
+    const leaderLabel = momentum?.querySelector('p.flex.items-center.gap-1')
+    expect(leaderLabel).toHaveTextContent(/Sinner\s*\+16/)
     expect(screen.getByText('查看近期得分走势与关键分')).toBeVisible()
     expect(screen.getByText(/更新于 9月8日 18:00/)).toBeVisible()
     expect(screen.getByText('关键分标记')).toBeVisible()

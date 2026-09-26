@@ -1,6 +1,7 @@
 'use client'
 
 import { Badge } from '@/components/ui/badge'
+import { PlayerName } from '@/components/player-name'
 import type { MatchStatisticDto, PlayerDto, PointEventDto } from '@/lib/api/types'
 import {
   formatAsOf,
@@ -145,9 +146,16 @@ export function MatchStatisticsCard({
                 className="rounded-md bg-muted/30 px-2 py-1 font-mono text-xs"
                 title={`${point.score_after.points[0] ?? ''} - ${point.score_after.points[1] ?? ''}`}
               >
-                {shortName(
-                  point.winner_player_id === players[0].id ? players[0].name : players[1].name,
-                )}
+                <PlayerName
+                  name={shortName(
+                    point.winner_player_id === players[0].id ? players[0].name : players[1].name,
+                  )}
+                  localizedName={
+                    point.winner_player_id === players[0].id
+                      ? players[0].localized_name
+                      : players[1].localized_name
+                  }
+                />
               </li>
             ))}
           </ol>

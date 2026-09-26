@@ -83,6 +83,7 @@ export type HomePulseRow = {
   id: string
   priority: 'position' | 'sell' | 'buy_live' | 'buy_upcoming' | 'wait'
   match: string
+  playerLocalizedNames?: [string | null, string | null] | null
   tournament: string
   phase: '直播' | '即将开始' | '已完赛'
   modelProbability: number
@@ -122,6 +123,8 @@ export type OpportunityPreview = {
   tournament: string
   phase: MatchPhase
   selection: string
+  selectionLocalizedName?: string | null
+  playerLocalizedNames?: [string | null, string | null] | null
   modelProbability: number
   executableProbability: number
   edgePp: number
@@ -143,6 +146,7 @@ export type MarketListingPreview = {
   state: 'no_bet' | 'market_only'
   playerOne: string
   playerTwo: string
+  playerLocalizedNames?: [string | null, string | null] | null
   playerOneAsk: number
   playerTwoAsk: number
   spread: number
@@ -159,6 +163,8 @@ export type PaperLedgerPreview = {
   match: string
   tournament: string
   direction: string
+  directionLocalizedName?: string | null
+  playerLocalizedNames?: [string | null, string | null] | null
   state: 'entry_pending' | 'hold' | 'exit_pending' | 'exited' | 'missed' | 'settled'
   cost: number
   shares: number
@@ -438,6 +444,7 @@ const pulseRows: HomePulseRow[] = [
     id: 'pulse-position',
     priority: 'position',
     match: 'Jannik Sinner vs Carlos Alcaraz',
+    playerLocalizedNames: ['扬尼克·辛纳', '卡洛斯·阿尔卡拉斯'],
     tournament: 'ATP Finals · 半决赛',
     phase: '直播',
     modelProbability: 0.64,
@@ -452,6 +459,7 @@ const pulseRows: HomePulseRow[] = [
     id: 'pulse-buy-live',
     priority: 'buy_live',
     match: 'Aryna Sabalenka vs Coco Gauff',
+    playerLocalizedNames: ['阿丽娜·萨巴伦卡', '科科·高芙'],
     tournament: 'WTA Finals · 半决赛',
     phase: '直播',
     modelProbability: 0.671,
@@ -466,6 +474,7 @@ const pulseRows: HomePulseRow[] = [
     id: 'pulse-wait-upcoming',
     priority: 'wait',
     match: 'Qinwen Zheng vs Elena Rybakina',
+    playerLocalizedNames: ['郑钦文', '埃琳娜·莱巴金娜'],
     tournament: 'WTA Finals · 小组赛',
     phase: '即将开始',
     modelProbability: 0.55,
@@ -508,9 +517,11 @@ export const opportunityFixtures: OpportunityPreview[] = [
   {
     id: 'opp-sinner',
     match: 'Jannik Sinner vs Carlos Alcaraz',
+    playerLocalizedNames: ['扬尼克·辛纳', '卡洛斯·阿尔卡拉斯'],
     tournament: 'ATP Finals · 半决赛',
     phase: 'live',
-    selection: 'Sinner 胜出',
+    selection: 'Jannik Sinner',
+    selectionLocalizedName: '扬尼克·辛纳',
     modelProbability: 0.64,
     executableProbability: 0.504,
     edgePp: 13.6,
@@ -523,9 +534,11 @@ export const opportunityFixtures: OpportunityPreview[] = [
   {
     id: 'opp-sabalenka',
     match: 'Aryna Sabalenka vs Coco Gauff',
+    playerLocalizedNames: ['阿丽娜·萨巴伦卡', '科科·高芙'],
     tournament: 'WTA Finals · 半决赛',
     phase: 'live',
-    selection: 'Sabalenka 胜出',
+    selection: 'Aryna Sabalenka',
+    selectionLocalizedName: '阿丽娜·萨巴伦卡',
     modelProbability: 0.671,
     executableProbability: 0.596,
     edgePp: 7.5,
@@ -538,9 +551,11 @@ export const opportunityFixtures: OpportunityPreview[] = [
   {
     id: 'opp-zheng',
     match: 'Qinwen Zheng vs Elena Rybakina',
+    playerLocalizedNames: ['郑钦文', '埃琳娜·莱巴金娜'],
     tournament: 'WTA Finals · 小组赛',
     phase: 'upcoming',
-    selection: 'Zheng 胜出',
+    selection: 'Qinwen Zheng',
+    selectionLocalizedName: '郑钦文',
     modelProbability: 0.55,
     executableProbability: 0.572,
     edgePp: -2.2,
@@ -562,8 +577,9 @@ export const marketListingFixtures: MarketListingPreview[] = [
     phase: 'live',
     covered: true,
     state: 'no_bet',
-    playerOne: 'Sinner',
-    playerTwo: 'Alcaraz',
+    playerOne: 'Jannik Sinner',
+    playerTwo: 'Carlos Alcaraz',
+    playerLocalizedNames: ['扬尼克·辛纳', '卡洛斯·阿尔卡拉斯'],
     playerOneAsk: 0.504,
     playerTwoAsk: 0.508,
     spread: 0.012,
@@ -583,8 +599,9 @@ export const marketListingFixtures: MarketListingPreview[] = [
     phase: 'upcoming',
     covered: true,
     state: 'no_bet',
-    playerOne: 'Zheng',
-    playerTwo: 'Rybakina',
+    playerOne: 'Qinwen Zheng',
+    playerTwo: 'Elena Rybakina',
+    playerLocalizedNames: ['郑钦文', '埃琳娜·莱巴金娜'],
     playerOneAsk: 0.572,
     playerTwoAsk: 0.447,
     spread: 0.019,
@@ -604,8 +621,9 @@ export const marketListingFixtures: MarketListingPreview[] = [
     phase: 'live',
     covered: false,
     state: 'market_only',
-    playerOne: 'Spizzirri',
-    playerTwo: 'Bergs',
+    playerOne: 'Eliot Spizzirri',
+    playerTwo: 'Zizou Bergs',
+    playerLocalizedNames: ['埃利奥特·斯皮齐里', '齐祖·贝尔赫斯'],
     playerOneAsk: 0.481,
     playerTwoAsk: 0.542,
     spread: 0.023,
@@ -625,8 +643,8 @@ export const marketListingFixtures: MarketListingPreview[] = [
     phase: 'upcoming',
     covered: false,
     state: 'market_only',
-    playerOne: 'Tanaka',
-    playerTwo: 'Novak',
+    playerOne: 'Maya Tanaka',
+    playerTwo: 'Clara Novak',
     playerOneAsk: 0.461,
     playerTwoAsk: 0.566,
     spread: 0.027,
@@ -665,7 +683,9 @@ export const openPaperFixtures: PaperLedgerPreview[] = [
     id: 'paper-open',
     match: 'Jannik Sinner vs Carlos Alcaraz',
     tournament: 'ATP Finals · 半决赛',
-    direction: 'Sinner 胜出',
+    direction: 'Jannik Sinner',
+    directionLocalizedName: '扬尼克·辛纳',
+    playerLocalizedNames: ['扬尼克·辛纳', '卡洛斯·阿尔卡拉斯'],
     state: 'hold',
     cost: 10,
     shares: 19.84,
@@ -680,7 +700,9 @@ export const openPaperFixtures: PaperLedgerPreview[] = [
     id: 'paper-pending',
     match: 'Aryna Sabalenka vs Coco Gauff',
     tournament: 'WTA Finals · 半决赛',
-    direction: 'Sabalenka 胜出',
+    direction: 'Aryna Sabalenka',
+    directionLocalizedName: '阿丽娜·萨巴伦卡',
+    playerLocalizedNames: ['阿丽娜·萨巴伦卡', '科科·高芙'],
     state: 'entry_pending',
     cost: 10,
     shares: 0,
@@ -695,7 +717,9 @@ export const openPaperFixtures: PaperLedgerPreview[] = [
     id: 'paper-resolution',
     match: 'Qinwen Zheng vs Elena Rybakina',
     tournament: 'WTA Finals · 小组赛',
-    direction: 'Zheng 胜出',
+    direction: 'Qinwen Zheng',
+    directionLocalizedName: '郑钦文',
+    playerLocalizedNames: ['郑钦文', '埃琳娜·莱巴金娜'],
     state: 'exit_pending',
     cost: 10,
     shares: 18.52,
@@ -713,7 +737,9 @@ export const terminalPaperFixtures: PaperLedgerPreview[] = [
     id: 'paper-exited',
     match: 'Jannik Sinner vs Carlos Alcaraz',
     tournament: 'ATP Finals · 半决赛',
-    direction: 'Sinner 胜出',
+    direction: 'Jannik Sinner',
+    directionLocalizedName: '扬尼克·辛纳',
+    playerLocalizedNames: ['扬尼克·辛纳', '卡洛斯·阿尔卡拉斯'],
     state: 'exited',
     cost: 10,
     shares: 19.84,
@@ -728,7 +754,9 @@ export const terminalPaperFixtures: PaperLedgerPreview[] = [
     id: 'paper-missed',
     match: 'Qinwen Zheng vs Elena Rybakina',
     tournament: 'WTA Finals · 小组赛',
-    direction: 'Zheng 胜出',
+    direction: 'Qinwen Zheng',
+    directionLocalizedName: '郑钦文',
+    playerLocalizedNames: ['郑钦文', '埃琳娜·莱巴金娜'],
     state: 'missed',
     cost: 10,
     shares: 0,
@@ -743,7 +771,9 @@ export const terminalPaperFixtures: PaperLedgerPreview[] = [
     id: 'paper-settled-positive',
     match: 'Aryna Sabalenka vs Coco Gauff',
     tournament: 'WTA Finals · 半决赛',
-    direction: 'Sabalenka 胜出',
+    direction: 'Aryna Sabalenka',
+    directionLocalizedName: '阿丽娜·萨巴伦卡',
+    playerLocalizedNames: ['阿丽娜·萨巴伦卡', '科科·高芙'],
     state: 'settled',
     cost: 10,
     shares: 17.24,

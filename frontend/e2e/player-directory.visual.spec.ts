@@ -33,7 +33,7 @@ const states: Array<[name: string, path: string, ready: (page: Page) => Promise<
     'players-profile',
     '/players/plr_atp_ben_shelton?preview=1',
     async (page) => {
-      await page.getByRole('heading', { level: 1, name: 'Ben Shelton' }).waitFor()
+      await page.getByRole('heading', { level: 1, name: /Ben Shelton/ }).waitFor()
     },
   ],
 ]

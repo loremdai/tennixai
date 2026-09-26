@@ -3,6 +3,7 @@ import { ArrowRight } from 'lucide-react'
 
 import { DecisionStatusBadge } from '@/components/p3/decision-status'
 import { PlayerAvatar } from '@/components/player-avatar'
+import { PlayerName } from '@/components/player-name'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 
@@ -11,7 +12,9 @@ export type PaperRowData = {
   match: string
   tournament: string
   direction: string
+  directionLocalizedName?: string | null
   playerNames?: [string, string] | null
+  playerLocalizedNames?: [string | null, string | null] | null
   playerImages?: [string | null, string | null] | null
   state: 'entry_pending' | 'hold' | 'exit_pending' | 'exit_missed' | 'exited' | 'missed' | 'settled'
   cost: number
@@ -54,11 +57,22 @@ export function PaperRow({ record }: { record: PaperRowData }) {
           <div className="col-span-2 min-w-0 md:col-span-1">
             <div className="flex min-w-0 items-center gap-2">
               <PlayerAvatar name={record.playerNames?.[0] ?? record.match} imageUrl={record.playerImages?.[0]} className="size-8" />
-              <h3 className="truncate font-semibold">{record.match}</h3>
+              <h3 className="flex min-w-0 items-center gap-1 font-semibold">
+                {record.playerNames ? (
+                  <>
+                    <PlayerName name={record.playerNames[0]} localizedName={record.playerLocalizedNames?.[0]} className="min-w-0" />
+                    <span className="shrink-0 text-xs text-muted-foreground">vs.</span>
+                    <PlayerName name={record.playerNames[1]} localizedName={record.playerLocalizedNames?.[1]} className="min-w-0" />
+                  </>
+                ) : record.match}
+              </h3>
               <PlayerAvatar name={record.playerNames?.[1] ?? record.match} imageUrl={record.playerImages?.[1]} className="size-8" />
             </div>
             <p className="mt-1 truncate text-sm text-muted-foreground">{record.tournament}</p>
-            <p className="mt-2 text-xs font-medium text-primary">方向：{record.direction}</p>
+            <p className="mt-2 flex items-center gap-1 text-xs font-medium text-primary">
+              <span>方向：</span>
+              <PlayerName name={record.direction} localizedName={record.directionLocalizedName} />
+            </p>
           </div>
           <dl><dt className="text-xs text-muted-foreground">{amountLabel}</dt><dd className="mt-1 font-mono font-semibold">{amountValue}</dd></dl>
           <dl><dt className="text-xs text-muted-foreground">{sharesLabel}</dt><dd className="mt-1 font-mono text-lg font-semibold tabular-nums">{sharesValue}</dd></dl>

@@ -1,4 +1,5 @@
 import { MatchResultCard } from '@/components/home/home-match-result-card'
+import { PlayerName } from '@/components/player-name'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import type { PlayerSeasonRecordDto, StructuredData } from '@/lib/api/types'
@@ -87,7 +88,12 @@ export function HomePlayerHistory({
             data-testid="player-history-section"
           >
             <header className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-pretty text-base font-semibold">{heading}</h3>
+              <h3 className="text-pretty text-base font-semibold">
+                <PlayerName
+                  name={history.player.name}
+                  localizedName={history.player.localized_name}
+                />
+              </h3>
               <Badge variant="outline">{scopeLabel}</Badge>
             </header>
             {history.scope === 'season' ? (

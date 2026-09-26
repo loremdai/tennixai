@@ -3,6 +3,7 @@ import { ArrowRight, Radar, ShieldCheck } from 'lucide-react'
 
 import { DecisionStatusBadge, decisionStateLabels } from '@/components/p3/decision-status'
 import { PlayerAvatar } from '@/components/player-avatar'
+import { PlayerName } from '@/components/player-name'
 import {
   opportunityFixtures,
   splitPreviewMatchPlayers,
@@ -67,13 +68,21 @@ export function OpportunitiesView({ state }: { state: MarketsPreviewState }) {
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="flex min-w-0 items-center gap-2">
                         <PlayerAvatar name={playerOne} className="size-7" />
-                        <h3 className="truncate font-semibold">{opportunity.match}</h3>
+                        <h3 className="flex min-w-0 items-center gap-1 font-semibold">
+                          <PlayerName name={playerOne} localizedName={opportunity.playerLocalizedNames?.[0]} className="min-w-0" />
+                          <span className="shrink-0 text-xs text-muted-foreground">vs.</span>
+                          <PlayerName name={playerTwo} localizedName={opportunity.playerLocalizedNames?.[1]} className="min-w-0" />
+                        </h3>
                         <PlayerAvatar name={playerTwo} className="size-7" />
                       </div>
                       <Badge variant="outline">{opportunity.phase === 'live' ? '直播' : '即将开始'}</Badge>
                     </div>
                     <p className="mt-1 truncate text-sm text-muted-foreground">{opportunity.tournament}</p>
-                    <p className="mt-2 text-xs font-medium text-primary">方向：{opportunity.selection}</p>
+                    <p className="mt-2 flex items-center gap-1 text-xs font-medium text-primary">
+                      <span>方向：</span>
+                      <PlayerName name={opportunity.selection} localizedName={opportunity.selectionLocalizedName} />
+                      <span>胜出</span>
+                    </p>
                   </div>
 
                   <dl>

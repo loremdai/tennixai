@@ -179,6 +179,7 @@ export function PlayerProfilePage({
         <PlayerResults
           key={`${scenario.profile.id}-results`}
           playerName={scenario.profile.name}
+          playerLocalizedName={scenario.profile.nameZh}
           results={scenario.results}
           historyState={historyState}
           season={season}

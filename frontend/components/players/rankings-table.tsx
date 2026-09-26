@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Minus } from 'lucide-rea
 
 import { PlayerCountry } from '@/components/player-country'
 import { PlayerAvatar } from '@/components/player-avatar'
+import { PlayerName } from '@/components/player-name'
 import type {
   PlayerDirectoryEntry,
   RankMovement,
@@ -110,8 +111,11 @@ export function RankingsTable({
                     <div className="flex min-w-0 items-center gap-3">
                       <PlayerAvatar name={player.name} imageUrl={player.avatarUrl} className="size-10" />
                       <div className="min-w-0">
-                        <p className="truncate font-medium text-foreground">{player.name}</p>
-                        {player.nameZh ? <p className="mt-0.5 truncate text-xs text-muted-foreground">{player.nameZh}</p> : null}
+                        <PlayerName
+                          name={player.name}
+                          localizedName={player.nameZh}
+                          className="font-medium text-foreground"
+                        />
                       </div>
                     </div>
                     <div className="flex items-center gap-2 text-sm">

@@ -277,6 +277,51 @@ async function askQuestion(question: string) {
 }
 
 describe('HomePage slate', () => {
+  it('shows the featured player English name first with Chinese underneath', async () => {
+    const match = {
+      ...upcomingDto,
+      players: [
+        { ...upcomingDto.players[0], localized_name: '扬尼克·辛纳' },
+        { ...upcomingDto.players[1], localized_name: '卡洛斯·阿尔卡拉斯' },
+      ] as MatchDto['players'],
+    }
+    getMatchCatalogMock.mockImplementation(async (status: 'live' | 'upcoming') =>
+      makeCatalog(status, status === 'live' ? [] : [match]),
+    )
+
+    render(<HomePage />)
+
+    const featured = screen.getByRole('heading', { name: '焦点比赛' }).closest('[data-slot="card"]') as HTMLElement
+    expect(await within(featured).findByText('Jannik Sinner')).toBeVisible()
+    expect(within(featured).getByText('扬尼克·辛纳')).toBeVisible()
+  })
+
+  it('shows localized names under compact English names in live and upcoming rows', async () => {
+    const localize = (match: MatchDto): MatchDto => ({
+      ...match,
+      players: match.players.map((player, index) => ({
+        ...player,
+        localized_name: index === 0 ? '扬尼克·辛纳' : player.localized_name,
+      })) as MatchDto['players'],
+    })
+    getMatchCatalogMock.mockImplementation(async (status: 'live' | 'upcoming') =>
+      status === 'live'
+        ? makeCatalog('live', [localize(liveDto)])
+        : makeCatalog('upcoming', [localize(upcomingDto)]),
+    )
+
+    render(<HomePage />)
+
+    const live = await screen.findByRole('region', { name: '正在直播' })
+    const liveCard = within(live).getByRole('link', { name: /打开 Sinner 对阵/ })
+    expect(within(liveCard).getByText('Sinner')).toBeVisible()
+    expect(within(liveCard).getByText('扬尼克·辛纳')).toBeVisible()
+
+    const upcoming = screen.getByRole('region', { name: '近期赛程' })
+    expect(within(upcoming).getByText('Sinner')).toBeVisible()
+    expect(within(upcoming).getByText('扬尼克·辛纳')).toBeVisible()
+  })
+
   it('shows tiebreak points alongside each player’s set score', async () => {
     getMatchCatalogMock.mockImplementation(async (status: 'live' | 'upcoming') =>
       makeCatalog(
@@ -777,18 +822,41 @@ describe('HomePage chat', () => {
     await askQuestion('Wang 最近战绩如何？')
 
     expect(await screen.findByText('多位候选球员，请选择')).toBeVisible()
-    expect(screen.getByRole('link', { name: /Xinyu Wang（王欣瑜）/ })).toHaveAttribute(
-      'href',
-      '/players/ply_wang_a',
-    )
-    expect(screen.getByRole('link', { name: /Xiyu Wang（王曦雨）/ })).toHaveAttribute(
-      'href',
-      '/players/ply_wang_b',
-    )
-    expect(screen.getByRole('link', { name: /Xinyu Wang（王欣瑜）/ })).toHaveTextContent('中国')
+    const xinyuCandidate = screen.getByRole('link', { name: /Xinyu Wang/ })
+    const xiyuCandidate = screen.getByRole('link', { name: /Xiyu Wang/ })
+    expect(xinyuCandidate).toHaveAttribute('href', '/players/ply_wang_a')
+    expect(xiyuCandidate).toHaveAttribute('href', '/players/ply_wang_b')
+    expect(within(xinyuCandidate).getByText('Xinyu Wang')).toBeVisible()
+    expect(within(xinyuCandidate).getByText('王欣瑜')).toBeVisible()
+    expect(within(xinyuCandidate).getByText('中国')).toBeVisible()
     expect(screen.getAllByText('中国')).toHaveLength(2)
     expect(screen.getAllByRole('img', { name: '中国国旗' })).toHaveLength(2)
     expect(screen.queryByText('chn')).toBeNull()
+  })
+
+  it('renders structured match names separately in the answer title', async () => {
+    const match = {
+      ...upcomingDto,
+      players: [
+        { ...upcomingDto.players[0], localized_name: '扬尼克·辛纳' },
+        { ...upcomingDto.players[1], localized_name: '卡洛斯·阿尔卡拉斯' },
+      ] as MatchDto['players'],
+    }
+    mockStream({
+      data: { kind: 'matches', matches: [match] },
+      text: '已整理比赛信息。',
+    })
+    render(<HomePage />)
+    await screen.findByText('Jannik Sinner')
+
+    await askQuestion('Sinner 的比赛信息是什么？')
+
+    const answer = screen.getByText('已整理比赛信息。').closest('article')!
+    const title = within(answer).getByRole('heading')
+    expect(within(title).getByText('Sinner')).toBeVisible()
+    expect(within(title).getByText('扬尼克·辛纳')).toBeVisible()
+    expect(within(title).getByText('Alcaraz')).toBeVisible()
+    expect(within(title).getByText('卡洛斯·阿尔卡拉斯')).toBeVisible()
   })
 
   it('renders broad historical unsupported without a card', async () => {
@@ -931,7 +999,7 @@ describe('HomePage chat', () => {
 })
 
 describe('HomePage player history', () => {
-  it('renders one history result with the bilingual player·scope title', async () => {
+  it('renders one history result with structured bilingual player names', async () => {
     mockStream({
       dataItems: [
         playerHistoryData({ player: sinnerPlayer, scope: 'last' }, [finishedHistoryDto]),
@@ -943,11 +1011,19 @@ describe('HomePage player history', () => {
 
     await askQuestion('辛纳上一次比赛是什么时候？')
 
-    expect(
-      await screen.findByRole('heading', { name: 'Jannik Sinner（辛纳） · 上一场比赛' }),
-    ).toBeVisible()
+    const answerHeading = await screen.findByRole('heading', { name: /上一场比赛/ })
+    expect(within(answerHeading).getByText('Jannik Sinner')).toBeVisible()
+    expect(within(answerHeading).getByText('辛纳')).toBeVisible()
     const sections = screen.getAllByTestId('player-history-section')
     expect(sections).toHaveLength(1)
+    const historySection = sections[0]
+    const historyHeading = within(historySection).getByRole('heading', { name: /Jannik Sinner/ })
+    expect(within(historyHeading).getByText('Jannik Sinner')).toBeVisible()
+    expect(within(historyHeading).getByText('辛纳')).toBeVisible()
+    const resultCard = within(historySection).getByTestId('home-match-finished')
+    const resultHeading = within(resultCard).getByRole('heading')
+    expect(within(resultHeading).getByText('Sinner')).toBeVisible()
+    expect(within(resultHeading).getByText('辛纳')).toBeVisible()
     expect(
       screen.getByRole('link', { name: /打开比赛：Sinner 对阵 One/ }),
     ).toHaveAttribute('href', '/matches/mat_hist_1')
@@ -965,9 +1041,9 @@ describe('HomePage player history', () => {
     await screen.findByText('Jannik Sinner')
     await askQuestion('Sinner 昨天赢了吗？')
 
-    expect(
-      await screen.findByRole('heading', { name: 'Jannik Sinner（辛纳） · 昨日赛果' }),
-    ).toBeVisible()
+    const answerHeading = await screen.findByRole('heading', { name: /昨日赛果/ })
+    expect(within(answerHeading).getByText('Jannik Sinner')).toBeVisible()
+    expect(within(answerHeading).getByText('辛纳')).toBeVisible()
     expect(screen.getByText('该范围暂无赛果信息')).toBeVisible()
     expect(screen.queryByText('没有符合条件的比赛')).toBeNull()
   })
@@ -1027,9 +1103,9 @@ describe('HomePage player history', () => {
 
     await askQuestion('郑钦文这个赛季战绩如何？')
 
-    expect(
-      await screen.findByRole('heading', { name: 'Qinwen Zheng（郑钦文） · 2026 赛季战绩' }),
-    ).toBeVisible()
+    const seasonHeading = await screen.findByRole('heading', { name: /2026 赛季战绩/ })
+    expect(within(seasonHeading).getByText('Qinwen Zheng')).toBeVisible()
+    expect(within(seasonHeading).getByText('郑钦文')).toBeVisible()
     const summary = screen.getByTestId('season-record-summary')
     expect(within(summary).getByText('30')).toBeVisible()
     expect(within(summary).getByText('5')).toBeVisible()
@@ -1061,9 +1137,9 @@ describe('HomePage player history', () => {
 
     await askQuestion('郑钦文 2024 赛季战绩如何？')
 
-    expect(
-      await screen.findByRole('heading', { name: 'Qinwen Zheng（郑钦文） · 2024 赛季战绩' }),
-    ).toBeVisible()
+    const seasonHeading = await screen.findByRole('heading', { name: /2024 赛季战绩/ })
+    expect(within(seasonHeading).getByText('Qinwen Zheng')).toBeVisible()
+    expect(within(seasonHeading).getByText('郑钦文')).toBeVisible()
     expect(screen.getByText('该赛季战绩暂不可用')).toBeVisible()
     expect(screen.queryByText('没有符合条件的比赛')).toBeNull()
   })

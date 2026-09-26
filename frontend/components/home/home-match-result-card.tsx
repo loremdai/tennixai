@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { ArrowRight, CheckCircle2, Clock3, Radio } from 'lucide-react'
 
 import { PlayerAvatar } from '@/components/player-avatar'
+import { PlayerName } from '@/components/player-name'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import {
@@ -37,8 +38,18 @@ export function MatchResultCard({
         <CardTitle>
           <div className="flex min-w-0 items-center gap-2">
             <PlayerAvatar name={match.playerDetails[0].name} imageUrl={match.playerDetails[0].avatarUrl} className="size-8" />
-            <h3 className="min-w-0 truncate text-pretty text-base">
-              {match.players[0]} <span className="text-muted-foreground">vs</span> {match.players[1]}
+            <h3 className="flex min-w-0 items-center gap-2 text-pretty text-base">
+              <PlayerName
+                name={match.players[0]}
+                localizedName={match.playerDetails[0].nameZh}
+                className="flex-1 font-medium"
+              />
+              <span className="shrink-0 text-muted-foreground">vs</span>
+              <PlayerName
+                name={match.players[1]}
+                localizedName={match.playerDetails[1].nameZh}
+                className="flex-1 font-medium"
+              />
             </h3>
             <PlayerAvatar name={match.playerDetails[1].name} imageUrl={match.playerDetails[1].avatarUrl} className="size-8" />
           </div>
@@ -65,11 +76,15 @@ export function MatchResultCard({
               <span>{match.freshnessLabel}</span>
             </div>
             <div className="flex flex-col gap-2">
-              {match.score.rows.map((row) => (
+              {match.score.rows.map((row, index) => (
                 <div key={row.player} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3">
                   <span className="flex min-w-0 items-center gap-2 font-medium">
                     {row.serving ? <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-label="发球方" /> : null}
-                    <span className="truncate">{row.player}</span>
+                    <PlayerName
+                      name={row.player}
+                      localizedName={match.playerDetails[index].nameZh}
+                      className="text-sm font-medium"
+                    />
                   </span>
                   <span className="font-mono text-sm text-muted-foreground tabular-nums">{row.sets.join('  ')}</span>
                   <span className="min-w-7 text-right font-mono text-lg font-semibold text-primary tabular-nums">{row.points}</span>

@@ -3,6 +3,7 @@ import { ChevronRight, SearchX } from 'lucide-react'
 
 import { PlayerCountry } from '@/components/player-country'
 import { PlayerAvatar } from '@/components/player-avatar'
+import { PlayerName } from '@/components/player-name'
 import type { PlayerDirectoryEntry } from '@/components/players/player-preview-data'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -54,11 +55,14 @@ export function PlayerSearchResults({
                   <PlayerAvatar name={player.name} imageUrl={player.avatarUrl} className="size-12" />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate font-medium text-foreground">{player.name}</p>
+                      <PlayerName
+                        name={player.name}
+                        localizedName={player.nameZh}
+                        className="font-medium text-foreground"
+                      />
                       {player.tour ? <Badge variant="outline">{player.tour}</Badge> : null}
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                      {player.nameZh ? <span>{player.nameZh}</span> : null}
                       <span className="inline-flex items-center gap-1.5">
                         <PlayerCountry player={player} />
                         {player.countryName}

@@ -3,6 +3,7 @@ import { ArrowRight } from 'lucide-react'
 
 import { DecisionStatusBadge } from '@/components/p3/decision-status'
 import { PlayerAvatar } from '@/components/player-avatar'
+import { PlayerName } from '@/components/player-name'
 import type { DecisionOverlay, DecisionState } from '@/components/p3/p3-preview-data'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -26,6 +27,7 @@ export type MarketRowData = {
   quoteLabel: string
   playerOne: string
   playerTwo: string
+  playerLocalizedNames?: [string | null, string | null] | null
   playerImages?: [string | null, string | null] | null
   playerOneAsk: number | null
   playerTwoAsk: number | null
@@ -77,14 +79,20 @@ export function MarketRow({ market }: { market: MarketRowData }) {
           <div>
             <dt className="flex min-w-0 items-center gap-2 truncate text-xs text-muted-foreground">
               <PlayerAvatar name={market.playerOne} imageUrl={market.playerImages?.[0]} className="size-7" />
-              <span className="truncate">{market.playerOne} 胜出报价</span>
+              <span className="flex min-w-0 flex-col">
+                <PlayerName name={market.playerOne} localizedName={market.playerLocalizedNames?.[0]} />
+                <span>胜出报价</span>
+              </span>
             </dt>
             <dd className="mt-1 font-mono text-lg font-semibold tabular-nums">{formatPercent(market.playerOneAsk)}</dd>
           </div>
           <div>
             <dt className="flex min-w-0 items-center gap-2 truncate text-xs text-muted-foreground">
               <PlayerAvatar name={market.playerTwo} imageUrl={market.playerImages?.[1]} className="size-7" />
-              <span className="truncate">{market.playerTwo} 胜出报价</span>
+              <span className="flex min-w-0 flex-col">
+                <PlayerName name={market.playerTwo} localizedName={market.playerLocalizedNames?.[1]} />
+                <span>胜出报价</span>
+              </span>
             </dt>
             <dd className="mt-1 font-mono text-lg font-semibold tabular-nums">{formatPercent(market.playerTwoAsk)}</dd>
           </div>

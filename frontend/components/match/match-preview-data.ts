@@ -5,6 +5,7 @@ import type { MatchHighlight, MatchStatus } from './match-data'
 export type PreviewPlayer = {
   id: string
   name: string
+  nameZh: string | null
   shortName: string
   country: string
   countryCode: string
@@ -25,6 +26,7 @@ export const previewPlayers: [PreviewPlayer, PreviewPlayer] = [
   {
     id: 'jannik-sinner',
     name: 'Jannik Sinner',
+    nameZh: '扬尼克·辛纳',
     shortName: 'Sinner',
     country: '意大利',
     countryCode: 'ITA',
@@ -35,6 +37,7 @@ export const previewPlayers: [PreviewPlayer, PreviewPlayer] = [
   {
     id: 'carlos-alcaraz',
     name: 'Carlos Alcaraz',
+    nameZh: '卡洛斯·阿尔卡拉斯',
     shortName: 'Alcaraz',
     country: '西班牙',
     countryCode: 'ESP',
@@ -146,6 +149,7 @@ export function buildPreviewMatch(status: MatchStatus): MatchViewModel {
       {
         id: previewPlayers[0].id,
         name: previewPlayers[0].name,
+        nameZh: previewPlayers[0].nameZh,
         shortName: previewPlayers[0].shortName,
         countryCode: previewPlayers[0].countryCode,
         countryName: previewPlayers[0].country,
@@ -155,6 +159,7 @@ export function buildPreviewMatch(status: MatchStatus): MatchViewModel {
       {
         id: previewPlayers[1].id,
         name: previewPlayers[1].name,
+        nameZh: previewPlayers[1].nameZh,
         shortName: previewPlayers[1].shortName,
         countryCode: previewPlayers[1].countryCode,
         countryName: previewPlayers[1].country,

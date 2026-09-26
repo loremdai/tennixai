@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { PlayerCountry } from '@/components/player-country'
 import { PlayerAvatar } from '@/components/player-avatar'
+import { PlayerName } from '@/components/player-name'
 import {
   Card,
   CardAction,
@@ -86,9 +87,11 @@ function PlayerSummary({
       <PlayerAvatar name={player.name} imageUrl={player.avatarUrl} className="size-20" />
 
       <div className="min-w-0">
-        <p className="text-pretty text-lg font-semibold leading-tight tracking-tight sm:text-2xl lg:text-3xl">
-          {player.name}
-        </p>
+        <PlayerName
+          name={player.name}
+          localizedName={player.nameZh}
+          className="text-lg font-semibold tracking-tight sm:text-2xl lg:text-3xl"
+        />
         <p className="mt-1 text-sm text-muted-foreground">
           {player.ranking !== null ? `世界排名 #${player.ranking}` : '世界排名暂未提供'}
         </p>
@@ -187,6 +190,7 @@ function LiveScore({
   const rows = scoreRows(match, score)
   const setCount = score.sets.length
   const currentSetNumber = preview ? previewMatchMeta.currentSet : match.currentSetNumber
+  const server = match.players.find((player) => player.id === knownServerPlayerId(match))
 
   return (
     <div
@@ -231,7 +235,7 @@ function LiveScore({
                 <span className="flex items-center gap-2">
                   <PlayerAvatar name={row.player.name} imageUrl={row.player.avatarUrl} className="size-7" />
                   {row.serving ? <span className="size-2 rounded-full bg-primary" aria-label="发球方" /> : null}
-                  {row.player.shortName}
+                  <PlayerName name={row.player.name} localizedName={row.player.nameZh} className="min-w-0" primaryClassName="text-sm font-medium" />
                 </span>
               </th>
               {row.sets.map((games, index) => (
@@ -246,13 +250,14 @@ function LiveScore({
       </table>
 
       <div className="flex flex-wrap items-center justify-center gap-2 text-sm text-muted-foreground">
-        <span>
-          {knownServerPlayerId(match)
-            ? `${match.players.find((player) => player.id === knownServerPlayerId(match))?.shortName ?? ''} 发球`
-            : match.visualStatus === 'upcoming'
-              ? '开赛前未产生发球方'
-              : '发球方暂未提供'}
-        </span>
+        {server ? (
+          <span className="inline-flex items-center gap-1">
+            <PlayerName name={server.shortName} localizedName={server.nameZh} />
+            <span>发球</span>
+          </span>
+        ) : (
+          <span>{match.visualStatus === 'upcoming' ? '开赛前未产生发球方' : '发球方暂未提供'}</span>
+        )}
         <span aria-hidden="true">·</span>
         <span>当前局 {score.points[0] ?? '–'}–{score.points[1] ?? '–'}</span>
         {setCount > 0 ? (
@@ -304,7 +309,12 @@ function FinishedScore({
     >
       <div className="flex items-center justify-center gap-2 text-sm font-medium text-primary">
         <Trophy aria-hidden="true" className="size-4" />
-        {winner ? `${winner.shortName} 获胜` : '比赛已结束'} · {preview ? previewMatchMeta.finalDuration : match.freshnessLabel}
+        {winner ? (
+          <span className="inline-flex items-center gap-1">
+            <PlayerName name={winner.shortName} localizedName={winner.nameZh} />
+            <span>获胜</span>
+          </span>
+        ) : '比赛已结束'} · {preview ? previewMatchMeta.finalDuration : match.freshnessLabel}
       </div>
       <table className="w-full table-fixed text-center" aria-label="最终比赛比分">
         <caption className="sr-only">
@@ -324,7 +334,7 @@ function FinishedScore({
               <th scope="row" className="py-2 text-left font-sans text-sm font-medium">
                 <span className="flex items-center gap-2">
                   <PlayerAvatar name={row.player.name} imageUrl={row.player.avatarUrl} className="size-7" />
-                  {row.player.shortName}
+                  <PlayerName name={row.player.shortName} localizedName={row.player.nameZh} className="min-w-0" primaryClassName="text-sm font-medium" />
                 </span>
               </th>
               {row.sets.map((games, index) => (
