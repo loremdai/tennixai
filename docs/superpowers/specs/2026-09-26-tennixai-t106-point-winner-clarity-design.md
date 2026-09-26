@@ -5,7 +5,7 @@
 
 ## 问题与根因
 
-- API-Tennis 的逐分数据提供分数变化和逐分序号，没有一个可直接映射的逐分 winner 字段。
+- API-Tennis 的[官方 REST](https://api-tennis.com/documentation) 与 [WebSocket](https://api-tennis.com/documentation_websocket) 示例提供分数变化和逐分序号，没有一个可直接映射的逐分 winner 字段。
 - 后端仅在前后比分能确定只有一方得分时填充 `winner_player_id`。比分相同或变化矛盾时，保留 `null` 并记录 `winner_indeterminate`；这符合不猜数据的领域规则。
 - Match 逐分时间线把每个 `null` 都显示为“胜者待定”，使已发生但无法确认的记录看起来像尚未发生，还造成大量重复文案。
 

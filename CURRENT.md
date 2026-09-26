@@ -4,20 +4,21 @@
 
 **最后更新：** 2026-09-26（北京时间）
 
-**当前主任务：** T106 — 比赛详情逐分记录中未知得分者的诚实展示（`in_progress`）。
+**当前主任务：** 无。T106 已完成；后续任务尚未领取。
 
-**最近任务：** T106 — 比赛详情逐分记录中未知得分者的诚实展示（`in_progress`）；T105 — 全站球员英文主名/中文辅名统一（`done`），实现提交 `991b9f0`、`a44fc6e`。
+**最近任务：** T106 — 比赛详情逐分记录中未知得分者的诚实展示（`done`），领取 `919281f`、实现 `f7ea297`；T105 — 全站球员英文主名/中文辅名统一（`done`），实现提交 `991b9f0`、`a44fc6e`。
 
-**执行者 / 分支：** Codex / `main`；T106 起始 HEAD `b6ec415`，领取记录、规格和计划先行推送。保留工作区已有 P3 freshness 修改与未跟踪文件，未纳入本任务。
+**最近执行者 / 分支：** Codex / `main`；T106 起始 HEAD `b6ec415`，领取 `919281f`，实现 `f7ea297`；当前无活动执行者/分支。保留工作区已有 P3 freshness 修改与未跟踪文件，未纳入本任务。
 
 **运行手册与证据：** [T106 设计规格](docs/superpowers/specs/2026-09-26-tennixai-t106-point-winner-clarity-design.md)；[T106 实施计划](docs/superpowers/plans/2026-09-26-tennixai-t106-point-winner-clarity-implementation.md)；[本地真实运行手册](docs/runbooks/local-real-runtime.md)。
 
-## T106 比赛详情逐分记录中未知得分者的诚实展示（`in_progress`）
+## T106 比赛详情逐分记录中未知得分者的诚实展示（`done`）
 
-- **领取：** 2026-09-26 11:53 CST，Codex，`main`，起始 HEAD `b6ec415`；领取记录、规格和实施计划先行推送。
+- **领取/完成：** 2026-09-26 11:53 CST 领取，12:16 CST 完成；Codex，`main`，起始 HEAD `b6ec415`；领取记录 `919281f`，实现提交 `f7ea297`。
 - **根因：** API-Tennis 没有直接的逐分 winner 字段。后端只在比分变化可确定时填充 winner；无法判断时保留 null 和 `winner_indeterminate`。比赛详情把每个 null 都展示为“胜者待定”，把历史数据不确定误说成尚未发生并重复刷屏。
-- **范围：** 只改 MatchPointsTimeline 的未知状态文案及对应字段矩阵；未知行用中性横线并附可访问说明，整段时间线只提示一次。保留确定姓名、比分、顺序和分组。不改 provider 推断、API、存储、动量，不猜得分者，不发上游请求、不重启服务。
-- **验收：** 定向 Vitest 红绿回归、前端 TypeScript、diff check；结束后提交并推送 `origin/main`。已有 P3 修改及未跟踪文件保持原样且不纳入提交。
+- **实现：** 对 null 或无法映射到本场两名球员的 winner，逐分行显示横线，并给屏幕阅读器保留“得分者未能确认”；整段时间线只显示一次“部分逐分记录无法确认得分者”。已知球员、比分、顺序、分组、关键分及后端推断保持不变；字段完整性矩阵已同步更新。
+- **验证：** 本地规范快照样本 129 条逐分记录中 25 条无法确认得分者；新增回归在旧页面先红（多个重复“胜者待定”），修复后绿。前端 Vitest `41 files / 524 passed`、`tsc --noEmit`、`git diff --check` 通过。没有运行 build/Playwright 或浏览器新构建验收：本地整栈仍运行，工作区含未提交的 P3 backend 修改；为避免触碰 `.next` 或重启加载用户修改，没有重建/重启。未读取/输出 `.env`，无上游请求。
+- **工作区保护：** 既有 `backend/app/service.py` 修改及 `.codex/`、`.superpowers/`、`REALTIME_LATENCY_INVESTIGATION.md`、`backend/tests/test_p3_query_freshness.py`、`frontend/next-env.d.ts` 均保留且未纳入 T106 提交。
 - **规格/计划：** [T106 设计规格](docs/superpowers/specs/2026-09-26-tennixai-t106-point-winner-clarity-design.md)；[T106 实施计划](docs/superpowers/plans/2026-09-26-tennixai-t106-point-winner-clarity-implementation.md)。
 
 ## T105 全站球员英文主名/中文辅名统一（`done`）
@@ -194,8 +195,8 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
+| 2026-09-26 | `f7ea297` | T106 修复比赛逐分记录的误导性“胜者待定”：未知/无法匹配的胜者显示可访问横线，整段时间线只说明一次；前端 524 测试与 TypeScript 通过。 |
+| 2026-09-26 | `919281f` | T106 领取记录、根因、规格和实施计划先行推送；确认 API 无逐分 winner 字段，后端未知时保留 null，UI 重复“胜者待定”是呈现问题。 |
 | 2026-09-26 | `e47b5e1` | T103 真实运行验收关闭：整栈重启后同一历史比赛在球员历史与比赛详情 API/页面均显示逐盘局分和抢七分；2026 年 47 场、2025 年 64 场样本均无局分缺失，服务与同步健康。 |
 | 2026-09-26 | `b21869f` | 核实球员历史与比赛详情使用不同读取路径，但共用供应商比分解析器；赛季结果缓存仅在 API 进程内，重启可清掉旧缓存。 |
 | 2026-09-26 | `e47b5e1` | T103 前端抢七分展示贯通球员历史、比赛详情与首页；前端全量 499 passed、TypeScript 通过。真实运行进程早于修复提交，等待批准重启后核验。 |
-| 2026-09-26 | `321917d` | T103 已结束缺失比分按需修复：复用元数据缓存并走原 Reducer/存储/SSE 路径，纯比分修复跳过场地查询；API/Service/provider 142 passed，适配器兼容回归 90 passed。 |
-| 2026-09-26 | `02b614f` | T103 稀疏比分归并：空字段或缺失盘行不再覆盖已知值，按比赛/有序球员/盘号隔离；reducer 与 realtime worker 40 passed。 |
