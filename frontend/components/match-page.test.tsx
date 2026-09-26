@@ -200,7 +200,7 @@ describe('production match page', () => {
 
     render(<MatchPage matchId="mat_1" />)
 
-    expect(await screen.findByText('Jannik Sinner 对阵 Carlos Alcaraz')).toBeVisible()
+    expect(await screen.findByRole('heading', { level: 1, name: 'ATP Finals' })).toBeVisible()
     const statusBadge = document.querySelector('[role="status"]')
     expect(statusBadge?.textContent).toContain('即将开始')
     expect(screen.getByText('20:30')).toBeVisible()
@@ -215,7 +215,7 @@ describe('production match page', () => {
 
     render(<MatchPage matchId="mat_1" />)
 
-    await screen.findByText('Jannik Sinner 对阵 Carlos Alcaraz')
+    await screen.findByRole('heading', { level: 1, name: 'ATP Finals' })
     expect(screen.getByRole('img', { name: '意大利国旗' })).toBeVisible()
     expect(screen.getByRole('img', { name: '西班牙国旗' })).toBeVisible()
     expect(screen.getAllByText('ITA').length).toBeGreaterThan(0)
@@ -250,8 +250,8 @@ describe('production match page', () => {
     expect(badges.some((badge) => badge.textContent?.includes('直播'))).toBe(true)
     const server = document.getElementById('server-indicator')
     expect(server).not.toBeNull()
-    expect(server?.textContent).toContain('当前发球')
-    expect(screen.getAllByText('当前发球').length).toBeGreaterThan(0)
+    expect(server?.textContent).toContain('发球')
+    expect(screen.getAllByText('发球', { exact: true })).toHaveLength(1)
   })
 
   it('uses the provider current set when score rows are incomplete', async () => {
@@ -315,7 +315,7 @@ describe('production match page', () => {
 
     await screen.findAllByText('Jannik Sinner')
     expect(screen.queryAllByText('接发球')).toHaveLength(0)
-    expect(screen.getAllByText('发球方暂未提供')).toHaveLength(2)
+    expect(screen.getAllByText('发球方暂未提供')).toHaveLength(1)
   })
 
   it('does not invent a set label when a live snapshot has no set rows', async () => {
@@ -334,9 +334,11 @@ describe('production match page', () => {
     render(<MatchPage matchId="mat_1" />)
 
     await screen.findAllByText('Jannik Sinner')
-    expect(screen.getByText('当前局 15–0')).toBeVisible()
     expect(screen.queryAllByText(/第\s*0\s*盘/)).toHaveLength(0)
     expect(screen.queryByText(/第-盘|第\d+盘 -–-/)).toBeNull()
+    const liveTable = screen.getByRole('table', { name: '实时比赛比分' })
+    expect(within(liveTable).getByRole('columnheader', { name: '当前局' })).toBeVisible()
+    expect(within(liveTable).getByText('15')).toBeVisible()
   })
 
   it('maps finished hero state with winner', async () => {
@@ -361,7 +363,7 @@ describe('production match page', () => {
 
     render(<MatchPage matchId="mat_1" />)
 
-    expect(await screen.findByText('Jannik Sinner 击败 Carlos Alcaraz')).toBeVisible()
+    expect(await screen.findByRole('heading', { level: 1, name: 'ATP Finals' })).toBeVisible()
     expect(screen.getAllByText('胜者').length).toBeGreaterThan(0)
   })
 
@@ -393,8 +395,8 @@ describe('production match page', () => {
     render(<MatchPage matchId="mat_1" />)
 
     const heroTable = await screen.findByRole('table', { name: '最终比赛比分' })
-    expect(within(heroTable).getByText('7（7）')).toBeVisible()
-    expect(within(heroTable).getByText('6（5）')).toBeVisible()
+    expect(within(heroTable).getByText((_, element) => element?.textContent === '7（7）')).toBeVisible()
+    expect(within(heroTable).getByText((_, element) => element?.textContent === '6（5）')).toBeVisible()
     const detailTable = screen.getByRole('table', { name: '最终详细比分' })
     expect(within(detailTable).getByText('7（7）')).toBeVisible()
     expect(within(detailTable).getByText('6（5）')).toBeVisible()
