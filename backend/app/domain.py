@@ -115,6 +115,7 @@ class Player(FrozenModel):
     localized_name: str | None = None
     country_code: str | None = None
     ranking: int | None = None
+    image_url: str | None = None
 
     @model_validator(mode="before")
     @classmethod

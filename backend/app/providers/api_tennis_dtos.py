@@ -61,10 +61,12 @@ class MatchDto(VendorModel):
     event_date: str | None = None
     event_time: str | None = None
     event_first_player: str | None = None
+    event_first_player_logo: str | None = None
     first_player_key: int | str | None = None
     first_player_dp1_key: int | str | None = None
     first_player_dp2_key: int | str | None = None
     event_second_player: str | None = None
+    event_second_player_logo: str | None = None
     second_player_key: int | str | None = None
     second_player_dp1_key: int | str | None = None
     second_player_dp2_key: int | str | None = None

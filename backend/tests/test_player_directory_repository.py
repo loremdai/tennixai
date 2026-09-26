@@ -227,6 +227,27 @@ async def test_rankings_page_nested_player_rank_matches_snapshot_rank(
 
 
 @pytest.mark.asyncio
+async def test_player_photo_survives_ranking_refresh_and_empty_updates(
+    repository: MemoryPlayerDirectoryRepository,
+) -> None:
+    await repository.save_ranking_snapshot((entry("ply_photo", "Photo Player", Tour.ATP, 1),))
+
+    saved = await repository.upsert_player_images(
+        {"ply_photo": "https://api.api-tennis.com/player.png"}
+    )
+    await repository.save_ranking_snapshot(
+        (entry("ply_photo", "Photo Player", Tour.ATP, 2, fetched=NOW.replace(day=13)),)
+    )
+    await repository.upsert_player_images({"ply_photo": ""})
+    rankings, _ = await repository.get_rankings(
+        Tour.ATP, page=1, page_size=50, country_code=None
+    )
+
+    assert saved == 1
+    assert rankings[0].player.image_url == "https://api.api-tennis.com/player.png"
+
+
+@pytest.mark.asyncio
 async def test_get_current_ranking_ignores_a_player_omitted_from_latest_snapshot(
     repository: MemoryPlayerDirectoryRepository,
 ) -> None:

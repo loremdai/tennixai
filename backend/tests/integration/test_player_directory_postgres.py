@@ -184,6 +184,29 @@ async def test_rankings_page_bounded_to_top_200(database: Database) -> None:
 
 
 @pytest.mark.asyncio
+async def test_player_photo_persists_and_survives_ranking_refresh(database: Database) -> None:
+    repository = PostgresPlayerDirectoryRepository(database)
+    namespace = _namespace()
+    entry = _entry(namespace, 1, Tour.ATP, 1)
+    photo_url = "https://api.api-tennis.com/player-photo.jpg"
+    await repository.save_ranking_snapshot((entry,))
+
+    assert await repository.upsert_player_images({entry.player.id: photo_url}) == 1
+    assert await repository.upsert_player_images({entry.player.id: " "}) == 0
+
+    await repository.save_ranking_snapshot((entry,))
+    saved = await repository.get_player(entry.player.id)
+    rankings, _ = await repository.get_rankings(
+        Tour.ATP, page=1, page_size=50, country_code=None
+    )
+
+    assert saved is not None
+    assert saved.player.image_url == photo_url
+    ranked = next(player for player in rankings if player.player.id == entry.player.id)
+    assert ranked.player.image_url == photo_url
+
+
+@pytest.mark.asyncio
 async def test_postgres_rankings_player_uses_snapshot_rank_not_player_cache(
     database: Database,
 ) -> None:

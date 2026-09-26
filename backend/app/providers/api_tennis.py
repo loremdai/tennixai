@@ -338,6 +338,7 @@ async def map_player(
         # unavailable rather than guessing.
         country_code=None,
         ranking=None,
+        image_url=(dto.player_logo or "").strip() or None,
     )
 
 
@@ -412,12 +413,20 @@ async def map_match(
     )
     p1 = await map_player(
         identities,
-        PlayerDto(player_key=dto.first_player_key, player_name=dto.event_first_player),
+        PlayerDto(
+            player_key=dto.first_player_key,
+            player_name=dto.event_first_player,
+            player_logo=dto.event_first_player_logo,
+        ),
         f"fixture:{dto.event_key}:p1",
     )
     p2 = await map_player(
         identities,
-        PlayerDto(player_key=dto.second_player_key, player_name=dto.event_second_player),
+        PlayerDto(
+            player_key=dto.second_player_key,
+            player_name=dto.event_second_player,
+            player_logo=dto.event_second_player_logo,
+        ),
         f"fixture:{dto.event_key}:p2",
     )
     player_ids = (p1.id, p2.id)
@@ -958,6 +967,7 @@ class ApiTennisProvider:
             # `get_players.stats[].rank` is season- and discipline-specific;
             # it is not the current singles world ranking.
             ranking=None,
+            image_url=(dto.player_logo or "").strip() or None,
         )
 
     async def get_player_profile(self, player_id: str) -> PlayerProfileData:
@@ -979,6 +989,7 @@ class ApiTennisProvider:
                 or "Unknown player",
                 country_code=country_code_from_name(dto.player_country),
                 ranking=None,
+                image_url=(dto.player_logo or "").strip() or None,
             ),
             birth_date=parse_birthday(dto.player_bday),
             image_url=(dto.player_logo or "").strip() or None,

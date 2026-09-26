@@ -93,6 +93,7 @@ def _player_conflict_updates(statement, *, observed_at: datetime | None = None) 
         "localized_name": func.coalesce(
             statement.excluded.localized_name, PlayerRow.localized_name
         ),
+        "image_url": func.coalesce(statement.excluded.image_url, PlayerRow.image_url),
         "country_code": func.coalesce(
             PlayerRow.country_code, statement.excluded.country_code
         ),
@@ -274,6 +275,7 @@ class MatchSnapshotRepository:
                 name=(row.name if row and row.name else "Unknown player"),
                 localized_name=row.localized_name if row else None,
                 country_code=row.country_code if row else None,
+                image_url=row.image_url if row else None,
                 ranking=(
                     current_rankings[player_id].rank
                     if player_id in current_rankings
@@ -401,6 +403,7 @@ class MatchSnapshotRepository:
                         name=player.name,
                         localized_name=player.localized_name,
                         country_code=player.country_code,
+                        image_url=player.image_url,
                         ranking=None,
                     )
                     await session.execute(
@@ -813,6 +816,7 @@ class MatchCatalogRepository:
                 name=player.name,
                 localized_name=player.localized_name,
                 country_code=player.country_code,
+                image_url=player.image_url,
                 ranking=None,
                 last_seen_at=observed_at,
             )
@@ -965,6 +969,7 @@ class MatchCatalogRepository:
                 ),
                 localized_name=player_row.localized_name if player_row else None,
                 country_code=player_row.country_code if player_row else None,
+                image_url=player_row.image_url if player_row else None,
                 ranking=(
                     current_rankings[player_id].rank
                     if player_id in current_rankings

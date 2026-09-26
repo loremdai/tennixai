@@ -66,7 +66,6 @@ class DirectoryPlayer(FrozenModel):
     player: Player
     gender: Gender = Gender.UNKNOWN
     birth_date: date | None = None
-    image_url: str | None = None
 
 
 class AliasMatch(FrozenModel):

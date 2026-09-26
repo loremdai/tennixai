@@ -242,6 +242,46 @@ async def test_live_match_round_trips_with_internal_ids_only(
     assert listed == [expected]
 
 
+async def test_catalog_round_trips_player_photos_and_keeps_them_on_sparse_updates(
+    database: Database,
+) -> None:
+    catalog = MatchCatalogRepository(database)
+    match = _make_match(
+        status=MatchStatus.SCHEDULED, scheduled_at=NOW + timedelta(hours=3)
+    )
+    photo_urls = (
+        "https://api.api-tennis.com/player-one.jpg",
+        "https://api.api-tennis.com/player-two.jpg",
+    )
+    with_photos = match.model_copy(
+        update={
+            "players": (
+                match.players[0].model_copy(update={"image_url": photo_urls[0]}),
+                match.players[1].model_copy(update={"image_url": photo_urls[1]}),
+            )
+        }
+    )
+    await catalog.upsert_matches([with_photos], observed_at=NOW)
+
+    stored = await catalog.get_match(match.id)
+    assert stored is not None
+    assert [player.image_url for player in stored.players] == list(photo_urls)
+
+    sparse = with_photos.model_copy(
+        update={
+            "players": tuple(
+                player.model_copy(update={"image_url": None})
+                for player in with_photos.players
+            )
+        }
+    )
+    await catalog.upsert_matches([sparse], observed_at=NOW + timedelta(minutes=1))
+
+    refreshed = await catalog.get_match(match.id)
+    assert refreshed is not None
+    assert [player.image_url for player in refreshed.players] == list(photo_urls)
+
+
 async def test_reupsert_reports_no_new_players(
     database: Database, upcoming_match: Match
 ) -> None:

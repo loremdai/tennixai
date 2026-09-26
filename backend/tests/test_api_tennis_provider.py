@@ -25,6 +25,7 @@ from app.providers.api_tennis import (
     STAT_NAME_MAP,
     country_code_from_name,
     map_livescore_row_to_snapshot,
+    map_match,
     map_status,
     normalize_surface,
 )
@@ -194,6 +195,22 @@ async def test_finished_result_keeps_set_count_when_vendor_has_no_set_rows(provi
     assert snapshot.match.live_state.score is not None
     assert snapshot.match.live_state.score.sets_won == (2, 0)
     assert snapshot.match.live_state.score.sets == ()
+
+
+@pytest.mark.asyncio
+async def test_fixture_player_logos_follow_their_canonical_player_order(provider) -> None:
+    built, _ = provider
+    row = dict(load("fixtures.json")["result"][0])
+    row["event_first_player_logo"] = "https://api.api-tennis.com/first.png"
+    row["event_second_player_logo"] = "https://api.api-tennis.com/second.png"
+
+    match = await map_match(MatchDto.model_validate(row), built._identities, built._now)
+
+    assert match is not None
+    assert [player.image_url for player in match.players] == [
+        "https://api.api-tennis.com/first.png",
+        "https://api.api-tennis.com/second.png",
+    ]
 
 
 @pytest.fixture()

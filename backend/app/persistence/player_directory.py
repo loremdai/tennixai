@@ -39,10 +39,10 @@ def _directory_player(row: PlayerRow) -> DirectoryPlayer:
             localized_name=row.localized_name,
             country_code=row.country_code,
             ranking=row.ranking,
+            image_url=row.image_url,
         ),
         gender=Gender(row.gender) if row.gender in Gender.__members__.values() else Gender.UNKNOWN,
         birth_date=row.birth_date,
-        image_url=row.image_url,
     )
 
 
@@ -315,6 +315,30 @@ class PostgresPlayerDirectoryRepository:
                         await session.execute(statement.on_conflict_do_nothing())
         return len(updates)
 
+    async def upsert_player_images(self, images: dict[str, str]) -> int:
+        normalized = {
+            player_id: image_url.strip()
+            for player_id, image_url in images.items()
+            if image_url and image_url.strip()
+        }
+        if not normalized:
+            return 0
+        async with self._database.session() as session:
+            async with session.begin():
+                result = await session.execute(
+                    update(PlayerRow)
+                    .where(PlayerRow.id.in_(normalized))
+                    .values(
+                        image_url=case(
+                            normalized,
+                            value=PlayerRow.id,
+                            else_=PlayerRow.image_url,
+                        ),
+                        updated_at=func.now(),
+                    )
+                )
+                return result.rowcount or 0
+
     async def get_player(self, player_id: str) -> DirectoryPlayer | None:
         async with self._database.session() as session:
             row = await session.get(PlayerRow, player_id)
@@ -392,6 +416,7 @@ class PostgresPlayerDirectoryRepository:
                 localized_name=player_row.localized_name,
                 country_code=player_row.country_code,
                 ranking=rank_row.rank,
+                image_url=player_row.image_url,
             )
             results[player_id] = _ranking_entry(rank_row, player)
         return results
@@ -448,6 +473,7 @@ class PostgresPlayerDirectoryRepository:
                     localized_name=player_row.localized_name,
                     country_code=player_row.country_code,
                     ranking=ranking_row.rank,
+                    image_url=player_row.image_url,
                 ),
             )
             for ranking_row, player_row in rows

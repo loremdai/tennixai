@@ -43,6 +43,9 @@ class PlayerDirectoryRepository(Protocol):
     async def save_localized_names(self, updates: tuple[LocalizedNameUpdate, ...]) -> int:
         raise NotImplementedError
 
+    async def upsert_player_images(self, images: dict[str, str]) -> int:
+        raise NotImplementedError
+
     async def get_player(self, player_id: str) -> DirectoryPlayer | None:
         raise NotImplementedError
 
@@ -111,7 +114,9 @@ class MemoryPlayerDirectoryRepository:
             localized = existing.player.localized_name if existing else None
             gender = existing.gender if existing else Gender.UNKNOWN
             birth_date = existing.birth_date if existing else None
-            image_url = existing.image_url if existing else None
+            image_url = entry.player.image_url or (
+                existing.player.image_url if existing else None
+            )
             self._players[entry.player.id] = DirectoryPlayer(
                 player=Player(
                     id=entry.player.id,
@@ -119,10 +124,10 @@ class MemoryPlayerDirectoryRepository:
                     localized_name=localized,
                     country_code=entry.player.country_code,
                     ranking=entry.rank,
+                    image_url=image_url,
                 ),
                 gender=gender,
                 birth_date=birth_date,
-                image_url=image_url,
             )
         tours_dates = {(entry.tour, entry.ranking_date) for entry in entries}
         self._rankings = [
@@ -203,13 +208,30 @@ class MemoryPlayerDirectoryRepository:
                     localized_name=update.localized_name,
                     country_code=directory_player.player.country_code,
                     ranking=directory_player.player.ranking,
+                    image_url=directory_player.player.image_url,
                 ),
                 gender=directory_player.gender,
                 birth_date=directory_player.birth_date,
-                image_url=directory_player.image_url,
             )
             await self.upsert_aliases(update.aliases)
         return len(updates)
+
+    async def upsert_player_images(self, images: dict[str, str]) -> int:
+        updated = 0
+        for player_id, image_url in images.items():
+            directory_player = self._players.get(player_id)
+            normalized_url = image_url.strip()
+            if directory_player is None or not normalized_url:
+                continue
+            self._players[player_id] = directory_player.model_copy(
+                update={
+                    "player": directory_player.player.model_copy(
+                        update={"image_url": normalized_url}
+                    )
+                }
+            )
+            updated += 1
+        return updated
 
     async def get_player(self, player_id: str) -> DirectoryPlayer | None:
         player = self._players.get(player_id)
@@ -275,8 +297,12 @@ class MemoryPlayerDirectoryRepository:
         return {
             player_id: entry.model_copy(
                 update={
-                    "player": entry.player.model_copy(
-                        update={"ranking": entry.rank}
+                    "player": (
+                        self._players[player_id].player.model_copy(
+                            update={"ranking": entry.rank}
+                        )
+                        if player_id in self._players
+                        else entry.player.model_copy(update={"ranking": entry.rank})
                     )
                 }
             )
@@ -307,7 +333,13 @@ class MemoryPlayerDirectoryRepository:
         return tuple(
             entry.model_copy(
                 update={
-                    "player": entry.player.model_copy(update={"ranking": entry.rank})
+                    "player": (
+                        self._players[entry.player.id].player.model_copy(
+                            update={"ranking": entry.rank}
+                        )
+                        if entry.player.id in self._players
+                        else entry.player.model_copy(update={"ranking": entry.rank})
+                    )
                 }
             )
             for entry in page_rows
