@@ -4,11 +4,11 @@
 
 **最后更新：** 2026-09-26（北京时间）
 
-**当前主任务：** T104 — 全站球员照片贯通（`in_progress`；先写规格与实施计划，再直接实施）。
+**当前主任务：** 无。T104 已完成；下一项任务尚未领取。
 
-**最近任务：** T104 — 全站球员照片贯通（`in_progress`），起始 HEAD `c3abe16`。
+**最近任务：** T104 — 全站球员照片贯通（`done`）；实现/回归提交 `9e26970`、`cea6988`、`d672578`、`6402831`、`19ee1a4`，起始 HEAD `c3abe16`。
 
-**执行者 / 分支：** Codex / `main`；T104 起始 HEAD `c3abe16`。保留工作区已有 P3 修改与未跟踪文件，不纳入本任务。
+**执行者 / 分支：** Codex / `main`；T104 起始 HEAD `c3abe16`，实现已提交。保留工作区已有 P3 freshness 修改与未跟踪文件，未纳入本任务。
 
 **运行手册与证据：** [本地真实运行手册](docs/runbooks/local-real-runtime.md)；[T98 审计规格与完成证据](docs/superpowers/specs/2026-09-24-tennixai-whole-product-audit.md)；[T97 审计计划](docs/superpowers/plans/2026-09-24-tennixai-t97-global-field-presentation-audit.md)；[T95–T98 字段矩阵](docs/research/2026-09-24-tennixai-t95-match-field-integrity-matrix.md)。
 
@@ -46,14 +46,16 @@
 - **验收门（通过）：** 真实 API 样本证明供应商提供的完整比分和抢七分可从历史/详情 API 到页面；partial、invalid、missing 与 provider-failure 行为由确定性 provider/service 测试验证，未知值继续为空、不推算。后端 deterministic、前端全量、TypeScript、改动文件 Ruff、`git diff --check` 均有通过证据。实查的 111 条真实记录均完整，因此没有把 fixture 误称为真实上游缺分样本。
 - **安全与现场：** 根 `.env` 未读取或输出；没有 API key、查询凭据或原始供应商 payload 被打印/保存。真实服务保持运行，数据库卷未重置。`backend/app/service.py` 的两处既有 P3 freshness 修改及 `.codex/`、`.superpowers/`、`REALTIME_LATENCY_INVESTIGATION.md`、`backend/tests/test_p3_query_freshness.py`、`frontend/next-env.d.ts` 均为用户已有改动，不纳入 T103 提交。
 
-## T104 全站球员照片贯通（`in_progress`）
+## T104 全站球员照片贯通（`done`）
 
-- **领取：** 2026-09-26，Codex，`main`，起始 HEAD `c3abe16`。
+- **领取与提交：** 2026-09-26，Codex，`main`，起始 HEAD `c3abe16`；实现提交 `9e26970`（供应商/canonical/目录持久化）、`cea6988`（service 与 P3 API）、`d672578`（全站前端），回归提交 `6402831`（排名照片请求并发上限）、`19ee1a4`（损坏照片中性占位）。
 - **目标：** 让首页、比赛详情、市场、排名、球员搜索/详情及其他显示球员身份的页面统一使用真实球员照片；彻底移除姓名首字母头像。
 - **方案：** 仅使用 API-Tennis 明确提供的球员照片；复用现有球员目录 `image_url` 存储和内部 `player_id` 关联。按页面实际需要填充并缓存，避免启动时批量请求全部球员；没有供应商照片或无法唯一识别球员时用中性头像，不伪造、不猜测身份。
 - **边界：** 不读取/输出根 `.env` 或凭据；不新增图片供应商、爬虫或图片生成；不修改市场匹配、模型、Paper 语义；保留已有用户修改与未跟踪文件，尤其 `backend/app/service.py` 的 P3 freshness 修改。
 - **规格/计划：** [设计规格](docs/superpowers/specs/2026-09-26-tennixai-t104-global-player-photos-design.md)；[实施计划](docs/superpowers/plans/2026-09-26-tennixai-t104-global-player-photos-implementation.md)。方案已落盘并直接进入实施，无额外等待确认。
-- **验收目标：** 所有页面共用头像展示；首页/详情和市场中有可靠 player ID 的球员显示已缓存的真实照片；排名页可以按需取得照片；搜索/详情与排名共用同一目录照片；无照片或身份不确定时不显示姓名首字母。完成后做静态类型检查与可行的浏览器验收，并记录未实际执行的测试。
+- **完成情况：** canonical `Player.image_url` 贯通 API-Tennis 比赛 `player_logo` 与球员资料 `player_logo`，按内部球员 ID 复用目录缓存；空照片更新不覆盖已知照片。排名只为当前页面缺图球员按需补齐，最多 5 个并发；比赛/首页目录读取不因头像而额外请求供应商，比赛详情需要补齐时复用 profile 缓存。照片缓存写入失败只记录异常类型，不影响核心数据响应。P3 市场、机会、Paper 和市场脉搏按内部 outcome/player ID 传图，不按名字猜测；全站统一 `PlayerAvatar`，无图/坏图使用中性人像，已删除姓名首字母头像。演示数据没有权威照片时保持中性占位。
+- **验证：** `uv run pytest -q --ignore=tests/integration`：`1363 passed, 37 skipped`；P3 查询与照片相关 PostgreSQL 集成：`14 passed`；前端 `./node_modules/.bin/vitest run`：`39 files / 505 passed`；`./node_modules/.bin/tsc --noEmit`、T104 后端 Ruff 与 `git diff --check` 均通过。全站真实浏览器/Playwright 视觉验收未运行：项目 Playwright 配置会读取根 `.env` 并可能启动服务，本任务边界禁止触碰；未重启服务、未运行 `init/up`，未读取或输出根 `.env`。一次较宽 integration 组合运行中有 1 个既有测试库 schema 不匹配失败（缺少 `match_state_snapshots.freshness`）；未迁移/重置该库；本任务相关 P3 与照片数据库集成测试另行通过。
+- **范围保护：** `backend/app/service.py` 中两处既有 P3 freshness 修改仍未暂存/提交；`.codex/`、`.superpowers/`、`REALTIME_LATENCY_INVESTIGATION.md`、`backend/tests/test_p3_query_freshness.py`、`frontend/next-env.d.ts` 等既有未跟踪文件均保留。
 
 ## T99 初始化并启动本地真实服务（`done`）
 

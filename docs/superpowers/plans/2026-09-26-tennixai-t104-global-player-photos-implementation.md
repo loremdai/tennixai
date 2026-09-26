@@ -4,11 +4,13 @@
 
 **Goal:** 用 API-Tennis 的真实球员照片统一覆盖 TennixAI 中所有球员头像位，并为原本没有头像的页面补上照片。
 
-**Architecture:** 用现有 `PlayerRow.image_url` 作为持久缓存，新增 canonical `Player.image_url` 将 provider、排名、比赛和目录输出统一起来。排名页按当前 50 人页面为缺图球员有界调用既有 profile 能力；Market/Paper 只通过已有内部球员 ID 传图。前端新增单一 `PlayerAvatar`，缺图/损坏图一律显示中性人像，不再用首字母。
+**Architecture:** 用现有 `PlayerRow.image_url` 作为持久缓存，新增 canonical `Player.image_url` 将 provider、排名、比赛和目录输出统一起来。排名页按当前 50 人页面为缺图球员有界调用既有 profile 能力，最多并发 5 个；比赛/首页目录读取不因头像缺失额外请求供应商，比赛详情可按需补齐。Market/Paper 只通过已有内部球员 ID 传图。前端新增单一 `PlayerAvatar`，缺图/损坏图一律显示中性人像，不再用首字母。
 
 **Tech Stack:** Python 3.12、FastAPI、Pydantic、SQLAlchemy/PostgreSQL、Next.js、TypeScript、React、现有 Base UI Avatar 与 lucide-react。
 
 **Spec:** [T104 全站球员照片设计](../specs/2026-09-26-tennixai-t104-global-player-photos-design.md)
+
+**状态：** 2026-09-26 已完成；实现提交 `9e26970`、`cea6988`、`d672578`，并发/坏图回归提交 `6402831`、`19ee1a4`。完整验证与未执行的浏览器门见 `CURRENT.md`。
 
 ## Global Constraints
 
@@ -47,13 +49,13 @@
 
 **Interfaces:** `Player.image_url: str | None = None`; repository method `upsert_player_images(images: dict[str, str]) -> int`; no database migration because `PlayerRow.image_url` already exists.
 
-- [ ] Add provider tests for `event_first_player_logo` / `event_second_player_logo` mapping to the corresponding canonical players, including null logo and stable player order.
-- [ ] Add directory repository tests proving nonempty URLs persist by internal ID, ranking upserts preserve them, and null/empty image updates never erase a known URL.
-- [ ] Extend provider DTO and `map_match`; map `PlayerDto.player_logo` into profile/player photo output.
-- [ ] Remove redundant `DirectoryPlayer.image_url` storage in favor of `DirectoryPlayer.player.image_url`, updating memory and PostgreSQL projections while preserving profile `image_url` response compatibility.
-- [ ] Extend match catalog player upsert/load so feed photos fill `PlayerRow.image_url` with `COALESCE` semantics and round-trip through `Match`.
-- [ ] Run focused provider, catalog, player-directory and PostgreSQL integration tests; run Ruff on changed Python files and `git diff --check`.
-- [ ] Commit only task files with `feat: persist canonical player photos`.
+- [x] Add provider tests for `event_first_player_logo` / `event_second_player_logo` mapping to the corresponding canonical players, including null logo and stable player order.
+- [x] Add directory repository tests proving nonempty URLs persist by internal ID, ranking upserts preserve them, and null/empty image updates never erase a known URL.
+- [x] Extend provider DTO and `map_match`; map `PlayerDto.player_logo` into profile/player photo output.
+- [x] Remove redundant `DirectoryPlayer.image_url` storage in favor of `DirectoryPlayer.player.image_url`, updating memory and PostgreSQL projections while preserving profile `image_url` response compatibility.
+- [x] Extend match catalog player upsert/load so feed photos fill `PlayerRow.image_url` with `COALESCE` semantics and round-trip through `Match`.
+- [x] Run focused provider, catalog, player-directory and PostgreSQL integration tests; run Ruff on changed Python files and `git diff --check`.
+- [x] Commit only task files with `feat: persist canonical player photos`.
 
 ### Task 2: Hydrate player photos for rankings, profiles and P3 reads
 
@@ -67,13 +69,13 @@
 
 **Interfaces:** `P3QueryService._match_facts()` returns ordered `player_images` aligned with `player_ids`; public P3 rows expose optional `[str | None, str | None]`. `TennisService.get_rankings_page()` returns the existing `RankingPage` shape with `entry.player.image_url` filled for photos found.
 
-- [ ] Add service tests: only missing images on requested ranking page invoke cached profiles; maximum profile-fetch concurrency is five; a profile failure/empty image still returns the full ranking page; successful image is persisted and reused.
-- [ ] Add API/P3 tests: images follow internal player order for mapped markets, opportunities, paper positions and pulse; unmapped market retains null images.
-- [ ] Implement page-scoped ranking hydration with `asyncio.Semaphore(5)`, reuse `_load_profile()` cache, save only nonempty provider URLs through directory repository, and return entries hydrated in the same response.
-- [ ] On profile view, persist a newly received nonempty image while keeping an existing directory image if provider returns null; directory image takes precedence for all other player fields.
-- [ ] Add ordered images to `_match_facts()` and each P3 response constructor without changing any matching/decision calculation.
-- [ ] Run focused backend service/API/P3 tests and directory PostgreSQL integration; run Ruff on changed Python files and `git diff --check`.
-- [ ] Commit only task files with `feat: expose player photos in API views`.
+- [x] Add service tests: only missing images on requested ranking page invoke cached profiles; maximum profile-fetch concurrency is five; a profile failure/empty image still returns the full ranking page; successful image is persisted and reused.
+- [x] Add API/P3 tests: images follow internal player order for mapped markets, opportunities, paper positions and pulse; unmapped market retains null images.
+- [x] Implement page-scoped ranking hydration with `asyncio.Semaphore(5)`, reuse `_load_profile()` cache, save only nonempty provider URLs through directory repository, and return entries hydrated in the same response.
+- [x] On profile view, persist a newly received nonempty image while keeping an existing directory image if provider returns null; directory image takes precedence for all other player fields.
+- [x] Add ordered images to `_match_facts()` and each P3 response constructor without changing any matching/decision calculation.
+- [x] Run focused backend service/API/P3 tests and directory PostgreSQL integration; run Ruff on changed Python files and `git diff --check`.
+- [x] Commit only task files with `feat: expose player photos in service views` (`cea6988`).
 
 ### Task 3: Add one reusable frontend avatar and wire every player surface
 
@@ -116,14 +118,14 @@
 
 **Interfaces:** `PlayerAvatar({name, imageUrl, size, className})`; `PlayerViewModel.avatarUrl`; P3 row view models contain ordered `playerImages`.
 
-- [ ] Add focused component/model expectations: real image renders `AvatarImage`; null/broken image renders neutral `UserRound` fallback and never initials; P3 decoders reject malformed image tuples.
-- [ ] Extend frontend API DTOs and strict P3 runtime decoders for `image_url` and `player_images`; map ranking/search/profile/result/match/P3 data to existing view models.
-- [ ] Implement `PlayerAvatar` with existing `Avatar` primitives and neutral silhouette; remove duplicated initials helpers from profile/search UI.
-- [ ] Use the shared component for Home live/upcoming/finished/structured match cards and player-disambiguation candidates, Match hero, rankings, search, player profile/history/current match, market rows, both opportunity renderers, paper rows, and production/preview Home pulse.
-- [ ] Add small headshots beside the two named outcomes in market/paper rows and beside each ranking entry; keep responsive layouts and names readable.
-- [ ] Preserve all current preview/live data semantics; static preview entries with no real provider photo use the same silhouette fallback.
-- [ ] Run affected frontend Vitest suites and full `pnpm test`, `pnpm typecheck`; run Playwright only against an isolated/local-safe target that does not rebuild or restart the user's running service; inspect global desktop/mobile avatar coverage.
-- [ ] Commit only task files with `feat: show player photos across the product`.
+- [x] Add focused component/model expectations: real image renders `AvatarImage`; null/broken image renders neutral `UserRound` fallback and never initials; P3 decoders reject malformed image tuples.
+- [x] Extend frontend API DTOs and strict P3 runtime decoders for `image_url` and `player_images`; map ranking/search/profile/result/match/P3 data to existing view models.
+- [x] Implement `PlayerAvatar` with existing `Avatar` primitives and neutral silhouette; remove duplicated initials helpers from profile/search UI.
+- [x] Use the shared component for Home live/upcoming/finished/structured match cards and player-disambiguation candidates, Match hero, rankings, search, player profile/history/current match, market rows, both opportunity renderers, paper rows, and production/preview Home pulse.
+- [x] Add small headshots beside the two named outcomes in market/paper rows and beside each ranking entry; keep responsive layouts and names readable.
+- [x] Preserve all current preview/live data semantics; static preview entries with no real provider photo use the same silhouette fallback.
+- [x] Run affected frontend Vitest suites and full `pnpm test`, `pnpm typecheck`; run Playwright only against an isolated/local-safe target that does not rebuild or restart the user's running service; inspect global desktop/mobile avatar coverage. **Executed:** Vitest and TypeScript passed; Playwright/browser inspection was not run because the available config reads root `.env` and may start services, outside this task's safety boundary.
+- [x] Commit only task files with `feat: show player photos across the product`.
 
 ### Task 4: Close task records and verify untouched scope
 
@@ -132,7 +134,7 @@
 - Modify: `ROADMAP.md`
 - Modify: `CURRENT.md`
 
-- [ ] Update the stable product rule: photos are supplier-backed, canonical-ID-bound; missing/ambiguous photos use a neutral fallback.
-- [ ] Record implementation commits, actual verification commands/results, unavailable real-browser gates, request/cache behavior, and preserved user worktree changes in the three control documents.
-- [ ] Review `git status` and `git diff` to prove known P3 freshness edits and the listed untracked files were not staged or altered by this task; inspect commit file lists.
-- [ ] Run `git diff --check`, then push only T104 commits to `origin/main` as required by the repository startup/hand-off rules.
+- [x] Update the stable product rule: photos are supplier-backed, canonical-ID-bound; missing/ambiguous photos use a neutral fallback.
+- [x] Record implementation commits, actual verification commands/results, unavailable real-browser gates, request/cache behavior, and preserved user worktree changes in the three control documents.
+- [x] Review `git status` and `git diff` to prove known P3 freshness edits and the listed untracked files were not staged or altered by this task; inspect commit file lists.
+- [x] Run `git diff --check`, then push only T104 commits to `origin/main` as required by the repository startup/hand-off rules.
