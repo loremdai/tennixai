@@ -143,4 +143,4 @@ expect(within(playerRow).getByText('扬尼克·辛纳')).toBeVisible()
 - [x] Run frontend Vitest (`./node_modules/.bin/vitest run`, 41 files / 523 tests passed) and TypeScript (`./node_modules/.bin/tsc --noEmit` passed). Playwright visual suite passed on desktop/mobile: 22 passed, 4 opt-in P2 Replay states skipped. Inspect actual/expected/diff and update intentional visual snapshots only (60 tracked PNG baselines).
 - [x] Record implementation commits `991b9f0` and `a44fc6e`, exact test counts, browser/device coverage, restart outcome, and gates not run. Keep the P2 Replay visual skips explicit.
 - [x] Review staged diff and commit file lists; confirm pre-existing `backend/app/service.py` freshness hunks and the documented untracked files remain outside T105 commits.
-- [ ] Run `git diff --check`, push T105 commits to `origin/main`, then verify `git status --short --branch` and remote HEAD.
+- [x] Run `git diff --check`, push T105 implementation and close-out commits to `origin/main`, then verify `git status --short --branch` and remote HEAD `0337219`.
