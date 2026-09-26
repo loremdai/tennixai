@@ -46,8 +46,8 @@ const match = {
   format: '三盘两胜 · BO3',
   indoorLabel: '室内',
   players: [
-    { id: 'ply_1', name: 'Jannik Sinner', shortName: 'Sinner', countryCode: 'ITA', countryName: '意大利', flagUrl: 'https://flagcdn.com/w40/it.png', ranking: 1 },
-    { id: 'ply_2', name: 'Carlos Alcaraz', shortName: 'Alcaraz', countryCode: 'ESP', countryName: '西班牙', flagUrl: 'https://flagcdn.com/w40/es.png', ranking: 2 },
+    { id: 'ply_1', name: 'Jannik Sinner', nameZh: '扬尼克·辛纳', shortName: 'Sinner', countryCode: 'ITA', countryName: '意大利', flagUrl: 'https://flagcdn.com/w40/it.png', ranking: 1 },
+    { id: 'ply_2', name: 'Carlos Alcaraz', nameZh: '卡洛斯·阿尔卡拉斯', shortName: 'Alcaraz', countryCode: 'ESP', countryName: '西班牙', flagUrl: 'https://flagcdn.com/w40/es.png', ranking: 2 },
   ],
   score: null,
   currentSetNumber: null,
@@ -111,7 +111,7 @@ function snapshot(momentumCount: number): MatchSnapshotDto {
 afterEach(cleanup)
 
 describe('MatchMomentumCard', () => {
-  it('renders the latest twenty observations, leader, as_of, and key-point markers', () => {
+  it('shows a plain-language leader, both chart sides, and the latest twenty confirmed points', () => {
     const current = snapshot(22)
     current.points[21] = point(22, { is_break_point: true })
 
@@ -126,13 +126,52 @@ describe('MatchMomentumCard', () => {
 
     const momentum = document.getElementById('momentum')
     expect(momentum).not.toBeNull()
-    const leaderLabel = momentum?.querySelector('p.flex.items-center.gap-1')
-    expect(leaderLabel).toHaveTextContent(/Sinner\s*\+16/)
+    const conclusion = screen.getByRole('heading', { level: 3, name: /近期走势偏向/ })
+    expect(conclusion).toHaveTextContent('Jannik Sinner')
+    expect(conclusion).toHaveTextContent('扬尼克·辛纳')
+    expect(screen.getByText('上方：').parentElement).toHaveTextContent('Sinner')
+    expect(screen.getByText('下方：').parentElement).toHaveTextContent('Alcaraz')
+    expect(screen.getByText('0 · 相对均衡')).toBeVisible()
+    expect(screen.getByText('走势指数 +16（不是胜率）')).toBeVisible()
+    expect(screen.getByText('最近 20 个已确认得分')).toBeVisible()
     expect(screen.getByText('查看近期得分走势与关键分')).toBeVisible()
-    expect(screen.getByText(/更新于 9月8日 18:00/)).toBeVisible()
+    expect(screen.getByText(/最新记录 9月8日 18:00/)).toBeVisible()
     expect(screen.getByText('关键分标记')).toBeVisible()
     expect(screen.getAllByText(/第 22 分/).length).toBeGreaterThan(0)
     expect(screen.getByRole('list', { name: '近期比赛走势观测' }).querySelectorAll('li')).toHaveLength(20)
+  })
+
+  it('uses the signed index even when a negative observation has no leader id', () => {
+    const current = snapshot(8)
+    current.momentum[7] = { ...current.momentum[7], value: -14.6, leader_player_id: null }
+
+    render(<MatchMomentumCard match={match} preview={false} highlight={null} snapshot={current} />)
+
+    const conclusion = screen.getByRole('heading', { level: 3, name: /近期走势偏向/ })
+    expect(conclusion).toHaveTextContent('Carlos Alcaraz')
+    expect(conclusion).toHaveTextContent('卡洛斯·阿尔卡拉斯')
+    expect(screen.getByText('走势指数 -14.6（不是胜率）')).toBeVisible()
+  })
+
+  it('calls zero balanced instead of guessing a leader', () => {
+    const current = snapshot(8)
+    current.momentum[7] = { ...current.momentum[7], value: 0, leader_player_id: null }
+
+    render(<MatchMomentumCard match={match} preview={false} highlight={null} snapshot={current} />)
+
+    expect(screen.getByRole('heading', { level: 3, name: '近期走势接近均衡' })).toBeVisible()
+    expect(screen.getByText('走势指数 0（不是胜率）')).toBeVisible()
+  })
+
+  it('discloses missing point winners without connecting the trend through them', () => {
+    const current = snapshot(8)
+    current.points[3] = point(4, { winner_player_id: null })
+    current.momentum = current.momentum.filter((observation) => observation.point_sequence !== 4)
+
+    render(<MatchMomentumCard match={match} preview={false} highlight={null} snapshot={current} />)
+
+    expect(screen.getByText('部分得分者无法确认，曲线在缺口处断开。')).toBeVisible()
+    expect(screen.getByRole('list', { name: '近期比赛走势观测' }).querySelectorAll('li')).toHaveLength(7)
   })
 
   it('uses the latest momentum observation time instead of the snapshot time', () => {
@@ -149,8 +188,8 @@ describe('MatchMomentumCard', () => {
       />,
     )
 
-    expect(screen.getByText(/更新于 9月8日 18:00/)).toBeVisible()
-    expect(screen.queryByText(/更新于 9月8日 19:00/)).toBeNull()
+    expect(screen.getByText(/最新记录 9月8日 18:00/)).toBeVisible()
+    expect(screen.queryByText(/最新记录 9月8日 19:00/)).toBeNull()
   })
 
   it('labels a short sample clearly and explains when no trend data is available', () => {
@@ -163,6 +202,15 @@ describe('MatchMomentumCard', () => {
       />,
     )
     expect(screen.getByText('样本较少')).toBeVisible()
+    expect(screen.getByText('可确认得分不足，暂不判断走势。')).toBeVisible()
+    expect(screen.queryByRole('heading', { level: 3, name: /近期走势偏向/ })).toBeNull()
+
+    cleanup()
+    const incomplete = snapshot(5)
+    incomplete.momentum = incomplete.momentum.map((item) => ({ ...item, is_provisional: false }))
+    render(<MatchMomentumCard match={match} preview={false} highlight={null} snapshot={incomplete} />)
+    expect(screen.getByText('可确认得分不足，暂不判断走势。')).toBeVisible()
+    expect(screen.queryByText('走势指数 +16（不是胜率）')).toBeNull()
 
     cleanup()
     render(

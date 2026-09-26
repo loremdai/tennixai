@@ -339,6 +339,36 @@ describe('statistics presentation mapping', () => {
 })
 
 describe('momentum presentation mapping', () => {
+  it('leaves a visible break when an unconfirmed point sits between observations', () => {
+    const observations = [1, 3].map((sequence) => ({
+      match_id: 'mat_1',
+      point_sequence: sequence,
+      state_version: 4,
+      algorithm_version: 'recent-control-v1',
+      value: sequence === 1 ? 12 : -4,
+      leader_player_id: sequence === 1 ? 'ply_1' : 'ply_2',
+      is_provisional: false,
+      as_of: '2026-09-08T10:00:00Z',
+      input_summary: 'n=6',
+    })) satisfies MomentumObservationDto[]
+    const points = [
+      { sequence: 1, winner_player_id: 'ply_1' },
+      { sequence: 2, winner_player_id: null },
+      { sequence: 3, winner_player_id: 'ply_2' },
+    ] as PointEventDto[]
+
+    const chart = toMomentumChart(observations, points)
+
+    expect(chart.map(({ sequence, value }) => [sequence, value])).toEqual([
+      [1, 12],
+      [2, null],
+      [3, -4],
+    ])
+    expect(chart[0].winnerPlayerId).toBe('ply_1')
+    expect(chart[1].winnerPlayerId).toBeNull()
+    expect(chart[2].winnerPlayerId).toBe('ply_2')
+  })
+
   it('limits the chart to the latest twenty observations and marks key points', () => {
     const observations = Array.from({ length: 21 }, (_, index) => ({
       match_id: 'mat_1',

@@ -400,8 +400,9 @@ export function formatAsOf(iso: string | null): string | null {
 
 export type MomentumChartPoint = {
   sequence: number
-  value: number
+  value: number | null
   isKeyPoint: boolean
+  winnerPlayerId: string | null
 }
 
 export function toMomentumChart(
@@ -413,13 +414,23 @@ export function toMomentumChart(
       .filter((point) => point.is_break_point || point.is_set_point || point.is_match_point)
       .map((point) => point.sequence),
   )
-  return observations
+  const pointsBySequence = new Map(points.map((point) => [point.sequence, point]))
+  const recent = observations
     .slice()
     .sort((a, b) => a.point_sequence - b.point_sequence)
     .slice(-20)
-    .map((observation) => ({
+  const chart: MomentumChartPoint[] = []
+  for (const observation of recent) {
+    const previous = chart.at(-1)
+    if (previous && observation.point_sequence > previous.sequence + 1) {
+      chart.push({ sequence: previous.sequence + 1, value: null, isKeyPoint: false, winnerPlayerId: null })
+    }
+    chart.push({
       sequence: observation.point_sequence,
       value: observation.value,
       isKeyPoint: keyPointSequences.has(observation.point_sequence),
-    }))
+      winnerPlayerId: pointsBySequence.get(observation.point_sequence)?.winner_player_id ?? null,
+    })
+  }
+  return chart
 }

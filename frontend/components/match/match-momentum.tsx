@@ -4,9 +4,11 @@ import {
   CartesianGrid,
   Line,
   LineChart,
+  ReferenceArea,
   ReferenceDot,
   ReferenceLine,
   XAxis,
+  YAxis,
 } from 'recharts'
 import { Trophy } from 'lucide-react'
 
@@ -21,6 +23,7 @@ import {
 } from '@/components/ui/chart'
 import type { MatchSnapshotDto } from '@/lib/api/types'
 import type { MatchViewModel } from '@/lib/view-models'
+import type { MomentumChartPoint } from '@/lib/view-models'
 import { formatAsOf, toMomentumChart } from '@/lib/view-models'
 import { cn } from '@/lib/utils'
 
@@ -75,9 +78,12 @@ function RecentControlPanel({
     .sort((a, b) => a.point_sequence - b.point_sequence)
   const latest = observations.at(-1)
   const chart = toMomentumChart(snapshot.momentum, snapshot.points)
+  const confirmed = chart.filter(
+    (item): item is MomentumChartPoint & { value: number } => item.value !== null,
+  )
   const keyPoints = snapshot.points
     .filter((point) => point.is_break_point || point.is_set_point || point.is_match_point)
-    .filter((point) => chart.some((item) => item.sequence === point.sequence))
+    .filter((point) => confirmed.some((item) => item.sequence === point.sequence))
 
   if (!latest || chart.length === 0) {
     return (
@@ -88,70 +94,154 @@ function RecentControlPanel({
   }
 
   const asOf = formatAsOf(latest.as_of)
-  const leader = match.players.find((player) => player.id === latest.leader_player_id)
+  const [positivePlayer, negativePlayer] = match.players
+  const leader = latest.value > 0 ? positivePlayer : latest.value < 0 ? negativePlayer : null
+  const insufficient = latest.is_provisional || confirmed.length < 6
+  const maxMagnitude = Math.max(...confirmed.map((item) => Math.abs(item.value)))
+  const extent = Math.min(100, Math.max(20, Math.ceil(maxMagnitude / 10) * 10))
+  const hasGap = chart.some((item) => item.value === null)
+  const pointBySequence = new Map(snapshot.points.map((point) => [point.sequence, point]))
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p className="flex items-center gap-1 text-sm font-medium">
-            {leader ? <PlayerName name={leader.shortName} localizedName={leader.nameZh} /> : <span>双方</span>}
-            <span>{formatIndex(latest.value)}</span>
-          </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <h3 className="flex flex-wrap items-center gap-x-1 text-base font-semibold">
+            {insufficient ? (
+              '可确认得分不足，暂不判断走势。'
+            ) : leader ? (
+              <>
+                <span>近期走势偏向</span>
+                <PlayerName name={leader.name} localizedName={leader.nameZh} primaryClassName="text-base" />
+              </>
+            ) : (
+              '近期走势接近均衡'
+            )}
+          </h3>
+          <p className="text-xs text-muted-foreground">最近 {confirmed.length} 个已确认得分</p>
           <p className="text-xs text-muted-foreground">
-            最近 {chart.length} 分 · {asOf ? `更新于 ${asOf}` : '更新时间暂不可用'}
+            {asOf ? `最新记录 ${asOf}` : '最新记录时间暂不可用'}
           </p>
         </div>
-        {latest.is_provisional ? <Badge variant="outline">样本较少</Badge> : <Badge variant="secondary">走势已更新</Badge>}
+        {insufficient ? <Badge variant="outline">样本较少</Badge> : (
+          <span className="rounded-full border border-border px-2.5 py-1 text-xs tabular-nums text-muted-foreground">
+            走势指数 {formatIndex(latest.value)}（不是胜率）
+          </span>
+        )}
       </div>
 
-      <ChartContainer config={momentumConfig} className="h-44 w-full" aria-label="近期比赛走势图表">
-        <LineChart accessibilityLayer data={chart} margin={{ left: 8, right: 8, top: 12, bottom: 0 }}>
-          <CartesianGrid vertical={false} strokeDasharray="3 6" />
-          <XAxis
-            dataKey="sequence"
-            type="number"
-            domain={['dataMin', 'dataMax']}
-            tickLine={false}
-            axisLine={false}
-            tickMargin={10}
-            tickFormatter={(value: number) => `${value}`}
-          />
-          <ReferenceLine y={0} stroke="var(--border)" />
-            <ChartTooltip
-              content={<ChartTooltipContent hideLabel />}
-              formatter={(value) => [formatIndex(Number(value)), '走势指数']}
-          />
-          <Line
-            type="monotone"
-            dataKey="value"
-            stroke="var(--color-momentum)"
-            strokeWidth={2.5}
-            dot={false}
-            activeDot={{ r: 4 }}
-          />
-          {chart.filter((item) => item.isKeyPoint).map((item) => (
-            <ReferenceDot
-              key={item.sequence}
-              x={item.sequence}
-              y={item.value}
-              r={4}
-              fill="var(--color-momentum)"
-              stroke="var(--background)"
-              strokeWidth={2}
-            />
-          ))}
-        </LineChart>
-      </ChartContainer>
+      {insufficient ? null : (
+        <div className="min-w-0 rounded-lg border border-border/70 bg-muted/10 px-3 py-3">
+          <div className="flex items-start justify-between gap-2 text-xs">
+            <div className="flex min-w-0 items-start gap-1 text-primary">
+              <span className="shrink-0">上方：</span>
+              <PlayerName name={positivePlayer.shortName} localizedName={positivePlayer.nameZh} />
+            </div>
+            <span className="tabular-nums text-muted-foreground">+{extent}</span>
+          </div>
+          <ChartContainer
+            config={momentumConfig}
+            className="h-52 w-full min-w-0"
+            aria-label={`近期比赛走势：上方${positivePlayer.name}，下方${negativePlayer.name}，0为相对均衡`}
+          >
+            <LineChart accessibilityLayer data={chart} margin={{ left: 24, right: 24, top: 8, bottom: 0 }}>
+              <ReferenceArea y1={0} y2={extent} fill="var(--primary)" fillOpacity={0.05} stroke="none" />
+              <ReferenceArea y1={-extent} y2={0} fill="var(--chart-2)" fillOpacity={0.06} stroke="none" />
+              <CartesianGrid vertical={false} strokeDasharray="3 6" />
+              <YAxis hide domain={[-extent, extent]} ticks={[-extent, 0, extent]} />
+              <XAxis
+                dataKey="sequence"
+                type="number"
+                domain={['dataMin', 'dataMax']}
+                ticks={[chart[0].sequence, confirmed.at(-1)!.sequence]}
+                interval={0}
+                tickLine={false}
+                axisLine={false}
+                tickMargin={10}
+                tickFormatter={(value: number) => `第${value}分`}
+              />
+              <ReferenceLine y={0} stroke="var(--foreground)" strokeOpacity={0.7} strokeWidth={1.5} />
+              <ChartTooltip
+                content={(
+                  <ChartTooltipContent
+                    hideIndicator
+                    labelFormatter={(_label, payload) => {
+                      const item = payload[0]?.payload as MomentumChartPoint | undefined
+                      return item?.value == null ? null : `第 ${item.sequence} 分`
+                    }}
+                    formatter={(value, _name, item) => {
+                      const chartPoint = item.payload as MomentumChartPoint
+                      const winner = match.players.find((player) => player.id === chartPoint.winnerPlayerId)
+                      const point = pointBySequence.get(chartPoint.sequence)
+                      return (
+                        <div className="grid gap-1 leading-snug">
+                          <span>走势指数 {formatIndex(Number(value))}</span>
+                          <span>本分得分者：{winner ? `${winner.name}${winner.nameZh ? ` · ${winner.nameZh}` : ''}` : '未确认'}</span>
+                          {point && keyPointLabel(point) ? <span>{keyPointLabel(point)}</span> : null}
+                        </div>
+                      )
+                    }}
+                  />
+                )}
+              />
+              <Line
+                type="linear"
+                dataKey="value"
+                stroke="var(--color-momentum)"
+                strokeWidth={2.5}
+                dot={false}
+                activeDot={{ r: 4 }}
+                connectNulls={false}
+                isAnimationActive={false}
+              />
+              {confirmed.filter((item) => item.isKeyPoint).map((item) => (
+                <ReferenceDot
+                  key={item.sequence}
+                  x={item.sequence}
+                  y={item.value}
+                  r={4}
+                  fill="var(--color-momentum)"
+                  stroke="var(--background)"
+                  strokeWidth={2}
+                />
+              ))}
+              <ReferenceDot
+                x={confirmed.at(-1)!.sequence}
+                y={confirmed.at(-1)!.value}
+                r={5}
+                fill="var(--color-momentum)"
+                stroke="var(--background)"
+                strokeWidth={2}
+              />
+            </LineChart>
+          </ChartContainer>
+          <div className="flex items-end justify-between gap-2 text-xs">
+            <div className="flex min-w-0 items-start gap-1 text-muted-foreground">
+              <span className="shrink-0">下方：</span>
+              <PlayerName name={negativePlayer.shortName} localizedName={negativePlayer.nameZh} />
+            </div>
+            <span className="tabular-nums text-muted-foreground">-{extent}</span>
+          </div>
+          <p className="mt-2 border-t border-border/60 pt-2 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">0 · 相对均衡</span>；曲线越过中线表示近期走势转向另一方。
+          </p>
+        </div>
+      )}
 
-      {latest.is_provisional ? (
-        <p className="text-xs text-muted-foreground">样本较少，走势可能变化；更多得分记录到达后会更稳定。</p>
+      {hasGap && !insufficient ? (
+        <p className="text-xs text-muted-foreground">部分得分者无法确认，曲线在缺口处断开。</p>
       ) : null}
+      <p className="text-xs text-muted-foreground">这只反映最近得分走势，不等于当前比分或获胜概率。</p>
 
-              <ol className="sr-only" aria-label="近期比赛走势观测">
-        {chart.map((item) => (
-          <li key={item.sequence}>第 {item.sequence} 分：{formatIndex(item.value)}</li>
-        ))}
+      <ol className="sr-only" aria-label="近期比赛走势观测">
+        {confirmed.map((item) => {
+          const winner = match.players.find((player) => player.id === item.winnerPlayerId)
+          return (
+            <li key={item.sequence}>
+              第 {item.sequence} 分：走势指数 {formatIndex(item.value)}；本分得分者 {winner?.name ?? '未确认'}
+            </li>
+          )
+        })}
       </ol>
 
       {keyPoints.length > 0 ? (
