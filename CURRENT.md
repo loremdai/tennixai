@@ -4,22 +4,24 @@
 
 **最后更新：** 2026-09-26（北京时间）
 
-**当前主任务：** T105 — 全站球员英文主名/中文辅名统一（`in_progress`）。
+**当前主任务：** 无。T105 已完成；后续任务尚未领取。
 
-**最近任务：** T105 — 全站球员英文主名/中文辅名统一（设计与实施计划均已确认，实施中）；T104 — 全站球员照片贯通（`done`），实现/回归提交 `9e26970`、`cea6988`、`d672578`、`6402831`、`19ee1a4`。
+**最近任务：** T105 — 全站球员英文主名/中文辅名统一（`done`），实现提交 `991b9f0`、`a44fc6e`；T104 — 全站球员照片贯通（`done`），实现/回归提交 `9e26970`、`cea6988`、`d672578`、`6402831`、`19ee1a4`。
 
-**执行者 / 分支：** Codex / `main`；T105 起始 HEAD `b0f386b`，领取记录与计划先行推送。保留工作区已有 P3 freshness 修改与未跟踪文件，未纳入本任务。
+**执行者 / 分支：** Codex / `main`；T105 起始 HEAD `b0f386b`，领取记录与计划先行推送。T105 完成后无活动执行者/分支。保留工作区已有 P3 freshness 修改与未跟踪文件，未纳入本任务。
 
 **运行手册与证据：** [T105 设计规格](docs/superpowers/specs/2026-09-26-tennixai-t105-global-bilingual-player-names-design.md)；[T105 实施计划](docs/superpowers/plans/2026-09-26-tennixai-t105-global-bilingual-player-names-implementation.md)；[本地真实运行手册](docs/runbooks/local-real-runtime.md)。
 
-## T105 全站球员英文主名/中文辅名统一（`in_progress`）
+## T105 全站球员英文主名/中文辅名统一（`done`）
 
-- **领取：** 2026-09-26 10:25 CST，Codex，`main`，起始 HEAD `b0f386b`；领取文档、规格与计划已推送，领取提交 `c15b061`。
+- **领取/完成：** 2026-09-26 10:25 CST 领取，Codex，`main`，起始 HEAD `b0f386b`；领取提交 `c15b061`。实现提交 `991b9f0`、`a44fc6e`。
 - **目标：** 全站所有结构化球员身份显示统一采用英文主名、中文辅名；中文名缺失时只显示英文。
 - **已确认边界：** Home、Match、Markets/Opportunities/Paper、Players、排名/搜索/资料/赛果和助手结构化球员卡均覆盖；AI 自然语言回答不强制插入双语。未知市场球员继续显示供应商 outcome 名称，不猜中文翻译。模型、比赛/市场/Paper 事实与身份解析不变。
-- **关键实现点：** canonical `Player.name` 始终作为英文主名；P3 API 的 `player_names` 明确为主名，并新增顺序对应的可空 `player_localized_names`。前端使用共享姓名组件贯通结构化界面。
-- **规格/计划：** [T105 设计规格](docs/superpowers/specs/2026-09-26-tennixai-t105-global-bilingual-player-names-design.md)；[T105 实施计划](docs/superpowers/plans/2026-09-26-tennixai-t105-global-bilingual-player-names-implementation.md)。计划已由用户确认；领取记录先行推送，随后开始产品代码实现。
-- **工作区保护：** `backend/app/service.py` 有用户已有 P3 freshness 修改；`.codex/`、`.superpowers/`、`REALTIME_LATENCY_INVESTIGATION.md`、`backend/tests/test_p3_query_freshness.py`、`frontend/next-env.d.ts` 均保留且不纳入 T105 提交。根 `.env` 不读取、不输出；重启服务不重置数据库。
+- **完成内容：** canonical `Player.name` 与 P3 `player_names` 作为英文主名，新增顺序对应的可空 `player_localized_names`。共享 `PlayerName` 贯通 Home、Match、Markets/Opportunities/Paper、Players 排名/搜索/资料/赛果及 P3 图表；中文缺失时仅显示英文，未知市场 outcome 不猜译。比分、身份解析、AI 自然语言、模型/市场/Paper 语义未改。
+- **验证：** 后端定向 API/集成测试 `16 passed`；前端 Vitest `41 files / 523 passed`、`tsc --noEmit` 通过；Playwright 桌面/手机视觉回归 `22 passed / 4 skipped`（P2 Replay 视觉用例按 opt-in 配置跳过）；审阅后更新 60 张视觉基线；`git diff --check` 通过。首次 Playwright 运行因隔离后端缺少 Redis、并错误连到旧 `tennix` schema 而中止；没有迁移旧库，最终视觉套件改用已有 schema `0008` 的 `tennix_live_local` 并通过。
+- **真实服务：** 用户授权后执行 `./scripts/tennix-live up`，exit 0；API 与前端 HTTP 200，数据库/Redis healthy，runtime/API/frontend 均运行。首轮同步完成后的最终 `status` 中 sports stream、schedule、rankings、Polymarket 均为 `ok`。未执行 `init`，未重置数据库。
+- **规格/计划：** [T105 设计规格](docs/superpowers/specs/2026-09-26-tennixai-t105-global-bilingual-player-names-design.md)；[T105 实施计划](docs/superpowers/plans/2026-09-26-tennixai-t105-global-bilingual-player-names-implementation.md)。
+- **工作区保护：** `backend/app/service.py` 有用户已有 P3 freshness 修改；`.codex/`、`.superpowers/`、`REALTIME_LATENCY_INVESTIGATION.md`、`backend/tests/test_p3_query_freshness.py`、`frontend/next-env.d.ts` 均保留且不纳入 T105 提交。根 `.env` 未手动检查或输出；Playwright 使用既有配置加载流程，任何凭据均未打印或提交。
 
 ## T101 修复过期比赛误入当前列表（`done`）
 

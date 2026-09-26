@@ -137,6 +137,8 @@ TennisService → REST DTO / Home Chat / Match Chat
 
 前端、Chat 和比赛数据只能共享同一份球员主数据与 resolver，不能各自维护中文名或名字匹配表。解析成功后必须按内部 `player_id` 查 external ID，再调用 provider；不得让业务层按供应商字符串反查身份。
 
+**结构化姓名展示契约：** canonical `Player.name` 始终作为英文主名；可选 `Player.localized_name` 是独立的中文辅名。公开 P3 DTO 的 `player_names` 与 `player_localized_names` 分开传输，并按同一球员/市场 outcome 顺序对齐。前端结构化球员字段复用 `PlayerName`：英文在前，非空中文在后；中文缺失时只显示英文。此展示约定不改变 resolver、aliases、内部 ID 或 AI 自然语言回答。
+
 当前单打世界排名、积分、变动和抓取时间统一以本地保存的最新 API-Tennis `get_standings` 快照为准；`get_players.stats` 中按赛季/单双打区分的 `rank` 不是当前世界排名。排名页、搜索候选、比赛卡和球员主页必须读取同一快照；比赛数据只能补充球员，不得覆盖较完整的规范姓名、国家或排名。供应商未提供或语义不清的值继续显示为未知，不填造默认值。
 
 ## P1 已批准方案

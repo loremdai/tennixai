@@ -5,11 +5,11 @@
 
 **最后更新：** 2026-09-26（北京时间）
 
-**总体状态：** `in_progress`（P4 持续打磨；T101–T104 已完成；T105 正在统一全站球员中英文展示。此前用户批准的 B 边界保持：所有活跃网球胜者市场展示供应商真实名称/报价，未映射/双打不进入模型或 Paper。模型未晋升时机会页继续诚实为空；模型晋升另行排期）
+**总体状态：** `in_progress`（P4 持续打磨；T101–T105 已完成，当前没有已领取任务。此前用户批准的 B 边界保持：所有活跃网球胜者市场展示供应商真实名称/报价，未映射/双打不进入模型或 Paper。模型未晋升时机会页继续诚实为空；模型晋升另行排期）
 
-**当前里程碑：** P3 已关闭；P4.0–P4.4 已完成（T72–T92）；P4.5（T93–T104）已完成；P4.6 的 T105 进行中。真实服务当前保持运行。
+**当前里程碑：** P3 已关闭；P4.0–P4.4 已完成（T72–T92）；P4.5（T93–T104）与 P4.6（T105）均已完成。T105 后续任务尚未领取；真实本地服务已重新启动。
 
-**当前阶段：** P4.6 — Consumer UI Consistency（T105 全站球员英文主名/中文辅名统一）进行中。P4 整体仍在持续打磨；模型未晋升时机会页仍为空，模型晋升证据链另行排期，自动下单继续 `deferred`。
+**当前阶段：** P4.6 — Consumer UI Consistency 已完成（T105：全站球员英文主名/中文辅名统一）；暂无进行中任务。P4 整体仍在持续打磨；模型未晋升时机会页仍为空，模型晋升证据链另行排期，自动下单继续 `deferred`。
 
 ## 状态说明
 
@@ -151,7 +151,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | P4.3 — Market Data Truthfulness & Coverage | `done` | 修复市场—比赛 read model 脱节，建立全市场可信报价覆盖与实时决策双通道，并让 Markets/Opportunities 如实表达数据与模型状态 | T83 规格经用户 2026-09-22 书面确认；T84–T89 全部 `done` 并逐项提交（2026-09-23）。交付：active-link 唯一 read truth、reversible `0006` latest-quote projection、有界 120s 批量快照覆盖车道（`POST /books`，只读、零凭据）、七个显式 quote 状态、显式 `model_availability`/真实 `decision_action`、按真实原因解释的机会空态、覆盖率健康与 runbook。模型晋升、自动下单和虚构机会均不属于本阶段，均未触碰 |
 | P4.4 — Host Environment Resilience | `done` | 消除项目 HTTP 客户端对宿主 `HTTP(S)_PROXY` / `NO_PROXY` 环境的非确定性继承，避免 IPv6 loopback 排除项导致应用与测试在导入阶段失败 | T90（`b3ef97d`）完成：所有项目自建 HTTPX 客户端显式 `trust_env=False`、WebSocket 显式 `proxy=None`；launcher 保留宿主环境但客户端不再隐式读取代理配置。回归在含 `::1` 的环境中通过，确定性后端 `1200 passed, 114 deselected`，无 API/LLM/交易调用，根 `.env` 未改 |
 | P4.5 — Global Data Integrity & Field Presentation | `done` | 核对结构化网球数据从供应商/API 到全站 UI 的字段和值语义；修复已验证的数据丢失、误标和展示缺陷 | T93–T104 已完成。P4 后续打磨任务单独规划，不在本里程碑内扩展。 |
-| P4.6 — Consumer UI Consistency | `in_progress` | 将所有结构化球员身份展示统一为英文主名、中文辅名 | T105：前端共享姓名展示与 P3 市场双语字段贯通；AI 自然语言回答不强制改写。 |
+| P4.6 — Consumer UI Consistency | `done` | 将所有结构化球员身份展示统一为英文主名、中文辅名 | T105 已完成：P3 DTO 分开传递英文名与可空中文名；共享 `PlayerName` 覆盖 Home、Match、Markets/Paper、Players 与排名/搜索/资料/赛果；AI 自然语言回答不强制改写。 |
 
 > **后验核验记录（2026-09-18）：** T80 的 `110 passed / 44 skipped / 0 failed` 是当时真实通过的历史证据。控制者随后在无影响路径产品代码变更的 `2270049` 上两次复跑当前完整 Playwright，均得到 `109 passed / 44 skipped / 1 failed`；唯一失败为 mobile `prototype.visual` 的 `home-answer`，265 像素差异。该用例单独以 `--workers=1 --repeat-each=10` 则 10/10 通过，故 T81 以两条顺序 CLI lane 消除跨文件 worker 并发，而非改动视觉真相。
 
@@ -194,7 +194,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | T102 | P4.5 | Audit and Repair Every Field on a Player Profile | `done` | `a885a6a`（实现/回归） | 已修复球员页字段、比分/轮次展示、对手目录补全及消费者文案。赛季摘要优先使用完整 API-Tennis stats；缺失时只按可验证的已收录单打赛果派生场数/胜负/胜率，并只在派生指标上标注来源；不推算未知冠军数或场地成绩，不完整结果集不生成摘要。真实页面：2026 已收录 47 场、44–3、93.6%；2025 供应商 stats 为 64 场、58–6、90.6%、6 冠及完整场地记录。整栈重启后数据库/Redis/API/frontend 和同步状态正常；后端确定性 `1338 passed`、前端 Vitest `37 files / 494 passed`、TypeScript、Ruff、P3 freshness 回归及真实桌面/手机检查通过。用户已有 P3 差异与未跟踪文件保留且未纳入任务提交；详见 `CURRENT.md`。 |
 | T103 | P4.5 | Investigate and Repair Missing Set/Game Scores in Historical Results | `done` | `0e63258`（领取），`cadc5d0`（根因），`1c47cc3`（规格），`de5badb`（计划），`f22d19d`（解析），`02b614f`（稀疏归并），`321917d`（按需修复），`e47b5e1`（前端展示） | 根因为 API-Tennis 抢七局分以 `6.7` / `7.9` 编码，旧解析器只接受整数文本，导致整盘双方局分均被丢弃。现严格解析、保留稀疏快照中的已知值、已结束详情按需修复旧快照，并在历史/详情/Home 展示抢七分。获批后执行支持的整栈 `down/up`，数据卷保留且未 init/迁移/重置；数据库/Redis、runtime/API/frontend 和 sports/schedule/rankings/Polymarket 均健康。真实历史 API 检查 2026 年 47/47、2025 年 64/64 条局分完整；浏览器球员历史及比赛详情显示 `6–7（7–9）、7–6（7–2）、6–3、6–4`，2026 样本有 19 个抢七盘分行。实查记录未发现上游真实缺分样本；partial/missing/error 不插值及不覆盖既有比分由 provider/service 测试验证。后端 deterministic `1358 passed, 37 skipped, 91 deselected`；前端 Vitest `499 passed`、TypeScript、改动文件 Ruff、diff check 通过。既有 integration 测试库的 16 个 schema 不匹配失败未通过迁移/重置处理；用户工作区改动均保留，根 `.env` 未读取/输出。详见 `CURRENT.md` 与 [T103 计划](./docs/superpowers/plans/2026-09-26-tennixai-t103-score-integrity-implementation.md)。 |
 | T104 | P4.5 | Use Real Player Photos Throughout the Product | `done` | `9e26970` / `cea6988` / `d672578`（实现）；`6402831` / `19ee1a4`（回归） | [设计规格](./docs/superpowers/specs/2026-09-26-tennixai-t104-global-player-photos-design.md) 与 [实施计划](./docs/superpowers/plans/2026-09-26-tennixai-t104-global-player-photos-implementation.md)。API-Tennis 照片通过内部 player ID 进入 canonical 模型及现有目录缓存；覆盖 Home/Match/Markets/Players/排名/搜索/详情/历史/市场脉搏。全站统一头像；缺图、演示数据或身份无法可靠确认时用中性人像，不猜测照片。排名当前页按需补图、最多 5 个并发；市场/Paper 仅按内部 outcome ID 对齐；不新增图片源、不批量抓取、不改模型/Paper 决策语义。后端 `1363 passed, 37 skipped`、前端 `505 passed`、TypeScript、Ruff、diff check 通过；P3 查询及照片相关 PostgreSQL 集成 `14 passed`。真实浏览器验收因本任务禁止 Playwright 读取根 `.env`/启动服务而未运行；旧集成库 schema 不匹配另见 `CURRENT.md`。 |
-| T105 | P4.6 | Unify English-Primary, Chinese-Secondary Player Names | `in_progress` | — | 用户已确认全站规则及实施计划。当前已知差异：match DTO 已有双语字段但部分 view model 丢弃中文名；P3 查询把中文名优先放入 `player_names`。将新增独立市场中文名字段、复用共享姓名组件，覆盖所有结构化球员展示；不改身份解析、LLM 叙述、模型/市场/Paper 语义。规格：[T105](./docs/superpowers/specs/2026-09-26-tennixai-t105-global-bilingual-player-names-design.md)，计划：[T105](./docs/superpowers/plans/2026-09-26-tennixai-t105-global-bilingual-player-names-implementation.md)。 |
+| T105 | P4.6 | Unify English-Primary, Chinese-Secondary Player Names | `done` | `991b9f0`, `a44fc6e` | canonical `Player.name`/P3 `player_names` 保持英文主名，新增独立可空 `player_localized_names`；共享 `PlayerName` 贯通 Home 助手/赛果/赛程/直播/市场脉搏、Match 比分/统计/PBP/决策/P3 图表、Markets/Opportunities/Paper、Players 排名/搜索/资料/历史。中文缺失只显示英文；未映射市场仍用供应商原名；不改 resolver、AI 自然语言、模型/报价/Paper 语义。验证：后端定向 API/集成 `16 passed`；前端 Vitest `41 files / 523 passed`，`tsc --noEmit` 通过；Playwright 桌面/移动视觉 `22 passed, 4 skipped`（P2 Replay opt-in）；审阅后更新 60 张视觉基线；`git diff --check` 通过。真实本地 `up` exit 0，API/前端 HTTP 200，数据库/Redis healthy；首轮同步完成后的最终 `status` 中 sports stream、schedule、rankings、Polymarket 均为 `ok`。规格：[T105](./docs/superpowers/specs/2026-09-26-tennixai-t105-global-bilingual-player-names-design.md)，计划：[T105](./docs/superpowers/plans/2026-09-26-tennixai-t105-global-bilingual-player-names-implementation.md)。 |
 
 ## P4.1 Completion Gate 核验摘要（2026-09-18，逐条实际核验）
 
