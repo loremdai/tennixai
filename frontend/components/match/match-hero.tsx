@@ -9,6 +9,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { PlayerCountry } from '@/components/player-country'
+import { PlayerAvatar } from '@/components/player-avatar'
 import {
   Card,
   CardAction,
@@ -81,6 +82,8 @@ function PlayerSummary({
           <Badge variant="outline">排名暂未提供</Badge>
         )}
       </div>
+
+      <PlayerAvatar name={player.name} imageUrl={player.avatarUrl} className="size-20" />
 
       <div className="min-w-0">
         <p className="text-pretty text-lg font-semibold leading-tight tracking-tight sm:text-2xl lg:text-3xl">
@@ -226,6 +229,7 @@ function LiveScore({
             <tr key={row.player.id}>
               <th scope="row" className="py-2 text-left font-sans text-sm font-medium">
                 <span className="flex items-center gap-2">
+                  <PlayerAvatar name={row.player.name} imageUrl={row.player.avatarUrl} className="size-7" />
                   {row.serving ? <span className="size-2 rounded-full bg-primary" aria-label="发球方" /> : null}
                   {row.player.shortName}
                 </span>
@@ -318,7 +322,10 @@ function FinishedScore({
           {rows.map((row) => (
             <tr key={row.player.id} className={row.player.id === match.winnerPlayerId ? 'text-primary' : undefined}>
               <th scope="row" className="py-2 text-left font-sans text-sm font-medium">
-                {row.player.shortName}
+                <span className="flex items-center gap-2">
+                  <PlayerAvatar name={row.player.name} imageUrl={row.player.avatarUrl} className="size-7" />
+                  {row.player.shortName}
+                </span>
               </th>
               {row.sets.map((games, index) => (
                 <td key={`${row.player.id}-${index}`} className="py-2">

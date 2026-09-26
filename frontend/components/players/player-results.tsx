@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 
 import { PlayerCountry } from '@/components/player-country'
+import { PlayerAvatar } from '@/components/player-avatar'
 import type {
   CompetitionTier,
   MatchOutcome,
@@ -362,6 +363,7 @@ export function PlayerResults({
                       </p>
                     </div>
                     <div className="flex min-w-0 items-center gap-2">
+                      <PlayerAvatar name={result.opponent.name} imageUrl={result.opponent.avatarUrl} className="size-8" />
                       <PlayerCountry player={result.opponent} />
                       <div className="min-w-0">
                         <p className="truncate text-sm">{result.opponent.name}</p>

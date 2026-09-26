@@ -93,6 +93,22 @@ describe('toHomeMatch', () => {
     })
   })
 
+  it('carries provider player photos into Home and Match view models', () => {
+    const view = toMatchViewModel(
+      baseMatch({
+        players: [
+          { id: 'ply_1', name: 'Jannik Sinner', country_code: 'ita', ranking: 1, image_url: 'https://images.example/sinner.jpg' },
+          { id: 'ply_2', name: 'Carlos Alcaraz', country_code: 'esp', ranking: 2, image_url: null },
+        ],
+      }),
+    )
+
+    expect(view.players.map((player) => player.avatarUrl)).toEqual([
+      'https://images.example/sinner.jpg',
+      null,
+    ])
+  })
+
   it('carries both players’ tiebreak points into the Home score rows', () => {
     const view = toHomeMatch(liveMatch({
       live_state: {
@@ -174,7 +190,7 @@ describe('toMatchViewModel', () => {
       id: 'ply_1',
       name: 'Jannik Sinner',
       shortName: 'Sinner',
-      initials: 'JS',
+      avatarUrl: null,
       countryCode: 'ITA',
       countryName: '意大利',
       flagUrl: 'https://flagcdn.com/w40/it.png',

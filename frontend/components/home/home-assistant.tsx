@@ -13,6 +13,7 @@ import {
 import { MatchResultCard } from '@/components/home/home-match-result-card'
 import { HomePlayerHistory } from '@/components/home/home-player-history'
 import { PlayerCountry } from '@/components/player-country'
+import { PlayerAvatar } from '@/components/player-avatar'
 import { OpportunityRow } from '@/components/markets/opportunity-row'
 import { ChatWarnings } from '@/components/chat-warnings'
 import { MarkdownAnswer } from '@/components/markdown-answer'
@@ -255,10 +256,13 @@ export function HomeAssistant({
                         href={`/players/${candidate.player.id}`}
                         className="flex items-center justify-between gap-3 rounded-xl border bg-card/60 px-4 py-3 text-sm transition-colors hover:bg-muted/40"
                       >
-                        <span className="font-medium">
-                          {candidate.player.localized_name
-                            ? `${candidate.player.name}（${candidate.player.localized_name}）`
-                            : candidate.player.name}
+                        <span className="flex min-w-0 items-center gap-3">
+                          <PlayerAvatar name={candidate.player.name} imageUrl={candidate.player.image_url} className="size-10" />
+                          <span className="truncate font-medium">
+                            {candidate.player.localized_name
+                              ? `${candidate.player.name}（${candidate.player.localized_name}）`
+                              : candidate.player.name}
+                          </span>
                         </span>
                         <span className="flex items-center gap-2 text-xs text-muted-foreground">
                           <PlayerCountry player={country} />

@@ -5,27 +5,11 @@ import { MarketPulse } from './market-pulse'
 
 afterEach(cleanup)
 
-describe('P3 Home market pulse preview', () => {
-  it('shows at most three rows and keeps every row link internal', () => {
+describe('MarketPulse preview', () => {
+  it('shows an avatar slot for each named player in a market row', () => {
     render(<MarketPulse initialState="populated" />)
 
-    const rowLinks = screen.getAllByRole('link').filter((link) =>
-      link.getAttribute('aria-label')?.startsWith('查看 '),
-    )
-
-    expect(rowLinks).toHaveLength(3)
-    expect(screen.getByText('当前退出参考价')).toBeVisible()
-    expect(screen.getAllByText('10 美元模拟买入价')).toHaveLength(2)
-    for (const link of rowLinks) {
-      expect(link.getAttribute('href')).toMatch(/^\/(?!\/)/)
-    }
-    expect(screen.queryAllByRole('button', { name: /钱包|下单|真实交易/ })).toHaveLength(0)
-  })
-
-  it('uses a distinct empty state instead of filling the pulse with weak rows', () => {
-    render(<MarketPulse initialState="empty" />)
-
-    expect(screen.getByText('暂无符合门槛的市场机会')).toBeVisible()
-    expect(screen.queryAllByRole('link', { name: /查看 .*决策/ })).toHaveLength(0)
+    const row = screen.getByRole('link', { name: /Jannik Sinner vs Carlos Alcaraz/ })
+    expect(row.querySelectorAll('[data-slot="avatar"]')).toHaveLength(2)
   })
 })

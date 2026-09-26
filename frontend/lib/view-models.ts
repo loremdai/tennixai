@@ -10,11 +10,11 @@ export type PlayerViewModel = {
   id: string
   name: string
   shortName: string
-  initials: string
   countryCode: string
   countryName: string
   flagUrl: string | null
   ranking: number | null
+  avatarUrl?: string | null
 }
 
 export type HomeMatchViewModel = {
@@ -201,13 +201,6 @@ function shortName(name: string): string {
   return parts[parts.length - 1] || name
 }
 
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return ''
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-}
-
 export function countryPresentation(
   countryCode: string | null,
   countryAlpha2: string | null = null,
@@ -242,9 +235,9 @@ function toPlayerView(player: MatchDto['players'][number]): PlayerViewModel {
     id: player.id,
     name: player.name,
     shortName: shortName(player.name),
-    initials: initials(player.name),
     ...countryPresentation(player.country_code, player.country_alpha2 ?? null),
     ranking: player.ranking,
+    avatarUrl: player.image_url ?? null,
   }
 }
 

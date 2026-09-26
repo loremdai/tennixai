@@ -83,6 +83,7 @@ export type PlayerResultPreview = {
     countryCode: string
     countryName: string
     flagUrl: string | null
+    avatarUrl?: string | null
   }
   outcome: PlayerResultOutcome
   score: string | null

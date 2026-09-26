@@ -1,8 +1,8 @@
 import { ArrowDown, ArrowUp, CalendarDays, Minus } from 'lucide-react'
 
 import { PlayerCountry } from '@/components/player-country'
+import { PlayerAvatar } from '@/components/player-avatar'
 import type { PlayerProfilePreview, RankMovement } from '@/components/players/player-preview-data'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { formatAsOf } from '@/lib/view-models'
 import {
@@ -11,10 +11,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-
-function initials(name: string) {
-  return name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase()
-}
 
 function formatBirthDate(value: string) {
   const [year, month, day] = value.split('-')
@@ -51,10 +47,7 @@ export function PlayerProfileHeader({ profile }: { profile: PlayerProfilePreview
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
-          <Avatar size="lg" className="!size-20 md:!size-24">
-            {profile.avatarUrl ? <AvatarImage src={profile.avatarUrl} alt={`${profile.name} 头像`} /> : null}
-            <AvatarFallback className="text-lg font-semibold">{initials(profile.name)}</AvatarFallback>
-          </Avatar>
+          <PlayerAvatar name={profile.name} imageUrl={profile.avatarUrl} className="!size-20 md:!size-24" />
           <div className="min-w-0 flex-1">
             <h1 id="player-profile-name" className="text-balance text-3xl font-semibold tracking-tight md:text-4xl">{profile.name}</h1>
             {profile.nameZh ? <p className="mt-1 text-lg text-muted-foreground">{profile.nameZh}</p> : null}

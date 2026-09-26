@@ -222,6 +222,26 @@ describe('production match page', () => {
     expect(screen.getAllByText('ESP').length).toBeGreaterThan(0)
   })
 
+  it('shows player photos in the detailed score and key facts panels', async () => {
+    const match = makeMatch({
+      players: [
+        { id: 'ply_1', name: 'Jannik Sinner', image_url: 'https://images.example/sinner.jpg', country_code: 'ita', ranking: 1 },
+        { id: 'ply_2', name: 'Carlos Alcaraz', image_url: 'https://images.example/alcaraz.jpg', country_code: 'esp', ranking: 2 },
+      ],
+    })
+    nextMatch = match
+    mockStream({ data: { kind: 'match', matches: [match] }, text: '比赛正在进行。' })
+
+    render(<MatchPage matchId="mat_1" />)
+
+    const scoreTable = await screen.findByRole('table', { name: '实时详细比分' })
+    expect(within(scoreTable).getByRole('img', { name: 'Jannik Sinner 头像' })).toBeInTheDocument()
+    expect(within(scoreTable).getByRole('img', { name: 'Carlos Alcaraz 头像' })).toBeInTheDocument()
+
+    const keyFacts = screen.getByRole('heading', { name: '关键事实' }).closest('[data-slot="card"]')
+    expect(keyFacts?.querySelectorAll('[data-slot="avatar"]')).toHaveLength(2)
+  })
+
   it('maps live hero state with server highlighting', async () => {
     render(<MatchPage matchId="mat_1" />)
 

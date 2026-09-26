@@ -12,8 +12,8 @@ import {
 
 import { SectionHeading } from '@/components/home/section-heading'
 import { PlayerCountry } from '@/components/player-country'
+import { PlayerAvatar } from '@/components/player-avatar'
 import { userFacingApiError } from '@/lib/api/user-facing-errors'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import {
@@ -64,9 +64,7 @@ function FeaturedPlayer({
 }) {
   return (
     <div className={cn('flex items-center gap-3', align === 'right' && 'flex-row-reverse text-right')}>
-      <Avatar className="size-12">
-        <AvatarFallback>{player.initials}</AvatarFallback>
-      </Avatar>
+      <PlayerAvatar name={player.name} imageUrl={player.avatarUrl} className="size-12" />
       <div className="min-w-0">
         <div className={cn('flex items-center gap-2', align === 'right' && 'justify-end')}>
           <PlayerCountry player={player} />
@@ -288,6 +286,7 @@ function CompactLiveCard({ match }: { match: HomeMatchViewModel }) {
                 <div key={row.player} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 border-t py-2 first:border-t-0">
                   <div className="flex min-w-0 items-center gap-2">
                     <PlayerCountry player={match.playerDetails[index]} />
+                    <PlayerAvatar name={match.playerDetails[index].name} imageUrl={match.playerDetails[index].avatarUrl} className="size-7" />
                     {row.serving ? <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-label="发球方" /> : <span className="size-1.5 shrink-0" aria-hidden="true" />}
                     <span className="truncate text-sm font-medium">{row.player}</span>
                   </div>
@@ -295,9 +294,10 @@ function CompactLiveCard({ match }: { match: HomeMatchViewModel }) {
                   <span className="min-w-6 text-right font-mono font-semibold text-primary">{row.points}</span>
                 </div>
               ))
-            : match.playerDetails.map((player) => (
+              : match.playerDetails.map((player) => (
                 <div key={player.id} className="flex min-w-0 items-center gap-2 border-t py-2 first:border-t-0">
                   <PlayerCountry player={player} />
+                  <PlayerAvatar name={player.name} imageUrl={player.avatarUrl} className="size-7" />
                   <span className="size-1.5 shrink-0" aria-hidden="true" />
                   <span className="truncate text-sm font-medium">{player.shortName}</span>
                 </div>
@@ -440,6 +440,7 @@ export function UpcomingSection({
                 <CardContent className="flex flex-col gap-3">
                   {match.playerDetails.map((player) => (
                     <div key={player.id} className="flex min-w-0 items-center gap-2">
+                      <PlayerAvatar name={player.name} imageUrl={player.avatarUrl} className="size-7" />
                       <PlayerCountry player={player} />
                       <span className="truncate font-medium">{player.shortName}</span>
                     </div>

@@ -2,8 +2,8 @@ import Link from 'next/link'
 import { ChevronRight, SearchX } from 'lucide-react'
 
 import { PlayerCountry } from '@/components/player-country'
+import { PlayerAvatar } from '@/components/player-avatar'
 import type { PlayerDirectoryEntry } from '@/components/players/player-preview-data'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -13,10 +13,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-
-function initials(name: string) {
-  return name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase()
-}
 
 export function PlayerSearchResults({
   query,
@@ -55,10 +51,7 @@ export function PlayerSearchResults({
                   aria-label={`打开 ${player.name}${player.nameZh ? `，${player.nameZh}` : ''} 的球员资料`}
                   className="group flex items-center gap-3 border-b px-4 py-4 transition-colors last:border-b-0 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring md:gap-4"
                 >
-                  <Avatar size="lg" className="size-12">
-                    {player.avatarUrl ? <AvatarImage src={player.avatarUrl} alt={`${player.name} 头像`} /> : null}
-                    <AvatarFallback>{initials(player.name)}</AvatarFallback>
-                  </Avatar>
+                  <PlayerAvatar name={player.name} imageUrl={player.avatarUrl} className="size-12" />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="truncate font-medium text-foreground">{player.name}</p>

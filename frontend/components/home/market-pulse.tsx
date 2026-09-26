@@ -5,9 +5,11 @@ import Link from 'next/link'
 import { ArrowRight, CircleAlert, Radar, ShieldCheck } from 'lucide-react'
 
 import { DecisionStatusBadge } from '@/components/p3/decision-status'
+import { PlayerAvatar } from '@/components/player-avatar'
 import { P3PreviewControls } from '@/components/p3/p3-preview-controls'
 import {
   getHomePulseRows,
+  splitPreviewMatchPlayers,
   type HomePulseState,
 } from '@/components/p3/p3-preview-data'
 import { Badge } from '@/components/ui/badge'
@@ -101,47 +103,54 @@ export function MarketPulse({ initialState }: { initialState: HomePulseState }) 
             </div>
           ) : (
             <div className="divide-y">
-              {rows.map((row) => (
-                <Link
-                  key={row.id}
-                  href={row.href}
-                  className="group grid min-h-24 grid-cols-2 gap-3 px-4 py-4 outline-none transition-colors hover:bg-muted/35 focus-visible:bg-muted/35 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:grid-cols-[minmax(16rem,1.6fr)_minmax(6rem,0.55fr)_minmax(8rem,0.7fr)_auto_auto] sm:items-center"
-                  aria-label={`查看 ${row.match} 的 ${row.state} 决策`}
-                >
-                  <div className="col-span-2 min-w-0 sm:col-span-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate font-semibold">{row.match}</p>
-                      <Badge variant="outline">{row.phase}</Badge>
+              {rows.map((row) => {
+                const [playerOne, playerTwo] = splitPreviewMatchPlayers(row.match)
+                return (
+                  <Link
+                    key={row.id}
+                    href={row.href}
+                    className="group grid min-h-24 grid-cols-2 gap-3 px-4 py-4 outline-none transition-colors hover:bg-muted/35 focus-visible:bg-muted/35 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:grid-cols-[minmax(16rem,1.6fr)_minmax(6rem,0.55fr)_minmax(8rem,0.7fr)_auto_auto] sm:items-center"
+                    aria-label={`查看 ${row.match} 的 ${row.state} 决策`}
+                  >
+                    <div className="col-span-2 min-w-0 sm:col-span-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <PlayerAvatar name={playerOne} className="size-8" />
+                          <p className="truncate font-semibold">{row.match}</p>
+                          <PlayerAvatar name={playerTwo} className="size-8" />
+                        </div>
+                        <Badge variant="outline">{row.phase}</Badge>
+                      </div>
+                      <p className="mt-1 truncate text-xs text-muted-foreground">{row.tournament}</p>
                     </div>
-                    <p className="mt-1 truncate text-xs text-muted-foreground">{row.tournament}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">模型估算胜率</p>
-                    <p className="mt-1 font-mono text-lg font-semibold tabular-nums">{formatPercent(row.modelProbability)}</p>
-                  </div>
-                  <div>
-                    <p
-                      className="text-xs text-muted-foreground"
-                      title={row.priority === 'position' || row.priority === 'sell'
-                        ? '按当前最高买价估算；不代表整笔持仓都能按此价格退出。'
-                        : undefined}
-                    >
-                      {row.priority === 'position' || row.priority === 'sell'
-                        ? '当前退出参考价'
-                        : '10 美元模拟买入价'}
-                    </p>
-                    <p className="mt-1 font-mono text-lg font-semibold tabular-nums">{formatPercent(row.executableProbability)}</p>
-                  </div>
-                  <div className="flex flex-col items-start gap-1">
-                    <DecisionStatusBadge state={row.state} overlay={row.stale ? 'stale' : 'none'} />
-                    <span className="font-mono text-xs text-muted-foreground">{formatEdge(row.edgePp)}</span>
-                  </div>
-                  <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground">
-                    <span>{row.freshness}</span>
-                    <ArrowRight aria-hidden="true" className="size-4 text-foreground transition-transform group-hover:translate-x-0.5" />
-                  </div>
-                </Link>
-              ))}
+                    <div>
+                      <p className="text-xs text-muted-foreground">模型估算胜率</p>
+                      <p className="mt-1 font-mono text-lg font-semibold tabular-nums">{formatPercent(row.modelProbability)}</p>
+                    </div>
+                    <div>
+                      <p
+                        className="text-xs text-muted-foreground"
+                        title={row.priority === 'position' || row.priority === 'sell'
+                          ? '按当前最高买价估算；不代表整笔持仓都能按此价格退出。'
+                          : undefined}
+                      >
+                        {row.priority === 'position' || row.priority === 'sell'
+                          ? '当前退出参考价'
+                          : '10 美元模拟买入价'}
+                      </p>
+                      <p className="mt-1 font-mono text-lg font-semibold tabular-nums">{formatPercent(row.executableProbability)}</p>
+                    </div>
+                    <div className="flex flex-col items-start gap-1">
+                      <DecisionStatusBadge state={row.state} overlay={row.stale ? 'stale' : 'none'} />
+                      <span className="font-mono text-xs text-muted-foreground">{formatEdge(row.edgePp)}</span>
+                    </div>
+                    <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground">
+                      <span>{row.freshness}</span>
+                      <ArrowRight aria-hidden="true" className="size-4 text-foreground transition-transform group-hover:translate-x-0.5" />
+                    </div>
+                  </Link>
+                )
+              })}
             </div>
           )}
         </CardContent>

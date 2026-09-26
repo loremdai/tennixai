@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowRight, CircleAlert, Radar, ShieldCheck } from 'lucide-react'
 
 import { DecisionStatusBadge, decisionStateLabels } from '@/components/p3/decision-status'
+import { PlayerAvatar } from '@/components/player-avatar'
 import { Badge } from '@/components/ui/badge'
 import {
   Card,
@@ -167,7 +168,11 @@ export function LiveMarketPulse({
                 >
                   <div className="col-span-2 min-w-0 sm:col-span-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate font-semibold">{row.match}</p>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <PlayerAvatar name={row.playerNames?.[0] ?? row.match} imageUrl={row.playerImages?.[0]} className="size-8" />
+                        <p className="truncate font-semibold">{row.match}</p>
+                        <PlayerAvatar name={row.playerNames?.[1] ?? row.match} imageUrl={row.playerImages?.[1]} className="size-8" />
+                      </div>
                       <Badge variant="outline">{row.phase}</Badge>
                     </div>
                     <p className="mt-1 truncate text-xs text-muted-foreground">{row.tournament}</p>

@@ -141,7 +141,7 @@ export function toDirectoryEntry(entry: RankingEntryDto): PlayerDirectoryEntry {
     tour: entry.tour,
     rank: entry.rank,
     points: entry.points,
-    avatarUrl: null,
+    avatarUrl: entry.player.image_url ?? null,
     movement: movementFor(entry.movement),
   })
 }
@@ -153,7 +153,7 @@ export function searchResolutionToEntries(resolution: PlayerSearchResolutionDto)
         tour: null,
         rank: resolution.player.ranking,
         points: null,
-        avatarUrl: null,
+        avatarUrl: resolution.player.image_url ?? null,
       }),
     ]
   }
@@ -163,7 +163,7 @@ export function searchResolutionToEntries(resolution: PlayerSearchResolutionDto)
         tour: null,
         rank: candidate.current_rank ?? candidate.player.ranking,
         points: null,
-        avatarUrl: null,
+        avatarUrl: candidate.player.image_url ?? null,
       }),
     )
   }
@@ -221,7 +221,7 @@ export function toProfilePreview(view: PlayerProfileViewDto, now: Date = new Dat
     tour: view.ranking?.tour ?? null,
     rank: view.ranking?.rank ?? null,
     points: view.ranking?.points ?? null,
-    avatarUrl: view.profile.image_url,
+    avatarUrl: view.profile.image_url ?? view.profile.player.image_url ?? null,
     movement: movementFor(view.ranking?.movement ?? 'unknown'),
   })
   return {
@@ -320,6 +320,7 @@ export function toResultPreview(match: MatchDto, playerId: string, fallbackSeaso
       name: opponentPlayer.name,
       nameZh: opponentPlayer.localized_name ?? null,
       ...countryPresentation(opponentPlayer.country_code, opponentPlayer.country_alpha2 ?? null),
+      avatarUrl: opponentPlayer.image_url ?? null,
     },
     outcome:
       match.winner_player_id === null
@@ -361,6 +362,7 @@ export function toCurrentStatus(
     name: opponentPlayer.name,
     nameZh: opponentPlayer.localized_name ?? null,
     ...countryPresentation(opponentPlayer.country_code, opponentPlayer.country_alpha2 ?? null),
+    avatarUrl: opponentPlayer.image_url ?? null,
   }
   const round = displayRoundLabel(match.round, match.tournament.name) ?? MISSING_ROUND_LABEL
 

@@ -19,6 +19,7 @@ export type PlayerDto = {
   country_alpha2?: string | null
   ranking: number | null
   localized_name?: string | null
+  image_url?: string | null
 }
 export type TournamentDto = {
   id: string
@@ -316,6 +317,7 @@ export type PlayerSummaryDto = {
   country_code: string | null
   country_alpha2?: string | null
   ranking: number | null
+  image_url?: string | null
 }
 
 export type RankingEntryDto = {
@@ -447,6 +449,7 @@ export type OpportunityDto = {
   target_player_id: string | null
   player_ids: [string, string] | null
   player_names: [string, string] | null
+  player_images?: [string | null, string | null] | null
   model_probability: number | null
   executable_probability: number | null
   conservative_net_edge: string | null
@@ -512,6 +515,7 @@ export type MarketSummaryDto = {
   reason_code: string | null
   player_ids: [string, string] | null
   player_names: [string, string] | null
+  player_images?: [string | null, string | null] | null
   model_probability: number | null
   quote: MarketQuoteDto
   is_stale: boolean
@@ -534,6 +538,7 @@ export type PaperPositionDto = {
   outcome_player_id: string
   player_ids: [string, string] | null
   player_names: [string, string] | null
+  player_images?: [string | null, string | null] | null
   status: PositionStatusValue
   entry_cost: string
   shares: string
@@ -555,6 +560,7 @@ export type PulseRowDto = {
   action: DecisionActionValue
   phase: OpportunityPhaseValue | 'closed' | null
   player_names: [string, string] | null
+  player_images?: [string | null, string | null] | null
   model_probability: number | null
   executable_probability: number | null
   conservative_net_edge: string | null

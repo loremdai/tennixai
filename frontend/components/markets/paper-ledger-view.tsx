@@ -2,9 +2,11 @@ import Link from 'next/link'
 import { ArrowRight, BookOpenCheck, ShieldCheck } from 'lucide-react'
 
 import { DecisionStatusBadge } from '@/components/p3/decision-status'
+import { PlayerAvatar } from '@/components/player-avatar'
 import {
   openPaperFixtures,
   terminalPaperFixtures,
+  splitPreviewMatchPlayers,
   type MarketsPreviewState,
   type PaperLedgerPreview,
 } from '@/components/p3/p3-preview-data'
@@ -68,6 +70,7 @@ export function PaperLedgerView({ state }: { state: MarketsPreviewState }) {
 
       <div className="grid gap-3">
         {records.map((record) => {
+          const [playerOne, playerTwo] = splitPreviewMatchPlayers(record.match)
           const entryPending = record.state === 'entry_pending'
           const noPosition = entryPending || record.state === 'missed'
           const averageEntry = `${(record.averageEntry * 100).toFixed(1)}%`
@@ -85,7 +88,11 @@ export function PaperLedgerView({ state }: { state: MarketsPreviewState }) {
               <Card size="sm" className="transition-[transform,box-shadow] group-hover:-translate-y-0.5 group-hover:ring-primary/35">
                 <CardContent className="grid min-h-28 grid-cols-2 items-center gap-4 py-1 md:grid-cols-[minmax(15rem,1.5fr)_minmax(8rem,0.7fr)_minmax(7rem,0.55fr)_minmax(8rem,0.65fr)_minmax(7rem,0.55fr)_auto_auto]">
                   <div className="col-span-2 min-w-0 md:col-span-1">
-                    <h3 className="truncate font-semibold">{record.match}</h3>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <PlayerAvatar name={playerOne} className="size-7" />
+                      <h3 className="truncate font-semibold">{record.match}</h3>
+                      <PlayerAvatar name={playerTwo} className="size-7" />
+                    </div>
                     <p className="mt-1 truncate text-sm text-muted-foreground">{record.tournament}</p>
                     <p className="mt-2 text-xs font-medium text-primary">方向：{record.direction}</p>
                   </div>

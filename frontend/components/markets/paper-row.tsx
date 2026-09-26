@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 
 import { DecisionStatusBadge } from '@/components/p3/decision-status'
+import { PlayerAvatar } from '@/components/player-avatar'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 
@@ -10,6 +11,8 @@ export type PaperRowData = {
   match: string
   tournament: string
   direction: string
+  playerNames?: [string, string] | null
+  playerImages?: [string | null, string | null] | null
   state: 'entry_pending' | 'hold' | 'exit_pending' | 'exit_missed' | 'exited' | 'missed' | 'settled'
   cost: number
   shares: number
@@ -49,7 +52,11 @@ export function PaperRow({ record }: { record: PaperRowData }) {
       <Card size="sm" className="transition-[transform,box-shadow] group-hover:-translate-y-0.5 group-hover:ring-primary/35">
         <CardContent className="grid min-h-28 grid-cols-2 items-center gap-4 py-1 md:grid-cols-[minmax(15rem,1.5fr)_minmax(8rem,0.7fr)_minmax(7rem,0.55fr)_minmax(8rem,0.65fr)_minmax(7rem,0.55fr)_auto_auto]">
           <div className="col-span-2 min-w-0 md:col-span-1">
-            <h3 className="truncate font-semibold">{record.match}</h3>
+            <div className="flex min-w-0 items-center gap-2">
+              <PlayerAvatar name={record.playerNames?.[0] ?? record.match} imageUrl={record.playerImages?.[0]} className="size-8" />
+              <h3 className="truncate font-semibold">{record.match}</h3>
+              <PlayerAvatar name={record.playerNames?.[1] ?? record.match} imageUrl={record.playerImages?.[1]} className="size-8" />
+            </div>
             <p className="mt-1 truncate text-sm text-muted-foreground">{record.tournament}</p>
             <p className="mt-2 text-xs font-medium text-primary">方向：{record.direction}</p>
           </div>

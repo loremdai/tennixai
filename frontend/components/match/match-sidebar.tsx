@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
+import { PlayerAvatar } from '@/components/player-avatar'
 import { Button } from '@/components/ui/button'
 import { ChatWarnings } from '@/components/chat-warnings'
 import { MarkdownAnswer } from '@/components/markdown-answer'
@@ -271,11 +272,14 @@ export function KeyFactsCard({ match, preview }: { match: MatchViewModel; previe
       <CardContent>
         <div className="grid grid-cols-2 gap-3 rounded-lg bg-muted/30 p-3">
           {match.players.map((player) => (
-            <div key={player.id} className="min-w-0">
-              <p className="truncate text-sm text-muted-foreground">{player.shortName}</p>
-              <p className="mt-1 font-mono text-lg font-semibold">
-                {player.ranking !== null ? `#${player.ranking}` : '排名暂未提供'}
-              </p>
+            <div key={player.id} className="flex min-w-0 items-center gap-2">
+              <PlayerAvatar name={player.name} imageUrl={player.avatarUrl} className="size-8" />
+              <div className="min-w-0">
+                <p className="truncate text-sm text-muted-foreground">{player.shortName}</p>
+                <p className="mt-1 font-mono text-lg font-semibold">
+                  {player.ranking !== null ? `#${player.ranking}` : '排名暂未提供'}
+                </p>
+              </div>
             </div>
           ))}
         </div>

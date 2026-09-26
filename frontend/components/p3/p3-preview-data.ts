@@ -109,6 +109,13 @@ export type TourTier = 'main' | 'challenger' | 'itf' | 'other'
 export type MarketGender = 'men' | 'women'
 export type MatchPhase = 'live' | 'upcoming'
 
+export function splitPreviewMatchPlayers(match: string): [string, string] {
+  const separator = ' vs '
+  const separatorIndex = match.indexOf(separator)
+  if (separatorIndex < 0) return [match, match]
+  return [match.slice(0, separatorIndex), match.slice(separatorIndex + separator.length)]
+}
+
 export type OpportunityPreview = {
   id: string
   match: string

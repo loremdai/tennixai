@@ -110,6 +110,21 @@ describe('P3 DTO decoding', () => {
     expect(availability).toBeNull()  // older payloads stay decodable
   })
 
+  it('decodes player photos as a nullable pair without coercing missing photos', () => {
+    const { rows } = decodeOpportunityList({
+      data: [opportunity({ player_images: ['https://images.example/a.jpg', null] })],
+    })
+    expect(rows[0].player_images).toEqual(['https://images.example/a.jpg', null])
+
+    const page = decodeMarketPage({
+      data: [marketSummary({ player_images: [null, 'https://images.example/b.jpg'] })],
+      page: 1,
+      page_size: 20,
+      total: 1,
+    })
+    expect(page.markets[0].player_images).toEqual([null, 'https://images.example/b.jpg'])
+  })
+
   it('accepts the wait action with a max acceptable price', () => {
     const { rows } = decodeOpportunityList({
       data: [opportunity({ action: 'wait', max_acceptable_price: '0.5500', conservative_net_edge: null })],

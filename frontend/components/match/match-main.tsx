@@ -17,6 +17,7 @@ import {
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { PlayerAvatar } from '@/components/player-avatar'
 import {
   Card,
   CardAction,
@@ -136,6 +137,8 @@ export function OverviewCard({ match, preview }: Pick<MainColumnProps, 'match' |
 
 type ScoreRowView = {
   playerId: string
+  playerName: string
+  avatarUrl: string | null
   shortName: string
   sets: Array<number | null>
   tiebreakPoints?: Array<number | null>
@@ -165,7 +168,7 @@ function ScoreTable({
       </caption>
       <thead>
         <tr className="text-xs text-muted-foreground sm:text-sm">
-          <th scope="col" className="w-20 pb-3 text-left font-normal">球员</th>
+          <th scope="col" className="w-24 pb-3 text-left font-normal">球员</th>
           {rows[0].sets.map((_, index) => (
             <th key={index} scope="col" className={cn('pb-3 font-normal', setNumberAt(index) === highlightedSetNumber && 'text-primary')}>
               {setLabel(setNumberAt(index) - 1)}
@@ -179,6 +182,7 @@ function ScoreTable({
           <tr key={row.playerId} className="border-t">
             <th scope="row" className="py-3 text-left font-sans text-sm font-medium">
               <span className="flex items-center gap-2">
+                <PlayerAvatar name={row.playerName} imageUrl={row.avatarUrl} className="size-6" />
                 {row.serving ? <span className="size-2 rounded-full bg-primary" aria-label="发球方" /> : null}
                 {row.shortName}
               </span>
@@ -201,6 +205,8 @@ function rowsFromMatch(match: MatchViewModel): [ScoreRowView, ScoreRowView] | nu
   if (!score) return null
   return [0, 1].map((index) => ({
     playerId: match.players[index].id,
+    playerName: match.players[index].name,
+    avatarUrl: match.players[index].avatarUrl ?? null,
     shortName: match.players[index].shortName,
     sets: score.sets.map((set) =>
       index === 0 ? set.player1_games : set.player2_games,
@@ -226,11 +232,11 @@ export function ScoreProgressCard({ match, preview, highlight }: Pick<MainColumn
     ? (visualStatus === 'finished'
         ? previewFinishedScore.rows.map((row) => {
             const player = getPreviewPlayer(row.playerId)
-            return { playerId: row.playerId, shortName: player.shortName, sets: row.sets, points: row.points, serving: row.serving, winner: row.winner }
+            return { playerId: row.playerId, playerName: player.name, avatarUrl: null, shortName: player.shortName, sets: row.sets, points: row.points, serving: row.serving, winner: row.winner }
           }) as [ScoreRowView, ScoreRowView]
         : previewLiveScore.rows.map((row) => {
             const player = getPreviewPlayer(row.playerId)
-            return { playerId: row.playerId, shortName: player.shortName, sets: row.sets, points: row.points, serving: row.serving, winner: row.winner }
+            return { playerId: row.playerId, playerName: player.name, avatarUrl: null, shortName: player.shortName, sets: row.sets, points: row.points, serving: row.serving, winner: row.winner }
           }) as [ScoreRowView, ScoreRowView])
     : rowsFromMatch(match)
 

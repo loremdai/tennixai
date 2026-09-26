@@ -91,6 +91,30 @@ describe('P3 markets preview', () => {
     ).toBeGreaterThan(0)
   })
 
+  it('keeps two player avatar slots beside preview market, opportunity, and paper rows', async () => {
+    const user = userEvent.setup()
+    render(
+      <MarketsPage
+        initialView="all"
+        initialState="populated"
+        initialTiers={[]}
+        initialGender="all"
+        initialPhase="all"
+      />,
+    )
+
+    const market = screen.getByRole('link', { name: '查看 Jannik Sinner vs Carlos Alcaraz 市场' })
+    expect(market.querySelectorAll('[data-slot="avatar"]')).toHaveLength(2)
+
+    await user.click(screen.getByRole('tab', { name: /机会/ }))
+    const opportunity = screen.getByRole('link', { name: /Jannik Sinner vs Carlos Alcaraz/ })
+    expect(opportunity.querySelectorAll('[data-slot="avatar"]')).toHaveLength(2)
+
+    await user.click(screen.getByRole('tab', { name: /^模拟记录/ }))
+    const paper = screen.getByRole('link', { name: '查看 Jannik Sinner vs Carlos Alcaraz 的模拟记录' })
+    expect(paper.querySelectorAll('[data-slot="avatar"]')).toHaveLength(2)
+  })
+
   it('distinguishes planned quotes from held positions in preview records', () => {
     render(
       <MarketsPage

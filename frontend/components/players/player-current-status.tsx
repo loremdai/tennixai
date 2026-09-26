@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { CalendarClock, ChevronRight, CircleDot, Info } from 'lucide-react'
 
 import { PlayerCountry } from '@/components/player-country'
+import { PlayerAvatar } from '@/components/player-avatar'
 import type { PlayerCurrentStatusPreview } from '@/components/players/player-preview-data'
 import { Badge } from '@/components/ui/badge'
 import { buttonVariants } from '@/components/ui/button'
@@ -60,6 +61,7 @@ export function PlayerCurrentStatus({
         <div className="rounded-xl bg-background/80 p-4 ring-1 ring-foreground/10">
           <p className="text-xs text-muted-foreground">对手</p>
           <div className="mt-2 flex items-center gap-2">
+            <PlayerAvatar name={status.opponent.name} imageUrl={status.opponent.avatarUrl} className="size-10" />
             <PlayerCountry player={status.opponent} />
             <div className="min-w-0">
               <p className="truncate font-medium">{status.opponent.name}</p>

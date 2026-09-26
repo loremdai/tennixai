@@ -6,7 +6,6 @@ export type PreviewPlayer = {
   id: string
   name: string
   shortName: string
-  initials: string
   country: string
   countryCode: string
   flagUrl: string
@@ -27,7 +26,6 @@ export const previewPlayers: [PreviewPlayer, PreviewPlayer] = [
     id: 'jannik-sinner',
     name: 'Jannik Sinner',
     shortName: 'Sinner',
-    initials: 'JS',
     country: '意大利',
     countryCode: 'ITA',
     flagUrl: 'https://flagcdn.com/w40/it.png',
@@ -38,7 +36,6 @@ export const previewPlayers: [PreviewPlayer, PreviewPlayer] = [
     id: 'carlos-alcaraz',
     name: 'Carlos Alcaraz',
     shortName: 'Alcaraz',
-    initials: 'CA',
     country: '西班牙',
     countryCode: 'ESP',
     flagUrl: 'https://flagcdn.com/w40/es.png',
@@ -150,7 +147,6 @@ export function buildPreviewMatch(status: MatchStatus): MatchViewModel {
         id: previewPlayers[0].id,
         name: previewPlayers[0].name,
         shortName: previewPlayers[0].shortName,
-        initials: previewPlayers[0].initials,
         countryCode: previewPlayers[0].countryCode,
         countryName: previewPlayers[0].country,
         flagUrl: previewPlayers[0].flagUrl,
@@ -160,7 +156,6 @@ export function buildPreviewMatch(status: MatchStatus): MatchViewModel {
         id: previewPlayers[1].id,
         name: previewPlayers[1].name,
         shortName: previewPlayers[1].shortName,
-        initials: previewPlayers[1].initials,
         countryCode: previewPlayers[1].countryCode,
         countryName: previewPlayers[1].country,
         flagUrl: previewPlayers[1].flagUrl,

@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { ArrowRight, CheckCircle2, Clock3, Radio } from 'lucide-react'
 
+import { PlayerAvatar } from '@/components/player-avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import {
@@ -34,9 +35,13 @@ export function MatchResultCard({
     <Card size="sm" className="bg-background/45" data-testid={`home-match-${match.status}`}>
       <CardHeader className="border-b">
         <CardTitle>
-          <h3 className="text-pretty text-base">
-            {match.players[0]} <span className="text-muted-foreground">vs</span> {match.players[1]}
-          </h3>
+          <div className="flex min-w-0 items-center gap-2">
+            <PlayerAvatar name={match.playerDetails[0].name} imageUrl={match.playerDetails[0].avatarUrl} className="size-8" />
+            <h3 className="min-w-0 truncate text-pretty text-base">
+              {match.players[0]} <span className="text-muted-foreground">vs</span> {match.players[1]}
+            </h3>
+            <PlayerAvatar name={match.playerDetails[1].name} imageUrl={match.playerDetails[1].avatarUrl} className="size-8" />
+          </div>
         </CardTitle>
         <p className="text-xs text-muted-foreground">{match.tournament} · {match.round}</p>
         <CardAction>

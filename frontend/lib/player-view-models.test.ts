@@ -154,7 +154,14 @@ describe('toDirectoryEntry', () => {
   })
 
   it('maps an English-primary name with optional Chinese secondary name', () => {
-    const entry = toDirectoryEntry(rankingEntryFixture())
+    const entry = toDirectoryEntry(
+      rankingEntryFixture({
+        player: {
+          ...rankingEntryFixture().player,
+          image_url: 'https://images.example/zheng.jpg',
+        },
+      }),
+    )
 
     expect(entry).toMatchObject({
       id: 'ply_zheng',
@@ -165,7 +172,7 @@ describe('toDirectoryEntry', () => {
       countryName: '中国',
       rank: 5,
       points: 5315,
-      avatarUrl: null,
+      avatarUrl: 'https://images.example/zheng.jpg',
       aliases: [],
     })
     expect(entry.flagUrl).toContain('/cn.png')

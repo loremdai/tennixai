@@ -24,6 +24,7 @@ export type OpportunityRowModel = {
   tournament: string
   phase: Exclude<RowPhase, 'closed' | 'unknown'>
   selection: string
+  selectionImageUrl?: string | null
   modelProbability: number | null
   executableProbability: number | null
   edgePp: number | null
@@ -53,6 +54,7 @@ export type MarketRowModel = {
   quoteLabel: string
   playerOne: string
   playerTwo: string
+  playerImages?: [string | null, string | null] | null
   playerOneAsk: number | null
   playerTwoAsk: number | null
   spread: number | null
@@ -70,6 +72,8 @@ export type PaperRowModel = {
   match: string
   tournament: string
   direction: string
+  playerNames?: [string, string] | null
+  playerImages?: [string | null, string | null] | null
   state: 'entry_pending' | 'hold' | 'exit_pending' | 'exit_missed' | 'exited' | 'missed' | 'settled'
   cost: number
   shares: number
@@ -85,6 +89,8 @@ export type PulseRowModel = {
   id: string
   priority: 'position' | 'sell' | 'buy_live' | 'buy_upcoming' | 'wait' | 'buy_unknown'
   match: string
+  playerNames?: [string, string] | null
+  playerImages?: [string | null, string | null] | null
   tournament: string
   phase: '直播' | '即将开始' | '已完赛' | '比赛状态未知'
   modelProbability: number | null
@@ -207,9 +213,13 @@ function namesOf(dto: {
 export function toOpportunityRow(dto: OpportunityDto, now: Date): OpportunityRowModel {
   const [one, two] = namesOf(dto)
   let selection = '—'
+  let selectionImageUrl: string | null = null
   if (dto.target_player_id && dto.player_ids && dto.player_names) {
     const index = dto.player_ids.indexOf(dto.target_player_id)
-    if (index >= 0) selection = dto.player_names[index]
+    if (index >= 0) {
+      selection = dto.player_names[index]
+      selectionImageUrl = dto.player_images?.[index] ?? null
+    }
   }
   return {
     id: dto.match_id,
@@ -217,6 +227,7 @@ export function toOpportunityRow(dto: OpportunityDto, now: Date): OpportunityRow
     tournament: dto.tournament_name ?? '—',
     phase: dto.phase,
     selection,
+    selectionImageUrl,
     modelProbability: dto.model_probability,
     executableProbability: dto.executable_probability,
     edgePp:
@@ -261,6 +272,7 @@ export function toMarketRow(dto: MarketSummaryDto, now: Date): MarketRowModel {
     quoteLabel: quoteStateLabel(dto.quote.state, dto.quote.as_of, now),
     playerOne: one,
     playerTwo: two,
+    playerImages: dto.player_images,
     playerOneAsk: dto.quote.outcome_asks
       ? parseDecimalOrNull(dto.quote.outcome_asks[0])
       : null,
@@ -307,6 +319,8 @@ export function toPaperRow(
     match: matchLabel ?? '—',
     tournament: dto.tournament_name ?? '—',
     direction,
+    playerNames: dto.player_names,
+    playerImages: dto.player_images,
     state,
     cost: parseDecimalOrNull(dto.entry_cost) ?? 0,
     shares: parseDecimalOrNull(dto.shares) ?? 0,
@@ -337,6 +351,8 @@ export function toPulseRow(dto: PulseRowDto, now: Date): PulseRowModel {
     id: `${dto.kind}:${dto.match_id}`,
     priority,
     match: `${one} vs. ${two}`,
+    playerNames: dto.player_names,
+    playerImages: dto.player_images,
     tournament: dto.tournament_name ?? '—',
     phase:
       dto.phase === 'live'

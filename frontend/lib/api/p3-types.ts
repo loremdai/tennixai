@@ -227,6 +227,21 @@ function namesTuple(value: unknown, path: string): [string, string] | null {
   return [str(items[0], `${path}[0]`), str(items[1], `${path}[1]`)]
 }
 
+function imagesTuple(
+  value: unknown,
+  path: string,
+): [string | null, string | null] | null {
+  if (value === null || value === undefined) return null
+  const items = rawList(value, path)
+  if (items.length !== 2) {
+    throw new P3DecodeError(path, 'expected exactly two player photo URLs')
+  }
+  return [
+    strOrNull(items[0], `${path}[0]`),
+    strOrNull(items[1], `${path}[1]`),
+  ]
+}
+
 function levelTuple(value: unknown, path: string): [string, string] | null {
   if (value === null || value === undefined) return null
   const items = rawList(value, path)
@@ -250,6 +265,7 @@ function decodeOpportunity(value: unknown, path: string): OpportunityDto {
     target_player_id: strOrNull(item.target_player_id, `${path}.target_player_id`),
     player_ids: idsTuple(item.player_ids, `${path}.player_ids`),
     player_names: namesTuple(item.player_names, `${path}.player_names`),
+    player_images: imagesTuple(item.player_images, `${path}.player_images`),
     model_probability: probability(item.model_probability, `${path}.model_probability`),
     executable_probability: probability(
       item.executable_probability,
@@ -346,6 +362,7 @@ function decodeMarketSummary(value: unknown, path: string): MarketSummaryDto {
     reason_code: strOrNull(item.reason_code, `${path}.reason_code`),
     player_ids: idsTuple(item.player_ids, `${path}.player_ids`),
     player_names: namesTuple(item.player_names, `${path}.player_names`),
+    player_images: imagesTuple(item.player_images, `${path}.player_images`),
     model_probability: probability(item.model_probability, `${path}.model_probability`),
     quote: decodeMarketQuote(item.quote, `${path}.quote`),
     is_stale: boolOrFalse(item.is_stale, `${path}.is_stale`),
@@ -376,6 +393,7 @@ function decodePosition(value: unknown, path: string): PaperPositionDto {
     outcome_player_id: str(item.outcome_player_id, `${path}.outcome_player_id`),
     player_ids: idsTuple(item.player_ids, `${path}.player_ids`),
     player_names: namesTuple(item.player_names, `${path}.player_names`),
+    player_images: imagesTuple(item.player_images, `${path}.player_images`),
     status: oneOf(item.status, POSITION_STATUSES, `${path}.status`) as PositionStatusValue,
     entry_cost: decimal(item.entry_cost, `${path}.entry_cost`),
     shares: decimal(item.shares, `${path}.shares`),
@@ -407,6 +425,7 @@ function decodePulseRow(value: unknown, path: string): PulseRowDto {
     action: oneOf(item.action, DECISION_ACTIONS, `${path}.action`) as DecisionActionValue,
     phase: oneOfOrNull(item.phase, PULSE_PHASES, `${path}.phase`) as PulseRowDto['phase'],
     player_names: namesTuple(item.player_names, `${path}.player_names`),
+    player_images: imagesTuple(item.player_images, `${path}.player_images`),
     model_probability: probability(item.model_probability, `${path}.model_probability`),
     executable_probability: probability(
       item.executable_probability,

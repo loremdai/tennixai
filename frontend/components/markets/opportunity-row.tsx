@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 
 import { DecisionStatusBadge, decisionStateLabels } from '@/components/p3/decision-status'
+import { PlayerAvatar } from '@/components/player-avatar'
 import type { DecisionOverlay } from '@/components/p3/p3-preview-data'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -12,6 +13,7 @@ export type OpportunityRowData = {
   tournament: string
   phase: 'live' | 'upcoming'
   selection: string
+  selectionImageUrl?: string | null
   modelProbability: number | null
   executableProbability: number | null
   edgePp: number | null
@@ -44,7 +46,10 @@ export function OpportunityRow({ opportunity }: { opportunity: OpportunityRowDat
               <Badge variant="outline">{opportunity.phase === 'live' ? '直播' : '即将开始'}</Badge>
             </div>
             <p className="mt-1 truncate text-sm text-muted-foreground">{opportunity.tournament}</p>
-            <p className="mt-2 text-xs font-medium text-primary">方向：{opportunity.selection}</p>
+            <p className="mt-2 flex items-center gap-2 text-xs font-medium text-primary">
+              <PlayerAvatar name={opportunity.selection} imageUrl={opportunity.selectionImageUrl} className="size-7" />
+              方向：{opportunity.selection}
+            </p>
           </div>
 
           <dl>

@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 
 import { DecisionStatusBadge } from '@/components/p3/decision-status'
+import { PlayerAvatar } from '@/components/player-avatar'
 import type { DecisionOverlay, DecisionState } from '@/components/p3/p3-preview-data'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -25,6 +26,7 @@ export type MarketRowData = {
   quoteLabel: string
   playerOne: string
   playerTwo: string
+  playerImages?: [string | null, string | null] | null
   playerOneAsk: number | null
   playerTwoAsk: number | null
   spread: number | null
@@ -73,11 +75,17 @@ export function MarketRow({ market }: { market: MarketRowData }) {
 
         <dl className="grid grid-cols-2 gap-3 rounded-lg bg-muted/30 p-3">
           <div>
-            <dt className="truncate text-xs text-muted-foreground">{market.playerOne} 胜出报价</dt>
+            <dt className="flex min-w-0 items-center gap-2 truncate text-xs text-muted-foreground">
+              <PlayerAvatar name={market.playerOne} imageUrl={market.playerImages?.[0]} className="size-7" />
+              <span className="truncate">{market.playerOne} 胜出报价</span>
+            </dt>
             <dd className="mt-1 font-mono text-lg font-semibold tabular-nums">{formatPercent(market.playerOneAsk)}</dd>
           </div>
           <div>
-            <dt className="truncate text-xs text-muted-foreground">{market.playerTwo} 胜出报价</dt>
+            <dt className="flex min-w-0 items-center gap-2 truncate text-xs text-muted-foreground">
+              <PlayerAvatar name={market.playerTwo} imageUrl={market.playerImages?.[1]} className="size-7" />
+              <span className="truncate">{market.playerTwo} 胜出报价</span>
+            </dt>
             <dd className="mt-1 font-mono text-lg font-semibold tabular-nums">{formatPercent(market.playerTwoAsk)}</dd>
           </div>
         </dl>
