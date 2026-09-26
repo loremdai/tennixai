@@ -4,13 +4,21 @@
 
 **最后更新：** 2026-09-26（北京时间）
 
-**当前主任务：** 无。T105 已完成；后续任务尚未领取。
+**当前主任务：** T106 — 比赛详情逐分记录中未知得分者的诚实展示（`in_progress`）。
 
-**最近任务：** T105 — 全站球员英文主名/中文辅名统一（`done`），实现提交 `991b9f0`、`a44fc6e`；T104 — 全站球员照片贯通（`done`），实现/回归提交 `9e26970`、`cea6988`、`d672578`、`6402831`、`19ee1a4`。
+**最近任务：** T106 — 比赛详情逐分记录中未知得分者的诚实展示（`in_progress`）；T105 — 全站球员英文主名/中文辅名统一（`done`），实现提交 `991b9f0`、`a44fc6e`。
 
-**执行者 / 分支：** Codex / `main`；T105 起始 HEAD `b0f386b`，领取记录与计划先行推送。T105 完成后无活动执行者/分支。保留工作区已有 P3 freshness 修改与未跟踪文件，未纳入本任务。
+**执行者 / 分支：** Codex / `main`；T106 起始 HEAD `b6ec415`，领取记录、规格和计划先行推送。保留工作区已有 P3 freshness 修改与未跟踪文件，未纳入本任务。
 
-**运行手册与证据：** [T105 设计规格](docs/superpowers/specs/2026-09-26-tennixai-t105-global-bilingual-player-names-design.md)；[T105 实施计划](docs/superpowers/plans/2026-09-26-tennixai-t105-global-bilingual-player-names-implementation.md)；[本地真实运行手册](docs/runbooks/local-real-runtime.md)。
+**运行手册与证据：** [T106 设计规格](docs/superpowers/specs/2026-09-26-tennixai-t106-point-winner-clarity-design.md)；[T106 实施计划](docs/superpowers/plans/2026-09-26-tennixai-t106-point-winner-clarity-implementation.md)；[本地真实运行手册](docs/runbooks/local-real-runtime.md)。
+
+## T106 比赛详情逐分记录中未知得分者的诚实展示（`in_progress`）
+
+- **领取：** 2026-09-26 11:53 CST，Codex，`main`，起始 HEAD `b6ec415`；领取记录、规格和实施计划先行推送。
+- **根因：** API-Tennis 没有直接的逐分 winner 字段。后端只在比分变化可确定时填充 winner；无法判断时保留 null 和 `winner_indeterminate`。比赛详情把每个 null 都展示为“胜者待定”，把历史数据不确定误说成尚未发生并重复刷屏。
+- **范围：** 只改 MatchPointsTimeline 的未知状态文案及对应字段矩阵；未知行用中性横线并附可访问说明，整段时间线只提示一次。保留确定姓名、比分、顺序和分组。不改 provider 推断、API、存储、动量，不猜得分者，不发上游请求、不重启服务。
+- **验收：** 定向 Vitest 红绿回归、前端 TypeScript、diff check；结束后提交并推送 `origin/main`。已有 P3 修改及未跟踪文件保持原样且不纳入提交。
+- **规格/计划：** [T106 设计规格](docs/superpowers/specs/2026-09-26-tennixai-t106-point-winner-clarity-design.md)；[T106 实施计划](docs/superpowers/plans/2026-09-26-tennixai-t106-point-winner-clarity-implementation.md)。
 
 ## T105 全站球员英文主名/中文辅名统一（`done`）
 
@@ -191,4 +199,3 @@
 | 2026-09-26 | `e47b5e1` | T103 前端抢七分展示贯通球员历史、比赛详情与首页；前端全量 499 passed、TypeScript 通过。真实运行进程早于修复提交，等待批准重启后核验。 |
 | 2026-09-26 | `321917d` | T103 已结束缺失比分按需修复：复用元数据缓存并走原 Reducer/存储/SSE 路径，纯比分修复跳过场地查询；API/Service/provider 142 passed，适配器兼容回归 90 passed。 |
 | 2026-09-26 | `02b614f` | T103 稀疏比分归并：空字段或缺失盘行不再覆盖已知值，按比赛/有序球员/盘号隔离；reducer 与 realtime worker 40 passed。 |
-| 2026-09-26 | `f22d19d` | T103 抢七解析与可选领域字段；provider/domain 聚焦测试 100 passed、Ruff 通过。 |
