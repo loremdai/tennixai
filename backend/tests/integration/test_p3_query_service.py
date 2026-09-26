@@ -92,13 +92,17 @@ async def _seed(database: Database) -> dict[str, str]:
             )
             await session.execute(
                 text(
-                    "UPDATE players SET name = :n WHERE id = :i"
+                    "UPDATE players SET name = :n, image_url = :image_url WHERE id = :i"
                 ),
-                {"n": f"Player {suffix}", "i": player_a},
+                {
+                    "n": f"Player {suffix}",
+                    "image_url": "https://images.example/player-a.jpg",
+                    "i": player_a,
+                },
             )
             await session.execute(
-                text("UPDATE players SET name = 'Player B' WHERE id = :i"),
-                {"i": player_b},
+                text("UPDATE players SET name = 'Player B', image_url = :url WHERE id = :i"),
+                {"url": "https://images.example/player-b.jpg", "i": player_b},
             )
             await session.execute(
                 text(
@@ -192,6 +196,10 @@ async def test_query_service_reads_durable_ledger(database: Database) -> None:
     assert row.tournament_tier == "atp"
     assert row.model_probability == pytest.approx(0.62)
     assert row.player_names is not None
+    assert row.player_images == (
+        "https://images.example/player-a.jpg",
+        "https://images.example/player-b.jpg",
+    )
     assert row.conservative_net_edge is not None
     assert Decimal(row.conservative_net_edge) == Decimal("0.041")
 
@@ -200,6 +208,7 @@ async def test_query_service_reads_durable_ledger(database: Database) -> None:
     assert summary.match_id == match_id
     assert summary.model_availability == "available"
     assert summary.decision_action == "buy"
+    assert summary.player_images == row.player_images
     assert summary.quote.state == "unavailable"
     assert summary.quote.best_bid is None and summary.quote.best_ask is None
     itf_page = await queries.markets(tier="itf", page=1, page_size=50)
@@ -210,6 +219,7 @@ async def test_query_service_reads_durable_ledger(database: Database) -> None:
         item for item in view["open"] if item.match_id == match_id
     )
     assert open_row.status == "open"
+    assert open_row.player_images == row.player_images
     assert open_row.current_exit_value is None  # no hot book → honest None
     assert Decimal(open_row.shares) == Decimal("19.047619")
 
@@ -220,6 +230,7 @@ async def test_query_service_reads_durable_ledger(database: Database) -> None:
     # 3-row cap by newer open positions from earlier runs, so assert the
     # contract (position rows lead) and the scoped view separately.
     assert pulse["data"][0].kind == "position"
+    assert pulse["data"][0].player_images == row.player_images
     assert any(item.match_id == match_id for item in view["open"])
 
     snapshot = await queries.markets_snapshot()

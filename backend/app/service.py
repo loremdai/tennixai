@@ -6,6 +6,7 @@ rather than prompt instructions.
 """
 
 import asyncio
+import logging
 from collections.abc import Callable
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
@@ -58,6 +59,7 @@ UNPROMOTED_REASONS = frozenset(
     {"MODEL_UNPROMOTED", "PROMOTION_NOT_GRANTED", "ARTIFACT_INVALID"}
 )
 MAIN_TOUR_TIERS = frozenset({"atp", "wta"})
+logger = logging.getLogger(__name__)
 
 
 def p3_model_availability(*, tier, prediction, observation) -> str:
@@ -248,6 +250,8 @@ def _finished_match_score_is_incomplete(match: Match) -> bool:
 
 
 class TennisService:
+    _RANKING_PHOTO_CONCURRENCY = 5
+
     def __init__(
         self,
         provider: TennisDataProvider,
@@ -287,6 +291,19 @@ class TennisService:
             if self._seeder is not None:
                 await self._seeder()
             self._seeded = True
+
+    async def _persist_player_images(self, images: dict[str, str]) -> None:
+        """Persist optional photos without making core tennis data unavailable."""
+        if self._directory is None or not images:
+            return
+        try:
+            await self._directory.upsert_player_images(images)
+        except Exception as error:
+            logger.warning(
+                "Could not persist %d optional player photos (%s)",
+                len(images),
+                type(error).__name__,
+            )
 
     async def resolve_player(
         self,
@@ -372,6 +389,46 @@ class TennisService:
         entries, total = await self._directory.get_rankings(
             tour, page=page, page_size=page_size, country_code=country_code
         )
+        missing_photos = tuple(
+            entry.player
+            for entry in entries
+            if not entry.player.image_url
+        )
+        if missing_photos:
+            semaphore = asyncio.Semaphore(self._RANKING_PHOTO_CONCURRENCY)
+
+            async def load_photo(player: Player) -> tuple[str, str | None]:
+                async with semaphore:
+                    try:
+                        profile = await self._load_profile(player.id)
+                    except Exception:
+                        # Photo enrichment is best-effort; a profile endpoint
+                        # failure must never make rankings unavailable.
+                        return player.id, None
+                    return player.id, profile.image_url or profile.player.image_url
+
+            photo_results = await asyncio.gather(
+                *(load_photo(player) for player in missing_photos)
+            )
+            photos = {
+                player_id: image_url
+                for player_id, image_url in photo_results
+                if image_url
+            }
+            if photos:
+                await self._persist_player_images(photos)
+                entries = tuple(
+                    entry.model_copy(
+                        update={
+                            "player": entry.player.model_copy(
+                                update={"image_url": photos.get(entry.player.id)}
+                            )
+                        }
+                    )
+                    if entry.player.id in photos
+                    else entry
+                    for entry in entries
+                )
         snapshot_entries, tour_total = await self._directory.get_rankings(
             tour, page=1, page_size=1, country_code=None
         )
@@ -405,15 +462,24 @@ class TennisService:
             current_ranking = await self._directory.get_current_ranking(player_id)
         profile = await self._load_profile(player_id)
         if directory_player is not None:
+            image_url = (
+                profile.image_url
+                or profile.player.image_url
+                or directory_player.player.image_url
+            )
+            if image_url:
+                await self._persist_player_images({player_id: image_url})
             profile = profile.model_copy(
                 update={
                     "player": directory_player.player.model_copy(
                         update={
+                            "image_url": image_url,
                             "ranking": (
                                 current_ranking.rank if current_ranking else None
                             )
                         }
-                    )
+                    ),
+                    "image_url": image_url,
                 }
             )
         # The product window is the current season plus the four prior ones;
@@ -513,6 +579,11 @@ class TennisService:
                             directory_player.player.country_code or player.country_code
                             if directory_player is not None
                             else player.country_code
+                        ),
+                        "image_url": (
+                            directory_player.player.image_url or player.image_url
+                            if directory_player is not None
+                            else player.image_url
                         ),
                     }
                 )
@@ -919,7 +990,9 @@ class TennisService:
         selected = sorted(
             (match for match in source if passes(match)), key=catalog_sort_key
         )
-        selected = await self._hydrate_matches_players(selected)
+        selected = await self._hydrate_matches_players(
+            selected, include_missing_photos=False
+        )
         facet_counts = FacetCounts(
             circuits={
                 tier: sum(
@@ -1103,7 +1176,7 @@ class TennisService:
         async def load() -> object:
             try:
                 return await self._provider.get_player(player_id)
-            except AppError:
+            except Exception:
                 # A profile lookup must not make an otherwise valid match
                 # snapshot unavailable.
                 return None
@@ -1116,7 +1189,9 @@ class TennisService:
         )
         return cast(Player | None, outcome.value)
 
-    async def _hydrate_matches_players(self, matches: list[Match]) -> list[Match]:
+    async def _hydrate_matches_players(
+        self, matches: list[Match], *, include_missing_photos: bool = True
+    ) -> list[Match]:
         player_ids = tuple(
             dict.fromkeys(player.id for match in matches for player in match.players)
         )
@@ -1125,24 +1200,57 @@ class TennisService:
             if self._directory is not None
             else {}
         )
+        directory_players = (
+            await self._directory.get_players(player_ids)
+            if self._directory is not None
+            else {}
+        )
         pending: dict[str, Player] = {}
         for match in matches:
             for player in match.players:
+                directory_player = directory_players.get(player.id)
                 if (
                     player.id not in pending
-                    and (player.ranking is None or player.country_code is None)
+                    and (
+                        player.ranking is None
+                        or player.country_code is None
+                        or include_missing_photos
+                        and not player.image_url
+                        and not (
+                            directory_player is not None
+                            and directory_player.player.image_url
+                        )
+                    )
                 ):
                     pending[player.id] = player
 
+        profile_semaphore = asyncio.Semaphore(5)
+
+        async def load_profile(player_id: str) -> Player | None:
+            async with profile_semaphore:
+                return await self._cached_player_profile(player_id)
+
         profiles = await asyncio.gather(
-            *(self._cached_player_profile(player.id) for player in pending.values())
+            *(load_profile(player.id) for player in pending.values())
         )
         profile_by_id = {
             player_id: profile
             for player_id, profile in zip(pending, profiles)
             if profile is not None
         }
-        if not profile_by_id and not current_rankings and self._directory is None:
+        profile_images = {
+            player_id: profile.image_url
+            for player_id, profile in profile_by_id.items()
+            if profile.image_url
+        }
+        if profile_images and self._directory is not None:
+            await self._persist_player_images(profile_images)
+        if (
+            not profile_by_id
+            and not current_rankings
+            and not directory_players
+            and self._directory is None
+        ):
             return matches
 
         hydrated: list[Match] = []
@@ -1174,6 +1282,26 @@ class TennisService:
                             current_rankings[player.id].player.localized_name
                             if player.id in current_rankings
                             else player.localized_name
+                        ),
+                        "image_url": (
+                            (
+                                directory_players[player.id].player.image_url
+                                if player.id in directory_players
+                                and directory_players[player.id].player.image_url
+                                else None
+                            )
+                            or (
+                                current_rankings[player.id].player.image_url
+                                if player.id in current_rankings
+                                else None
+                            )
+                            or player.image_url
+                            or profile_images.get(player.id)
+                            or (
+                                profile_by_id[player.id].image_url
+                                if player.id in profile_by_id
+                                else None
+                            )
                         ),
                         "ranking": (
                             current_rankings[player.id].rank
@@ -1507,6 +1635,7 @@ class P3QueryService:
                 else []
             )
         player_names = {row.id: (row.localized_name or row.name) for row in players}
+        player_images = {row.id: row.image_url for row in players}
         tournament_by_id = {row.id: row for row in tournaments}
         facts = {}
         for row in matches:
@@ -1523,6 +1652,14 @@ class P3QueryService:
                 ),
                 "player_ids": (
                     (row.player1_id, row.player2_id)
+                    if row.player1_id is not None and row.player2_id is not None
+                    else None
+                ),
+                "player_images": (
+                    (
+                        player_images.get(row.player1_id),
+                        player_images.get(row.player2_id),
+                    )
                     if row.player1_id is not None and row.player2_id is not None
                     else None
                 ),
@@ -1834,6 +1971,7 @@ class P3QueryService:
                         target_player_id=observation.target_player_id,
                         player_ids=match_facts.get("player_ids"),
                         player_names=match_facts.get("player_names"),
+                        player_images=match_facts.get("player_images"),
                         model_probability=model_probability,
                         executable_probability=(
                             float(quote_price) if quote_price is not None else None
@@ -2011,6 +2149,22 @@ class P3QueryService:
                 if resolved_names[0] is not None and resolved_names[1] is not None
                 else None
             )
+            image_by_id = (
+                dict(
+                    zip(
+                        fact_ids,
+                        match_facts.get("player_images") or (None, None),
+                        strict=False,
+                    )
+                )
+                if fact_ids is not None
+                else {}
+            )
+            player_images = (
+                (image_by_id.get(outcome_ids[0]), image_by_id.get(outcome_ids[1]))
+                if outcome_ids[0] is not None and outcome_ids[1] is not None
+                else None
+            )
             summaries.append(
                 MarketSummaryDto(
                     market_id=row.market_id,
@@ -2034,6 +2188,7 @@ class P3QueryService:
                         else None
                     ),
                     player_names=player_names,
+                    player_images=player_images,
                     model_probability=model_probability,
                     quote=MarketQuoteDto(
                         state=quote.state.value,
@@ -2129,6 +2284,7 @@ class P3QueryService:
                     outcome_player_id=position.outcome_player_id,
                     player_ids=match_facts.get("player_ids"),
                     player_names=match_facts.get("player_names"),
+                    player_images=match_facts.get("player_images"),
                     status=position.status.value,
                     entry_cost=str(position.entry_cost),
                     shares=str(position.shares),
@@ -2171,6 +2327,7 @@ class P3QueryService:
                     outcome_player_id=intent.outcome_player_id,
                     player_ids=match_facts.get("player_ids"),
                     player_names=match_facts.get("player_names"),
+                    player_images=match_facts.get("player_images"),
                     status="entry_pending",
                     entry_cost=str(intent.stake),
                     shares=str(intent.quote.shares),
@@ -2261,6 +2418,7 @@ class P3QueryService:
                     action=(decision.action if decision is not None else "hold"),
                     phase=phase,
                     player_names=position.player_names,
+                    player_images=facts.get("player_images"),
                     model_probability=(
                         None
                         if decision is None
@@ -2299,6 +2457,7 @@ class P3QueryService:
                     action=opportunity.action,
                     phase=opportunity.phase,
                     player_names=opportunity.player_names,
+                    player_images=opportunity.player_images,
                     model_probability=opportunity.model_probability,
                     executable_probability=opportunity.executable_probability,
                     conservative_net_edge=opportunity.conservative_net_edge,

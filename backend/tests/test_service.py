@@ -448,8 +448,18 @@ async def test_match_snapshot_hydrates_missing_player_profiles_once() -> None:
     provider = CountingProvider(
         snapshots={match.id: snapshot},
         profiles={
-            SINNER.id: Player(id=SINNER.id, name="Jannik Sinner", ranking=1),
-            ALCARAZ.id: Player(id=ALCARAZ.id, name="Carlos Alcaraz", ranking=2),
+            SINNER.id: Player(
+                id=SINNER.id,
+                name="Jannik Sinner",
+                ranking=1,
+                image_url="https://images.example/sinner.jpg",
+            ),
+            ALCARAZ.id: Player(
+                id=ALCARAZ.id,
+                name="Carlos Alcaraz",
+                ranking=2,
+                image_url="https://images.example/alcaraz.jpg",
+            ),
         },
     )
     service, _, _ = build_service(provider)
@@ -459,6 +469,10 @@ async def test_match_snapshot_hydrates_missing_player_profiles_once() -> None:
 
     assert [player.ranking for player in first.match.players] == [1, 2]
     assert [player.ranking for player in second.match.players] == [1, 2]
+    assert [player.image_url for player in first.match.players] == [
+        "https://images.example/sinner.jpg",
+        "https://images.example/alcaraz.jpg",
+    ]
     assert provider.calls["get_player"] == 2
 
 
@@ -491,6 +505,54 @@ async def test_catalog_hydrates_missing_player_profiles_once() -> None:
 
     assert [player.country_code for player in first.matches[0].players] == ["ita", "esp"]
     assert [player.ranking for player in second.matches[0].players] == [1, 2]
+    assert provider.calls["get_player"] == 2
+
+
+@pytest.mark.asyncio
+async def test_match_hydration_fills_and_persists_missing_photos() -> None:
+    from app.players.repository import MemoryPlayerDirectoryRepository
+
+    players = (
+        Player(id=SINNER.id, name=SINNER.name, ranking=1, country_code="ita"),
+        Player(id=ALCARAZ.id, name=ALCARAZ.name, ranking=2, country_code="esp"),
+    )
+    match = build_match("mat_photo_hydration", MatchStatus.SCHEDULED, NOW_UTC, players)
+    directory = MemoryPlayerDirectoryRepository()
+    await directory.save_ranking_snapshot(
+        tuple(
+            RankingEntry(
+                player=player,
+                tour=Tour.ATP,
+                rank=index + 1,
+                points=100,
+                movement=RankingMovement.UNKNOWN,
+                ranking_date=NOW_UTC.date(),
+                fetched_at=NOW_UTC,
+            )
+            for index, player in enumerate(players)
+        )
+    )
+    provider = CountingProvider(
+        profiles={
+            SINNER.id: players[0].model_copy(
+                update={"image_url": "https://images.example/sinner.jpg"}
+            ),
+            ALCARAZ.id: players[1].model_copy(
+                update={"image_url": "https://images.example/alcaraz.jpg"}
+            ),
+        }
+    )
+    service, _, _ = build_service(provider, directory=directory)
+
+    hydrated = await service._hydrate_matches_players([match])
+
+    assert [player.image_url for player in hydrated[0].players] == [
+        "https://images.example/sinner.jpg",
+        "https://images.example/alcaraz.jpg",
+    ]
+    saved = await directory.get_player(SINNER.id)
+    assert saved is not None
+    assert saved.player.image_url == "https://images.example/sinner.jpg"
     assert provider.calls["get_player"] == 2
 
 

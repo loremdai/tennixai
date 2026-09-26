@@ -79,6 +79,7 @@ class ProfileProvider:
         self.live: list[Match] = []
         self.upcoming: list[Match] = []
         self.reported_profile_rank: int | None = None
+        self.profile_image_url: str | None = None
         self._finished: tuple[Match, ...] = (
             tuple(
                 _finished_match(index, 2026, circuit, index % 3 != 2)
@@ -99,7 +100,7 @@ class ProfileProvider:
         return PlayerProfileData(
             player=player,
             birth_date=date(2000, 1, 1),
-            image_url=None,
+            image_url=self.profile_image_url,
             seasons=_seasons(),
         )
 
@@ -200,6 +201,45 @@ async def test_rankings_page_reads_directory(seeded_directory) -> None:
 
     wta = await service.get_rankings_page(Tour.WTA, page=1, page_size=50, country_code=None)
     assert wta.entries[0].player.id == ZHENG.id
+
+
+@pytest.mark.asyncio
+async def test_rankings_page_fills_and_persists_missing_player_photo(
+    seeded_directory,
+) -> None:
+    provider = ProfileProvider()
+    provider.profile_image_url = "https://images.example/zheng.png"
+    service = build_service(provider, seeded_directory)
+
+    page = await service.get_rankings_page(
+        Tour.WTA, page=1, page_size=50, country_code=None
+    )
+
+    assert page.entries[0].player.image_url == provider.profile_image_url
+    assert provider.calls["profile"] == 1
+    saved = await seeded_directory.get_player(ZHENG.id)
+    assert saved is not None
+    assert saved.player.image_url == provider.profile_image_url
+
+
+@pytest.mark.asyncio
+async def test_rankings_page_keeps_working_if_optional_photo_save_fails(
+    seeded_directory, monkeypatch
+) -> None:
+    provider = ProfileProvider()
+    provider.profile_image_url = "https://images.example/zheng.png"
+
+    async def fail_photo_save(_images: dict[str, str]) -> int:
+        raise RuntimeError("photo storage unavailable")
+
+    monkeypatch.setattr(seeded_directory, "upsert_player_images", fail_photo_save)
+    service = build_service(provider, seeded_directory)
+
+    page = await service.get_rankings_page(
+        Tour.WTA, page=1, page_size=50, country_code=None
+    )
+
+    assert page.entries[0].player.image_url == provider.profile_image_url
 
 
 @pytest.mark.asyncio
