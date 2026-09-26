@@ -4,13 +4,22 @@
 
 **最后更新：** 2026-09-26（北京时间）
 
-**当前主任务：** 暂无；T107 — 比赛详情近期得分走势图可读性改版已完成（`done`），下一任务待领取。
+**当前主任务：** T108 — 比赛详情页比分头图区精简改版（`in_progress`），Codex / `main`，起始 HEAD `89780e3`。
 
-**最近任务：** T107 — Match 近期走势可读性改版（`done`），领取 `4389aa1`、实现 `3ce6f41`、复审修补 `ddbfb01` / `bd33d78`；T106 — 逐分未知得分者诚实展示（`done`），实现 `f7ea297`。
+**最近任务：** T108 — 比赛详情页比分头图区精简改版（`in_progress`）；T107 — Match 近期走势可读性改版（`done`），领取 `4389aa1`、实现 `3ce6f41`、复审修补 `ddbfb01` / `bd33d78`；T106 — 逐分未知得分者诚实展示（`done`），实现 `f7ea297`。
 
-**最近执行者 / 分支：** Codex / `main`；T107 于 2026-09-26 14:35 CST 从 `c72e454` 开始，2026-09-26 15:09 CST 完成；保留工作区已有 P3 freshness 修改与未跟踪文件，未纳入本任务。
+**最近执行者 / 分支：** Codex / `main`；T108 于 2026-09-26 16:00 CST 从 `89780e3` 开始；保留工作区已有 P3 freshness 修改与未跟踪文件，未纳入本任务。
 
-**运行手册与证据：** T107 采用本对话已确认的双球员零线图方案；[P2 走势语义](docs/superpowers/specs/2026-09-09-tennixai-p2-live-match-intelligence-design.md)；[本地真实运行手册](docs/runbooks/local-real-runtime.md)。
+**运行手册与证据：** T108 采用用户确认的单一比分记分牌布局；[本地真实运行手册](docs/runbooks/local-real-runtime.md)。
+
+## T108 比赛详情页比分头图区精简改版（`in_progress`）
+
+- **领取：** 2026-09-26 16:00 CST；Codex / `main`；起始 HEAD `89780e3`。领取记录先推送到 `origin/main`。
+- **已批准设计：** 将比赛头图区合并为一张记分牌。每位球员只出现一次：照片、英文主名/中文辅名、国旗和排名，与逐盘/当前局比分同列；球员姓名可换行。顶部只保留赛事/轮次/场地、比赛状态与更新时间。发球标记只放在实际发球球员行；未知发球方只提示一次。赛前展示开赛时间，完赛只标一次胜者；移除重复对阵标题、二次头像/姓名/排名及比分复述。页面下方的详细比分保持现有能力。
+- **实施计划：** ① 最小改造 `frontend/components/match/match-hero.tsx`，让 live、upcoming、finished 与 unavailable 共用清晰的球员行和比分层级；② 确保长姓名/中文辅名、无排名、无发球方、抢七/五盘及窄屏布局有对应实现；③ 复核代码差异；④ 更新 ROADMAP/CURRENT，提交并推送实现和总控记录。不得覆盖既有工作区改动。
+- **边界：** 只改比赛页展示，不改 canonical 数据、实时更新、服务端/API、P3 市场/决策/Paper 语义；保留既有演示与真实页面行为。
+- **验证：** 待实施后补录实际通过的命令和浏览器/视口证据；未执行的检查不记为通过。
+- **工作区保护：** `backend/app/service.py`、`.codex/`、`.superpowers/`、`REALTIME_LATENCY_INVESTIGATION.md`、`backend/tests/test_p3_query_freshness.py`、`frontend/next-env.d.ts` 均是 T108 前已有用户修改，不纳入本任务。
 
 ## T107 比赛详情近期得分走势图可读性改版（`done`）
 
