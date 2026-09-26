@@ -122,7 +122,12 @@ function RecentControlPanel({
             ) : leader ? (
               <>
                 <span>近期走势偏向</span>
-                <PlayerName name={leader.name} localizedName={leader.nameZh} primaryClassName="text-base" />
+                <PlayerName
+                  name={leader.name}
+                  localizedName={leader.nameZh}
+                  primaryClassName="whitespace-normal break-words text-base"
+                  secondaryClassName="whitespace-normal break-words"
+                />
               </>
             ) : (
               '近期走势接近均衡'
@@ -145,7 +150,12 @@ function RecentControlPanel({
           <div className="flex items-start justify-between gap-2 text-xs">
             <div className="flex min-w-0 items-start gap-1 text-primary">
               <span className="shrink-0">上方：</span>
-              <PlayerName name={positivePlayer.name} localizedName={positivePlayer.nameZh} />
+              <PlayerName
+                name={positivePlayer.name}
+                localizedName={positivePlayer.nameZh}
+                primaryClassName="whitespace-normal break-words"
+                secondaryClassName="whitespace-normal break-words"
+              />
             </div>
             <span className="tabular-nums text-muted-foreground">+{extent}</span>
           </div>
@@ -228,7 +238,12 @@ function RecentControlPanel({
           <div className="flex items-end justify-between gap-2 text-xs">
             <div className="flex min-w-0 items-start gap-1 text-muted-foreground">
               <span className="shrink-0">下方：</span>
-              <PlayerName name={negativePlayer.name} localizedName={negativePlayer.nameZh} />
+              <PlayerName
+                name={negativePlayer.name}
+                localizedName={negativePlayer.nameZh}
+                primaryClassName="whitespace-normal break-words"
+                secondaryClassName="whitespace-normal break-words"
+              />
             </div>
             <span className="tabular-nums text-muted-foreground">-{extent}</span>
           </div>
