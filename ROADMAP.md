@@ -5,11 +5,11 @@
 
 **最后更新：** 2026-09-26（北京时间）
 
-**总体状态：** `in_progress`（P4 持续打磨；T101–T106 已完成，当前没有已领取任务。此前用户批准的 B 边界保持：所有活跃网球胜者市场展示供应商真实名称/报价，未映射/双打不进入模型或 Paper。模型未晋升时机会页继续诚实为空；模型晋升另行排期）
+**总体状态：** `in_progress`（P4 持续打磨；T101–T106 已完成，T107 正在实施。此前用户批准的 B 边界保持：所有活跃网球胜者市场展示供应商真实名称/报价，未映射/双打不进入模型或 Paper。模型未晋升时机会页继续诚实为空；模型晋升另行排期）
 
 **当前里程碑：** P3 已关闭；P4.0–P4.4 已完成（T72–T92）；P4.5（T93–T104）、P4.6（T105）及逐分展示修复 T106 均已完成；真实本地服务保持运行。
 
-**当前阶段：** P4 后续打磨 — T106 逐分未知得分者展示已完成；暂无进行中任务。P4 整体持续打磨；模型未晋升时机会页仍为空，模型晋升证据链另行排期，自动下单继续 `deferred`。
+**当前阶段：** P4 后续打磨 — T107 比赛详情近期得分走势图可读性改版进行中；模型未晋升时机会页仍为空，模型晋升证据链另行排期，自动下单继续 `deferred`。
 
 ## 状态说明
 
@@ -153,6 +153,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | P4.5 — Global Data Integrity & Field Presentation | `done` | 核对结构化网球数据从供应商/API 到全站 UI 的字段和值语义；修复已验证的数据丢失、误标和展示缺陷 | T93–T104 已完成。P4 后续打磨任务单独规划，不在本里程碑内扩展。 |
 | P4.6 — Consumer UI Consistency | `done` | 将所有结构化球员身份展示统一为英文主名、中文辅名 | T105 已完成：P3 DTO 分开传递英文名与可空中文名；共享 `PlayerName` 覆盖 Home、Match、Markets/Paper、Players 与排名/搜索/资料/赛果；AI 自然语言回答不强制改写。 |
 | P4 follow-up — Point-by-Point Clarity | `done` | 让无法确认的逐分得分者显示为诚实、紧凑的未知状态，而非“胜者待定” | T106 已完成（`f7ea297`）：未知或无法映射的胜者行显示可访问横线，并在时间线顶部解释一次；后端不猜测、已知球员与比分不变。新回归先 RED 后 GREEN；前端 Vitest `41 files / 524 passed`、TypeScript 与 `git diff --check` 通过。未重建/重启正在运行的共享服务，以保护工作区中用户未提交的 P3 backend 修改。详情见 `CURRENT.md`。 |
+| P4 follow-up — Match Trend Clarity | `in_progress` | 让普通用户直接看懂两位球员的近期走势方向、零线、观测缺口与非胜率语义 | T107 已领取；只调整现有比赛详情前端视图映射/卡片，不改 Recent Control 算法或 P3 决策。验收门见 `CURRENT.md`。 |
 
 > **后验核验记录（2026-09-18）：** T80 的 `110 passed / 44 skipped / 0 failed` 是当时真实通过的历史证据。控制者随后在无影响路径产品代码变更的 `2270049` 上两次复跑当前完整 Playwright，均得到 `109 passed / 44 skipped / 1 failed`；唯一失败为 mobile `prototype.visual` 的 `home-answer`，265 像素差异。该用例单独以 `--workers=1 --repeat-each=10` 则 10/10 通过，故 T81 以两条顺序 CLI lane 消除跨文件 worker 并发，而非改动视觉真相。
 
@@ -197,6 +198,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | T104 | P4.5 | Use Real Player Photos Throughout the Product | `done` | `9e26970` / `cea6988` / `d672578`（实现）；`6402831` / `19ee1a4`（回归） | [设计规格](./docs/superpowers/specs/2026-09-26-tennixai-t104-global-player-photos-design.md) 与 [实施计划](./docs/superpowers/plans/2026-09-26-tennixai-t104-global-player-photos-implementation.md)。API-Tennis 照片通过内部 player ID 进入 canonical 模型及现有目录缓存；覆盖 Home/Match/Markets/Players/排名/搜索/详情/历史/市场脉搏。全站统一头像；缺图、演示数据或身份无法可靠确认时用中性人像，不猜测照片。排名当前页按需补图、最多 5 个并发；市场/Paper 仅按内部 outcome ID 对齐；不新增图片源、不批量抓取、不改模型/Paper 决策语义。后端 `1363 passed, 37 skipped`、前端 `505 passed`、TypeScript、Ruff、diff check 通过；P3 查询及照片相关 PostgreSQL 集成 `14 passed`。真实浏览器验收因本任务禁止 Playwright 读取根 `.env`/启动服务而未运行；旧集成库 schema 不匹配另见 `CURRENT.md`。 |
 | T105 | P4.6 | Unify English-Primary, Chinese-Secondary Player Names | `done` | `991b9f0`, `a44fc6e` | canonical `Player.name`/P3 `player_names` 保持英文主名，新增独立可空 `player_localized_names`；共享 `PlayerName` 贯通 Home 助手/赛果/赛程/直播/市场脉搏、Match 比分/统计/PBP/决策/P3 图表、Markets/Opportunities/Paper、Players 排名/搜索/资料/历史。中文缺失只显示英文；未映射市场仍用供应商原名；不改 resolver、AI 自然语言、模型/报价/Paper 语义。验证：后端定向 API/集成 `16 passed`；前端 Vitest `41 files / 523 passed`，`tsc --noEmit` 通过；Playwright 桌面/移动视觉 `22 passed, 4 skipped`（P2 Replay opt-in）；审阅后更新 60 张视觉基线；`git diff --check` 通过。真实本地 `up` exit 0，API/前端 HTTP 200，数据库/Redis healthy；首轮同步完成后的最终 `status` 中 sports stream、schedule、rankings、Polymarket 均为 `ok`。规格：[T105](./docs/superpowers/specs/2026-09-26-tennixai-t105-global-bilingual-player-names-design.md)，计划：[T105](./docs/superpowers/plans/2026-09-26-tennixai-t105-global-bilingual-player-names-implementation.md)。 |
 | T106 | P4 follow-up | Fix Misleading Unknown Point-Winner Presentation | `done` | `f7ea297`（实现） | API-Tennis 逐分数据无 winner 字段；后端比分无法确定得分者时保留 null，UI 不再把它写成“胜者待定”。未知或无法映射的胜者显示横线和辅助文本，时间线顶部解释一次；不改事实推断、分数、顺序、API 或存储。回归先 RED 后 GREEN；前端 Vitest `41 files / 524 passed`，TypeScript、diff check 通过。未做浏览器新构建验证或重启运行栈，既有 P3 用户修改未纳入。规格：[T106](./docs/superpowers/specs/2026-09-26-tennixai-t106-point-winner-clarity-design.md)，计划：[T106](./docs/superpowers/plans/2026-09-26-tennixai-t106-point-winner-clarity-implementation.md)。 |
+| T107 | P4 follow-up | Make Recent Match Trend Understandable | `in_progress` | — | 双球员零线、结论先行、已确认得分窗口、缺口不断线、样本不足不下结论；TDD、前端全量与桌面/手机验收后关闭。只动前端展示，不动指数模型。 |
 
 ## P4.1 Completion Gate 核验摘要（2026-09-18，逐条实际核验）
 
