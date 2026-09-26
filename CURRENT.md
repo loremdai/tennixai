@@ -4,9 +4,9 @@
 
 **最后更新：** 2026-09-26（北京时间）
 
-**当前主任务：** T103 — 彻查并修复历史赛果盘分/局分丢失（`blocked`：实现与自动化验证已完成，等待用户批准短暂重启本地栈后做真实验收）。
+**当前主任务：** 无；T103 — 彻查并修复历史赛果盘分/局分丢失已于 2026-09-26 完成真实运行验收。
 
-**最近任务：** T103 — 彻查并修复历史赛果盘分/局分丢失（`blocked`），起始 HEAD `0d63c48`。
+**最近任务：** T103 — 彻查并修复历史赛果盘分/局分丢失（`done`），起始 HEAD `0d63c48`。
 
 **执行者 / 分支：** Codex / `main`；T103 起始 HEAD `0d63c48`。保留工作区已有 P3 修改与未跟踪文件，不纳入本任务。
 
@@ -32,19 +32,19 @@
 - **完成提交：** 实现与回归测试 `a885a6a`；本任务不包含用户已有 P3 工作区差异。总控关闭记录随下一提交。
 - **环境与保护：** 复用已运行本地真实服务；不运行 `init`、不读根 `.env`；保留 `backend/app/service.py` 中两处既有 P3 修改及 `.codex/`、`.superpowers/`、`REALTIME_LATENCY_INVESTIGATION.md`、`backend/tests/test_p3_query_freshness.py`、`frontend/next-env.d.ts`，不纳入本任务提交。
 
-## T103 彻查并修复历史赛果盘分/局分丢失（`blocked`：等待批准重启本地栈）
+## T103 彻查并修复历史赛果盘分/局分丢失（`done`）
 
 - **领取：** 2026-09-26，Codex，`main`，起始 HEAD `0d63c48`；领取记录 `c82cd11`、`0e63258` 已推送。
 - **目标：** 查清为什么历史赛果中经常缺少盘分或每盘局分，逐层比较供应商原始返回、provider 解析、canonical `Match/SetScore`、存储读回、REST DTO、前端 view model 与最终页面；修复实际丢失数据的根因，而不是只调整空值文案。
 - **调查范围：** 检查 API-Tennis 官方数据契约与多个真实不完整/完整样本；区分“供应商确实未提供”与“本地解析、归约、持久化、缓存、序列化或展示丢失”；覆盖球员历史列表和共享比赛详情路径；确认已落库空值能否通过正常有限重取恢复，以及不可恢复时的诚实呈现。
 - **已验证根因（2026-09-26）：** 本地真实 `get_fixtures` 返回抢七盘分为 `score_first="6.7"`、`score_second="7.9"`（另有 `7.7` / `6.2`）；当前 `parse_non_negative_int()` 只接受纯数字字符串，因而把两侧都转成 `null`。同一响应保留 `event_final_result="3 - 1"`，所以盘数在、含抢七的逐盘局分缺失；普通数字分如 `6` / `3` 正常通过。球员赛果 API 与比赛详情 API 都能复现。两盘 PBP 最终比分分别是 `7–9`、`7–2`，与小数点后数字相符。比赛详情的已存快照也保留缺值（`as_of=2026-09-25T16:29:48Z`），故需要兼顾旧快照按需刷新。官方文档说明 fixtures 内联提供 `scores` 与 `pointbypoint`，但未写明点号编码；参考：[REST fixtures](https://api-tennis.com/documentation)，[WebSocket score payload](https://api-tennis.com/documentation_websocket)。
-- **设计与计划：** [T103 比分完整性设计](./docs/superpowers/specs/2026-09-26-tennixai-t103-score-integrity-design.md) 与 [T103 实施计划](./docs/superpowers/plans/2026-09-26-tennixai-t103-score-integrity-implementation.md)；用户已确认方案。严格解析、稀疏快照合并、已结束不完整比分按需修复和前端展示均已实现；现阶段只剩真实运行样本验收。无 schema migration、批量历史抓取或 `.env` 读取。
+- **设计与计划：** [T103 比分完整性设计](./docs/superpowers/specs/2026-09-26-tennixai-t103-score-integrity-design.md) 与 [T103 实施计划](./docs/superpowers/plans/2026-09-26-tennixai-t103-score-integrity-implementation.md)；用户已确认方案。严格解析、稀疏快照合并、已结束不完整比分按需修复和前端展示均已实现并通过真实运行验收。无 schema migration、批量历史抓取或 `.env` 读取。
 - **已完成切片：** `f22d19d` 为 canonical `SetScore` 增加向后兼容的抢七分字段并严格解析供应商格式（如 `6.7` → 局数 6、抢七分 7）；`02b614f` 按同一比赛、球员顺序和盘号归并稀疏比分；`321917d` 为已结束且局分不完整的旧快照增加详情读取时按需补取，复用 `match-metadata:<id>` 缓存、Reducer、持久化及 SSE 发布；`e47b5e1` 将逐盘抢七分贯通球员历史、比赛详情和首页比分展示。纯比分补取跳过额外场地查询；完成、进行中和未开始的完整/不适用场景不会触发比分补取。
-- **验证：** 后端 deterministic 套件 `1358 passed, 37 skipped, 91 deselected`；前端 Vitest `37 files / 499 passed`、TypeScript、T103 改动文件 Ruff、`git diff --check` 通过。此前全量后端尝试的 16 个失败仍是本机既有集成测试库 schema 不匹配（缺少 `match_state_snapshots.freshness` 列及 `point_events.is_break_point` 非空约束不满足）；未迁移或重置数据库。代码路径复核确认：球员历史从 `_load_season_results` 直接拉供应商 fixtures，经同一新比分解析器；比赛详情另走已存快照的按需补取。该赛季结果缓存是进程内 `AsyncTTLCache`，不是 Redis，应用重启会清空。因此整套重启后，历史页会重新取数并通过新解析器，详情页也会加载按需修复逻辑。当前运行进程早于 T103 提交，HTTP 200 仍返回旧空比分；项目启动器没有单独重启 API/前端的命令，受支持的 `down`/`up` 会短暂停止/启动自有 runtime/API/frontend 与 PostgreSQL/Redis 容器，但保留数据且不执行 `init`。目前未操作，等待用户决定是否允许这次短暂停机。
+- **自动化验证：** 后端 deterministic 套件 `1358 passed, 37 skipped, 91 deselected`；前端 Vitest `37 files / 499 passed`、TypeScript、T103 改动文件 Ruff、`git diff --check` 通过。此前全量后端尝试的 16 个失败仍是本机既有集成测试库 schema 不匹配（缺少 `match_state_snapshots.freshness` 列及 `point_events.is_break_point` 非空约束不满足）；未迁移或重置数据库。
+- **真实运行验收（2026-09-26）：** 经批准执行 `./scripts/tennix-live down` → `up`，down 明确报告数据保留、未触碰 volumes；没有运行 `init`、迁移或清库。`status` 随后显示数据库、Redis、runtime、API、frontend 均健康/运行中，sports stream、schedule、rankings、Polymarket 均为 `ok`，paper 仍为 `paper_only`、模型仍为 `not_promoted`。同一比赛 `mat_127f7e0acb5c443ba79e4fb90bf8471b` 的历史 API、详情 API 和浏览器页现均显示完整四盘 `6–7（7–9）、7–6（7–2）、6–3、6–4`；详情页显示两盘抢七双方小分。重启后核验该球员 2026 赛季 47/47、2025 赛季 64/64 条记录均含完整逐盘局分；2026 样本中有 19 个抢七盘分行。检查到的 111 条真实赛果没有上游缺盘分样本；provider/service 回归测试覆盖无效/缺失值保持未知、补取失败或仍不完整时不覆盖已知比分，未用推算填空。浏览器首次载入时仍显示旧缓存时间，刷新后 API 与页面时间均更新至 08:17（北京时间）。
 - **执行边界：** 真实字段缺失继续未知；不依据胜负、胜盘数或 PBP 反推局分，不做周期轮询或批量历史抓取；只在查看已结束且比分不完整的比赛时按需刷新，并复用现有缓存。
-- **当前下一步：** 请用户决定是否允许按受支持流程执行 `./scripts/tennix-live down` 后 `./scripts/tennix-live up`，使所有进程加载 T103 代码。该流程会短暂停止并恢复 TennixAI 自有 PostgreSQL/Redis 容器，但保留数据，不执行 `init`、迁移或重置。获批后通过同一球员历史与比赛详情重新核验实际比分及抢七分，再更新 T103 完成证据。
-- **验收门：** 至少包含供应商有完整比分、仅有部分比分、确实无比分三类样本；证明有值时端到端不丢、空值不造；修复必须有先失败后通过的测试，覆盖 provider/service/存储/API/UI 中实际受影响层；后端确定性套件、前端相关与全量测试、TypeScript、改动文件 Ruff、`git diff --check` 通过；真实页面/API 用安全脱敏的内部 ID 和比分字段复核。未经必要性确认不迁移 schema、不执行 `init`、不重置数据库。
-- **安全与现场：** 不直接查看或输出根 `.env` 文件内容；允许通过应用现有配置对象安全读取凭据，进行有界只读 API 核验。任何 API key、查询凭据、无关供应商 payload 均不得打印或落盘。优先复用已运行本地服务，当前服务/数据保持运行。`backend/app/service.py` 的两处既有 P3 freshness 修改及 `.codex/`、`.superpowers/`、`REALTIME_LATENCY_INVESTIGATION.md`、`backend/tests/test_p3_query_freshness.py`、`frontend/next-env.d.ts` 均为用户已有改动，不纳入 T103 提交。
+- **验收门（通过）：** 真实 API 样本证明供应商提供的完整比分和抢七分可从历史/详情 API 到页面；partial、invalid、missing 与 provider-failure 行为由确定性 provider/service 测试验证，未知值继续为空、不推算。后端 deterministic、前端全量、TypeScript、改动文件 Ruff、`git diff --check` 均有通过证据。实查的 111 条真实记录均完整，因此没有把 fixture 误称为真实上游缺分样本。
+- **安全与现场：** 根 `.env` 未读取或输出；没有 API key、查询凭据或原始供应商 payload 被打印/保存。真实服务保持运行，数据库卷未重置。`backend/app/service.py` 的两处既有 P3 freshness 修改及 `.codex/`、`.superpowers/`、`REALTIME_LATENCY_INVESTIGATION.md`、`backend/tests/test_p3_query_freshness.py`、`frontend/next-env.d.ts` 均为用户已有改动，不纳入 T103 提交。
 
 ## T99 初始化并启动本地真实服务（`done`）
 
@@ -164,6 +164,7 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
+| 2026-09-26 | `e47b5e1` | T103 真实运行验收关闭：整栈重启后同一历史比赛在球员历史与比赛详情 API/页面均显示逐盘局分和抢七分；2026 年 47 场、2025 年 64 场样本均无局分缺失，服务与同步健康。 |
 | 2026-09-26 | `b21869f` | 核实球员历史与比赛详情使用不同读取路径，但共用供应商比分解析器；赛季结果缓存仅在 API 进程内，重启可清掉旧缓存。 |
 | 2026-09-26 | `e47b5e1` | T103 前端抢七分展示贯通球员历史、比赛详情与首页；前端全量 499 passed、TypeScript 通过。真实运行进程早于修复提交，等待批准重启后核验。 |
 | 2026-09-26 | `321917d` | T103 已结束缺失比分按需修复：复用元数据缓存并走原 Reducer/存储/SSE 路径，纯比分修复跳过场地查询；API/Service/provider 142 passed，适配器兼容回归 90 passed。 |
