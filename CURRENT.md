@@ -14,7 +14,7 @@
 
 ## T105 全站球员英文主名/中文辅名统一（`in_progress`）
 
-- **领取：** 2026-09-26 10:25 CST，Codex，`main`，起始 HEAD `b0f386b`；领取文档与计划已登记，领取提交待记录。
+- **领取：** 2026-09-26 10:25 CST，Codex，`main`，起始 HEAD `b0f386b`；领取文档、规格与计划已推送，领取提交 `c15b061`。
 - **目标：** 全站所有结构化球员身份显示统一采用英文主名、中文辅名；中文名缺失时只显示英文。
 - **已确认边界：** Home、Match、Markets/Opportunities/Paper、Players、排名/搜索/资料/赛果和助手结构化球员卡均覆盖；AI 自然语言回答不强制插入双语。未知市场球员继续显示供应商 outcome 名称，不猜中文翻译。模型、比赛/市场/Paper 事实与身份解析不变。
 - **关键实现点：** canonical `Player.name` 始终作为英文主名；P3 API 的 `player_names` 明确为主名，并新增顺序对应的可空 `player_localized_names`。前端使用共享姓名组件贯通结构化界面。
