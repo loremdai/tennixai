@@ -1,5 +1,6 @@
 """Player profile/results service composition tests (deterministic fakes)."""
 
+import asyncio
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 
@@ -240,6 +241,59 @@ async def test_rankings_page_keeps_working_if_optional_photo_save_fails(
     )
 
     assert page.entries[0].player.image_url == provider.profile_image_url
+
+
+@pytest.mark.asyncio
+async def test_rankings_photo_hydration_caps_profile_concurrency_at_five() -> None:
+    players = tuple(
+        Player(id=f"ply_photo_{index}", name=f"Photo Player {index}", ranking=index + 1)
+        for index in range(7)
+    )
+    directory = MemoryPlayerDirectoryRepository()
+    await directory.save_ranking_snapshot(
+        tuple(
+            RankingEntry(
+                player=player,
+                tour=Tour.WTA,
+                rank=index + 1,
+                points=100 - index,
+                movement=RankingMovement.UNKNOWN,
+                ranking_date=NOW_UTC.date(),
+                fetched_at=NOW_UTC,
+            )
+            for index, player in enumerate(players)
+        )
+    )
+
+    class ConcurrentPhotoProvider(ProfileProvider):
+        active_profiles = 0
+        max_active_profiles = 0
+
+        async def get_player_profile(self, player_id: str) -> PlayerProfileData:
+            self.active_profiles += 1
+            self.max_active_profiles = max(
+                self.max_active_profiles, self.active_profiles
+            )
+            try:
+                await asyncio.sleep(0.001)
+                player = next(player for player in players if player.id == player_id)
+                return PlayerProfileData(
+                    player=player,
+                    image_url=f"https://images.example/{player_id}.jpg",
+                )
+            finally:
+                self.active_profiles -= 1
+
+    provider = ConcurrentPhotoProvider()
+    service = build_service(provider, directory)
+
+    page = await service.get_rankings_page(
+        Tour.WTA, page=1, page_size=50, country_code=None
+    )
+
+    assert len(page.entries) == 7
+    assert provider.max_active_profiles == 5
+    assert all(entry.player.image_url for entry in page.entries)
 
 
 @pytest.mark.asyncio
