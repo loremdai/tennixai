@@ -135,7 +135,7 @@ describe('MatchMomentumCard', () => {
     expect(screen.getByText('走势指数 +16（不是胜率）')).toBeVisible()
     expect(screen.getByText('最近 20 个已确认得分')).toBeVisible()
     expect(screen.getByText('查看近期得分走势与关键分')).toBeVisible()
-    expect(screen.getByText(/最新记录 9月8日 18:00/)).toBeVisible()
+    expect(screen.getByText(/走势截至 9月8日 18:00/)).toBeVisible()
     expect(screen.getByText('关键分标记')).toBeVisible()
     expect(screen.getAllByText(/第 22 分/).length).toBeGreaterThan(0)
     expect(screen.getByRole('list', { name: '近期比赛走势观测' }).querySelectorAll('li')).toHaveLength(20)
@@ -163,6 +163,31 @@ describe('MatchMomentumCard', () => {
     expect(screen.getByText('走势指数 0（不是胜率）')).toBeVisible()
   })
 
+  it('uses the displayed precision when deciding whether either side leads', () => {
+    const current = snapshot(8)
+    current.momentum[7] = { ...current.momentum[7], value: -0.04 }
+
+    render(<MatchMomentumCard match={match} preview={false} highlight={null} snapshot={current} />)
+
+    expect(screen.getByRole('heading', { level: 3, name: '近期走势接近均衡' })).toBeVisible()
+    expect(screen.getByText('走势指数 0（不是胜率）')).toBeVisible()
+  })
+
+  it('uses full names to distinguish two players with the same surname', () => {
+    const sameSurname = {
+      ...match,
+      players: [
+        { ...match.players[0], name: 'Na Li', shortName: 'Li', nameZh: undefined },
+        { ...match.players[1], name: 'Xian Li', shortName: 'Li', nameZh: undefined },
+      ],
+    } satisfies MatchViewModel
+
+    render(<MatchMomentumCard match={sameSurname} preview={false} highlight={null} snapshot={snapshot(8)} />)
+
+    expect(screen.getByText('上方：').parentElement).toHaveTextContent('Na Li')
+    expect(screen.getByText('下方：').parentElement).toHaveTextContent('Xian Li')
+  })
+
   it('discloses missing point winners without connecting the trend through them', () => {
     const current = snapshot(8)
     current.points[3] = point(4, { winner_player_id: null })
@@ -170,8 +195,34 @@ describe('MatchMomentumCard', () => {
 
     render(<MatchMomentumCard match={match} preview={false} highlight={null} snapshot={current} />)
 
-    expect(screen.getByText('部分得分者无法确认，曲线在缺口处断开。')).toBeVisible()
+    expect(screen.getByText('有些得分未纳入走势，曲线在缺口处断开。')).toBeVisible()
     expect(screen.getByRole('list', { name: '近期比赛走势观测' }).querySelectorAll('li')).toHaveLength(7)
+  })
+
+  it('discloses newer points that cannot be represented by the trend', () => {
+    const current = snapshot(8)
+    current.points.push(point(9, { winner_player_id: null }))
+    current.points.push(point(10, { winner_player_id: null }))
+
+    render(<MatchMomentumCard match={match} preview={false} highlight={null} snapshot={current} />)
+
+    expect(screen.getByText('之后还有 2 分得分者无法确认，走势停留在第 8 分。')).toBeVisible()
+
+    cleanup()
+    current.points[9] = point(10)
+    render(<MatchMomentumCard match={match} preview={false} highlight={null} snapshot={current} />)
+    expect(screen.getByText('之后还有 2 分尚未计入走势，走势停留在第 8 分。')).toBeVisible()
+  })
+
+  it('excludes a winner outside this match from the trend and its sample count', () => {
+    const current = snapshot(8)
+    current.points[7] = point(8, { winner_player_id: 'ply_other' })
+
+    render(<MatchMomentumCard match={match} preview={false} highlight={null} snapshot={current} />)
+
+    expect(screen.getByText('最近 7 个已确认得分')).toBeVisible()
+    expect(screen.getByText('走势指数 +2（不是胜率）')).toBeVisible()
+    expect(screen.getByText('之后还有 1 分得分者无法确认，走势停留在第 7 分。')).toBeVisible()
   })
 
   it('uses the latest momentum observation time instead of the snapshot time', () => {
@@ -188,8 +239,8 @@ describe('MatchMomentumCard', () => {
       />,
     )
 
-    expect(screen.getByText(/最新记录 9月8日 18:00/)).toBeVisible()
-    expect(screen.queryByText(/最新记录 9月8日 19:00/)).toBeNull()
+    expect(screen.getByText(/走势截至 9月8日 18:00/)).toBeVisible()
+    expect(screen.queryByText(/走势截至 9月8日 19:00/)).toBeNull()
   })
 
   it('labels a short sample clearly and explains when no trend data is available', () => {
@@ -222,5 +273,27 @@ describe('MatchMomentumCard', () => {
       />,
     )
     expect(screen.getByText(/暂时没有可用的逐分记录/)).toBeVisible()
+
+    cleanup()
+    render(
+      <MatchMomentumCard
+        match={match}
+        preview={false}
+        highlight={null}
+        snapshot={{ ...snapshot(0), points: [point(1, { winner_player_id: null })] }}
+      />,
+    )
+    expect(screen.getByText('已有逐分记录，但得分者均无法确认，暂不能绘制走势。')).toBeVisible()
+
+    cleanup()
+    render(
+      <MatchMomentumCard
+        match={match}
+        preview={false}
+        highlight={null}
+        snapshot={{ ...snapshot(0), points: [point(1)] }}
+      />,
+    )
+    expect(screen.getByText('已有得分记录，走势尚未生成。')).toBeVisible()
   })
 })

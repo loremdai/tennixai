@@ -339,6 +339,30 @@ describe('statistics presentation mapping', () => {
 })
 
 describe('momentum presentation mapping', () => {
+  it('keeps a trailing break when newer points have no momentum observation', () => {
+    const observations = [{
+      match_id: 'mat_1',
+      point_sequence: 1,
+      state_version: 4,
+      algorithm_version: 'recent-control-v1',
+      value: 12,
+      leader_player_id: 'ply_1',
+      is_provisional: false,
+      as_of: '2026-09-08T10:00:00Z',
+      input_summary: 'n=6',
+    }] satisfies MomentumObservationDto[]
+    const points = [
+      { sequence: 1, winner_player_id: 'ply_1' },
+      { sequence: 2, winner_player_id: null },
+      { sequence: 3, winner_player_id: null },
+    ] as PointEventDto[]
+
+    expect(toMomentumChart(observations, points).map(({ sequence, value }) => [sequence, value])).toEqual([
+      [1, 12],
+      [2, null],
+    ])
+  })
+
   it('leaves a visible break when an unconfirmed point sits between observations', () => {
     const observations = [1, 3].map((sequence) => ({
       match_id: 'mat_1',

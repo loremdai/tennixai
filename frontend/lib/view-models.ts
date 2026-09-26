@@ -432,5 +432,9 @@ export function toMomentumChart(
       winnerPlayerId: pointsBySequence.get(observation.point_sequence)?.winner_player_id ?? null,
     })
   }
+  const lastObserved = chart.at(-1)
+  if (lastObserved && points.some((point) => point.sequence > lastObserved.sequence)) {
+    chart.push({ sequence: lastObserved.sequence + 1, value: null, isKeyPoint: false, winnerPlayerId: null })
+  }
   return chart
 }

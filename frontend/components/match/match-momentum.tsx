@@ -73,11 +73,14 @@ function RecentControlPanel({
   match: MatchViewModel
   snapshot: MatchSnapshotDto
 }) {
+  const playerIds = new Set(match.players.map((player) => player.id))
+  const pointBySequence = new Map(snapshot.points.map((point) => [point.sequence, point]))
   const observations = snapshot.momentum
+    .filter((item) => playerIds.has(pointBySequence.get(item.point_sequence)?.winner_player_id ?? ''))
     .slice()
     .sort((a, b) => a.point_sequence - b.point_sequence)
   const latest = observations.at(-1)
-  const chart = toMomentumChart(snapshot.momentum, snapshot.points)
+  const chart = toMomentumChart(observations, snapshot.points)
   const confirmed = chart.filter(
     (item): item is MomentumChartPoint & { value: number } => item.value !== null,
   )
@@ -86,21 +89,28 @@ function RecentControlPanel({
     .filter((point) => confirmed.some((item) => item.sequence === point.sequence))
 
   if (!latest || chart.length === 0) {
+    const description = snapshot.points.length === 0
+      ? '暂时没有可用的逐分记录，比赛走势会在数据到达后显示。'
+      : snapshot.points.some((point) => playerIds.has(point.winner_player_id ?? ''))
+        ? '已有得分记录，走势尚未生成。'
+        : '已有逐分记录，但得分者均无法确认，暂不能绘制走势。'
     return (
       <p className="rounded-md bg-muted/25 px-3 py-2 text-xs text-muted-foreground">
-        暂时没有可用的逐分记录，比赛走势会在数据到达后显示。
+        {description}
       </p>
     )
   }
 
   const asOf = formatAsOf(latest.as_of)
   const [positivePlayer, negativePlayer] = match.players
-  const leader = latest.value > 0 ? positivePlayer : latest.value < 0 ? negativePlayer : null
+  const displayedIndex = Math.round(latest.value * 10) / 10
+  const leader = displayedIndex > 0 ? positivePlayer : displayedIndex < 0 ? negativePlayer : null
   const insufficient = latest.is_provisional || confirmed.length < 6
   const maxMagnitude = Math.max(...confirmed.map((item) => Math.abs(item.value)))
   const extent = Math.min(100, Math.max(20, Math.ceil(maxMagnitude / 10) * 10))
   const hasGap = chart.some((item) => item.value === null)
-  const pointBySequence = new Map(snapshot.points.map((point) => [point.sequence, point]))
+  const trailingPoints = snapshot.points.filter((point) => point.sequence > latest.point_sequence)
+  const trailingWinnersUnknown = trailingPoints.every((point) => !playerIds.has(point.winner_player_id ?? ''))
 
   return (
     <div className="flex flex-col gap-4">
@@ -120,7 +130,7 @@ function RecentControlPanel({
           </h3>
           <p className="text-xs text-muted-foreground">最近 {confirmed.length} 个已确认得分</p>
           <p className="text-xs text-muted-foreground">
-            {asOf ? `最新记录 ${asOf}` : '最新记录时间暂不可用'}
+            {asOf ? `走势截至 ${asOf}` : '走势记录时间暂不可用'}
           </p>
         </div>
         {insufficient ? <Badge variant="outline">样本较少</Badge> : (
@@ -135,7 +145,7 @@ function RecentControlPanel({
           <div className="flex items-start justify-between gap-2 text-xs">
             <div className="flex min-w-0 items-start gap-1 text-primary">
               <span className="shrink-0">上方：</span>
-              <PlayerName name={positivePlayer.shortName} localizedName={positivePlayer.nameZh} />
+              <PlayerName name={positivePlayer.name} localizedName={positivePlayer.nameZh} />
             </div>
             <span className="tabular-nums text-muted-foreground">+{extent}</span>
           </div>
@@ -189,7 +199,7 @@ function RecentControlPanel({
                 dataKey="value"
                 stroke="var(--color-momentum)"
                 strokeWidth={2.5}
-                dot={false}
+                dot={{ r: 2, fill: 'var(--color-momentum)', strokeWidth: 0 }}
                 activeDot={{ r: 4 }}
                 connectNulls={false}
                 isAnimationActive={false}
@@ -218,7 +228,7 @@ function RecentControlPanel({
           <div className="flex items-end justify-between gap-2 text-xs">
             <div className="flex min-w-0 items-start gap-1 text-muted-foreground">
               <span className="shrink-0">下方：</span>
-              <PlayerName name={negativePlayer.shortName} localizedName={negativePlayer.nameZh} />
+              <PlayerName name={negativePlayer.name} localizedName={negativePlayer.nameZh} />
             </div>
             <span className="tabular-nums text-muted-foreground">-{extent}</span>
           </div>
@@ -229,7 +239,14 @@ function RecentControlPanel({
       )}
 
       {hasGap && !insufficient ? (
-        <p className="text-xs text-muted-foreground">部分得分者无法确认，曲线在缺口处断开。</p>
+        <p className="text-xs text-muted-foreground">有些得分未纳入走势，曲线在缺口处断开。</p>
+      ) : null}
+      {trailingPoints.length > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          {trailingWinnersUnknown
+            ? `之后还有 ${trailingPoints.length} 分得分者无法确认，走势停留在第 ${latest.point_sequence} 分。`
+            : `之后还有 ${trailingPoints.length} 分尚未计入走势，走势停留在第 ${latest.point_sequence} 分。`}
+        </p>
       ) : null}
       <p className="text-xs text-muted-foreground">这只反映最近得分走势，不等于当前比分或获胜概率。</p>
 
