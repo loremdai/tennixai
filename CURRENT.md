@@ -4,13 +4,22 @@
 
 **最后更新：** 2026-09-26（北京时间）
 
-**当前主任务：** 无。T104 已完成；下一项任务尚未领取。
+**当前主任务：** T105 — 全站球员英文主名/中文辅名统一（`in_progress`）。
 
-**最近任务：** T104 — 全站球员照片贯通（`done`）；实现/回归提交 `9e26970`、`cea6988`、`d672578`、`6402831`、`19ee1a4`，起始 HEAD `c3abe16`。
+**最近任务：** T105 — 全站球员英文主名/中文辅名统一（设计与实施计划均已确认，实施中）；T104 — 全站球员照片贯通（`done`），实现/回归提交 `9e26970`、`cea6988`、`d672578`、`6402831`、`19ee1a4`。
 
-**执行者 / 分支：** Codex / `main`；T104 起始 HEAD `c3abe16`，实现已提交。保留工作区已有 P3 freshness 修改与未跟踪文件，未纳入本任务。
+**执行者 / 分支：** Codex / `main`；T105 起始 HEAD `b0f386b`，领取记录与计划先行推送。保留工作区已有 P3 freshness 修改与未跟踪文件，未纳入本任务。
 
-**运行手册与证据：** [本地真实运行手册](docs/runbooks/local-real-runtime.md)；[T98 审计规格与完成证据](docs/superpowers/specs/2026-09-24-tennixai-whole-product-audit.md)；[T97 审计计划](docs/superpowers/plans/2026-09-24-tennixai-t97-global-field-presentation-audit.md)；[T95–T98 字段矩阵](docs/research/2026-09-24-tennixai-t95-match-field-integrity-matrix.md)。
+**运行手册与证据：** [T105 设计规格](docs/superpowers/specs/2026-09-26-tennixai-t105-global-bilingual-player-names-design.md)；[T105 实施计划](docs/superpowers/plans/2026-09-26-tennixai-t105-global-bilingual-player-names-implementation.md)；[本地真实运行手册](docs/runbooks/local-real-runtime.md)。
+
+## T105 全站球员英文主名/中文辅名统一（`in_progress`）
+
+- **领取：** 2026-09-26 10:25 CST，Codex，`main`，起始 HEAD `b0f386b`；领取文档与计划已登记，领取提交待记录。
+- **目标：** 全站所有结构化球员身份显示统一采用英文主名、中文辅名；中文名缺失时只显示英文。
+- **已确认边界：** Home、Match、Markets/Opportunities/Paper、Players、排名/搜索/资料/赛果和助手结构化球员卡均覆盖；AI 自然语言回答不强制插入双语。未知市场球员继续显示供应商 outcome 名称，不猜中文翻译。模型、比赛/市场/Paper 事实与身份解析不变。
+- **关键实现点：** canonical `Player.name` 始终作为英文主名；P3 API 的 `player_names` 明确为主名，并新增顺序对应的可空 `player_localized_names`。前端使用共享姓名组件贯通结构化界面。
+- **规格/计划：** [T105 设计规格](docs/superpowers/specs/2026-09-26-tennixai-t105-global-bilingual-player-names-design.md)；[T105 实施计划](docs/superpowers/plans/2026-09-26-tennixai-t105-global-bilingual-player-names-implementation.md)。计划已由用户确认；领取记录先行推送，随后开始产品代码实现。
+- **工作区保护：** `backend/app/service.py` 有用户已有 P3 freshness 修改；`.codex/`、`.superpowers/`、`REALTIME_LATENCY_INVESTIGATION.md`、`backend/tests/test_p3_query_freshness.py`、`frontend/next-env.d.ts` 均保留且不纳入 T105 提交。根 `.env` 不读取、不输出；重启服务不重置数据库。
 
 ## T101 修复过期比赛误入当前列表（`done`）
 
