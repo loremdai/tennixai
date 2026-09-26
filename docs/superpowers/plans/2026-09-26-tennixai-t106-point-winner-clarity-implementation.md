@@ -27,8 +27,8 @@
 **Files:**
 - Modify: `frontend/components/match/match-points.test.tsx`
 
-- [ ] 构造同一展开局中的两个未知 winner 和一个已知 winner；断言旧“胜者待定”不再出现，未知项有一条说明和两个可访问占位，已知球员名称与各行比分仍出现。
-- [ ] 运行 `cd frontend && ./node_modules/.bin/vitest run components/match/match-points.test.tsx`，确认新增断言针对当前 fallback 失败（RED）。
+- [x] 构造同一展开局中的两个 null winner、一个无法对应到本场球员的 winner 和一个已知 winner；断言旧“胜者待定”不再出现，未知项有一条说明和三个可访问占位，已知球员名称与各行比分仍出现。
+- [x] 运行 `cd frontend && ./node_modules/.bin/vitest run components/match/match-points.test.tsx`，确认新增断言针对当前 fallback 失败（RED）。
 
 ### Task 2: 在唯一负责的 UI 层最小修复
 
@@ -36,10 +36,10 @@
 - Modify: `frontend/components/match/match-points.tsx`
 - Modify: `docs/research/2026-09-24-tennixai-t95-match-field-integrity-matrix.md`
 
-- [ ] 对全部 points 检查是否存在 null winner；存在时在时间线顶部只显示一次“部分逐分记录的得分者无法从现有比分中确认”。
-- [ ] 每个未知 winner 行显示 `—`，并包含 sr-only 文本 `得分者未能确认`；移除可见的“胜者待定”。已知胜者仍通过现有 `PlayerName`。
-- [ ] 更新字段矩阵中 winner/quality 的页面消费事实，记录时间线中性显示和一次性说明。
-- [ ] 重跑定向 Vitest，确认新增和既有用例通过（GREEN）；运行 `cd frontend && ./node_modules/.bin/tsc --noEmit`、`git diff --check`。
+- [x] 对全部 points 检查是否存在 null 或无法对应参赛球员的 winner；存在时在时间线顶部只显示一次“部分逐分记录无法确认得分者”。
+- [x] 每个未知 winner 行显示 `—`，并包含 sr-only 文本 `得分者未能确认`；移除可见的“胜者待定”。已知胜者仍通过现有 `PlayerName`。
+- [x] 更新字段矩阵中 winner/quality 的页面消费事实，记录时间线中性显示和一次性说明。
+- [x] 全量前端 Vitest（41 files / 524 tests）、TypeScript `tsc --noEmit` 与 `git diff --check` 通过；新增 UI 回归先 RED 后 GREEN。
 
 ### Task 3: 关闭任务并推送
 

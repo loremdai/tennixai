@@ -114,6 +114,10 @@ export function MatchPointsTimeline({
   }
 
   const hasCorrection = points.some((point) => point.revision > 1)
+  const hasIndeterminateWinner = points.some(
+    (point) =>
+      point.winner_player_id !== players[0].id && point.winner_player_id !== players[1].id,
+  )
   const setNumbers = [...new Set(games.map((group) => group.setNumber))].sort((a, b) => a - b)
 
   return (
@@ -125,6 +129,14 @@ export function MatchPointsTimeline({
           className="rounded-md bg-secondary/60 px-3 py-1.5 text-xs text-muted-foreground"
         >
           部分逐分记录已更新，当前显示最新记录。
+        </p>
+      ) : null}
+      {hasIndeterminateWinner ? (
+        <p
+          role="note"
+          className="rounded-md bg-secondary/60 px-3 py-1.5 text-xs text-muted-foreground"
+        >
+          部分逐分记录无法确认得分者。
         </p>
       ) : null}
 
@@ -206,7 +218,12 @@ export function MatchPointsTimeline({
                                         localizedName={winner.localized_name}
                                         primaryClassName="font-medium"
                                       />
-                                    ) : <span className="truncate font-medium">胜者待定</span>}
+                                    ) : (
+                                      <span className="truncate font-medium">
+                                        <span aria-hidden="true">—</span>
+                                        <span className="sr-only">得分者未能确认</span>
+                                      </span>
+                                    )}
                                     {badges.map((badge) => (
                                       <Badge key={badge} variant="outline">
                                         {badge}

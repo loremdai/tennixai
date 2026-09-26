@@ -15,7 +15,7 @@ function point(
   setNumber: number,
   gameNumber: number,
   options: {
-    winner?: 'ply_a' | 'ply_b' | null
+    winner?: string | null
     score?: [string, string]
     breakPoint?: boolean
     setPoint?: boolean
@@ -31,7 +31,7 @@ function point(
     game_number: gameNumber,
     point_number: sequence,
     server_player_id: 'ply_a',
-    winner_player_id: options.winner ?? 'ply_a',
+    winner_player_id: options.winner === undefined ? 'ply_a' : options.winner,
     score_before: null,
     score_after: {
       sets_won: [0, 0],
@@ -101,6 +101,27 @@ describe('MatchPointsTimeline', () => {
   it('does not show the correction notice without revisions', () => {
     render(<MatchPointsTimeline points={history} players={players} />)
     expect(screen.queryByRole('status', { name: /数据已校准/ })).not.toBeInTheDocument()
+  })
+
+  it('shows one explanation and accessible neutral placeholders for unknown winners', () => {
+    const points = [
+      point(7, 1, 7, { winner: null, score: ['15', '0'] }),
+      point(8, 1, 7, { winner: null, score: ['15', '15'] }),
+      point(9, 1, 7, { winner: 'ply_unknown', score: ['15', '30'] }),
+      point(10, 1, 7, { winner: 'ply_b', score: ['30', '30'] }),
+    ]
+
+    render(<MatchPointsTimeline points={points} players={players} />)
+
+    expect(screen.queryByText('胜者待定')).not.toBeInTheDocument()
+    expect(screen.getAllByText('部分逐分记录无法确认得分者。')).toHaveLength(1)
+    expect(screen.getAllByText('得分者未能确认')).toHaveLength(3)
+    expect(screen.getAllByText('—')).toHaveLength(3)
+    expect(screen.getByText('Alcaraz')).toBeVisible()
+    expect(screen.getByText('15 - 0')).toBeVisible()
+    expect(screen.getByText('15 - 15')).toBeVisible()
+    expect(screen.getByText('15 - 30')).toBeVisible()
+    expect(screen.getByText('30 - 30')).toBeVisible()
   })
 
   it('auto-follows new points only when the viewer is near the bottom', async () => {
