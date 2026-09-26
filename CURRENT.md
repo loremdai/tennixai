@@ -4,11 +4,11 @@
 
 **最后更新：** 2026-09-26（北京时间）
 
-**当前主任务：** 无；T103 — 彻查并修复历史赛果盘分/局分丢失已于 2026-09-26 完成真实运行验收。
+**当前主任务：** T104 — 全站球员照片贯通（`in_progress`；先写规格与实施计划，再直接实施）。
 
-**最近任务：** T103 — 彻查并修复历史赛果盘分/局分丢失（`done`），起始 HEAD `0d63c48`。
+**最近任务：** T104 — 全站球员照片贯通（`in_progress`），起始 HEAD `c3abe16`。
 
-**执行者 / 分支：** Codex / `main`；T103 起始 HEAD `0d63c48`。保留工作区已有 P3 修改与未跟踪文件，不纳入本任务。
+**执行者 / 分支：** Codex / `main`；T104 起始 HEAD `c3abe16`。保留工作区已有 P3 修改与未跟踪文件，不纳入本任务。
 
 **运行手册与证据：** [本地真实运行手册](docs/runbooks/local-real-runtime.md)；[T98 审计规格与完成证据](docs/superpowers/specs/2026-09-24-tennixai-whole-product-audit.md)；[T97 审计计划](docs/superpowers/plans/2026-09-24-tennixai-t97-global-field-presentation-audit.md)；[T95–T98 字段矩阵](docs/research/2026-09-24-tennixai-t95-match-field-integrity-matrix.md)。
 
@@ -45,6 +45,15 @@
 - **执行边界：** 真实字段缺失继续未知；不依据胜负、胜盘数或 PBP 反推局分，不做周期轮询或批量历史抓取；只在查看已结束且比分不完整的比赛时按需刷新，并复用现有缓存。
 - **验收门（通过）：** 真实 API 样本证明供应商提供的完整比分和抢七分可从历史/详情 API 到页面；partial、invalid、missing 与 provider-failure 行为由确定性 provider/service 测试验证，未知值继续为空、不推算。后端 deterministic、前端全量、TypeScript、改动文件 Ruff、`git diff --check` 均有通过证据。实查的 111 条真实记录均完整，因此没有把 fixture 误称为真实上游缺分样本。
 - **安全与现场：** 根 `.env` 未读取或输出；没有 API key、查询凭据或原始供应商 payload 被打印/保存。真实服务保持运行，数据库卷未重置。`backend/app/service.py` 的两处既有 P3 freshness 修改及 `.codex/`、`.superpowers/`、`REALTIME_LATENCY_INVESTIGATION.md`、`backend/tests/test_p3_query_freshness.py`、`frontend/next-env.d.ts` 均为用户已有改动，不纳入 T103 提交。
+
+## T104 全站球员照片贯通（`in_progress`）
+
+- **领取：** 2026-09-26，Codex，`main`，起始 HEAD `c3abe16`。
+- **目标：** 让首页、比赛详情、市场、排名、球员搜索/详情及其他显示球员身份的页面统一使用真实球员照片；彻底移除姓名首字母头像。
+- **方案：** 仅使用 API-Tennis 明确提供的球员照片；复用现有球员目录 `image_url` 存储和内部 `player_id` 关联。按页面实际需要填充并缓存，避免启动时批量请求全部球员；没有供应商照片或无法唯一识别球员时用中性头像，不伪造、不猜测身份。
+- **边界：** 不读取/输出根 `.env` 或凭据；不新增图片供应商、爬虫或图片生成；不修改市场匹配、模型、Paper 语义；保留已有用户修改与未跟踪文件，尤其 `backend/app/service.py` 的 P3 freshness 修改。
+- **规格/计划：** 编写后直接执行，不另等用户确认；详见下方链接（完成前补齐）。
+- **验收目标：** 所有页面共用头像展示；首页/详情和市场中有可靠 player ID 的球员显示已缓存的真实照片；排名页可以按需取得照片；搜索/详情与排名共用同一目录照片；无照片或身份不确定时不显示姓名首字母。完成后做静态类型检查与可行的浏览器验收，并记录未实际执行的测试。
 
 ## T99 初始化并启动本地真实服务（`done`）
 
