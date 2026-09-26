@@ -24,6 +24,9 @@ export type OpportunityRowModel = {
   tournament: string
   phase: Exclude<RowPhase, 'closed' | 'unknown'>
   selection: string
+  selectionLocalizedName: string | null
+  playerNames: [string, string] | null
+  playerLocalizedNames: [string | null, string | null] | null
   selectionImageUrl?: string | null
   modelProbability: number | null
   executableProbability: number | null
@@ -54,6 +57,8 @@ export type MarketRowModel = {
   quoteLabel: string
   playerOne: string
   playerTwo: string
+  playerNames: [string, string] | null
+  playerLocalizedNames: [string | null, string | null] | null
   playerImages?: [string | null, string | null] | null
   playerOneAsk: number | null
   playerTwoAsk: number | null
@@ -72,7 +77,9 @@ export type PaperRowModel = {
   match: string
   tournament: string
   direction: string
+  directionLocalizedName: string | null
   playerNames?: [string, string] | null
+  playerLocalizedNames?: [string | null, string | null] | null
   playerImages?: [string | null, string | null] | null
   state: 'entry_pending' | 'hold' | 'exit_pending' | 'exit_missed' | 'exited' | 'missed' | 'settled'
   cost: number
@@ -90,6 +97,7 @@ export type PulseRowModel = {
   priority: 'position' | 'sell' | 'buy_live' | 'buy_upcoming' | 'wait' | 'buy_unknown'
   match: string
   playerNames?: [string, string] | null
+  playerLocalizedNames?: [string | null, string | null] | null
   playerImages?: [string | null, string | null] | null
   tournament: string
   phase: '直播' | '即将开始' | '已完赛' | '比赛状态未知'
@@ -213,11 +221,13 @@ function namesOf(dto: {
 export function toOpportunityRow(dto: OpportunityDto, now: Date): OpportunityRowModel {
   const [one, two] = namesOf(dto)
   let selection = '—'
+  let selectionLocalizedName: string | null = null
   let selectionImageUrl: string | null = null
   if (dto.target_player_id && dto.player_ids && dto.player_names) {
     const index = dto.player_ids.indexOf(dto.target_player_id)
     if (index >= 0) {
       selection = dto.player_names[index]
+      selectionLocalizedName = dto.player_localized_names?.[index] ?? null
       selectionImageUrl = dto.player_images?.[index] ?? null
     }
   }
@@ -227,6 +237,9 @@ export function toOpportunityRow(dto: OpportunityDto, now: Date): OpportunityRow
     tournament: dto.tournament_name ?? '—',
     phase: dto.phase,
     selection,
+    selectionLocalizedName,
+    playerNames: dto.player_names,
+    playerLocalizedNames: dto.player_localized_names ?? null,
     selectionImageUrl,
     modelProbability: dto.model_probability,
     executableProbability: dto.executable_probability,
@@ -272,6 +285,8 @@ export function toMarketRow(dto: MarketSummaryDto, now: Date): MarketRowModel {
     quoteLabel: quoteStateLabel(dto.quote.state, dto.quote.as_of, now),
     playerOne: one,
     playerTwo: two,
+    playerNames: dto.player_names,
+    playerLocalizedNames: dto.player_localized_names ?? null,
     playerImages: dto.player_images,
     playerOneAsk: dto.quote.outcome_asks
       ? parseDecimalOrNull(dto.quote.outcome_asks[0])
@@ -310,16 +325,22 @@ export function toPaperRow(
 ): PaperRowModel {
   const state = PAPER_STATE_MAP[dto.status]
   let direction = '—'
+  let directionLocalizedName: string | null = null
   if (dto.player_ids && dto.player_names) {
     const index = dto.player_ids.indexOf(dto.outcome_player_id)
-    if (index >= 0) direction = dto.player_names[index]
+    if (index >= 0) {
+      direction = dto.player_names[index]
+      directionLocalizedName = dto.player_localized_names?.[index] ?? null
+    }
   }
   return {
     id: dto.position_id,
     match: matchLabel ?? '—',
     tournament: dto.tournament_name ?? '—',
     direction,
+    directionLocalizedName,
     playerNames: dto.player_names,
+    playerLocalizedNames: dto.player_localized_names ?? null,
     playerImages: dto.player_images,
     state,
     cost: parseDecimalOrNull(dto.entry_cost) ?? 0,
@@ -352,6 +373,7 @@ export function toPulseRow(dto: PulseRowDto, now: Date): PulseRowModel {
     priority,
     match: `${one} vs. ${two}`,
     playerNames: dto.player_names,
+    playerLocalizedNames: dto.player_localized_names ?? null,
     playerImages: dto.player_images,
     tournament: dto.tournament_name ?? '—',
     phase:

@@ -1634,7 +1634,15 @@ class P3QueryService:
                 if tournament_ids
                 else []
             )
-        player_names = {row.id: (row.localized_name or row.name) for row in players}
+        player_names = {row.id: row.name for row in players}
+        player_localized_names = {
+            row.id: (
+                row.localized_name
+                if row.localized_name and row.localized_name.strip()
+                else None
+            )
+            for row in players
+        }
         player_images = {row.id: row.image_url for row in players}
         tournament_by_id = {row.id: row for row in tournaments}
         facts = {}
@@ -1643,11 +1651,20 @@ class P3QueryService:
                 player_names.get(player_id)
                 for player_id in (row.player1_id, row.player2_id)
             )
+            localized_names = tuple(
+                player_localized_names.get(player_id)
+                for player_id in (row.player1_id, row.player2_id)
+            )
             tournament = tournament_by_id.get(row.tournament_id)
             facts[row.id] = {
                 "player_names": (
                     (names[0], names[1])
                     if names[0] is not None and names[1] is not None
+                    else None
+                ),
+                "player_localized_names": (
+                    localized_names
+                    if row.player1_id is not None and row.player2_id is not None
                     else None
                 ),
                 "player_ids": (
@@ -1971,6 +1988,9 @@ class P3QueryService:
                         target_player_id=observation.target_player_id,
                         player_ids=match_facts.get("player_ids"),
                         player_names=match_facts.get("player_names"),
+                        player_localized_names=match_facts.get(
+                            "player_localized_names"
+                        ),
                         player_images=match_facts.get("player_images"),
                         model_probability=model_probability,
                         executable_probability=(
@@ -2135,9 +2155,15 @@ class P3QueryService:
             # fallback so a row is never nameless when the market knows them.
             fact_ids = match_facts.get("player_ids")
             fact_names = match_facts.get("player_names")
+            fact_localized_names = match_facts.get("player_localized_names")
             name_by_id = (
                 dict(zip(fact_ids, fact_names, strict=False))
                 if fact_ids is not None and fact_names is not None
+                else {}
+            )
+            localized_name_by_id = (
+                dict(zip(fact_ids, fact_localized_names, strict=False))
+                if fact_ids is not None and fact_localized_names is not None
                 else {}
             )
             resolved_names = [
@@ -2147,6 +2173,15 @@ class P3QueryService:
             player_names = (
                 (resolved_names[0], resolved_names[1])
                 if resolved_names[0] is not None and resolved_names[1] is not None
+                else None
+            )
+            resolved_localized_names = [
+                localized_name_by_id.get(player_id) if player_id else None
+                for player_id in outcome_ids
+            ]
+            player_localized_names = (
+                (resolved_localized_names[0], resolved_localized_names[1])
+                if outcome_ids[0] is not None and outcome_ids[1] is not None
                 else None
             )
             image_by_id = (
@@ -2188,6 +2223,7 @@ class P3QueryService:
                         else None
                     ),
                     player_names=player_names,
+                    player_localized_names=player_localized_names,
                     player_images=player_images,
                     model_probability=model_probability,
                     quote=MarketQuoteDto(
@@ -2284,6 +2320,9 @@ class P3QueryService:
                     outcome_player_id=position.outcome_player_id,
                     player_ids=match_facts.get("player_ids"),
                     player_names=match_facts.get("player_names"),
+                    player_localized_names=match_facts.get(
+                        "player_localized_names"
+                    ),
                     player_images=match_facts.get("player_images"),
                     status=position.status.value,
                     entry_cost=str(position.entry_cost),
@@ -2327,6 +2366,9 @@ class P3QueryService:
                     outcome_player_id=intent.outcome_player_id,
                     player_ids=match_facts.get("player_ids"),
                     player_names=match_facts.get("player_names"),
+                    player_localized_names=match_facts.get(
+                        "player_localized_names"
+                    ),
                     player_images=match_facts.get("player_images"),
                     status="entry_pending",
                     entry_cost=str(intent.stake),
@@ -2418,6 +2460,7 @@ class P3QueryService:
                     action=(decision.action if decision is not None else "hold"),
                     phase=phase,
                     player_names=position.player_names,
+                    player_localized_names=position.player_localized_names,
                     player_images=facts.get("player_images"),
                     model_probability=(
                         None
@@ -2457,6 +2500,7 @@ class P3QueryService:
                     action=opportunity.action,
                     phase=opportunity.phase,
                     player_names=opportunity.player_names,
+                    player_localized_names=opportunity.player_localized_names,
                     player_images=opportunity.player_images,
                     model_probability=opportunity.model_probability,
                     executable_probability=opportunity.executable_probability,

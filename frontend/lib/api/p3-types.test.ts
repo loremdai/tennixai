@@ -110,6 +110,74 @@ describe('P3 DTO decoding', () => {
     expect(availability).toBeNull()  // older payloads stay decodable
   })
 
+  it('decodes optional localized player names and keeps legacy responses compatible', () => {
+    const { rows } = decodeOpportunityList({
+      data: [
+        opportunity({ player_localized_names: ['甲球员', null] }),
+        opportunity({ market_id: 'mkt_legacy' }),
+      ],
+    })
+
+    expect(rows[0].player_localized_names).toEqual(['甲球员', null])
+    expect(rows[1].player_localized_names).toBeNull()
+
+    const page = decodeMarketPage({
+      data: [marketSummary({ player_localized_names: [null, '乙球员'] })],
+      page: 1,
+      page_size: 20,
+      total: 1,
+    })
+    expect(page.markets[0].player_localized_names).toEqual([null, '乙球员'])
+
+    const positions = decodePaperPositions({
+      open: [
+        {
+          position_id: 'pos_1',
+          match_id: 'mat_pos',
+          market_id: 'mkt_pos',
+          outcome_player_id: 'ply_a',
+          player_localized_names: ['甲球员', '乙球员'],
+          status: 'open',
+          entry_cost: '10.00',
+          shares: '19.05',
+          freshness_as_of: NOW,
+        },
+      ],
+      recent: [],
+    })
+    expect(positions.open[0].player_localized_names).toEqual(['甲球员', '乙球员'])
+
+    const pulse = decodePulse({
+      data: [
+        {
+          match_id: 'mat_live',
+          kind: 'position',
+          action: 'hold',
+          player_localized_names: ['甲球员', null],
+          as_of: NOW,
+        },
+      ],
+      has_open_position: true,
+    })
+    expect(pulse.data[0].player_localized_names).toEqual(['甲球员', null])
+  })
+
+  it('rejects malformed localized player name pairs and non-string entries', () => {
+    expect(() =>
+      decodeOpportunityList({
+        data: [opportunity({ player_localized_names: ['甲球员'] })],
+      }),
+    ).toThrow(P3DecodeError)
+    expect(() =>
+      decodeMarketPage({
+        data: [marketSummary({ player_localized_names: ['甲球员', 7] })],
+        page: 1,
+        page_size: 20,
+        total: 1,
+      }),
+    ).toThrow(P3DecodeError)
+  })
+
   it('decodes player photos as a nullable pair without coercing missing photos', () => {
     const { rows } = decodeOpportunityList({
       data: [opportunity({ player_images: ['https://images.example/a.jpg', null] })],

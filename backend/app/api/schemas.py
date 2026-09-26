@@ -82,6 +82,7 @@ class OpportunityDto(BaseModel):
     target_player_id: str | None = None
     player_ids: tuple[str, str] | None = None
     player_names: tuple[str, str] | None = None
+    player_localized_names: tuple[str | None, str | None] | None = None
     player_images: tuple[str | None, str | None] | None = None
     model_probability: float | None = None
     executable_probability: float | None = None
@@ -138,6 +139,7 @@ class MarketSummaryDto(BaseModel):
     reason_code: str | None = None
     player_ids: tuple[str, str] | None = None
     player_names: tuple[str, str] | None = None
+    player_localized_names: tuple[str | None, str | None] | None = None
     player_images: tuple[str | None, str | None] | None = None
     # Prediction probability for player_names[0]/outcome A, not a whole-match
     # probability or a symmetric pair of probabilities.
@@ -163,6 +165,7 @@ class PaperPositionDto(BaseModel):
     outcome_player_id: str
     player_ids: tuple[str, str] | None = None
     player_names: tuple[str, str] | None = None
+    player_localized_names: tuple[str | None, str | None] | None = None
     player_images: tuple[str | None, str | None] | None = None
     # "open" | "exit_pending" | "exited" | "exit_missed" | "settled", or
     # "entry_pending" for a ledger row synthesized from a pending intent.
@@ -182,6 +185,7 @@ class PulseRowDto(BaseModel):
     action: str
     phase: str | None = None  # "live" | "upcoming" | "closed"
     player_names: tuple[str, str] | None = None
+    player_localized_names: tuple[str | None, str | None] | None = None
     player_images: tuple[str | None, str | None] | None = None
     model_probability: float | None = None
     executable_probability: float | None = None

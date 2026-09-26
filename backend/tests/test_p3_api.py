@@ -45,7 +45,9 @@ class FakeP3Queries:
                 phase="live",
                 action="buy",
                 target_player_id="ply_a",
+                player_ids=("ply_a", "ply_b"),
                 player_names=("Alpha One", "Beta Two"),
+                player_localized_names=("甲球员", "乙球员"),
                 model_probability=0.62,
                 executable_probability=0.55,
                 conservative_net_edge="0.07",
@@ -60,7 +62,9 @@ class FakeP3Queries:
                 phase="upcoming",
                 action="wait",
                 target_player_id="ply_b",
+                player_ids=("ply_c", "ply_d"),
                 player_names=("Gamma Three", "Delta Four"),
+                player_localized_names=("丙球员", None),
                 model_probability=0.58,
                 executable_probability=0.57,
                 conservative_net_edge=None,
@@ -82,6 +86,9 @@ class FakeP3Queries:
                 model_availability="available",
                 decision_action="buy",
                 reason_code=None,
+                player_ids=("ply_a", "ply_b"),
+                player_names=("Alpha One", "Beta Two"),
+                player_localized_names=("甲球员", "乙球员"),
                 quote=MarketQuoteDto(
                     state="snapshot",
                     source="snapshot",
@@ -118,7 +125,9 @@ class FakeP3Queries:
                 match_id="mat_pos",
                 market_id="mkt_pos",
                 outcome_player_id="ply_a",
+                player_ids=("ply_a", "ply_b"),
                 player_names=("Alpha One", "Beta Two"),
+                player_localized_names=("甲球员", "乙球员"),
                 status="open",
                 entry_cost="10.00",
                 shares="19.05",
@@ -187,6 +196,7 @@ class FakeP3Queries:
                 market_id="mkt_pos",
                 kind="position",
                 action="hold",
+                player_localized_names=("甲球员", "乙球员"),
                 player_names=("Alpha One", "Beta Two"),
                 model_probability=0.6,
                 executable_probability=0.57,
@@ -233,6 +243,9 @@ async def test_opportunities_are_ordered_live_buy_first(client):
     assert [row["match_id"] for row in rows] == ["mat_live", "mat_soon"]
     assert rows[0]["action"] == "buy"
     assert rows[1]["action"] == "wait"
+    assert rows[0]["player_names"] == ["Alpha One", "Beta Two"]
+    assert rows[0]["player_localized_names"] == ["甲球员", "乙球员"]
+    assert rows[1]["player_localized_names"] == ["丙球员", None]
     assert rows[1]["max_acceptable_price"] == "0.5500"
     # The empty-state explanation travels with the list, as a reason code.
     assert body["availability"]["reason"] in {
@@ -254,6 +267,8 @@ async def test_markets_list_supports_canonical_filters_and_pagination(client):
     body = response.json()
     assert body["total"] == 1
     assert body["data"][0]["market_id"] == "mkt_live"
+    assert body["data"][0]["player_names"] == ["Alpha One", "Beta Two"]
+    assert body["data"][0]["player_localized_names"] == ["甲球员", "乙球员"]
     assert_no_forbidden(response.text)
 
 
@@ -279,6 +294,7 @@ async def test_paper_positions_open_first(client):
 
     body = response.json()
     assert [row["status"] for row in body["open"]] == ["open"]
+    assert body["open"][0]["player_localized_names"] == ["甲球员", "乙球员"]
     assert body["recent"] == []
     assert_no_forbidden(response.text)
 
@@ -289,6 +305,7 @@ async def test_pulse_caps_rows_and_flags_open_position(client):
     body = response.json()
     assert body["has_open_position"] is True
     assert len(body["data"]) <= 3
+    assert body["data"][0]["player_localized_names"] == ["甲球员", "乙球员"]
     assert_no_forbidden(response.text)
 
 

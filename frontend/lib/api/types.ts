@@ -449,6 +449,7 @@ export type OpportunityDto = {
   target_player_id: string | null
   player_ids: [string, string] | null
   player_names: [string, string] | null
+  player_localized_names?: [string | null, string | null] | null
   player_images?: [string | null, string | null] | null
   model_probability: number | null
   executable_probability: number | null
@@ -515,6 +516,7 @@ export type MarketSummaryDto = {
   reason_code: string | null
   player_ids: [string, string] | null
   player_names: [string, string] | null
+  player_localized_names?: [string | null, string | null] | null
   player_images?: [string | null, string | null] | null
   model_probability: number | null
   quote: MarketQuoteDto
@@ -538,6 +540,7 @@ export type PaperPositionDto = {
   outcome_player_id: string
   player_ids: [string, string] | null
   player_names: [string, string] | null
+  player_localized_names?: [string | null, string | null] | null
   player_images?: [string | null, string | null] | null
   status: PositionStatusValue
   entry_cost: string
@@ -560,6 +563,7 @@ export type PulseRowDto = {
   action: DecisionActionValue
   phase: OpportunityPhaseValue | 'closed' | null
   player_names: [string, string] | null
+  player_localized_names?: [string | null, string | null] | null
   player_images?: [string | null, string | null] | null
   model_probability: number | null
   executable_probability: number | null

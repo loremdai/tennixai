@@ -184,11 +184,17 @@ describe('toMatchViewModel', () => {
   })
 
   it('maps player presentation fields with localized country metadata', () => {
-    const view = toMatchViewModel(baseMatch())
+    const view = toMatchViewModel(baseMatch({
+      players: [
+        { id: 'ply_1', name: 'Jannik Sinner', country_code: 'ita', ranking: 1, localized_name: '扬尼克·辛纳' },
+        { id: 'ply_2', name: 'Carlos Alcaraz', country_code: 'esp', ranking: 2, localized_name: null },
+      ],
+    }))
 
     expect(view.players[0]).toEqual({
       id: 'ply_1',
       name: 'Jannik Sinner',
+      nameZh: '扬尼克·辛纳',
       shortName: 'Sinner',
       avatarUrl: null,
       countryCode: 'ITA',
@@ -196,6 +202,7 @@ describe('toMatchViewModel', () => {
       flagUrl: 'https://flagcdn.com/w40/it.png',
       ranking: 1,
     })
+    expect(view.players[1].nameZh).toBeNull()
   })
 
   it('maps meta fields with unavailable fallbacks', () => {

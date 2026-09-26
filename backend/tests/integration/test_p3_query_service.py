@@ -305,6 +305,22 @@ async def test_enriched_fields_and_pulse_selection(database: Database) -> None:
     market_id = seeded["market_id"]
     player_a = seeded["player_a"]
     player_b = seeded["player_b"]
+    async with database.session() as session:
+        async with session.begin():
+            await session.execute(
+                text(
+                    "UPDATE players SET name = 'Player A', localized_name = '甲球员' "
+                    "WHERE id = :id"
+                ),
+                {"id": player_a},
+            )
+            await session.execute(
+                text(
+                    "UPDATE players SET name = 'Player B', localized_name = '乙球员' "
+                    "WHERE id = :id"
+                ),
+                {"id": player_b},
+            )
     markets = MarketRepository(database)
     ledger = PaperLedgerRepository(database)
     identity = PostgresIdentityRepository(database)
@@ -440,8 +456,8 @@ async def test_enriched_fields_and_pulse_selection(database: Database) -> None:
     summary2 = next(item for item in page.markets if item.market_id == market2)
     assert summary2.tournament_name == "Test Trophy"
     assert summary2.player_ids == (player_a, player_b)
-    assert summary2.player_names is not None
-    assert summary2.player_names[1] == "Player B"
+    assert summary2.player_names == ("Player A", "Player B")
+    assert summary2.player_localized_names == ("甲球员", "乙球员")
     assert summary2.model_probability == pytest.approx(0.7)
     assert summary2.quote.outcome_bids == ("0.68", "0.28")
     assert summary2.quote.outcome_asks == ("0.70", "0.30")
@@ -463,6 +479,8 @@ async def test_enriched_fields_and_pulse_selection(database: Database) -> None:
     opp2 = next(item for item in opportunities if item.match_id == match2)
     assert opp2.action == "wait"
     assert opp2.player_ids == (player_a, player_b)
+    assert opp2.player_names == ("Player A", "Player B")
+    assert opp2.player_localized_names == ("甲球员", "乙球员")
     assert opp2.is_stale is True
     assert opp2.model_probability == pytest.approx(0.7)
     assert Decimal(opp2.max_acceptable_price) == Decimal("0.55")
@@ -473,6 +491,8 @@ async def test_enriched_fields_and_pulse_selection(database: Database) -> None:
     assert Decimal(open_row.average_entry_price) == Decimal("0.525")
     assert open_row.tournament_name == "Test Open"
     assert open_row.player_ids == (player_a, player_b)
+    assert open_row.player_names == ("Player A", "Player B")
+    assert open_row.player_localized_names == ("甲球员", "乙球员")
     # exit value from the hot book: 19.047619 shares × 0.58 best bid
     assert open_row.current_exit_value is not None
     assert Decimal(open_row.current_exit_value) == Decimal("19.047619") * Decimal(
@@ -495,6 +515,8 @@ async def test_enriched_fields_and_pulse_selection(database: Database) -> None:
     assert top.action == "sell"
     assert top.phase == "live"
     assert top.tournament_name == "Test Open"
+    assert top.player_names == ("Player A", "Player B")
+    assert top.player_localized_names == ("甲球员", "乙球员")
     assert Decimal(top.conservative_net_edge) == Decimal("0.041")
     assert top.is_stale is False
     assert pulse["data"][0].kind == "position"

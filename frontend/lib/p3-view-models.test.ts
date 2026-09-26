@@ -147,6 +147,18 @@ describe('toOpportunityRow', () => {
     expect(row.overlay).toBe('none')
   })
 
+  it('keeps English and localized names aligned by player ID', () => {
+    const row = toOpportunityRow(
+      opportunity({ player_localized_names: ['甲球员', '乙球员'] }),
+      NOW,
+    )
+
+    expect(row.playerNames).toEqual(['Alpha One', 'Beta Two'])
+    expect(row.playerLocalizedNames).toEqual(['甲球员', '乙球员'])
+    expect(row.selection).toBe('Beta Two')
+    expect(row.selectionLocalizedName).toBe('乙球员')
+  })
+
   it('keeps absent values null and stale rows overlaid', () => {
     const row = toOpportunityRow(
       opportunity({
@@ -182,6 +194,16 @@ describe('toMarketRow', () => {
     expect(row.quoteState).toBe('snapshot')
     expect(row.quoteLabel).toBe('最近报价 · 1 分前')
     expect(row.href).toBe('/matches/mat_1')
+  })
+
+  it('keeps localized names aligned with the canonical market player order', () => {
+    const row = toMarketRow(
+      summary({ player_localized_names: [null, '乙球员'] }),
+      NOW,
+    )
+
+    expect(row.playerNames).toEqual(['Alpha One', 'Beta Two'])
+    expect(row.playerLocalizedNames).toEqual([null, '乙球员'])
   })
 
   it('shows quote freshness, not market-catalog observation time', () => {
@@ -334,8 +356,14 @@ describe('toPaperRow', () => {
     const exitMissed = toPaperRow(position({ status: 'exit_missed' }), null, NOW)
     expect(exitMissed.state).toBe('exit_missed')
     expect(exitMissed.detail).toBe('模拟退出未成交，仍持有至结算')
-    const row = toPaperRow(position(), 'Alpha One vs. Beta Two', NOW)
+    const row = toPaperRow(
+      position({ player_localized_names: ['甲球员', '乙球员'] }),
+      'Alpha One vs. Beta Two',
+      NOW,
+    )
     expect(row.direction).toBe('Beta Two')
+    expect(row.playerNames).toEqual(['Alpha One', 'Beta Two'])
+    expect(row.playerLocalizedNames).toEqual(['甲球员', '乙球员'])
     expect(row.averageEntry).toBeCloseTo(0.525)
     expect(row.currentExitValue).toBeCloseTo(11.4)
     expect(row.netPnl).toBeNull()
@@ -406,6 +434,12 @@ describe('toPulseRow', () => {
     expect(toPulseRow(pulseRow({ phase: 'closed', match_id: 'm5' }), NOW).phase).toBe('已完赛')
     expect(toPulseRow(pulseRow({ phase: null }), NOW).phase).toBe('比赛状态未知')
     expect(toPulseRow(pulseRow(), NOW).edgePp).toBeCloseTo(7.0)
+    const bilingual = toPulseRow(
+      pulseRow({ player_localized_names: ['甲球员', '乙球员'] }),
+      NOW,
+    )
+    expect(bilingual.playerNames).toEqual(['Alpha One', 'Beta Two'])
+    expect(bilingual.playerLocalizedNames).toEqual(['甲球员', '乙球员'])
   })
 
   it('does not rank an unknown match phase as an upcoming buy', () => {

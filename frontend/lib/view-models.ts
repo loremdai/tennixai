@@ -9,6 +9,7 @@ import type {
 export type PlayerViewModel = {
   id: string
   name: string
+  nameZh?: string | null
   shortName: string
   countryCode: string
   countryName: string
@@ -234,6 +235,7 @@ function toPlayerView(player: MatchDto['players'][number]): PlayerViewModel {
   return {
     id: player.id,
     name: player.name,
+    nameZh: player.localized_name?.trim() || null,
     shortName: shortName(player.name),
     ...countryPresentation(player.country_code, player.country_alpha2 ?? null),
     ranking: player.ranking,
