@@ -4,18 +4,19 @@
 
 **最后更新：** 2026-09-27（北京时间）
 
-**当前主任务：** T109 — 按用户批准的示意图复刻比赛详情记分牌（`in_progress`）。
+**当前主任务：** 暂无；T109 已完成，下一任务待用户确定。
 
-**最近任务：** T108 — 比赛详情页比分头图区精简改版（`done`，实现 `ffdabce`）；T107 — Match 近期走势可读性改版（`done`）；T106 — 逐分未知得分者诚实展示（`done`）。
+**最近任务：** T109 — 比赛详情记分牌视觉复刻（`done`，实现 `db3b156`、审阅修补 `ed9789a`）；T108 — 比赛详情页比分头图区精简（`done`）；T107 — Match 近期走势可读性改版（`done`）。
 
-**执行者 / ADE / 分支：** Codex / 本地 ADE / `main`；T109 起始提交 `7f45728`，2026-09-27 09:53 CST 领取；既有 P3 freshness 修改及未跟踪文件保留，未纳入本任务。
+**最近执行者 / ADE / 分支：** Codex / 本地 ADE / `main`；T109 起始提交 `7f45728`，2026-09-27 09:53 CST 领取；既有 P3 freshness 修改及未跟踪文件保留，未纳入本任务。
 
 **运行手册与证据：** T109 [视觉规格](docs/superpowers/specs/2026-09-27-tennixai-t109-broadcast-scoreboard-design.md) / [实施计划](docs/superpowers/plans/2026-09-27-tennixai-t109-broadcast-scoreboard-implementation.md)；[本地真实运行手册](docs/runbooks/local-real-runtime.md)。
 
-## T109 比赛详情记分牌视觉复刻（`in_progress`）
+## T109 比赛详情记分牌视觉复刻（`done`）
 
-- **用户授权：** 以仓库内的[已批准示意图](docs/superpowers/specs/2026-09-27-tennixai-t109-scoreboard-reference.png)为视觉目标，唯一指定删改为去掉可见“本局”标题；桌面尽量逐项复刻，手机保留同一信息层级。
-- **当前动作：** 已核对 T108 代码、预览状态和旧视觉基线，准备更新记分牌、定向断言及双视口视觉证据。比赛事实、详情下方内容和数据接口不在范围内。
+- **用户授权：** 以仓库内的[已批准示意图](docs/superpowers/specs/2026-09-27-tennixai-t109-scoreboard-reference.png)为视觉目标，去掉可见“本局”标题。首版浏览器复核后，用户要求缩小头图比例并移除下方重复比分卡；第二次复核后，再要求将桌面字体稍微缩小。
+- **完成内容：** 实现 `db3b156` 复刻紧凑单张记分牌，移除下方重复比分卡，收紧桌面字号与头图比例，压平 P3 网格空白。只读审阅指出五盘窄屏双位局分/抢七可能串列、已完赛但无已知盘分时缺少说明；`ed9789a` 为五盘增加宽度和紧凑抢七小分、补“最终比分暂未提供”及胜者保留，并去掉无 paper 持仓时的空网格行。比赛事实、数据接口、模型及 paper 语义未改。
+- **验证与真实运行：** 审阅修补的定向回归先红后绿；最终前端 Vitest `41 files / 534 passed`、`tsc --noEmit`、P3 工作台 Playwright `29 passed / 1 skipped`、修补后 Match 视觉基线桌面/手机 `4 passed`、`git diff --check` 通过。运行手册 `tennix-live verify` 实际结果 `7 passed / 1 skipped（未请求 LLM）`；获用户授权后 `down`→`up`，未执行 `init`、未清数据卷或 paper ledger。重启后真实运行浏览器验收桌面/手机 `6 passed`，首页与 API HTTP 200，数据库/Redis 健康，runtime/API/frontend 均运行，比分流、赛程、排名、Polymarket 均 `ok`。浏览器实查真实直播赛场 `/matches/mat_ab9657dd950440408f3400e9daa3aaae`：单张头图展示双方真实姓名、逐盘比分、抢七小分、当前局分和发球方，无重复比分卡。实现与审阅修补提交分别为 `db3b156`、`ed9789a`；本次总控提交关闭任务。
 - **工作区保护：** `backend/app/service.py`、`.codex/`、`.superpowers/`、`REALTIME_LATENCY_INVESTIGATION.md`、`backend/tests/test_p3_query_freshness.py`、`frontend/next-env.d.ts` 为已记录的用户现有改动，仅保留，不纳入提交。
 
 ## T108 比赛详情页比分头图区精简改版（`done`）
