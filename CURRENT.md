@@ -2,15 +2,21 @@
 
 > 快速了解现在做到哪里、最近做完什么、接下来由谁接手。长期路线与阶段证据见 [ROADMAP.md](./ROADMAP.md)，产品定位和稳定架构见 [PROJECT.md](./PROJECT.md)。
 
-**最后更新：** 2026-09-26（北京时间）
+**最后更新：** 2026-09-27（北京时间）
 
-**当前主任务：** 无（T108 已完成；下一任务待领取）。
+**当前主任务：** T109 — 按用户批准的示意图复刻比赛详情记分牌（`in_progress`）。
 
-**最近任务：** T108 — 比赛详情页比分头图区精简改版（`done`，实现 `ffdabce`）；T107 — Match 近期走势可读性改版（`done`），领取 `4389aa1`、实现 `3ce6f41`、复审修补 `ddbfb01` / `bd33d78`；T106 — 逐分未知得分者诚实展示（`done`），实现 `f7ea297`。
+**最近任务：** T108 — 比赛详情页比分头图区精简改版（`done`，实现 `ffdabce`）；T107 — Match 近期走势可读性改版（`done`）；T106 — 逐分未知得分者诚实展示（`done`）。
 
-**最近执行者 / 分支：** Codex / `main`；T108 从 `89780e3` 开始，领取记录 `1667e1b`，实现提交 `ffdabce`；既有 P3 freshness 修改及未跟踪文件保留，未纳入本任务。
+**执行者 / ADE / 分支：** Codex / 本地 ADE / `main`；T109 起始提交 `7f45728`，2026-09-27 09:53 CST 领取；既有 P3 freshness 修改及未跟踪文件保留，未纳入本任务。
 
-**运行手册与证据：** T108 采用用户确认的单一比分记分牌布局；[本地真实运行手册](docs/runbooks/local-real-runtime.md)。
+**运行手册与证据：** T109 [视觉规格](docs/superpowers/specs/2026-09-27-tennixai-t109-broadcast-scoreboard-design.md) / [实施计划](docs/superpowers/plans/2026-09-27-tennixai-t109-broadcast-scoreboard-implementation.md)；[本地真实运行手册](docs/runbooks/local-real-runtime.md)。
+
+## T109 比赛详情记分牌视觉复刻（`in_progress`）
+
+- **用户授权：** 以仓库内的[已批准示意图](docs/superpowers/specs/2026-09-27-tennixai-t109-scoreboard-reference.png)为视觉目标，唯一指定删改为去掉可见“本局”标题；桌面尽量逐项复刻，手机保留同一信息层级。
+- **当前动作：** 已核对 T108 代码、预览状态和旧视觉基线，准备更新记分牌、定向断言及双视口视觉证据。比赛事实、详情下方内容和数据接口不在范围内。
+- **工作区保护：** `backend/app/service.py`、`.codex/`、`.superpowers/`、`REALTIME_LATENCY_INVESTIGATION.md`、`backend/tests/test_p3_query_freshness.py`、`frontend/next-env.d.ts` 为已记录的用户现有改动，仅保留，不纳入提交。
 
 ## T108 比赛详情页比分头图区精简改版（`done`）
 
