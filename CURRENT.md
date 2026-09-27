@@ -15,9 +15,10 @@
 ## T110 私人测试服务器 Docker 镜像部署（`in_progress`）
 
 - **用户授权：** 为 amd64 服务器构建镜像、部署 TennixAI，并在部署后执行真实 `init` 与 API 运行；目标 `8.134.76.110`。本机 Docker Buildx 已确认支持 `linux/amd64`。
-- **只读预检：** 服务器为 Ubuntu 24.04 / amd64，Docker Engine 与 Compose 已安装；`/opt/tennixai` 不存在，Docker 当前无容器、镜像或数据卷。现有 DEUCE/Nginx 监听 80/443/8080，DEUCE API 使用 `127.0.0.1:8000`；3100 当前未监听。不得覆盖/停止既有站点或服务。
-- **阻塞与保护：** 系统盘 40GB、可用空间为 0；`/tmp` 占约 9.5GB，由 4070 个旧 `heavy-radar-*` 目录组成，全部属于 `deuce:deuce`，未见近期新目录或匹配运行进程/打开文件。它们属于其他项目范围，未删除。UFW 为 inactive；TennixAI 无应用登录认证，公网开放会允许任意访问者调用真实 LLM 并消耗配额。尚未安装镜像、创建部署目录/数据卷、修改 Nginx/防火墙、读取或复制根 `.env`，也未运行远端 `init`。
-- **需要用户决定：** 先扩容系统盘或明确授权清理上述精确临时目录；同时确定好友访问方式（例如提供来源 IP 以限制入站，或先仅允许 SSH 隧道）。在获得必要方向前，不删除 DEUCE 数据、不开放公网端口、不进行远端写入。
+- **只读预检：** 服务器为 Ubuntu 24.04 / amd64，Docker Engine 与 Compose 已安装；`/opt/tennixai` 不存在，Docker 当前无容器、镜像或数据卷。现有 DEUCE/Nginx 监听 80/443/8080，DEUCE API 使用 `127.0.0.1:8000`；服务器本机没有 3100 监听。Nginx 是 catch-all，现有 IP 证书为自签名，无法作为浏览器可信 HTTPS 入口。不得覆盖/停止既有站点或服务。
+- **容量与访问阻塞：** 系统盘 40GB、可用空间为 0；`/tmp` 约 9.5GB 来自 4070 个旧 `heavy-radar-*` 目录，均属 `deuce:deuce`，无匹配运行进程/打开文件；未删除。内存 1.6GiB、当前可用约 728MiB、另有 2GiB swap；本地实测 runtime RSS 约 535MiB、Next 生产风格服务尚未实测，部署后内存余量可能不足。UFW inactive；应用无登录认证，不能假设公开端口只给好友使用。外部探测 3100 得到空响应，与服务器本机无监听的结果不一致，网络边缘状态待部署后验证。
+- **未执行事项：** 未安装镜像、创建部署目录/数据卷、修改 Nginx/防火墙、读取/复制 `.env` 值或运行远端 `init`。本地根 `.env` 的 provider/LLM/Paper 模式及必需密钥字段已只检查存在性，值未显示或写入文档。
+- **待决条件：** 扩容系统盘或明确授权清理上述精确临时目录；确定好友访问限制方式。未获决定前不删除 DEUCE 数据、不开放公网端口、不进行远端写入。整体 Compose 方案已提出，等待用户确认。
 - **保留的工作区改动：** `backend/app/service.py`、`.codex/`、`.superpowers/`、`REALTIME_LATENCY_INVESTIGATION.md`、`backend/tests/test_p3_query_freshness.py`、`frontend/next-env.d.ts` 均为用户现有改动，保留且不纳入 T110。
 
 ## T109 比赛详情记分牌视觉复刻（`done`）
