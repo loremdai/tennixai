@@ -17,7 +17,6 @@ import {
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { PlayerAvatar } from '@/components/player-avatar'
 import { PlayerName } from '@/components/player-name'
 import {
   Card,
@@ -32,11 +31,8 @@ import type { MatchViewModel } from '@/lib/view-models'
 import { cn } from '@/lib/utils'
 
 import { FutureModule } from './future-module'
-import { setLabel, type MatchHighlight, type MatchStatus } from './match-data'
+import { type MatchHighlight, type MatchStatus } from './match-data'
 import {
-  getPreviewPlayer,
-  previewFinishedScore,
-  previewLiveScore,
   previewMatchMeta,
   previewMatchStats,
   previewPromptsByStatus,
@@ -131,218 +127,6 @@ export function OverviewCard({ match, preview }: Pick<MainColumnProps, 'match' |
         <dl className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {items.map((item) => <OverviewItem key={item.label} {...item} />)}
         </dl>
-      </CardContent>
-    </Card>
-  )
-}
-
-type ScoreRowView = {
-  playerId: string
-  playerName: string
-  localizedName: string | null
-  avatarUrl: string | null
-  shortName: string
-  sets: Array<number | null>
-  tiebreakPoints?: Array<number | null>
-  points?: string | null
-  serving?: boolean
-  winner?: boolean
-}
-
-function ScoreTable({
-  rows,
-  setNumbers,
-  currentSetNumber,
-  showPoints,
-}: {
-  rows: [ScoreRowView, ScoreRowView]
-  setNumbers: number[]
-  currentSetNumber: number | null
-  showPoints: boolean
-}) {
-  const setCount = rows[0].sets.length
-  const highlightedSetNumber = showPoints ? currentSetNumber : setNumbers.at(-1) ?? null
-  const setNumberAt = (index: number) => setNumbers[index] ?? index + 1
-  return (
-    <table className="w-full table-fixed" aria-label={showPoints ? '实时详细比分' : '最终详细比分'}>
-      <caption className="sr-only">
-        {showPoints ? '本场比赛逐盘比分与当前局分' : '本场比赛最终逐盘比分'}
-      </caption>
-      <thead>
-        <tr className="text-xs text-muted-foreground sm:text-sm">
-          <th scope="col" className="w-24 pb-3 text-left font-normal">球员</th>
-          {rows[0].sets.map((_, index) => (
-            <th key={index} scope="col" className={cn('pb-3 font-normal', setNumberAt(index) === highlightedSetNumber && 'text-primary')}>
-              {setLabel(setNumberAt(index) - 1)}
-            </th>
-          ))}
-          {showPoints ? <th scope="col" className="pb-3 font-normal">当前局</th> : null}
-        </tr>
-      </thead>
-      <tbody className="font-mono text-lg font-semibold tabular-nums">
-        {rows.map((row) => (
-          <tr key={row.playerId} className="border-t">
-            <th scope="row" className="py-3 text-left font-sans text-sm font-medium">
-              <span className="flex items-center gap-2">
-                <PlayerAvatar name={row.playerName} imageUrl={row.avatarUrl} className="size-6" />
-                {row.serving ? <span className="size-2 rounded-full bg-primary" aria-label="发球方" /> : null}
-                <PlayerName name={row.shortName} localizedName={row.localizedName} className="min-w-0" primaryClassName="text-sm font-medium" />
-              </span>
-            </th>
-            {row.sets.map((set, index) => (
-              <td key={`${row.playerId}-${index}`} className={cn('text-center', setNumberAt(index) === highlightedSetNumber && 'text-primary')}>
-                {set ?? '-'}{row.tiebreakPoints?.[index] != null ? `（${row.tiebreakPoints[index]}）` : ''}
-              </td>
-            ))}
-            {showPoints ? <td className="text-center text-xl">{row.points ?? ''}</td> : null}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  )
-}
-
-function rowsFromMatch(match: MatchViewModel): [ScoreRowView, ScoreRowView] | null {
-  const score = match.score
-  if (!score) return null
-  return [0, 1].map((index) => ({
-    playerId: match.players[index].id,
-    playerName: match.players[index].name,
-    localizedName: match.players[index].nameZh ?? null,
-    avatarUrl: match.players[index].avatarUrl ?? null,
-    shortName: match.players[index].shortName,
-    sets: score.sets.map((set) =>
-      index === 0 ? set.player1_games : set.player2_games,
-    ),
-    tiebreakPoints: score.sets.map((set) => {
-      if (
-        set.player1_tiebreak_points == null ||
-        set.player2_tiebreak_points == null
-      ) {
-        return null
-      }
-      return index === 0 ? set.player1_tiebreak_points : set.player2_tiebreak_points
-    }),
-    points: score.points[index],
-    serving: match.serverPlayerId === match.players[index].id,
-    winner: match.winnerPlayerId === match.players[index].id,
-  })) as [ScoreRowView, ScoreRowView]
-}
-
-export function ScoreProgressCard({ match, preview, highlight }: Pick<MainColumnProps, 'match' | 'preview' | 'highlight'>) {
-  const visualStatus = match.visualStatus
-  const rows = preview
-    ? (visualStatus === 'finished'
-        ? previewFinishedScore.rows.map((row) => {
-            const player = getPreviewPlayer(row.playerId)
-            return { playerId: row.playerId, playerName: player.name, localizedName: player.nameZh, avatarUrl: null, shortName: player.shortName, sets: row.sets, points: row.points, serving: row.serving, winner: row.winner }
-          }) as [ScoreRowView, ScoreRowView]
-        : previewLiveScore.rows.map((row) => {
-            const player = getPreviewPlayer(row.playerId)
-            return { playerId: row.playerId, playerName: player.name, localizedName: player.nameZh, avatarUrl: null, shortName: player.shortName, sets: row.sets, points: row.points, serving: row.serving, winner: row.winner }
-          }) as [ScoreRowView, ScoreRowView])
-    : rowsFromMatch(match)
-  const winner = match.players.find((player) => player.id === match.winnerPlayerId)
-
-  return (
-    <Card
-      id="score-progress"
-      className={cn(
-        'scroll-mt-24 transition-[box-shadow,background-color]',
-        highlight === 'score' && 'bg-primary/5 ring-2 ring-primary/60',
-      )}
-    >
-      <CardHeader>
-        <CardTitle><h2>比分与比赛进程</h2></CardTitle>
-        <p className="text-sm text-muted-foreground">
-          {visualStatus === 'finished' ? '最终逐盘比分与比赛结果' : '逐盘比分、当前局分与发球权'}
-        </p>
-        <CardAction>
-          <Badge variant={visualStatus === 'upcoming' ? 'outline' : 'secondary'}>
-            {visualStatus === 'upcoming'
-              ? '等待开赛'
-              : visualStatus === 'live'
-                ? preview
-                  ? `第 ${previewMatchMeta.currentSet} 盘`
-                  : match.currentSetNumber !== null
-                    ? `第 ${match.currentSetNumber} 盘`
-                    : '盘数暂未提供'
-                : visualStatus === 'finished'
-                  ? '已完赛'
-                  : '比赛信息待更新'}
-          </Badge>
-        </CardAction>
-      </CardHeader>
-      <CardContent>
-        {visualStatus === 'upcoming' ? (
-          <FutureModule
-            title="比分暂未提供"
-            description="比赛开始后，这里会显示每盘比分、当前局分和发球方。"
-          />
-        ) : visualStatus === 'unavailable' || !rows ? (
-          <FutureModule
-            title="比分暂不可用"
-            description="目前无法获取这场比赛的比分，请稍后再看。"
-          />
-        ) : visualStatus === 'live' ? (
-          <div className="flex flex-col gap-5">
-            <ScoreTable
-              rows={rows}
-              setNumbers={preview ? rows[0].sets.map((_, index) => index + 1) : match.score?.sets.map((set) => set.number) ?? []}
-              currentSetNumber={preview ? previewMatchMeta.currentSet : match.currentSetNumber}
-              showPoints
-            />
-            <div className="grid grid-cols-3 items-center rounded-lg bg-muted/30 p-4 text-center">
-              <div>
-                <p className="font-mono text-2xl font-semibold">{rows[0].points ?? '–'}</p>
-                <PlayerName name={rows[0].shortName} localizedName={rows[0].localizedName} className="text-sm text-muted-foreground" />
-              </div>
-              <div className="flex flex-col items-center gap-1">
-                <Badge>实时比分</Badge>
-                <span className="text-sm text-muted-foreground">
-                  {preview ? '4–5 · 0 个破发点' : '当前局分'}
-                </span>
-              </div>
-              <div>
-                <p className="font-mono text-2xl font-semibold">{rows[1].points ?? '–'}</p>
-                <PlayerName name={rows[1].shortName} localizedName={rows[1].localizedName} className="text-sm text-muted-foreground" />
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-5">
-            <ScoreTable
-              rows={rows}
-              setNumbers={preview ? rows[0].sets.map((_, index) => index + 1) : match.score?.sets.map((set) => set.number) ?? []}
-              currentSetNumber={null}
-              showPoints={false}
-            />
-            <div className="flex flex-col gap-2 rounded-lg bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="font-semibold">
-                  {winner ? (
-                    <span className="inline-flex items-center gap-2">
-                      <PlayerName name={winner.name} localizedName={winner.nameZh} />
-                      <span>获胜</span>
-                    </span>
-                  ) : '比赛已结束'}
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  最终比分 {rows[0].sets.map((games, index) => {
-                    const firstTiebreak = rows[0].tiebreakPoints?.[index]
-                    const secondTiebreak = rows[1].tiebreakPoints?.[index]
-                    const tiebreak =
-                      firstTiebreak != null && secondTiebreak != null
-                        ? `（${firstTiebreak}–${secondTiebreak}）`
-                        : ''
-                    return `${games ?? '-'}–${rows[1].sets[index] ?? '-'}${tiebreak}`
-                  }).join('、')}
-                </p>
-              </div>
-              <Badge variant="secondary">{preview ? previewMatchMeta.finalDuration : `结果 · ${match.freshnessLabel}`}</Badge>
-            </div>
-          </div>
-        )}
       </CardContent>
     </Card>
   )
@@ -562,7 +346,6 @@ export function MatchMainColumn({ match, preview, highlight, onPromptSelect, sna
   return (
     <div className="flex min-w-0 flex-col gap-4">
       <OverviewCard match={match} preview={preview} />
-      <ScoreProgressCard match={match} preview={preview} highlight={highlight} />
       <StatsCard match={match} preview={preview} highlight={highlight} snapshot={snapshot} />
       <MatchMomentumCard match={match} preview={preview} highlight={highlight} snapshot={snapshot} />
       <AIInsightsCard match={match} preview={preview} onPromptSelect={onPromptSelect} />

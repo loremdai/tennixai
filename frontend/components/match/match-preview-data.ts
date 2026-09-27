@@ -155,6 +155,7 @@ export function buildPreviewMatch(status: MatchStatus): MatchViewModel {
         countryName: previewPlayers[0].country,
         flagUrl: previewPlayers[0].flagUrl,
         ranking: previewPlayers[0].rank,
+        avatarUrl: '/images/player-sinner.png',
       },
       {
         id: previewPlayers[1].id,
@@ -165,6 +166,7 @@ export function buildPreviewMatch(status: MatchStatus): MatchViewModel {
         countryName: previewPlayers[1].country,
         flagUrl: previewPlayers[1].flagUrl,
         ranking: previewPlayers[1].rank,
+        avatarUrl: '/images/player-alcaraz.png',
       },
     ],
     score: status === 'live' ? liveScoreDto : status === 'finished' ? finishedScoreDto : null,

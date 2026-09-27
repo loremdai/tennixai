@@ -53,8 +53,8 @@ describe('P3 match decision preview', () => {
 
     const sections = [
       screen.getByRole('heading', { level: 1 }),
+      screen.getByRole('table', { name: '实时比赛比分' }),
       document.getElementById('decision-summary-title'),
-      screen.getByRole('heading', { name: '比分与比赛进程' }),
       screen.getByRole('heading', { name: '关键事实' }),
       screen.getByRole('heading', { name: '比赛概览' }),
       document.getElementById('probability-market-title'),
@@ -65,6 +65,7 @@ describe('P3 match decision preview', () => {
       screen.getByRole('heading', { name: '本场判断助手' }),
     ]
 
+    expect(screen.queryByRole('heading', { name: '比分与比赛进程' })).toBeNull()
     expect(sections.every((section) => section !== null)).toBe(true)
     for (const [index, section] of sections.slice(0, -1).entries()) {
       const currentSection = section!

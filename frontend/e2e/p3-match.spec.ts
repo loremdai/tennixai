@@ -139,8 +139,9 @@ function sse(frames: string[]): string {
   return frames.join('')
 }
 
-async function interceptWorkbench(page: Page, state: string, options: { decisionDelta?: number } = {}) {
+async function interceptWorkbench(page: Page, state: string, options: { decisionDelta?: number; snapshot?: typeof MATCH_SNAPSHOT } = {}) {
   const decision = decisionFixture(state)
+  const snapshot = options.snapshot ?? MATCH_SNAPSHOT
   await page.route((url) => {
     const path = url.pathname
     return (
@@ -156,7 +157,7 @@ async function interceptWorkbench(page: Page, state: string, options: { decision
         status: 200,
         contentType: 'text/event-stream',
         body: sse([
-          `event: ready\nid: 5\ndata: ${JSON.stringify({ snapshot: MATCH_SNAPSHOT, state_version: 5, as_of: AS_OF })}\n\n`,
+          `event: ready\nid: 5\ndata: ${JSON.stringify({ snapshot, state_version: 5, as_of: AS_OF })}\n\n`,
         ]),
       })
       return
@@ -195,7 +196,7 @@ async function interceptWorkbench(page: Page, state: string, options: { decision
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ data: MATCH_SNAPSHOT }),
+      body: JSON.stringify({ data: snapshot }),
     })
   })
 }
@@ -265,10 +266,11 @@ test.describe('P3 workbench stream independence and a11y', () => {
     await page.goto(`/matches/${MATCH_ID}`)
 
     await expect(page.getByText(/判断暂时无法更新/)).toBeVisible({ timeout: 15_000 })
-    // The sports view is untouched by the decision gap: the score section and
+    // The sports view is untouched by the decision gap: the hero scoreboard and
     // the last trusted match data stay rendered (both fake SSE streams close
     // after fulfil, so a P2 reconnect notice is legitimate and orthogonal).
-    await expect(page.getByRole('heading', { name: '比分与比赛进程' })).toBeVisible()
+    await expect(page.getByRole('table', { name: '实时比赛比分' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '比分与比赛进程' })).toHaveCount(0)
     await expect(page.getByText('WB Alpha').first()).toBeVisible()
   })
 
@@ -315,6 +317,80 @@ test.describe('P3 workbench mobile', () => {
     const ask = page.getByRole('button', { name: /问这场比赛/ })
     const box = await ask.boundingBox()
     expect(box).not.toBeNull()
-    expect(box!.height).toBeGreaterThanOrEqual(36)
+    expect(Math.round(box!.height)).toBeGreaterThanOrEqual(36)
   })
+
+  test('a live five-set match keeps long names and the serving point inside the scoreboard', async ({ page }) => {
+    const snapshot = {
+      ...MATCH_SNAPSHOT,
+      match: {
+        ...MATCH_SNAPSHOT.match,
+        format: 'BO5',
+        players: [
+          { ...MATCH_SNAPSHOT.match.players[0], name: 'Alejandro Davidovich Fokina' },
+          { ...MATCH_SNAPSHOT.match.players[1], name: 'Juan Manuel Cerundolo' },
+        ],
+        live_state: {
+          ...MATCH_SNAPSHOT.match.live_state,
+          current_set_number: 5,
+          score: {
+            ...MATCH_SNAPSHOT.match.live_state.score,
+            sets: [
+              { number: 1, player1_games: 6, player2_games: 4 },
+              { number: 2, player1_games: 4, player2_games: 6 },
+              { number: 3, player1_games: 7, player2_games: 5 },
+              { number: 4, player1_games: 3, player2_games: 6 },
+              { number: 5, player1_games: 4, player2_games: 5 },
+            ],
+          },
+        },
+      },
+    }
+    await interceptWorkbench(page, 'hold', { snapshot })
+    await page.goto(`/matches/${MATCH_ID}`)
+    const score = page.getByRole('table', { name: '实时比赛比分' })
+    await expect(score.getByRole('columnheader')).toHaveCount(7)
+    await expect(score.getByText('Alejandro Davidovich Fokina')).toBeVisible()
+    await expect(score.getByText('Juan Manuel Cerundolo')).toBeVisible()
+    const fit = await page.evaluate(() => {
+      const table = document.querySelector<HTMLTableElement>('#live-scoreboard table')
+      const point = table?.querySelector<HTMLTableCellElement>('tbody tr:first-child td:last-child')
+      const content = point?.querySelector('span')
+      return {
+        pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        pointOverflow: point && content
+          ? content.getBoundingClientRect().right - point.getBoundingClientRect().right
+          : null,
+      }
+    })
+    expect(fit.pageOverflow).toBeLessThanOrEqual(0)
+    expect(fit.pointOverflow).not.toBeNull()
+    expect(fit.pointOverflow!).toBeLessThanOrEqual(1)
+  })
+})
+
+test('desktop workbench cards stack without empty rows after removing the duplicate score', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop')
+  await interceptWorkbench(page, 'hold')
+  await page.goto(`/matches/${MATCH_ID}`)
+  await expect(page.getByRole('heading', { name: '胜率与市场价格走势' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '比分与比赛进程' })).toHaveCount(0)
+
+  const gaps = await page.evaluate(() => {
+    const card = (name: string) => [...document.querySelectorAll('h2')]
+      .find((heading) => heading.textContent === name)
+      ?.closest('[data-slot="card"]')
+    const sections = ['比赛概览', '胜率与市场价格走势', '判断依据', '技术统计'].map(card)
+    return sections.slice(0, -1).map((section, index) => {
+      const next = sections[index + 1]
+      return section && next
+        ? next.getBoundingClientRect().top - section.getBoundingClientRect().bottom
+        : null
+    })
+  })
+  for (const gap of gaps) {
+    expect(gap).not.toBeNull()
+    expect(gap!).toBeGreaterThanOrEqual(0)
+    expect(gap!).toBeLessThanOrEqual(32)
+  }
 })

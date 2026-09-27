@@ -35,7 +35,6 @@ import { MatchHero } from './match/match-hero'
 import {
   MatchMainColumn,
   OverviewCard,
-  ScoreProgressCard,
   StatsCard,
 } from './match/match-main'
 import { MatchMomentumCard } from './match/match-momentum'
@@ -309,26 +308,23 @@ export function MatchPage({ matchId, previewMatch, preview = false }: MatchPageP
                   id="content"
                   className="match-reveal grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]"
                 >
-                  <div className="min-w-0 lg:col-start-1 lg:row-start-2">
-                    <ScoreProgressCard match={activeViewModel} preview={false} highlight={highlight} />
-                  </div>
-                  <aside className="min-w-0 lg:col-start-2 lg:row-start-2" aria-label="比赛关键事实">
+                  <aside className="min-w-0 lg:col-start-2 lg:row-start-3 lg:row-span-3" aria-label="比赛关键事实">
                     <KeyFactsCard match={activeViewModel} preview={false} />
                   </aside>
                   <div className="min-w-0 lg:col-start-1 lg:row-start-1">
                     <OverviewCard match={activeViewModel} preview={false} />
                   </div>
-                  <div className="min-w-0 lg:col-start-1 lg:row-start-3">
+                  <div className="min-w-0 lg:col-start-1 lg:row-start-2">
                     <ProbabilityMarketChart
                       sides={chartSides}
                       trajectory={trajectory}
                       overlay={decision ? workbenchOverlay(decision) : 'none'}
                     />
                   </div>
-                  <div className="min-w-0 lg:col-start-1 lg:row-start-4">
+                  <div className="min-w-0 lg:col-start-1 lg:row-start-3">
                     {evidenceModel ? <DecisionEvidenceLive evidence={evidenceModel} /> : null}
                   </div>
-                  <div className="min-w-0 lg:col-start-1 lg:row-start-5">
+                  <div className="min-w-0 lg:col-start-1 lg:row-start-4">
                     <StatsCard
                       match={activeViewModel}
                       preview={false}
@@ -336,7 +332,7 @@ export function MatchPage({ matchId, previewMatch, preview = false }: MatchPageP
                       snapshot={stream.snapshot}
                     />
                   </div>
-                  <div className="min-w-0 lg:col-start-1 lg:row-start-6">
+                  <div className="min-w-0 lg:col-start-1 lg:row-start-5">
                     <MatchMomentumCard
                       match={activeViewModel}
                       preview={false}
@@ -344,11 +340,11 @@ export function MatchPage({ matchId, previewMatch, preview = false }: MatchPageP
                       snapshot={stream.snapshot}
                     />
                   </div>
-                  <div className="min-w-0 lg:col-start-1 lg:row-start-7">
+                  <div className="min-w-0 lg:col-start-1 lg:row-start-6">
                     {paperModel ? <PaperLifecycleLive paper={paperModel} /> : null}
                   </div>
                   <aside
-                    className="min-w-0 lg:sticky lg:top-20 lg:col-start-2 lg:row-start-1"
+                    className="min-w-0 lg:sticky lg:top-20 lg:col-start-2 lg:row-start-1 lg:row-span-2"
                     aria-label="比赛助手"
                   >
                     <AssistantPanel

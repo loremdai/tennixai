@@ -206,7 +206,7 @@ describe('production match page', () => {
     expect(screen.getByText('20:30')).toBeVisible()
   })
 
-  it('shows production player flags and country codes in the match hero', async () => {
+  it('shows production player flags and rankings in the match hero', async () => {
     const scheduled = makeMatch({
       status: 'scheduled',
       live_state: null,
@@ -218,11 +218,12 @@ describe('production match page', () => {
     await screen.findByRole('heading', { level: 1, name: 'ATP Finals' })
     expect(screen.getByRole('img', { name: '意大利国旗' })).toBeVisible()
     expect(screen.getByRole('img', { name: '西班牙国旗' })).toBeVisible()
-    expect(screen.getAllByText('ITA').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('ESP').length).toBeGreaterThan(0)
+    const hero = document.getElementById('match')!
+    expect(within(hero).getByText('世界排名 #1')).toBeVisible()
+    expect(within(hero).getByText('世界排名 #2')).toBeVisible()
   })
 
-  it('shows player photos in the detailed score and key facts panels', async () => {
+  it('shows player photos in the hero and key facts panels', async () => {
     const match = makeMatch({
       players: [
         { id: 'ply_1', name: 'Jannik Sinner', image_url: 'https://images.example/sinner.jpg', country_code: 'ita', ranking: 1 },
@@ -234,9 +235,10 @@ describe('production match page', () => {
 
     render(<MatchPage matchId="mat_1" />)
 
-    const scoreTable = await screen.findByRole('table', { name: '实时详细比分' })
+    const scoreTable = await screen.findByRole('table', { name: '实时比赛比分' })
     expect(within(scoreTable).getByRole('img', { name: 'Jannik Sinner 头像' })).toBeInTheDocument()
     expect(within(scoreTable).getByRole('img', { name: 'Carlos Alcaraz 头像' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '比分与比赛进程' })).toBeNull()
 
     const keyFacts = screen.getByRole('heading', { name: '关键事实' }).closest('[data-slot="card"]')
     expect(keyFacts?.querySelectorAll('[data-slot="avatar"]')).toHaveLength(2)
@@ -246,8 +248,12 @@ describe('production match page', () => {
     render(<MatchPage matchId="mat_1" />)
 
     await screen.findAllByText('Jannik Sinner')
-    const badges = Array.from(document.querySelectorAll('[role="status"]'))
-    expect(badges.some((badge) => badge.textContent?.includes('直播'))).toBe(true)
+    const hero = document.getElementById('match')!
+    expect(within(hero).getByRole('status', { name: '直播中' })).toHaveTextContent('LIVE')
+    expect(within(hero).getByText('第 3 盘 · 第 10 局')).toBeVisible()
+    const liveTable = within(hero).getByRole('table', { name: '实时比赛比分' })
+    expect(within(liveTable).getByRole('columnheader', { name: '当前局' })).toBeInTheDocument()
+    expect(within(liveTable).queryByText('本局')).toBeNull()
     const server = document.getElementById('server-indicator')
     expect(server).not.toBeNull()
     expect(server?.textContent).toContain('发球')
@@ -274,10 +280,11 @@ describe('production match page', () => {
     render(<MatchPage matchId="mat_1" />)
 
     await screen.findAllByText('Jannik Sinner')
-    expect(screen.getAllByText('第 3 盘')).toHaveLength(2)
+    expect(screen.getAllByText('第 3 盘')).toHaveLength(1)
+    expect(within(document.getElementById('match')!).getByText('第 3 盘')).toBeVisible()
     expect(screen.queryAllByText('第 2 盘')).toHaveLength(0)
     const liveTable = screen.getByRole('table', { name: '实时比赛比分' })
-    expect(within(liveTable).getByRole('columnheader', { name: '2' })).not.toHaveClass('text-primary')
+    expect(within(liveTable).getByRole('columnheader', { name: '盘 2' })).not.toHaveClass('text-primary')
   })
 
   it('does not infer the current set from the number of score rows', async () => {
@@ -300,10 +307,10 @@ describe('production match page', () => {
     render(<MatchPage matchId="mat_1" />)
 
     await screen.findAllByText('Jannik Sinner')
-    expect(screen.getByText('盘数暂未提供')).toBeVisible()
+    expect(within(document.getElementById('match')!).getByText('当前盘比分暂未提供')).toBeVisible()
     expect(screen.queryAllByText('第 2 盘')).toHaveLength(0)
     const liveTable = screen.getByRole('table', { name: '实时比赛比分' })
-    expect(within(liveTable).getByRole('columnheader', { name: '2' })).not.toHaveClass('text-primary')
+    expect(within(liveTable).getByRole('columnheader', { name: '盘 2' })).not.toHaveClass('text-primary')
   })
 
   it('does not claim both players are receiving when the server is unknown', async () => {
@@ -367,7 +374,7 @@ describe('production match page', () => {
     expect(screen.getAllByText('胜者').length).toBeGreaterThan(0)
   })
 
-  it('shows tiebreak points in both finished match scoreboards', async () => {
+  it('shows tiebreak points once in the finished match scoreboard', async () => {
     nextMatch = makeMatch({
       status: 'finished',
       winner_player_id: 'ply_1',
@@ -397,10 +404,7 @@ describe('production match page', () => {
     const heroTable = await screen.findByRole('table', { name: '最终比赛比分' })
     expect(within(heroTable).getByText((_, element) => element?.textContent === '7（7）')).toBeVisible()
     expect(within(heroTable).getByText((_, element) => element?.textContent === '6（5）')).toBeVisible()
-    const detailTable = screen.getByRole('table', { name: '最终详细比分' })
-    expect(within(detailTable).getByText('7（7）')).toBeVisible()
-    expect(within(detailTable).getByText('6（5）')).toBeVisible()
-    expect(screen.getAllByText(/最终比分 7–6（7–5）/).length).toBeGreaterThan(0)
+    expect(screen.queryByRole('table', { name: '最终详细比分' })).toBeNull()
   })
 
   it('shows unavailable copy for missing round, surface, and server', async () => {
@@ -779,11 +783,10 @@ describe('production decision workbench (T69)', () => {
 
     const content = await waitFor(() => {
       const element = container.querySelector('#content')!
-      expect(sectionLabels(element)).toHaveLength(9)
+      expect(sectionLabels(element)).toHaveLength(8)
       return element
     })
     expect(sectionLabels(content)).toEqual([
-      '比分与比赛进程',
       '关键事实',
       '比赛概览',
       '胜率与市场价格走势',
@@ -809,7 +812,6 @@ describe('production decision workbench (T69)', () => {
     await waitFor(() => expect(screen.getByText('胜率与市场价格走势')).toBeTruthy())
     for (const heading of [
       '比赛概览',
-      '比分与比赛进程',
       '技术统计',
       '得分走势与关键分',
       '本场比赛助手',
@@ -817,6 +819,8 @@ describe('production decision workbench (T69)', () => {
     ]) {
       expect(screen.getByText(heading)).toBeTruthy()
     }
+    expect(screen.getByRole('table', { name: '实时比赛比分' })).toBeVisible()
+    expect(screen.queryByRole('heading', { name: '比分与比赛进程' })).toBeNull()
   })
 
   it('surfaces decision-stream degradation without touching the sports stream', async () => {

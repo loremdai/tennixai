@@ -1,6 +1,5 @@
 import {
   Clock3,
-  Radio,
   RefreshCw,
   Sparkles,
   Trophy,
@@ -13,11 +12,8 @@ import { PlayerAvatar } from '@/components/player-avatar'
 import { PlayerName } from '@/components/player-name'
 import {
   Card,
-  CardAction,
   CardContent,
   CardFooter,
-  CardHeader,
-  CardTitle,
 } from '@/components/ui/card'
 import type { MatchScoreDto } from '@/lib/api/types'
 import type { MatchViewModel } from '@/lib/view-models'
@@ -54,39 +50,42 @@ function ScorePlayerIdentity({
   const ranking = previewPlayer?.rank ?? player.ranking
 
   return (
-    <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-      <PlayerAvatar name={player.name} imageUrl={player.avatarUrl} className="size-9 shrink-0 sm:size-11" />
+    <div className="flex min-w-0 items-center gap-2 sm:gap-3 lg:gap-4">
+      <PlayerAvatar
+        name={player.name}
+        imageUrl={player.avatarUrl}
+        className="size-10 shrink-0 border border-white/20 bg-background sm:size-14 md:size-16"
+      />
       <div className="min-w-0 flex-1">
         <PlayerName
           name={player.name}
           localizedName={player.nameZh}
-          className="min-w-0 flex-1 !whitespace-normal"
-          primaryClassName="text-sm font-semibold leading-tight !overflow-visible !text-clip !whitespace-normal break-words [overflow-wrap:anywhere] sm:text-base"
-          secondaryClassName="!overflow-visible !text-clip !whitespace-normal text-[11px] sm:text-xs"
+          className="min-w-0 max-w-full !whitespace-normal"
+          primaryClassName="!overflow-visible !text-clip !whitespace-normal break-words [overflow-wrap:anywhere] text-sm font-semibold leading-tight tracking-tight sm:text-lg lg:text-xl"
+          secondaryClassName="mt-0.5 !overflow-visible !text-clip !whitespace-normal break-words [overflow-wrap:anywhere] text-xs leading-snug sm:text-sm"
         />
-        <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-none text-muted-foreground sm:text-xs">
+        <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground sm:mt-2 sm:text-xs lg:text-sm">
           {previewPlayer ? (
-            <span className="inline-flex items-center gap-1.5" aria-label={`${previewPlayer.country}（${previewPlayer.countryCode}）`}>
+            <span className="inline-flex items-center" aria-label={`${previewPlayer.country}（${previewPlayer.countryCode}）`}>
               <img
                 src={previewPlayer.flagUrl}
                 alt={`${previewPlayer.country}国旗`}
-                width={18}
-                height={13}
+                width={20}
+                height={14}
                 loading="eager"
                 fetchPriority="high"
-                className="h-[13px] w-[18px] rounded-sm object-cover ring-1 ring-border"
+                className="h-3.5 w-5 rounded-sm object-cover ring-1 ring-border"
               />
-              <span className="font-mono">{previewPlayer.countryCode}</span>
             </span>
           ) : (
-            <PlayerCountry player={player} showCode />
+            <PlayerCountry player={player} />
           )}
-          {ranking !== null ? <span className="font-mono">#{ranking}</span> : null}
+          {ranking !== null ? <span>世界排名 #{ranking}</span> : null}
           {isServing ? (
             <span
               id="server-indicator"
               className={cn(
-                'inline-flex items-center gap-1 rounded px-1 font-medium text-primary transition-[box-shadow,background-color]',
+                'inline-flex items-center gap-1 font-medium text-primary transition-[box-shadow,background-color]',
                 highlight === 'server' && 'bg-primary/10 ring-2 ring-primary/70',
               )}
               aria-live="polite"
@@ -96,7 +95,7 @@ function ScorePlayerIdentity({
             </span>
           ) : null}
           {isWinner ? (
-            <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+            <Badge variant="secondary" className="h-5 px-1.5 text-[10px] text-primary">
               <Trophy data-icon="inline-start" aria-hidden="true" />
               胜者
             </Badge>
@@ -109,12 +108,12 @@ function ScorePlayerIdentity({
 
 function ScheduledMatch({ match, preview }: { match: MatchViewModel; preview: boolean }) {
   return (
-    <div className="flex min-h-28 flex-col items-center justify-center gap-2 rounded-xl bg-background/35 p-4 text-center">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+    <div className="flex min-h-28 flex-col items-center justify-center gap-1 border-t border-white/10 py-4 text-center md:border-t-0 md:border-l md:py-2">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground sm:text-base">
         <Clock3 aria-hidden="true" className="size-4 text-primary" />
         预计开赛
       </div>
-      <p className="font-mono text-4xl font-semibold tracking-tighter sm:text-5xl">
+      <p className="font-mono text-3xl font-semibold tracking-tight sm:text-4xl">
         {match.scheduledTime}
       </p>
       <p className="text-sm text-muted-foreground">
@@ -152,6 +151,36 @@ function scoreRows(match: MatchViewModel, score: MatchScoreDto) {
   }))
 }
 
+function TennisBall() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="size-4 text-primary sm:size-5">
+      <circle cx="12" cy="12" r="10" fill="currentColor" />
+      <path d="M5 5c5 4 5 10 0 14M19 5c-5 4-5 10 0 14" stroke="var(--background)" strokeWidth="1.5" />
+    </svg>
+  )
+}
+
+function currentGameLabel(score: MatchScoreDto, currentSetNumber: number | null, preview: boolean) {
+  if (preview) return `第 ${previewMatchMeta.currentSet} 盘 · 第 ${previewMatchMeta.currentGame} 局`
+  if (currentSetNumber === null) return '当前盘比分暂未提供'
+  if (score.is_tiebreak) return `第 ${currentSetNumber} 盘 · 抢七`
+  const currentSet = score.sets.find((set) => set.number === currentSetNumber)
+  if (
+    currentSet?.player1_games == null ||
+    currentSet.player2_games == null ||
+    score.points.every((point) => point == null)
+  ) {
+    return `第 ${currentSetNumber} 盘`
+  }
+  return `第 ${currentSetNumber} 盘 · 第 ${currentSet.player1_games + currentSet.player2_games + 1} 局`
+}
+
+function playerColumnWidth(setCount: number, live: boolean) {
+  if (setCount >= 5) return live ? 'w-[45%] sm:w-[52%]' : 'w-[45%] sm:w-[54%]'
+  if (setCount === 4) return live ? 'w-[49%] sm:w-[55%]' : 'w-[49%] sm:w-[57%]'
+  return live ? 'w-[52%] sm:w-[58%]' : 'w-[52%] sm:w-[60%]'
+}
+
 function LiveScore({
   match,
   highlight,
@@ -171,69 +200,87 @@ function LiveScore({
     <div
       id="live-scoreboard"
       className={cn(
-        'flex flex-col justify-center gap-3 rounded-xl bg-background/35 p-3 transition-[box-shadow,background-color] sm:p-4',
+        'transition-[box-shadow,background-color]',
         highlight === 'score' && 'bg-primary/5 ring-2 ring-primary/60',
       )}
       aria-live="polite"
     >
-      <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm font-medium text-primary">
-        <Radio aria-hidden="true" className="size-4" />
-        {preview
-          ? <>第 {previewMatchMeta.currentSet} 盘 · 第 {previewMatchMeta.currentGame} 局</>
-          : currentSetNumber !== null
-            ? <>第 {currentSetNumber} 盘</>
-            : <>当前盘比分暂未提供</>}
-        <span className="font-mono text-muted-foreground">
-          {preview ? previewMatchMeta.liveElapsed : match.freshnessLabel}
-        </span>
-        {!server ? <span className="text-xs font-normal text-muted-foreground">发球方暂未提供</span> : null}
+      <div className="flex min-h-7 flex-wrap items-center justify-end gap-x-3 gap-y-1 text-right text-xs text-muted-foreground sm:text-sm">
+        <span>{currentGameLabel(score, currentSetNumber, preview)}</span>
+        {!server ? <span className="text-xs">发球方暂未提供</span> : null}
       </div>
 
-      <table className="w-full table-fixed text-center" aria-label="实时比赛比分">
-        <caption className="sr-only">
-          实时比赛比分，含逐盘比分与当前局分
-        </caption>
+      <table className="w-full table-fixed border-collapse" aria-label="实时比赛比分">
+        <caption className="sr-only">实时比赛比分，含逐盘比分与当前局分</caption>
+        <colgroup>
+          <col className={playerColumnWidth(score.sets.length, true)} />
+          {score.sets.map((set) => <col key={set.number} />)}
+          <col className="w-[15%] sm:w-[13%]" />
+        </colgroup>
         <thead>
-          <tr className="font-mono text-[11px] text-muted-foreground sm:text-xs">
-            <th scope="col" className="w-[42%] text-left font-normal">球员</th>
+          <tr className="text-[10px] text-muted-foreground sm:text-xs lg:text-sm">
+            <th scope="col" className="pb-1 text-left font-normal"><span className="sr-only">球员</span></th>
             {score.sets.map((set) => (
               <th
                 key={set.number}
                 scope="col"
-                className={cn('px-0.5 font-normal', set.number === currentSetNumber && 'text-primary')}
+                className={cn('px-0.5 pb-1 text-center font-normal', set.number === currentSetNumber && 'bg-primary/5 text-primary')}
               >
-                {set.number}
+                盘 {set.number}
               </th>
             ))}
-            <th scope="col" className="w-[13%] px-0.5 font-normal">当前局</th>
+            <th scope="col" className="border-l border-white/15 pb-1"><span className="sr-only">当前局</span></th>
           </tr>
         </thead>
-        <tbody className="font-mono text-xl font-semibold tabular-nums sm:text-2xl">
-          {rows.map((row) => (
-            <tr key={row.player.id} className="border-t border-border/60">
-              <th scope="row" className="py-2 pr-1 text-left font-sans font-medium">
+        <tbody className="tabular-nums">
+          {rows.map((row, rowIndex) => (
+            <tr key={row.player.id} className="border-t border-white/10 first:border-t-0">
+              <th scope="row" className="py-2 pr-1 text-left font-sans font-normal sm:py-3">
                 <ScorePlayerIdentity
                   player={row.player}
                   previewPlayer={preview ? getPreviewPlayer(row.player.id) : null}
-                  isServing={row.serving}
+                  isServing={false}
                   isWinner={false}
-                  highlight={highlight}
                 />
               </th>
-              {row.sets.map((games, index) => (
-                <td
-                  key={`${row.player.id}-${index}`}
-                  className={cn('px-0.5 py-2', score.sets[index]?.number === currentSetNumber && 'text-primary')}
-                >
-                  {games ?? '-'}
-                  {row.tiebreakPoints[index] != null ? (
-                    <span className="block text-xs font-medium leading-tight text-muted-foreground sm:inline sm:text-[0.65em]">
-                      （{row.tiebreakPoints[index]}）
+              {row.sets.map((games, index) => {
+                const current = score.sets[index]?.number === currentSetNumber
+                const otherGames = rows[1 - rowIndex]?.sets[index]
+                return (
+                  <td
+                    key={`${row.player.id}-${index}`}
+                    className={cn(
+                      'px-0.5 py-2 text-center font-mono text-xl font-semibold sm:py-3 sm:text-2xl lg:text-3xl',
+                      current ? 'bg-primary/5 text-primary' : games != null && otherGames != null && games < otherGames ? 'text-muted-foreground' : 'text-foreground',
+                    )}
+                  >
+                    {games ?? '–'}
+                    {row.tiebreakPoints[index] != null ? (
+                      <span className="block text-[10px] font-normal leading-tight text-muted-foreground sm:text-xs">
+                        （{row.tiebreakPoints[index]}）
+                      </span>
+                    ) : null}
+                  </td>
+                )
+              })}
+              <td className="border-l border-white/15 px-0.5 py-2 text-center font-mono text-xl font-semibold text-foreground sm:py-3 sm:text-2xl lg:text-3xl">
+                <span className={cn(
+                  'inline-flex items-center justify-center',
+                  score.sets.length >= 4 ? 'flex-col gap-0 sm:flex-row sm:gap-2' : 'gap-1 sm:gap-2',
+                )}>
+                  {row.points ?? '–'}
+                  {row.serving ? (
+                    <span
+                      id="server-indicator"
+                      aria-label={`${row.player.name} 发球`}
+                      className={cn('inline-flex text-primary', highlight === 'server' && 'rounded-full bg-primary/10 ring-2 ring-primary/70')}
+                    >
+                      <TennisBall />
+                      <span className="sr-only">发球</span>
                     </span>
                   ) : null}
-                </td>
-              ))}
-              <td className="px-0.5 py-2 text-foreground">{row.points ?? '–'}</td>
+                </span>
+              </td>
             </tr>
           ))}
         </tbody>
@@ -258,36 +305,31 @@ function FinishedScore({
     <div
       id="final-scoreboard"
       className={cn(
-        'flex flex-col justify-center gap-3 rounded-xl bg-background/35 p-3 transition-[box-shadow,background-color] sm:p-4',
+        'transition-[box-shadow,background-color]',
         highlight === 'score' && 'bg-primary/5 ring-2 ring-primary/60',
       )}
       aria-live="polite"
     >
-      <div className="flex items-center justify-center gap-2 text-sm font-medium text-primary">
-        <Trophy aria-hidden="true" className="size-4" />
-        最终比分
-        <span className="font-mono text-xs font-normal text-muted-foreground">
-          {preview ? previewMatchMeta.finalDuration : match.freshnessLabel}
-        </span>
-      </div>
-      <table className="w-full table-fixed text-center" aria-label="最终比赛比分">
-        <caption className="sr-only">
-          最终比分，含逐盘比分
-        </caption>
+      <table className="w-full table-fixed border-collapse" aria-label="最终比赛比分">
+        <caption className="sr-only">最终比分，含逐盘比分</caption>
+        <colgroup>
+          <col className={playerColumnWidth(score.sets.length, false)} />
+          {score.sets.map((set) => <col key={set.number} />)}
+        </colgroup>
         <thead>
-          <tr className="font-mono text-[11px] text-muted-foreground sm:text-xs">
-            <th scope="col" className="w-[42%] text-left font-normal">球员</th>
+          <tr className="text-[10px] text-muted-foreground sm:text-xs lg:text-sm">
+            <th scope="col" className="pb-1 text-left font-normal"><span className="sr-only">球员</span></th>
             {score.sets.map((set) => (
-              <th key={set.number} scope="col" className="px-0.5 font-normal">{set.number}</th>
+              <th key={set.number} scope="col" className="px-0.5 pb-1 text-center font-normal">盘 {set.number}</th>
             ))}
           </tr>
         </thead>
-        <tbody className="font-mono text-xl font-semibold tabular-nums sm:text-2xl">
-          {rows.map((row) => {
+        <tbody className="tabular-nums">
+          {rows.map((row, rowIndex) => {
             const isWinner = row.player.id === match.winnerPlayerId
             return (
-              <tr key={row.player.id} className={cn('border-t border-border/60', isWinner && 'text-primary')}>
-                <th scope="row" className="py-2 pr-1 text-left font-sans font-medium">
+              <tr key={row.player.id} className="border-t border-white/10 first:border-t-0">
+                <th scope="row" className="py-2 pr-1 text-left font-sans font-normal sm:py-3">
                   <ScorePlayerIdentity
                     player={row.player}
                     previewPlayer={preview ? getPreviewPlayer(row.player.id) : null}
@@ -295,16 +337,25 @@ function FinishedScore({
                     isWinner={isWinner}
                   />
                 </th>
-                {row.sets.map((games, index) => (
-                  <td key={`${row.player.id}-${index}`} className="px-0.5 py-2">
-                    {games ?? '-'}
-                    {row.tiebreakPoints[index] != null ? (
-                      <span className="block text-xs font-medium leading-tight text-muted-foreground sm:inline sm:text-[0.65em]">
-                        （{row.tiebreakPoints[index]}）
-                      </span>
-                    ) : null}
-                  </td>
-                ))}
+                {row.sets.map((games, index) => {
+                  const otherGames = rows[1 - rowIndex]?.sets[index]
+                  return (
+                    <td
+                      key={`${row.player.id}-${index}`}
+                      className={cn(
+                        'px-0.5 py-2 text-center font-mono text-xl font-semibold sm:py-3 sm:text-2xl lg:text-3xl',
+                        games != null && otherGames != null && games < otherGames ? 'text-muted-foreground' : 'text-foreground',
+                      )}
+                    >
+                      {games ?? '–'}
+                      {row.tiebreakPoints[index] != null ? (
+                        <span className="block text-[10px] font-normal leading-tight text-muted-foreground sm:text-xs">
+                          （{row.tiebreakPoints[index]}）
+                        </span>
+                      ) : null}
+                    </td>
+                  )
+                })}
               </tr>
             )
           })}
@@ -328,9 +379,9 @@ function PlayerList({
   highlight?: MatchHighlight
 }) {
   return (
-    <div className="divide-y divide-border/60 rounded-xl bg-background/35 px-3">
+    <div className="divide-y divide-white/10">
       {match.players.map((player) => (
-        <div key={player.id} className="py-3">
+        <div key={player.id} className="py-2 sm:py-3 lg:py-4">
           <ScorePlayerIdentity
             player={player}
             previewPlayer={preview ? getPreviewPlayer(player.id) : null}
@@ -353,31 +404,38 @@ export function MatchHero({ match, highlight, onAsk, onRefresh, preview = false 
   const matchDetails = preview
     ? `${previewMatchMeta.event} · ${previewMatchMeta.surface}`
     : `${match.round} · ${match.surface}`
+  const updateLabel = preview
+    ? '北京 20:42 更新'
+    : match.freshnessLabel.startsWith('更新于 ')
+      ? `北京 ${match.freshnessLabel.slice(4)} 更新`
+      : match.freshnessLabel
 
   return (
-    <Card id="match" data-tone="hero" className="relative">
-      <CardHeader className="border-b">
-        <CardTitle>
-          <h1 className="text-balance text-base font-semibold">{tournament}</h1>
-        </CardTitle>
-        <p className="text-sm text-muted-foreground">{matchDetails}</p>
-        <CardAction>
+    <Card id="match" data-tone="hero" className="relative !gap-0 !bg-[#0b1114] !py-0">
+      <div className="flex items-start justify-between gap-2 border-b border-white/15 px-5 py-3 sm:items-center sm:gap-4 sm:px-6 sm:py-4 lg:px-8 lg:py-5">
+        <div className="min-w-0 border-l-4 border-primary pl-3 sm:pl-4">
+          <h1 className="text-balance text-lg font-medium leading-tight tracking-tight sm:text-xl">{tournament}</h1>
+          <p className="mt-1 text-xs text-muted-foreground sm:text-sm">{matchDetails}</p>
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-1 text-[10px] text-muted-foreground sm:flex-row sm:items-center sm:gap-3 sm:text-xs lg:text-sm">
           {isLive ? (
-            <Badge variant="destructive" role="status">
-              <span className="live-pulse size-1.5 rounded-full bg-current" aria-hidden="true" />
-              直播
+            <Badge variant="outline" role="status" aria-label="直播中" className="h-7 gap-1.5 border-primary/10 bg-primary/5 px-2 text-xs font-semibold tracking-wide text-primary sm:h-8 sm:px-3 sm:text-sm">
+              <span className="live-pulse size-2 rounded-full bg-primary" aria-hidden="true" />
+              LIVE
             </Badge>
           ) : isFinished ? (
-            <Badge variant="secondary" role="status">已完赛</Badge>
+            <Badge variant="secondary" role="status" className="h-7 px-2 sm:h-8 sm:px-3">已完赛</Badge>
           ) : visualStatus === 'upcoming' ? (
-            <Badge variant="outline" role="status">即将开始</Badge>
+            <Badge variant="outline" role="status" className="h-7 px-2 sm:h-8 sm:px-3">即将开始</Badge>
           ) : (
-            <Badge variant="outline" role="status">比赛信息待更新</Badge>
+            <Badge variant="outline" role="status" className="h-7 px-2 sm:h-8 sm:px-3">比赛信息待更新</Badge>
           )}
-        </CardAction>
-      </CardHeader>
+          <span className="hidden h-5 w-px bg-white/20 sm:block" aria-hidden="true" />
+          <span>{updateLabel}</span>
+        </div>
+      </div>
 
-      <CardContent className="flex flex-col gap-3 pt-1">
+      <CardContent className="flex flex-col gap-2 !px-5 !pt-2 !pb-3 sm:!px-6 sm:!pt-3 sm:!pb-4 lg:!px-8">
         {isLive ? (
           <>
             {match.score ? (
@@ -410,15 +468,21 @@ export function MatchHero({ match, highlight, onAsk, onRefresh, preview = false 
             ) : null}
           </>
         ) : null}
-        {visualStatus === 'upcoming' || visualStatus === 'unavailable' ? (
-          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(12rem,0.7fr)] md:items-center">
+        {visualStatus === 'upcoming' ? (
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(12rem,0.48fr)] md:items-center">
             <PlayerList match={match} preview={preview} />
             <ScheduledMatch match={match} preview={preview} />
           </div>
         ) : null}
+        {visualStatus === 'unavailable' ? (
+          <>
+            <PlayerList match={match} preview={preview} />
+            <p className="text-sm text-muted-foreground">目前无法获取这场比赛的比分，请稍后再看。</p>
+          </>
+        ) : null}
       </CardContent>
 
-      <CardFooter className="flex flex-col items-start justify-end gap-3 sm:flex-row sm:items-center">
+      <CardFooter className="flex flex-col items-start justify-end gap-3 !border-white/10 !bg-transparent !px-5 !py-3 sm:flex-row sm:items-center sm:!px-6 lg:!px-8">
         <div className="flex w-full gap-2 sm:w-auto">
           <Button className="w-full sm:w-auto" onClick={onAsk}>
             <Sparkles data-icon="inline-start" aria-hidden="true" />

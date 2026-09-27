@@ -6,7 +6,7 @@ import { DecisionAssistant } from '@/components/match/decision-assistant'
 import { DecisionEvidence } from '@/components/match/decision-evidence'
 import { DecisionSummary } from '@/components/match/decision-summary'
 import { MatchHero } from '@/components/match/match-hero'
-import { OverviewCard, ScoreProgressCard, StatsCard } from '@/components/match/match-main'
+import { OverviewCard, StatsCard } from '@/components/match/match-main'
 import type { MatchStatus } from '@/components/match/match-data'
 import { MatchMomentumCard } from '@/components/match/match-momentum'
 import { KeyFactsCard } from '@/components/match/match-sidebar'
@@ -156,31 +156,28 @@ export function MatchDecisionPage({
         <DecisionSummary decision={decision} onAsk={focusDecisionAssistant} />
 
         <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
-          <div className="min-w-0 lg:col-start-1 lg:row-start-2">
-            <ScoreProgressCard match={match} preview highlight={null} />
-          </div>
-          <aside className="min-w-0 lg:col-start-2 lg:row-start-2" aria-label="比赛关键事实">
+          <aside className="min-w-0 lg:col-start-2 lg:row-start-3 lg:row-span-3" aria-label="比赛关键事实">
             <KeyFactsCard match={match} preview />
           </aside>
           <div className="min-w-0 lg:col-start-1 lg:row-start-1">
             <OverviewCard match={match} preview />
           </div>
-          <div className="min-w-0 lg:col-start-1 lg:row-start-3">
+          <div className="min-w-0 lg:col-start-1 lg:row-start-2">
             <ProbabilityMarketTrajectory decision={decision} analysisState={analysis} />
           </div>
-          <div className="min-w-0 lg:col-start-1 lg:row-start-4">
+          <div className="min-w-0 lg:col-start-1 lg:row-start-3">
             <DecisionEvidence decision={decision} methodologyState={methodology} />
           </div>
-          <div className="min-w-0 lg:col-start-1 lg:row-start-5">
+          <div className="min-w-0 lg:col-start-1 lg:row-start-4">
             <StatsCard match={match} preview highlight={null} snapshot={null} />
           </div>
-          <div className="min-w-0 lg:col-start-1 lg:row-start-6">
+          <div className="min-w-0 lg:col-start-1 lg:row-start-5">
             <MatchMomentumCard match={match} preview highlight={null} snapshot={null} />
           </div>
-          <div className="min-w-0 lg:col-start-1 lg:row-start-7">
+          <div className="min-w-0 lg:col-start-1 lg:row-start-6">
             <PaperLifecycle decision={decision} />
           </div>
-          <aside className="min-w-0 lg:sticky lg:top-20 lg:col-start-2 lg:row-start-1" aria-label="比赛决策助手">
+          <aside className="min-w-0 lg:sticky lg:top-20 lg:col-start-2 lg:row-start-1 lg:row-span-2" aria-label="比赛决策助手">
             <DecisionAssistant key={`${state}-${overlay}-${selection}-${confidence}`} decision={decision} />
           </aside>
         </div>
