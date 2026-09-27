@@ -374,6 +374,29 @@ describe('production match page', () => {
     expect(screen.getAllByText('胜者').length).toBeGreaterThan(0)
   })
 
+  it('explains when a finished match has a score envelope but no known set scores', async () => {
+    nextMatch = makeMatch({
+      status: 'finished',
+      winner_player_id: 'ply_1',
+      live_state: {
+        score: {
+          sets_won: [2, 0],
+          sets: [{ number: 1, player1_games: null, player2_games: null }],
+          points: [null, null],
+          is_tiebreak: false,
+        },
+        server_player_id: null,
+      },
+    })
+
+    render(<MatchPage matchId="mat_1" />)
+
+    await screen.findAllByText('Jannik Sinner')
+    expect(within(document.getElementById('match')!).getByText('最终比分暂未提供')).toBeVisible()
+    expect(within(document.getElementById('match')!).getByText('胜者')).toBeVisible()
+    expect(screen.queryByRole('table', { name: '最终比赛比分' })).toBeNull()
+  })
+
   it('shows tiebreak points once in the finished match scoreboard', async () => {
     nextMatch = makeMatch({
       status: 'finished',

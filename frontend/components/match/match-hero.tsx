@@ -176,7 +176,7 @@ function currentGameLabel(score: MatchScoreDto, currentSetNumber: number | null,
 }
 
 function playerColumnWidth(setCount: number, live: boolean) {
-  if (setCount >= 5) return live ? 'w-[45%] sm:w-[52%]' : 'w-[45%] sm:w-[54%]'
+  if (setCount >= 5) return live ? 'w-[41%] sm:w-[52%]' : 'w-[45%] sm:w-[54%]'
   if (setCount === 4) return live ? 'w-[49%] sm:w-[55%]' : 'w-[49%] sm:w-[57%]'
   return live ? 'w-[52%] sm:w-[58%]' : 'w-[52%] sm:w-[60%]'
 }
@@ -215,7 +215,7 @@ function LiveScore({
         <colgroup>
           <col className={playerColumnWidth(score.sets.length, true)} />
           {score.sets.map((set) => <col key={set.number} />)}
-          <col className="w-[15%] sm:w-[13%]" />
+          <col className={score.sets.length >= 5 ? 'w-[13%]' : 'w-[15%] sm:w-[13%]'} />
         </colgroup>
         <thead>
           <tr className="text-[10px] text-muted-foreground sm:text-xs lg:text-sm">
@@ -250,14 +250,18 @@ function LiveScore({
                   <td
                     key={`${row.player.id}-${index}`}
                     className={cn(
-                      'px-0.5 py-2 text-center font-mono text-xl font-semibold sm:py-3 sm:text-2xl lg:text-3xl',
+                      'px-0.5 py-2 text-center font-mono font-semibold sm:py-3 sm:text-2xl lg:text-3xl',
+                      score.sets.length >= 5 ? 'text-lg' : 'text-xl',
                       current ? 'bg-primary/5 text-primary' : games != null && otherGames != null && games < otherGames ? 'text-muted-foreground' : 'text-foreground',
                     )}
                   >
                     {games ?? '–'}
                     {row.tiebreakPoints[index] != null ? (
-                      <span className="block text-[10px] font-normal leading-tight text-muted-foreground sm:text-xs">
-                        （{row.tiebreakPoints[index]}）
+                      <span
+                        className="block text-[10px] font-normal leading-tight text-muted-foreground sm:text-xs"
+                        aria-label={`抢七得分 ${row.tiebreakPoints[index]}`}
+                      >
+                        {score.sets.length >= 5 ? row.tiebreakPoints[index] : `（${row.tiebreakPoints[index]}）`}
                       </span>
                     ) : null}
                   </td>
@@ -343,14 +347,18 @@ function FinishedScore({
                     <td
                       key={`${row.player.id}-${index}`}
                       className={cn(
-                        'px-0.5 py-2 text-center font-mono text-xl font-semibold sm:py-3 sm:text-2xl lg:text-3xl',
+                        'px-0.5 py-2 text-center font-mono font-semibold sm:py-3 sm:text-2xl lg:text-3xl',
+                        score.sets.length >= 5 ? 'text-lg' : 'text-xl',
                         games != null && otherGames != null && games < otherGames ? 'text-muted-foreground' : 'text-foreground',
                       )}
                     >
                       {games ?? '–'}
                       {row.tiebreakPoints[index] != null ? (
-                        <span className="block text-[10px] font-normal leading-tight text-muted-foreground sm:text-xs">
-                          （{row.tiebreakPoints[index]}）
+                        <span
+                          className="block text-[10px] font-normal leading-tight text-muted-foreground sm:text-xs"
+                          aria-label={`抢七得分 ${row.tiebreakPoints[index]}`}
+                        >
+                          {score.sets.length >= 5 ? row.tiebreakPoints[index] : `（${row.tiebreakPoints[index]}）`}
                         </span>
                       ) : null}
                     </td>
@@ -400,6 +408,9 @@ export function MatchHero({ match, highlight, onAsk, onRefresh, preview = false 
   const isLive = visualStatus === 'live'
   const isFinished = visualStatus === 'finished'
   const serverPlayerId = knownServerPlayerId(match)
+  const hasKnownSetScore = match.score?.sets.some(
+    (set) => set.player1_games != null || set.player2_games != null,
+  ) ?? false
   const tournament = preview ? previewMatchMeta.tournament : match.tournament
   const matchDetails = preview
     ? `${previewMatchMeta.event} · ${previewMatchMeta.surface}`
@@ -458,12 +469,12 @@ export function MatchHero({ match, highlight, onAsk, onRefresh, preview = false 
         ) : null}
         {isFinished ? (
           <>
-            {match.score ? (
+            {hasKnownSetScore ? (
               <FinishedScore match={match} highlight={highlight} preview={preview} />
             ) : (
               <PlayerList match={match} preview={preview} winnerPlayerId={match.winnerPlayerId} />
             )}
-            {!match.score ? (
+            {!hasKnownSetScore ? (
               <p className="text-center text-sm text-muted-foreground">最终比分暂未提供</p>
             ) : null}
           </>

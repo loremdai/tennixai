@@ -336,11 +336,11 @@ test.describe('P3 workbench mobile', () => {
           score: {
             ...MATCH_SNAPSHOT.match.live_state.score,
             sets: [
-              { number: 1, player1_games: 6, player2_games: 4 },
+              { number: 1, player1_games: 7, player2_games: 6, player1_tiebreak_points: 10, player2_tiebreak_points: 8 },
               { number: 2, player1_games: 4, player2_games: 6 },
               { number: 3, player1_games: 7, player2_games: 5 },
               { number: 4, player1_games: 3, player2_games: 6 },
-              { number: 5, player1_games: 4, player2_games: 5 },
+              { number: 5, player1_games: 10, player2_games: 10 },
             ],
           },
         },
@@ -356,16 +356,32 @@ test.describe('P3 workbench mobile', () => {
       const table = document.querySelector<HTMLTableElement>('#live-scoreboard table')
       const point = table?.querySelector<HTMLTableCellElement>('tbody tr:first-child td:last-child')
       const content = point?.querySelector('span')
+      const setCells = table?.querySelectorAll<HTMLTableCellElement>('tbody td:not(:last-child)')
+      const setOverflows = [...(setCells ?? [])].flatMap((cell) => {
+        const cellBox = cell.getBoundingClientRect()
+        const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT)
+        const textBoxes: DOMRect[] = []
+        while (walker.nextNode()) {
+          const range = document.createRange()
+          range.selectNodeContents(walker.currentNode)
+          textBoxes.push(range.getBoundingClientRect())
+        }
+        return textBoxes.map((box) => {
+          return Math.max(cellBox.left - box.left, box.right - cellBox.right)
+        })
+      })
       return {
         pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
         pointOverflow: point && content
           ? content.getBoundingClientRect().right - point.getBoundingClientRect().right
           : null,
+        setOverflow: Math.max(0, ...setOverflows),
       }
     })
     expect(fit.pageOverflow).toBeLessThanOrEqual(0)
     expect(fit.pointOverflow).not.toBeNull()
     expect(fit.pointOverflow!).toBeLessThanOrEqual(1)
+    expect(fit.setOverflow).toBeLessThanOrEqual(1)
   })
 })
 

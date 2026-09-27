@@ -340,9 +340,11 @@ export function MatchPage({ matchId, previewMatch, preview = false }: MatchPageP
                       snapshot={stream.snapshot}
                     />
                   </div>
-                  <div className="min-w-0 lg:col-start-1 lg:row-start-6">
-                    {paperModel ? <PaperLifecycleLive paper={paperModel} /> : null}
-                  </div>
+                  {paperModel ? (
+                    <div className="min-w-0 lg:col-start-1 lg:row-start-6">
+                      <PaperLifecycleLive paper={paperModel} />
+                    </div>
+                  ) : null}
                   <aside
                     className="min-w-0 lg:sticky lg:top-20 lg:col-start-2 lg:row-start-1 lg:row-span-2"
                     aria-label="比赛助手"
