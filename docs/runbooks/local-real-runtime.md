@@ -91,7 +91,7 @@ TENNIX_RUN_LOCAL_RUNTIME_VERIFY=1 uv run pytest -m local_runtime_live \
 
 ## 5. 浏览器验收（opt-in）
 
-前置：`./scripts/tennix-live up` 已在运行（默认前端 `http://127.0.0.1:3100`）。
+前置：`./scripts/tennix-live up` 已在运行。前端默认地址为 `http://127.0.0.1:3100`；若 3100 被占用，启动器会尝试 3101。以 `up` 输出的实际地址为准。
 
 ```bash
 cd frontend

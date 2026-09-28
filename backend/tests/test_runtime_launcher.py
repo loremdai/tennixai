@@ -671,9 +671,34 @@ def test_up_reports_owned_port_as_already_running_without_signalling(launcher):
     assert launcher.runner.spawned == []
 
 
-def test_up_reports_occupied_frontend_port_without_killing(launcher):
+def test_up_uses_default_frontend_port_when_available(launcher):
+    assert launcher.up() == 0
+    _, _, inner_front = parse_child_args(launcher.runner.spawned[-1].argv[3:])
+    assert inner_front[-2:] == ["--port", "3100"]
+    assert "http://127.0.0.1:3100" in joined_output(launcher)
+
+
+def test_up_falls_back_when_default_frontend_port_is_occupied(launcher):
     launcher.ports.in_use[3100] = "foreign"
+    assert launcher.up() == 0
+    _, _, inner_front = parse_child_args(launcher.runner.spawned[-1].argv[3:])
+    assert inner_front[-2:] == ["--port", "3101"]
+    text = joined_output(launcher)
+    assert "http://127.0.0.1:3101" in text
+    assert "3100" in text
+    assert launcher.ports.in_use[3100] == "foreign"
+    assert launcher.runner.signalled_pids == []
+
+
+def test_up_refuses_when_default_and_fallback_frontend_ports_are_occupied(
+    launcher,
+):
+    launcher.ports.in_use[3100] = "foreign-default"
+    launcher.ports.in_use[3101] = "foreign-fallback"
     assert launcher.up() == 2
+    text = joined_output(launcher)
+    assert "LOCAL_PORT_OCCUPIED" in text
+    assert "3100" in text and "3101" in text
     assert launcher.runner.signalled_pids == []
     assert launcher.runner.spawned == []
 

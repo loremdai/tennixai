@@ -58,9 +58,10 @@ RUNTIME_ENTRY_MODULE = "app.runtime.daemon_main"
 MANAGED_ROLES: tuple[str, ...] = ("runtime", "api", "frontend")
 COMPOSE_SERVICES: tuple[str, ...] = ("postgres", "redis")
 API_PORT = 8000
-FRONTEND_PORT = 3100
+DEFAULT_FRONTEND_PORT = 3100
+FALLBACK_FRONTEND_PORT = 3101
+FRONTEND_PORTS = (DEFAULT_FRONTEND_PORT, FALLBACK_FRONTEND_PORT)
 API_HEALTH_URL = f"http://127.0.0.1:{API_PORT}/api/v1/health"
-FRONTEND_URL = f"http://127.0.0.1:{FRONTEND_PORT}"
 LIVE_LOCAL_DATABASE_NAME = "tennix_live_local"
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 HEALTHY_FIRST_DISCOVERY_SOURCES = ("tennis_live", "polymarket", "live_catalog")
@@ -361,9 +362,9 @@ class RuntimeLauncher:
         recorded_failure = self._check_recorded_processes()
         if recorded_failure is not None:
             return recorded_failure
-        port_failure = self._check_ports()
-        if port_failure is not None:
-            return port_failure
+        frontend_port = self._check_ports()
+        if frontend_port is None:
+            return EXIT_PRECONDITION
         frontend_failure = self._check_frontend()
         if frontend_failure is not None:
             return frontend_failure
@@ -431,7 +432,7 @@ class RuntimeLauncher:
                 "--hostname",
                 "127.0.0.1",
                 "--port",
-                str(FRONTEND_PORT),
+                str(frontend_port),
             ],
             cwd=self.frontend_dir,
             runtime_role=None,
@@ -452,7 +453,12 @@ class RuntimeLauncher:
         self._say(
             "up complete: runtime, api and frontend children are owned by this launcher"
         )
-        self._say(f"  open the browser at {FRONTEND_URL}")
+        if frontend_port != DEFAULT_FRONTEND_PORT:
+            self._say(
+                f"  default port {DEFAULT_FRONTEND_PORT} is occupied; "
+                f"using fallback port {frontend_port}"
+            )
+        self._say(f"  open the browser at http://127.0.0.1:{frontend_port}")
         self._say(f"  api health: {API_HEALTH_URL}")
         self._say(
             "  hints: ./scripts/tennix-live status | logs runtime | logs api | logs frontend | down"
@@ -734,22 +740,39 @@ class RuntimeLauncher:
 
     def _check_ports(self) -> int | None:
         owned_pids = {str(process.pid) for process in self.state.processes}
-        for port in (API_PORT, FRONTEND_PORT):
+        api_listener = self.ports.listener(API_PORT)
+        if api_listener is not None:
+            if api_listener in owned_pids:
+                self._say(
+                    f"up refused: LOCAL_ALREADY_RUNNING "
+                    f"(port {API_PORT} is held by our pid {api_listener}; "
+                    "use ./scripts/tennix-live status or down)"
+                )
+                return None
+            self._say(
+                f"up refused: LOCAL_PORT_OCCUPIED "
+                f"(port {API_PORT} is in use by another process; "
+                "the launcher never kills foreign processes)"
+            )
+            return None
+
+        for port in FRONTEND_PORTS:
             listener = self.ports.listener(port)
             if listener is None:
-                continue
+                return port
             if listener in owned_pids:
                 self._say(
                     f"up refused: LOCAL_ALREADY_RUNNING "
                     f"(port {port} is held by our pid {listener}; "
                     "use ./scripts/tennix-live status or down)"
                 )
-                return EXIT_PRECONDITION
-            self._say(
-                f"up refused: LOCAL_PORT_OCCUPIED "
-                f"(port {port} is in use by another process; the launcher never kills foreign processes)"
-            )
-            return EXIT_PRECONDITION
+                return None
+
+        self._say(
+            "up refused: LOCAL_PORT_OCCUPIED "
+            f"(ports {DEFAULT_FRONTEND_PORT} and {FALLBACK_FRONTEND_PORT} "
+            "are in use by other processes; the launcher never kills foreign processes)"
+        )
         return None
 
     def _check_frontend(self) -> int | None:
