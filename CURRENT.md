@@ -18,7 +18,8 @@
 - **实现与边界：** `tennix-live up` 优先使用 3100，若被其他进程占用则使用 3101，并打印实际地址；两个端口均被占用时安全拒绝，不向外部进程发送信号。用户已批准此行为。3100 当前由另一 ADE 的 Vite 预览占用，未停止该进程。
 - **代码验证：** 新增端口选择回归先按预期失败，再通过；启动器 `63 passed`，完整后端确定性套件 `1379 passed, 131 deselected`，改动文件 Ruff lint/format 与 `git diff --check` 通过。
 - **已批准恢复：** 用户于 2026-09-28 明确批准现在开始完整初始化。按运行手册执行唯一受支持的 `./scripts/tennix-live init`；它会迁移专用本地 schema、同步赛程/排名与目录，并可能批量调用 LLM 补齐中文名。此前 schema 为 `0008`，T112 要求 `0009`；不手工绕过启动器迁移，不清空数据库或 Paper ledger。
-- **当前验收步骤：** 初始化完成后运行 `./scripts/tennix-live up`，启动器应保留其他 ADE 占用的 3100 并使用 3101；随后检查 `status`、API/前端 HTTP、真实市场页面和健康状态。若初始化或上游同步失败，记录真实结果并按运行手册排查，不伪报完成。
+- **运行验收节点（2026-09-28 18:21 CST）：** 获批的 `init` 成功，数据库迁移到 `0009`，同步摘要 `players=3979 matches=281`。`up` 因 180 秒内未达到必需的首次健康发现而返回 `LOCAL_RUNTIME_UNHEALTHY`；按启动器保护逻辑仅停止本次 Tennix runtime，API/frontend 未启动。随后 `status` 确认 PostgreSQL/Redis healthy、Tennix 子进程均停止，Polymarket 为 `STARTUP_RECOVERY`，首次发现需要的 `tennis_live` / `live_catalog` 未出现，schedule/rankings 当前未知。3100 的其他 ADE 未触碰。
+- **下一步：** 按运行手册执行不调用 LLM 的只读 `./scripts/tennix-live verify`，逐一确认供应商 REST/WS 可用性与安静时段 skip；结合实际结果判断首次发现超时来自上游连通性、当下无 live 比赛还是运行时健康状态映射。根因未确认前不绕过健康门或手工单独拉起 API/frontend。
 - **边界：** 根 `.env` 仅由启动器读取，不输出凭据；不终止 3100 的其他 ADE 进程，不删除或重置运行数据，不改变市场模型晋升或 paper-only 边界；所有已有用户工作区改动继续保留且不纳入提交。
 
 ## T112 修复 Polymarket 市场规则链路（`done`）
