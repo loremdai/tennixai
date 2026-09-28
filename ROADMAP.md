@@ -5,11 +5,11 @@
 
 **最后更新：** 2026-09-28（北京时间）
 
-**总体状态：** `in_progress`（P4 持续打磨；T111 已完成；T112 Polymarket 市场规则链路修复进行中；T110 私人测试服务器部署因磁盘空间和访问边界决策而 `blocked`。所有活跃网球胜者市场展示真实名称/报价；未严格映射的市场不进入模型或 Paper。模型未晋升时机会页继续诚实为空）
+**总体状态：** `in_progress`（P4 持续打磨；T111、T112 已完成；T110 私人测试服务器部署因磁盘空间和访问边界决策而 `blocked`。所有活跃网球胜者市场展示真实名称/报价；未严格映射的市场不进入模型或 Paper。模型未晋升时机会页继续诚实为空）
 
 **当前里程碑：** P3 已关闭；P4.0–P4.4 已完成（T72–T92）；P4.5（T93–T104）、P4.6（T105）及后续打磨 T106–T109 均已完成；真实本地服务保持运行。
 
-**当前阶段：** P4 后续打磨 — T112 市场规则来源、持久化与行动安全门修复进行中；T110 私人测试部署等待用户决策（`blocked`）。模型晋升证据链另行排期，自动下单继续 `deferred`。
+**当前阶段：** P4 后续打磨 — T112 市场规则链路修复已交付；T110 私人测试部署等待用户决策（`blocked`）。模型晋升证据链另行排期，自动下单继续 `deferred`。
 
 ## 状态说明
 
@@ -204,7 +204,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | T109 | P4 follow-up | Recreate Approved Match Scoreboard Mockup | `done` | `90e42a9`（领取）、`db3b156`（实现）、`ed9789a`（审阅修补） | 按已批准示意图重做单张 Match 记分牌，缩小头图和桌面字级，删除下方重复比分卡及无 paper 持仓时的空网格行；五盘窄屏双位局分/抢七小分不串列，已完赛但缺盘分时明示缺失并保留已知胜者。审阅修补先红后绿；最终前端 Vitest `41 files / 534 passed`、TypeScript、P3 E2E `29 passed / 1 skipped`、Match 双视口视觉回归 `4 passed`、差异检查通过。真实 API 只读核验 `7 passed / 1 skipped（LLM 未请求）`；`tennix-live down`→`up` 保留数据卷和 paper ledger，未 `init`。重启后本地真实浏览器验收 `6 passed`，健康状态比分流/赛程/排名/Polymarket 均 `ok`，实查直播比赛头图显示真实比分、抢七及发球方。规格：[T109](./docs/superpowers/specs/2026-09-27-tennixai-t109-broadcast-scoreboard-design.md)，计划：[T109](./docs/superpowers/plans/2026-09-27-tennixai-t109-broadcast-scoreboard-implementation.md)。 |
 | T110 | P4 follow-up | Deploy Private TennixAI Runtime to amd64 Server | `blocked` | — | 目标为用户授权的私人测试部署；本机 Buildx 支持 `linux/amd64`，服务器 Ubuntu 24.04/amd64 已装 Docker Compose，现有站点/服务已识别并保护。只读预检发现系统盘 40GB 已满、应用无登录认证且 UFW 未启用；尚未向远端写入、开放端口或读取/复制凭据。等待用户决定安全释放/增加磁盘空间的方式及朋友访问边界；用户改派 T111 后显式暂停。 |
 | T111 | P4 follow-up | Fix Match Stage Display | `done` | `84a344e`（实现与回归） | 根因是 API-Tennis `get_fixtures.tournament_round` 与比赛实际阶段不符，provider 曾无条件信任该字段。对可疑半决赛轮次按赛事/赛季查询 `get_draw`，只按唯一精确 `match_key` 校正；签表缺失/冲突/API 不可用时安全保留原值，并缓存以限制配额。覆盖赛程、live、详情与比分快照。回归先 RED 后 GREEN；Provider `96 passed`、后端非 integration/live 确定性测试 `1366 passed`、前端轮次 view-model `66 passed`、`git diff --check` 通过。全量后端 pytest 约 80 秒后人工中断：已完成 18 项、10 个集成用例因本机测试库缺少 `match_state_snapshots.freshness` 列失败，其余未执行；未改数据库。真实服务未重启，改动需安全重启/重载后生效。官方依据：[API-Tennis 文档](https://api-tennis.com/documentation)。 |
-| T112 | P4 follow-up | Repair Polymarket Market Rules Ingestion and Safety Gates | `in_progress` | — | 以 Gamma market `description` 与 `resolutionSource` 为候选规则来源，确认官网 Rules 对应关系；复用目录扫描避免逐市场拉取，保留规则版本证据；缺失、变更或过期规则时禁止新的 BUY/SELL 与 Paper intent，展示/报价链路独立。只读真实核验、回归和请求量检查完成后关闭；不晋升模型或部署服务器。 |
+| T112 | P4 follow-up | Repair Polymarket Market Rules Ingestion and Safety Gates | `done` | `6b7de72`（实现与回归） | 以 Gamma market `description` / `resolutionSource` 取规则并复用 keyset 扫描；内部 ID 规则版本保留 A→B→A 历史。完整且新鲜的扫描索引是唯一 BUY/SELL 资格来源；缺失、变更、扫描失败或过期时安全阻断新行动，但不影响市场展示/报价。无 parser 时规则进入第二版会持续阻断，不推测规则等价。后端 deterministic `1377 passed, 131 deselected`；前端 `536 passed`、TypeScript、Ruff lint、migration 0001→0009 与隔离 DB 规则集成 `3 passed` 均通过；共享运行库未迁移/服务未重启。官方 Gamma 实时 payload 对照因环境 TLS 证书验证失败未完成，未绕过 TLS；见 `CURRENT.md` 与 [实施计划](./docs/superpowers/plans/2026-09-28-tennixai-t112-market-rules-repair.md)。 |
 
 ## P4.1 Completion Gate 核验摘要（2026-09-18，逐条实际核验）
 

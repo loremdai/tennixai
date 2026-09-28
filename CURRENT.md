@@ -4,20 +4,21 @@
 
 **最后更新：** 2026-09-28（北京时间）
 
-**当前主任务：** T112 — 修复 Polymarket 市场规则链路（`in_progress`）。T110 仍因服务器磁盘与访问边界决策而 `blocked`。
+**当前主任务：** 暂无进行中的主任务。T112 已完成；T110 私人测试服务器部署仍因磁盘和访问边界决策而 `blocked`。
 
-**最近任务：** T112 — Polymarket 规则链路修复（`in_progress`）；T111 — 修复比赛阶段显示（`done`，`84a344e`）；T110 — 私人测试服务器部署（`blocked`）；T109 — 比赛详情记分牌视觉复刻（`done`）。
+**最近任务：** T112 — Polymarket 规则链路修复（`done`，实现 `6b7de72`）；T111 — 修复比赛阶段显示（`done`，`84a344e`）；T110 — 私人测试服务器部署（`blocked`）；T109 — 比赛详情记分牌视觉复刻（`done`）。
 
-**最近执行者 / ADE / 分支：** Codex / 本地 ADE / `main`；T112 起始提交 `5d31ba0`，2026-09-28 16:00 CST 领取；保留 T110 等待事项及所有已记录的用户工作区改动，不纳入本任务。
+**最近执行者 / ADE / 分支：** Codex / 本地 ADE / `main`；T112 从 `5d31ba0` 开始，领取记录 `6be5fae`，实现 `6b7de72` 已推送到 `origin/main`；所有已记录的用户工作区改动均保留且未纳入任务提交。
 
 **运行手册与证据：** [本地真实运行手册](docs/runbooks/local-real-runtime.md)。
 
-## T112 修复 Polymarket 市场规则链路（`in_progress`）
+## T112 修复 Polymarket 市场规则链路（`done`）
 
-- **领取：** Codex / 本地 ADE / `main`；起始提交 `5d31ba0`；2026-09-28 16:00 CST。
-- **目标：** 按 Polymarket 官方 market 字段提取比赛胜者市场规则，复用目录扫描并记录规则版本；规则缺失、变更或不够新时禁止新的决策行动和 Paper intent，但不阻断市场名称与报价展示。
-- **边界：** 不做模型晋升、自动下单或 T110 服务器部署；不覆盖 `backend/app/service.py` 和已记录的未跟踪文件；不输出凭据。
-- **验收门：** 真实形状无 `rules` payload、缺失/来源变化、A→B→A、扫描中断、旧快照及安全门先 RED 后 GREEN；相关后端回归、只读官网规则对照与请求量检查，未运行的测试不得声称通过。
+- **领取与提交：** Codex / 本地 ADE / `main`；起始提交 `5d31ba0`；领取记录 `6be5fae`；实现与回归 `6b7de72`，已推送至 `origin/main`。
+- **完成内容：** 从 Gamma market `description` 与 `resolutionSource` 读取规则，不再读取不存在的 `rules` 或把 `resolvedBy` 当来源；随网球目录扫描一次性带回，严格匹配到内部比赛后保存，规则文本和来源共同用于识别变化。规则历史按时间保存，即使从 A 改为 B 再改回 A，也记录为三个版本。决策只认最近一次完整且未过期的扫描；扫描失败、不完整、过期、规则缺失或发生变化时，暂停新的模拟买入/退出，但市场名称和报价仍照常展示。当前还不能自动判断规则变化是否影响赛果，因此发现任何新版本都会持续暂停操作，不猜测新旧规则等价；同时移除了缺少规则时伪造的 `unfrozen` 标记。前端新增普通用户可读的规则缺失说明。
+- **验证：** TDD 覆盖 Gamma 真实字段形状、来源单独变化、缺失规则、单次扫描请求量、A→B→A、同 hash 刷新、完整/失败/过期扫描、缺失/变更规则门、Paper 拒绝无 hash intent。后端非外部服务/基础设施确定性套件 `1377 passed, 131 deselected`；前端 Vitest `41 files / 536 passed`、`tsc --noEmit` 通过；改动 Python 文件 Ruff lint 通过，10 个新增/重点文件 Ruff format 检查通过；`git diff --check` 通过。隔离数据库迁移 `0001→0009` 成功，规则持久化集成 `3 passed, 6 deselected`，验证 A→B→A 后降级被安全拒绝，临时测试库已删除；共享运行库未迁移/重置。
+- **外部核验限制与运行状态：** 官方 Gamma [keyset 文档](https://docs.polymarket.com/api-reference/events/list-events-keyset-pagination)、[market 文档](https://docs.polymarket.com/api-reference/markets/get-market-by-id)、[规则澄清说明](https://help.polymarket.com/en/articles/13364548-how-are-markets-clarified)及一个官网市场 Rules 页面已检查；但当前网络对 Gamma API 主机返回不受信任的 TLS 证书，实时 API payload 与网页 Rules 文本的逐字比对未完成，也没有关闭 TLS 校验。没有迁移共享运行库、重启服务、启用模型或调用订单接口；根 `.env` 未读取/更改。重新运行服务前需要先按日常流程应用 migration 0009。
+- **工作区保护：** `backend/app/service.py`、`.codex/`、`.superpowers/`、`REALTIME_LATENCY_INVESTIGATION.md`、`backend/tests/test_p3_query_freshness.py`、`frontend/next-env.d.ts` 均为任务外已有用户改动，未暂存或提交。
 
 ## T111 修复比赛阶段统一显示为 Semi-finals（`done`）
 
@@ -248,9 +249,8 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
-| 2026-09-28 | 领取记录待提交 | 显式暂停等待用户决策的 T110，登记并接手 T111 比赛阶段错误；开始时 `main`/`49a48b6`，工作区已有改动全部保留。 |
+| 2026-09-28 | `6b7de72` | T112 完成：修复 Polymarket 官方规则字段读取、规则版本历史、扫描新鲜度与 BUY/SELL/Paper 安全门；后端 `1377 passed`、前端 `536 passed`、类型检查及 Ruff lint 通过。Gamma 实时 API 比对因 TLS 证书验证失败未完成；共享数据库未迁移、服务未重启。 |
+| 2026-09-28 | `6be5fae` | 领取 T112 市场规则链路修复；从 `main`/`5d31ba0` 开始，保留已有用户工作区改动。 |
 | 2026-09-27 | 先前领取记录 | T110 私人测试服务器 Docker 部署只读预检发现远端磁盘满、现有 Nginx/DEUCE 服务及公网访问安全决策待处理；未修改远端状态。 |
 | 2026-09-26 | `ddbfb01` / `bd33d78` | T107 复审问题收口并完成：尾部未知、孤点、身份异常、同姓姓名、零附近舍入均处理；最终前端 533 项测试及 TypeScript 通过，真实桌面/手机页复验。 |
 | 2026-09-26 | `3ce6f41` | T107 前端走势卡初版：人话结论、双方零线、未知得分断线、样本不足保护。 |
-| 2026-09-26 | `4389aa1` | T107 按已批准方案领取 Match 近期走势卡改版；仅改前端展示和缺口映射，不改指数算法。 |
-| 2026-09-26 | `f7ea297` | T106 修复比赛逐分记录的误导性“胜者待定”：未知/无法匹配的胜者显示可访问横线，整段时间线只说明一次；前端 524 测试与 TypeScript 通过。 |

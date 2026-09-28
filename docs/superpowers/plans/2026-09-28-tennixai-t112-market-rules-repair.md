@@ -67,4 +67,4 @@
 
 - [x] Check diff scope and credentials; run `git diff --check`, focused and broad tests, and migration proof. Report skipped/blocked gates accurately.
 - [x] Verify scan request count with mocked transport; do not turn model on or call order APIs. Direct public Gamma comparison remains unverified due to TLS validation failure described above.
-- [ ] Commit implementation and test changes with explicit paths; update controls with exact commit and actual validation; push `origin/main` while preserving user edits.
+- [x] Commit implementation and test changes with explicit paths (`6b7de72`); update controls with exact commit and actual validation; push `origin/main` while preserving user edits.
