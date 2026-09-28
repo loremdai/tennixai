@@ -4,31 +4,32 @@
 
 **最后更新：** 2026-09-28（北京时间）
 
-**当前主任务：** T111 — 修复比赛阶段统一显示为 Semi-finals（`in_progress`；先追查供应商映射、canonical 数据及页面展示链路）。
+**当前主任务：** 无。T111 已完成；T110 仍因服务器磁盘与访问边界决策而 `blocked`。
 
-**最近任务：** T111 — 修复比赛阶段统一显示为 Semi-finals（`in_progress`）；T110 — 私人测试服务器 Docker 镜像部署（`blocked`，等磁盘空间与访问边界决策）；T109 — 比赛详情记分牌视觉复刻（`done`，实现 `db3b156`、审阅修补 `ed9789a`）；T108 — 比赛详情页比分头图区精简（`done`）。
+**最近任务：** T111 — 修复比赛阶段统一显示为 Semi-finals（`done`，实现 `84a344e`）；T110 — 私人测试服务器 Docker 镜像部署（`blocked`，等磁盘空间与访问边界决策）；T109 — 比赛详情记分牌视觉复刻（`done`，实现 `db3b156`、审阅修补 `ed9789a`）；T108 — 比赛详情页比分头图区精简（`done`）。
 
-**最近执行者 / ADE / 分支：** Codex / 本地 ADE / `main`；T111 起始提交 `49a48b6`，2026-09-28 10:02 CST 领取；保留 T110 等待事项及所有既有用户工作区改动，不纳入本任务。
+**最近执行者 / ADE / 分支：** Codex / 本地 ADE / `main`；T111 起始提交 `49a48b6`，2026-09-28 10:02 CST 领取，实现提交 `84a344e`；保留 T110 等待事项及所有既有用户工作区改动，不纳入本任务。
 
 **运行手册与证据：** [本地真实运行手册](docs/runbooks/local-real-runtime.md)。T111 是窄范围数据/展示缺陷修复，不另建阶段性设计文档；实施与验收门如下。
 
-## T111 修复比赛阶段统一显示为 Semi-finals（`in_progress`）
+## T111 修复比赛阶段统一显示为 Semi-finals（`done`）
 
-- **目标：** 找出为什么不同比赛都显示 `Semi-finals`，修复真实数据链路中的根因，让每场比赛展示其自身正确的阶段/轮次；不以隐藏字段或固定文案掩盖错误。
-- **实施计划：** ① 用多场不同轮次的现有 fixture、API 响应或本地只读页面/API 复现；② 从供应商字段追到 provider mapper、canonical match/tournament 字段、DTO/view model 和所有相关组件，确定首次出现错误值的位置；③ 先添加能复现错误的回归测试并观察失败，再做最小修复；④ 验证正常轮次、未知/缺失轮次和旧兼容字段不被误改。
-- **验收门：** 定向回归先 RED 后 GREEN；运行受影响的后端/前端测试、TypeScript 及改动文件 lint；按影响范围运行全量确定性测试。若本地运行时浏览器能安全复用，则只读核对多个不同轮次；不读取或输出 `.env`/凭据，不为测试改数据库、不清缓存或做无关重启。最终 `git diff --check` 通过。
-- **范围边界：** 只修复阶段/轮次错误，不改比赛排序、供应商、存储 schema、其他比赛字段、UI 设计或市场/Paper 语义。所有已存在的用户工作区改动继续保留，不纳入本任务。
+- **领取：** Codex / 本地 ADE / `main`；起始提交 `49a48b6`，领取记录 `e2903d7`。
+- **根因：** API-Tennis `get_fixtures` 的 `tournament_round` 被 provider 直接写入 canonical `Match.round`，前端又直接显示该值。对当前赛程的只读核对发现不同场次均收到 `Semi-finals`；同赛事 `get_draw` 响应以相同 `match_key` 标注为 `Qualifying Round 1`。Git 历史显示近期只增加了去空格，并未改变轮次语义映射。官方接口文档确认 `get_draw` 提供轮次、签表和比赛 `match_key`，并可包含资格赛：[API-Tennis 官方文档](https://api-tennis.com/documentation)。
+- **修复：** 仅当供应商轮次标为半决赛时，按赛事/赛季读取一次 `get_draw`，用完全相同且唯一的 `match_key` 校正轮次；缺失、冲突或不可用时保留原供应商值，不做猜测。赛事签表缓存 6 小时、空签表缓存 15 分钟、过期数据最多容忍 24 小时；失败后 15 分钟内不重复请求。覆盖赛程、直播、比赛详情和比分快照；不改 UI、schema、其他字段或市场/Paper 语义。
+- **验证：** 新回归先 RED、后 GREEN，覆盖资格赛校正、严格按比赛 ID 匹配、签表缓存、比赛详情/快照复用、live 轮次及签表 API 不可用时安全回退。Provider 测试 `96 passed`；后端非 integration/live 确定性测试 `1366 passed`；前端轮次 view-model 测试 `66 passed`；`git diff --check` 通过。全量后端 pytest 运行约 80 秒后人工中断：已完成 18 项、10 个数据库集成用例因本机测试库缺少 `match_state_snapshots.freshness` 列失败，其余尚未执行；未迁移、重置或改动数据库。未重启现有真实服务，所以修复代码会在下次安全重启/重载后进入运行中的 API；未读取或输出凭据。
+- **提交：** 实现与回归 `84a344e`。既有用户工作区改动均保留，未纳入本任务。
 
 ## T110 私人测试服务器 Docker 镜像部署（`blocked`；显式交接暂停）
 
-- **状态交接：** 用户于 2026-09-28 优先要求修复 T111，因此暂停 T110；T111 是唯一 `in_progress` 任务。T110 的只读预检和原始授权继续保留，用户补齐阻塞决策后再显式接续。
+- **状态交接：** 用户于 2026-09-28 优先要求修复 T111，因此暂停 T110；T111 已完成，T110 仍为唯一未完成但受阻任务。T110 的只读预检和原始授权继续保留，用户补齐阻塞决策后再显式接续。
 
 - **用户授权：** 为 amd64 服务器构建镜像、部署 TennixAI，并在部署后执行真实 `init` 与 API 运行；目标 `8.134.76.110`。本机 Docker Buildx 已确认支持 `linux/amd64`。
 - **只读预检：** 服务器为 Ubuntu 24.04 / amd64，Docker Engine 与 Compose 已安装；`/opt/tennixai` 不存在，Docker 当前无容器、镜像或数据卷。现有 DEUCE/Nginx 监听 80/443/8080，DEUCE API 使用 `127.0.0.1:8000`；服务器本机没有 3100 监听。Nginx 是 catch-all，现有 IP 证书为自签名，无法作为浏览器可信 HTTPS 入口。不得覆盖/停止既有站点或服务。
 - **容量与访问阻塞：** 系统盘 40GB、可用空间为 0；`/tmp` 约 9.5GB 来自 4070 个旧 `heavy-radar-*` 目录，均属 `deuce:deuce`，无匹配运行进程/打开文件；未删除。内存 1.6GiB、当前可用约 728MiB、另有 2GiB swap；本地实测 runtime RSS 约 535MiB、Next 生产风格服务尚未实测，部署后内存余量可能不足。UFW inactive；应用无登录认证，不能假设公开端口只给好友使用。外部探测 3100 得到空响应，与服务器本机无监听的结果不一致，网络边缘状态待部署后验证。
 - **未执行事项：** 未安装镜像、创建部署目录/数据卷、修改 Nginx/防火墙、读取/复制 `.env` 值或运行远端 `init`。本地根 `.env` 的 provider/LLM/Paper 模式及必需密钥字段已只检查存在性，值未显示或写入文档。
 - **待决条件：** 扩容系统盘或明确授权清理上述精确临时目录；确定好友访问限制方式。未获决定前不删除 DEUCE 数据、不开放公网端口、不进行远端写入。整体 Compose 方案已提出，等待用户确认。
-- **保留的工作区改动：** `backend/app/service.py`、`.codex/`、`.superpowers/`、`REALTIME_LATENCY_INVESTIGATION.md`、`backend/tests/test_p3_query_freshness.py`、`frontend/next-env.d.ts` 均为用户现有改动，保留且不纳入 T110。
+- **保留的用户工作区改动：** `backend/app/service.py`、`.codex/`、`.superpowers/`、`REALTIME_LATENCY_INVESTIGATION.md`、`backend/tests/test_p3_query_freshness.py`、`frontend/next-env.d.ts` 均已原样保留，未纳入 T110 或 T111 提交。
 
 ## T109 比赛详情记分牌视觉复刻（`done`）
 
