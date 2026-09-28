@@ -3,13 +3,13 @@
 > 本文件回答“项目要经过哪些阶段、现在整体走到哪里、每项完成有什么证据”。
 > 项目定位见 [PROJECT.md](./PROJECT.md)，唯一当前任务见 [CURRENT.md](./CURRENT.md)。
 
-**最后更新：** 2026-09-27（北京时间）
+**最后更新：** 2026-09-28（北京时间）
 
-**总体状态：** `in_progress`（P4 持续打磨；T101–T109 已完成；T110 私人测试服务器 Docker 部署已领取，远端预检完成，当前等用户决定磁盘空间和访问边界。此前用户批准的 B 边界保持：所有活跃网球胜者市场展示供应商真实名称/报价，未映射/双打不进入模型或 Paper。模型未晋升时机会页继续诚实为空；模型晋升另行排期）
+**总体状态：** `in_progress`（P4 持续打磨；T101–T109 已完成；T111 比赛阶段错误修复进行中；T110 私人测试服务器 Docker 部署因等待用户决定磁盘空间和访问边界而 `blocked`。此前用户批准的 B 边界保持：所有活跃网球胜者市场展示供应商真实名称/报价，未映射/双打不进入模型或 Paper。模型未晋升时机会页继续诚实为空；模型晋升另行排期）
 
 **当前里程碑：** P3 已关闭；P4.0–P4.4 已完成（T72–T92）；P4.5（T93–T104）、P4.6（T105）及后续打磨 T106–T109 均已完成；真实本地服务保持运行。
 
-**当前阶段：** P4 后续打磨 / 私人测试部署 — T110 进行中；模型未晋升时机会页仍为空，模型晋升证据链另行排期，自动下单继续 `deferred`。
+**当前阶段：** P4 后续打磨 — T111 比赛阶段错误修复进行中；T110 私人测试部署等待用户决策（`blocked`）。模型未晋升时机会页仍为空，模型晋升证据链另行排期，自动下单继续 `deferred`。
 
 ## 状态说明
 
@@ -202,7 +202,8 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | T107 | P4 follow-up | Make Recent Match Trend Understandable | `done` | `4389aa1`（领取）、`3ce6f41`（实现）、`ddbfb01` / `bd33d78`（复审修补） | 双球员零线、结论先行、已确认得分窗口、未知/尾部缺口断线、孤立观测可见；身份异常与少样本不臆断，长姓名可换行。前端 Vitest `41 files / 533 passed`、TypeScript、差异检查和运行中的真实服务桌面/手机手工验收通过。共享 `.next` 未做 production build/隔离 Playwright；只改前端展示，不动指数模型。 |
 | T108 | P4 follow-up | Simplify Match Detail Scoreboard Hero | `done` | `1667e1b`（领取）、`ffdabce`（实现与回归） | 比赛详情头部合并为单一记分牌；移除重复标题/球员/比分文字，live 当前局直接入表，发球提示只出现一次，finished 胜者只标一次；长姓名、中文辅名、排名、国旗、五盘抢七及赛前排期均保留。Vitest `41 files / 533 passed`、`tsc --noEmit` 通过；Playwright 确定性 finished 预览桌面/手机 `2 passed`；真实页面桌面检查与 390px 五盘手机截图均无横向溢出。全量 Playwright 未运行；`p1-match-live` 固定技术统计空态前置条件与真实服务数据不符，不计为本任务验证。既有 P3 用户改动保留且未提交。 |
 | T109 | P4 follow-up | Recreate Approved Match Scoreboard Mockup | `done` | `90e42a9`（领取）、`db3b156`（实现）、`ed9789a`（审阅修补） | 按已批准示意图重做单张 Match 记分牌，缩小头图和桌面字级，删除下方重复比分卡及无 paper 持仓时的空网格行；五盘窄屏双位局分/抢七小分不串列，已完赛但缺盘分时明示缺失并保留已知胜者。审阅修补先红后绿；最终前端 Vitest `41 files / 534 passed`、TypeScript、P3 E2E `29 passed / 1 skipped`、Match 双视口视觉回归 `4 passed`、差异检查通过。真实 API 只读核验 `7 passed / 1 skipped（LLM 未请求）`；`tennix-live down`→`up` 保留数据卷和 paper ledger，未 `init`。重启后本地真实浏览器验收 `6 passed`，健康状态比分流/赛程/排名/Polymarket 均 `ok`，实查直播比赛头图显示真实比分、抢七及发球方。规格：[T109](./docs/superpowers/specs/2026-09-27-tennixai-t109-broadcast-scoreboard-design.md)，计划：[T109](./docs/superpowers/plans/2026-09-27-tennixai-t109-broadcast-scoreboard-implementation.md)。 |
-| T110 | P4 follow-up | Deploy Private TennixAI Runtime to amd64 Server | `in_progress` | — | 目标为用户授权的私人测试部署；本机 Buildx 支持 `linux/amd64`，服务器 Ubuntu 24.04/amd64 已装 Docker Compose，现有站点/服务已识别并保护。只读预检发现系统盘 40GB 已满、应用无登录认证且 UFW 未启用；尚未向远端写入、开放端口或读取/复制凭据。当前需先确定安全释放/增加磁盘空间的方式及朋友访问边界。 |
+| T110 | P4 follow-up | Deploy Private TennixAI Runtime to amd64 Server | `blocked` | — | 目标为用户授权的私人测试部署；本机 Buildx 支持 `linux/amd64`，服务器 Ubuntu 24.04/amd64 已装 Docker Compose，现有站点/服务已识别并保护。只读预检发现系统盘 40GB 已满、应用无登录认证且 UFW 未启用；尚未向远端写入、开放端口或读取/复制凭据。等待用户决定安全释放/增加磁盘空间的方式及朋友访问边界；用户改派 T111 后显式暂停。 |
+| T111 | P4 follow-up | Fix Match Stage Display | `in_progress` | — | 调查并修复多场比赛阶段都显示 `Semi-finals` 的问题。沿供应商 → provider mapping → canonical 数据 → API/UI 全链路定位，先写失败回归再最小修复，覆盖多轮次及未知/缺失轮次；最终记录实际通过的定向/全量验证证据。 |
 
 ## P4.1 Completion Gate 核验摘要（2026-09-18，逐条实际核验）
 
