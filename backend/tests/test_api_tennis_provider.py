@@ -1132,6 +1132,158 @@ async def test_fixtures_request_uses_bounded_window_and_keeps_only_scheduled(pro
 
 
 @pytest.mark.asyncio
+async def test_scheduled_round_uses_exact_match_round_from_cached_draw() -> None:
+    source_row = load("fixtures.json")["result"][-1]
+    fixture_rows = []
+    draw_matches = []
+    for index in range(4):
+        row = dict(source_row)
+        row.update(
+            {
+                "event_key": 9000 + index,
+                "event_date": "2026-09-10",
+                "event_first_player": f"Player {index * 2 + 1}",
+                "first_player_key": 9100 + index * 2,
+                "event_second_player": f"Player {index * 2 + 2}",
+                "second_player_key": 9101 + index * 2,
+                "event_status": "Scheduled",
+                "event_type_type": "Atp Singles",
+                "tournament_name": "Beijing",
+                "tournament_key": 9900,
+                "tournament_round": "ATP Beijing - Semi-finals",
+                "tournament_season": "2026",
+            }
+        )
+        fixture_rows.append(row)
+        if index < 3:
+            draw_matches.append({"match_key": 9000 + index})
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        method = request.url.params.get("method")
+        if method == "get_fixtures":
+            match_key = request.url.params.get("match_key")
+            rows = (
+                [row for row in fixture_rows if str(row["event_key"]) == match_key]
+                if match_key is not None
+                else fixture_rows
+            )
+            return httpx.Response(200, json={"success": 1, "result": rows})
+        if method == "get_draw":
+            return httpx.Response(
+                200,
+                json={
+                    "success": 1,
+                    "result": {
+                        "tournament": {"tournament_surface": "Hard"},
+                        "source": "reconstructed_from_results",
+                        "brackets": [
+                            {
+                                "stage": "Singles - Qualifying",
+                                "rounds": [
+                                    {
+                                        "round_name": "Qualifying Round 1",
+                                        "matches": draw_matches,
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                },
+            )
+        return route_handler(request)
+
+    built, seen, client, _directory = build_provider(handler)
+    try:
+        first_read = await built.get_fixtures()
+        second_read = await built.get_fixtures()
+        detail = await built.get_match(first_read[0].id)
+        snapshot = await built.get_match_snapshot(first_read[0].id)
+
+        expected_rounds = ["ATP Beijing - Qualifying Round 1"] * 3 + [
+            "ATP Beijing - Semi-finals"
+        ]
+        assert [match.round for match in first_read] == expected_rounds
+        assert [match.round for match in second_read] == expected_rounds
+        assert detail.round == "ATP Beijing - Qualifying Round 1"
+        assert snapshot.match.round == "ATP Beijing - Qualifying Round 1"
+        draw_requests = [
+            item for item in seen if item.url.params.get("method") == "get_draw"
+        ]
+        assert len(draw_requests) == 1
+        assert draw_requests[0].url.params["include_qualification"] == "1"
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_live_round_uses_exact_match_round_from_draw() -> None:
+    row = dict(load("livescore.json")["result"][0])
+    row["tournament_round"] = "Tulln - Semi-finals"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        method = request.url.params.get("method")
+        if method == "get_livescore":
+            return httpx.Response(200, json={"success": 1, "result": [row]})
+        if method == "get_draw":
+            return httpx.Response(
+                200,
+                json={
+                    "success": 1,
+                    "result": {
+                        "tournament": {"tournament_surface": "Hard"},
+                        "brackets": [
+                            {
+                                "rounds": [
+                                    {
+                                        "round_name": "1/8-finals",
+                                        "matches": [{"match_key": row["event_key"]}],
+                                    }
+                                ]
+                            }
+                        ],
+                    },
+                },
+            )
+        return route_handler(request)
+
+    built, _seen, client, _directory = build_provider(handler)
+    try:
+        live = await built.get_live_matches()
+        assert len(live) == 1
+        assert live[0].round == "Tulln - 1/8-finals"
+        assert live[0].status is MatchStatus.LIVE
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_unavailable_draw_keeps_fixture_round_and_is_not_retried_immediately() -> None:
+    row = dict(load("fixtures.json")["result"][-1])
+    row["tournament_round"] = "Tulln - Semi-finals"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        method = request.url.params.get("method")
+        if method == "get_fixtures":
+            return httpx.Response(200, json={"success": 1, "result": [row]})
+        if method == "get_draw":
+            return httpx.Response(403, json={"success": 0, "error": "not available"})
+        return route_handler(request)
+
+    built, seen, client, _directory = build_provider(handler)
+    try:
+        first_read = await built.get_fixtures()
+        second_read = await built.get_fixtures()
+
+        assert first_read[0].round == "Tulln - Semi-finals"
+        assert second_read[0].round == "Tulln - Semi-finals"
+        assert sum(
+            item.url.params.get("method") == "get_draw" for item in seen
+        ) == 1
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
 async def test_fixtures_player_filter_sends_provider_external_key(provider) -> None:
     built, seen = provider
 

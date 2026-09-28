@@ -12,13 +12,16 @@ import json
 import math
 import re
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
+from time import monotonic
 from typing import Any
 from zoneinfo import ZoneInfo
 
 import httpx
 from pydantic import ValidationError
 
+from app.cache import AsyncTTLCache
 from app.domain import (
     CapabilityStatus,
     DataFreshness,
@@ -68,6 +71,10 @@ PROVIDER_NAME = "api_tennis"
 UPCOMING_WINDOW_DAYS = 7
 RECENT_RESULTS_WINDOW_DAYS = 30
 SEARCH_RESULT_LIMIT = 20
+DRAW_METADATA_TTL_SECONDS = 6 * 60 * 60
+EMPTY_DRAW_METADATA_TTL_SECONDS = 15 * 60
+DRAW_METADATA_STALE_TTL_SECONDS = 24 * 60 * 60
+DRAW_REQUEST_RETRY_SECONDS = 15 * 60
 
 FIRST_PLAYER_TOKENS = ("first player", "first play", "player 1", "1")
 SECOND_PLAYER_TOKENS = ("second player", "second play", "player 2", "2")
@@ -732,6 +739,12 @@ async def map_livescore_row_to_snapshot(
 # ------------------------------------------------------------------ provider
 
 
+@dataclass(frozen=True)
+class _TournamentDraw:
+    surface: str | None
+    rounds_by_match_key: dict[str, str]
+
+
 class ApiTennisProvider:
     def __init__(
         self,
@@ -749,6 +762,10 @@ class ApiTennisProvider:
         self._now = now
         self._product_timezone = ZoneInfo(product_timezone)
         self._directory = directory
+        self._draw_cache: AsyncTTLCache[tuple[str, str], _TournamentDraw] = (
+            AsyncTTLCache(max_entries=64)
+        )
+        self._draw_retry_after: dict[tuple[str, str], float] = {}
 
     async def _request(
         self, method: str, extra_params: dict[str, Any] | None = None
@@ -818,26 +835,118 @@ class ApiTennisProvider:
         parsed = self._validate(ApiTennisResponse[list[MatchDto]], payload)
         return list(parsed.result or [])
 
-    async def _draw_surface(self, dto: MatchDto) -> str | None:
+    async def _draw_metadata(self, dto: MatchDto) -> _TournamentDraw | None:
         if dto.tournament_key is None:
             return None
-        params: dict[str, Any] = {
-            "timezone": "GMT",
-            "tournament_key": str(dto.tournament_key),
-        }
-        if dto.tournament_season:
-            params["tournament_season"] = dto.tournament_season
+        cache_key = (str(dto.tournament_key), dto.tournament_season or "")
+
+        async def load_draw() -> _TournamentDraw:
+            now = monotonic()
+            if self._draw_retry_after.get(cache_key, 0) > now:
+                raise AppError(
+                    "provider_unavailable",
+                    "Tournament draw lookup is temporarily deferred",
+                    503,
+                )
+            params: dict[str, Any] = {
+                "timezone": "GMT",
+                "tournament_key": cache_key[0],
+                "include_qualification": "1",
+            }
+            if cache_key[1]:
+                params["tournament_season"] = cache_key[1]
+            try:
+                payload = await self._request("get_draw", params)
+                parsed = self._validate(ApiTennisResponse[DrawResultDto], payload)
+            except AppError:
+                # Draw metadata is optional. Avoid retrying a failed or
+                # unsupported endpoint on every fixture refresh.
+                self._draw_retry_after[cache_key] = (
+                    monotonic() + DRAW_REQUEST_RETRY_SECONDS
+                )
+                raise
+
+            self._draw_retry_after.pop(cache_key, None)
+            result = parsed.result
+            if result is None:
+                return _TournamentDraw(surface=None, rounds_by_match_key={})
+
+            round_candidates: dict[str, set[str]] = {}
+            for bracket in result.brackets:
+                rounds = bracket.get("rounds")
+                if not isinstance(rounds, list):
+                    continue
+                for draw_round in rounds:
+                    if not isinstance(draw_round, dict):
+                        continue
+                    round_name = draw_round.get("round_name")
+                    if not isinstance(round_name, str) or not round_name.strip():
+                        continue
+                    matches = draw_round.get("matches")
+                    if not isinstance(matches, list):
+                        continue
+                    for draw_match in matches:
+                        if not isinstance(draw_match, dict):
+                            continue
+                        match_key = draw_match.get("match_key")
+                        if not isinstance(match_key, (str, int)):
+                            continue
+                        key = str(match_key).strip()
+                        if key:
+                            round_candidates.setdefault(key, set()).add(
+                                round_name.strip()
+                            )
+
+            tournament = result.tournament
+            surface = normalize_surface(
+                tournament.tournament_surface if tournament is not None else None
+            )
+            unambiguous_rounds = {
+                match_key: next(iter(round_names))
+                for match_key, round_names in round_candidates.items()
+                if len(round_names) == 1
+            }
+            return _TournamentDraw(
+                surface=surface,
+                rounds_by_match_key=unambiguous_rounds,
+            )
+
         try:
-            payload = await self._request("get_draw", params)
-            parsed = self._validate(ApiTennisResponse[DrawResultDto], payload)
+            outcome = await self._draw_cache.get_or_load(
+                cache_key,
+                load_draw,
+                ttl=lambda draw: (
+                    DRAW_METADATA_TTL_SECONDS
+                    if draw.rounds_by_match_key
+                    else EMPTY_DRAW_METADATA_TTL_SECONDS
+                ),
+                stale_ttl=DRAW_METADATA_STALE_TTL_SECONDS,
+            )
         except AppError:
-            # Draw metadata is an optional enrichment. A plan limitation or a
-            # missing draw must not hide an otherwise valid match snapshot.
             return None
-        tournament = parsed.result.tournament if parsed.result else None
-        return normalize_surface(
-            tournament.tournament_surface if tournament is not None else None
-        )
+        return outcome.value
+
+    async def _draw_surface(self, dto: MatchDto) -> str | None:
+        draw = await self._draw_metadata(dto)
+        return draw.surface if draw is not None else None
+
+    async def _correct_suspect_round(
+        self, dto: MatchDto, match: Match
+    ) -> Match:
+        raw_round = (dto.tournament_round or "").strip()
+        normalized_round = " ".join(raw_round.casefold().replace("-", " ").split())
+        if re.search(r"\bsemi\s*finals?\b", normalized_round) is None:
+            return match
+
+        draw = await self._draw_metadata(dto)
+        stage = draw.rounds_by_match_key.get(str(dto.event_key)) if draw else None
+        if not stage:
+            return match
+
+        prefix = raw_round.rsplit(" - ", 1)[0].strip() if " - " in raw_round else ""
+        prefix = prefix or match.tournament.name.strip()
+        corrected_round = f"{prefix} - {stage}" if prefix else stage
+        return match.model_copy(update={"round": corrected_round})
 
     @staticmethod
     def _filter(matches: list[Match], player_id: str | None) -> list[Match]:
@@ -859,11 +968,11 @@ class ApiTennisProvider:
                 return []
             params["player_key"] = external_id
         rows = await self._match_rows("get_livescore", params)
-        mapped = [
-            match
-            for dto in rows
-            if (match := await map_match(dto, self._identities, self._now)) is not None
-        ]
+        mapped = []
+        for dto in rows:
+            match = await map_match(dto, self._identities, self._now)
+            if match is not None:
+                mapped.append(await self._correct_suspect_round(dto, match))
         live = [match for match in mapped if match.status is MatchStatus.LIVE]
         return self._filter(live, player_id)
 
@@ -877,11 +986,11 @@ class ApiTennisProvider:
                 return []
             params["player_key"] = external_id
         rows = await self._match_rows("get_fixtures", params)
-        mapped = [
-            match
-            for dto in rows
-            if (match := await map_match(dto, self._identities, self._now)) is not None
-        ]
+        mapped = []
+        for dto in rows:
+            match = await map_match(dto, self._identities, self._now)
+            if match is not None:
+                mapped.append(await self._correct_suspect_round(dto, match))
         scheduled = [match for match in mapped if match.status is MatchStatus.SCHEDULED]
         return self._filter(scheduled, player_id)
 
@@ -1068,7 +1177,7 @@ class ApiTennisProvider:
         )
         if match is None:
             raise AppError("not_found", "Match not found", 404)
-        return match
+        return await self._correct_suspect_round(rows[0], match)
 
     async def get_match_snapshot(
         self, match_id: str, *, include_surface: bool = True
@@ -1093,6 +1202,10 @@ class ApiTennisProvider:
         )
         if snapshot is None:
             raise AppError("not_found", "Match not found", 404)
+        if include_surface:
+            corrected = await self._correct_suspect_round(rows[0], snapshot.match)
+            if corrected is not snapshot.match:
+                snapshot = snapshot.model_copy(update={"match": corrected})
         return snapshot
 
     async def get_recent_results(self, player_id: str, *, limit: int) -> list[Match]:
