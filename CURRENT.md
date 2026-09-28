@@ -4,22 +4,23 @@
 
 **最后更新：** 2026-09-28（北京时间）
 
-**当前主任务：** T113 — 本地启动器前端端口回退与真实运行验收（`in_progress`）。用户已批准执行完整 `init`（包括可能的 LLM 中文名补齐），随后在端口 3101 启动并检查真实服务；3100 上其他 ADE 的进程保持不动。T110 私人测试服务器部署仍因磁盘和访问边界决策而 `blocked`。
+**当前主任务：** T113 — 本地启动器前端备用端口与真实运行验收（`blocked`）。端口回退实现已完成；本地初始化成功，但真实启动被 Polymarket Gamma/CLOB 主机的 TLS 自签名证书错误阻断。TLS 验证保持开启，未绕过；等待可信网络/证书链恢复后再完成 3101 实测。3100 上其他 ADE 的进程保持不动。T110 私人测试服务器部署仍 `blocked`。
 
-**最近任务：** T113 — 本地启动器前端备用端口与真实运行验收（`in_progress`，实现 `ea1d760`）；T112 — Polymarket 规则链路修复（`done`，实现 `6b7de72`）；T111 — 修复比赛阶段显示（`done`，`84a344e`）；T110 — 私人测试服务器部署（`blocked`）。
+**最近任务：** T113 — 本地启动器前端备用端口与真实运行验收（`blocked`，实现 `ea1d760`）；T112 — Polymarket 规则链路修复（`done`，实现 `6b7de72`）；T111 — 修复比赛阶段显示（`done`，`84a344e`）；T110 — 私人测试服务器部署（`blocked`）。
 
 **最近执行者 / ADE / 分支：** Codex / 本地 ADE / `main`；T113 从 `2835e19` 开始，领取记录 `7d5d325`，实现 `ea1d760`；T112 领取 `6be5fae`、实现 `6b7de72` 已推送到 `origin/main`。所有已记录的用户工作区改动均保留且未纳入任务提交。
 
 **运行手册与证据：** [本地真实运行手册](docs/runbooks/local-real-runtime.md)。
 
-## T113 本地启动器前端备用端口（`in_progress`）
+## T113 本地启动器前端备用端口（`blocked`）
 
 - **领取与实现：** 初次领取于 2026-09-28 17:54 CST；Codex / 本地 ADE / `main`；起始 HEAD `2835e19`；领取 `7d5d325`；代码、回归与手册 `ea1d760`。用户批准初始化后于 2026-09-28 18:10 CST 恢复执行；恢复基线 `88c4281`。
 - **实现与边界：** `tennix-live up` 优先使用 3100，若被其他进程占用则使用 3101，并打印实际地址；两个端口均被占用时安全拒绝，不向外部进程发送信号。用户已批准此行为。3100 当前由另一 ADE 的 Vite 预览占用，未停止该进程。
 - **代码验证：** 新增端口选择回归先按预期失败，再通过；启动器 `63 passed`，完整后端确定性套件 `1379 passed, 131 deselected`，改动文件 Ruff lint/format 与 `git diff --check` 通过。
 - **已批准恢复：** 用户于 2026-09-28 明确批准现在开始完整初始化。按运行手册执行唯一受支持的 `./scripts/tennix-live init`；它会迁移专用本地 schema、同步赛程/排名与目录，并可能批量调用 LLM 补齐中文名。此前 schema 为 `0008`，T112 要求 `0009`；不手工绕过启动器迁移，不清空数据库或 Paper ledger。
-- **运行验收节点（2026-09-28 18:21 CST）：** 获批的 `init` 成功，数据库迁移到 `0009`，同步摘要 `players=3979 matches=281`。`up` 因 180 秒内未达到必需的首次健康发现而返回 `LOCAL_RUNTIME_UNHEALTHY`；按启动器保护逻辑仅停止本次 Tennix runtime，API/frontend 未启动。随后 `status` 确认 PostgreSQL/Redis healthy、Tennix 子进程均停止，Polymarket 为 `STARTUP_RECOVERY`，首次发现需要的 `tennis_live` / `live_catalog` 未出现，schedule/rankings 当前未知。3100 的其他 ADE 未触碰。
-- **下一步：** 按运行手册执行不调用 LLM 的只读 `./scripts/tennix-live verify`，逐一确认供应商 REST/WS 可用性与安静时段 skip；结合实际结果判断首次发现超时来自上游连通性、当下无 live 比赛还是运行时健康状态映射。根因未确认前不绕过健康门或手工单独拉起 API/frontend。
+- **运行验收节点（2026-09-28 18:27 CST）：** 获批的 `init` 成功，数据库迁移到 `0009`，同步摘要 `players=3979 matches=281`。`up` 因 180 秒内未达到必需的首次健康发现而返回 `LOCAL_RUNTIME_UNHEALTHY`；按启动器保护逻辑仅停止本次 Tennix runtime，API/frontend 未启动。失败后 `status` 确认 PostgreSQL/Redis healthy、Tennix 子进程均停止；3100 的其他 ADE 未触碰。
+- **根因证据：** 不调用 LLM 的只读 `verify` 为 3 passed（API-Tennis 排名、赛程目录、网球 WebSocket）、4 skipped（无已映射/活跃盘口，LLM 未请求）、1 failed（Polymarket `market_discovery: PROVIDER_UNAVAILABLE`）。匿名只读 TLS 探测中，Gamma `/tags/slug/tennis` 和 CLOB `/time` 均返回 curl error 60 / TLS verify result 18：证书为自签名、当前信任链无法验证。故障发生于 HTTPS 证书验证，不是 API key、无 live 比赛或市场匹配空结果；尚不能断言是 IP 封锁。没有关闭 TLS 校验。
+- **阻塞与下一步：** 需要恢复 Polymarket 主机的有效 TLS 信任链（确认当前网络/证书链，或配置经用户批准的显式代理与 CA）。不使用 `verify=False`、不跳过市场首次发现健康门、不手工单独启动 API/frontend。TLS 恢复后重跑只读 `verify`，再 `up` 验证 3101 与真实页面。
 - **边界：** 根 `.env` 仅由启动器读取，不输出凭据；不终止 3100 的其他 ADE 进程，不删除或重置运行数据，不改变市场模型晋升或 paper-only 边界；所有已有用户工作区改动继续保留且不纳入提交。
 
 ## T112 修复 Polymarket 市场规则链路（`done`）
@@ -259,7 +260,7 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
-| 2026-09-28 | `ea1d760` / `7d5d325` | T113 启动器现支持前端默认 3100、占用时回退 3101；确定性回归通过。用户已批准完整 `init` 与可能的 LLM 配额消耗；恢复真实初始化及 3101 运行验收，其他 ADE 的 3100 进程保持不动。 |
+| 2026-09-28 | `90ba194` / `fd22892` / `ea1d760` | T113 端口回退实现与回归已交付；获批 `init` 成功（schema `0009`，3979 players / 281 matches）。真实 `up` 被 Gamma/CLOB 自签名 TLS 证书链阻断，安全超时后未启动 API/frontend；`verify` 确认 API-Tennis 三项通过、Polymarket market discovery 失败。未绕过 TLS，3100 的其他 ADE 未触碰。 |
 | 2026-09-28 | `6b7de72` | T112 完成：修复 Polymarket 官方规则字段读取、规则版本历史、扫描新鲜度与 BUY/SELL/Paper 安全门；后端 `1377 passed`、前端 `536 passed`、类型检查及 Ruff lint 通过。Gamma 实时 API 比对因 TLS 证书验证失败未完成；共享数据库未迁移、服务未重启。 |
 | 2026-09-28 | `6be5fae` | 领取 T112 市场规则链路修复；从 `main`/`5d31ba0` 开始，保留已有用户工作区改动。 |
 | 2026-09-27 | 先前领取记录 | T110 私人测试服务器 Docker 部署只读预检发现远端磁盘满、现有 Nginx/DEUCE 服务及公网访问安全决策待处理；未修改远端状态。 |
