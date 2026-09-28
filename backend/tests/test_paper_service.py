@@ -101,6 +101,18 @@ async def test_first_buy_creates_one_entry_intent_and_requotes_after_delay(env):
     assert fill_index < filled_publish_index
 
 
+async def test_buy_without_market_rules_creates_no_intent(env):
+    await env["service"].on_decision(
+        env["buy_observation"],
+        book=env["book"],
+        metadata=env["metadata"],
+        rules_hash=None,
+    )
+
+    assert await env["ledger"].load_all_intents() == []
+    assert env["published"] == []
+
+
 async def test_insufficient_depth_after_delay_is_missed_not_partial(env):
     service, ledger, clock = env["service"], env["ledger"], env["clock"]
     await service.on_decision(

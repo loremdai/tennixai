@@ -123,6 +123,7 @@ const REASON_LABELS: Record<string, string> = {
   OUT_OF_DOMAIN: '该场比赛暂未提供胜率估算',
   DATA_INCOMPLETE: '比赛数据不完整，暂时无法评估',
   MODEL_DISAGREEMENT: '不同分析结果不一致，暂不提供建议',
+  RULES_UNAVAILABLE: '市场规则暂未确认，已暂停新的模拟操作',
   RULE_CHANGED: '市场规则有变化，已暂停新的模拟操作',
   STALE: '市场报价更新较慢，已暂停新的模拟操作',
   GAP: '比赛数据更新中断，已暂停新的模拟操作',

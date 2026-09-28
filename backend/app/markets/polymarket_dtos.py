@@ -57,8 +57,8 @@ class GammaMarketDto(VendorModel):
     automaticallyResolved: bool | None = None  # noqa: N815 - vendor wire name
     negRisk: bool | None = None  # noqa: N815 - vendor wire name
     enableOrderBook: bool | None = None  # noqa: N815 - vendor wire name
-    rules: str | None = None
-    resolvedBy: str | None = None  # noqa: N815 - vendor wire name
+    description: str | None = None
+    resolutionSource: str | None = None  # noqa: N815 - vendor wire name
 
     @field_validator("outcomes", "outcomePrices", "clobTokenIds", mode="before")
     @classmethod

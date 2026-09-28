@@ -358,8 +358,12 @@ def create_app(
                     return await self._provider.get_execution_metadata(market_id)
 
                 async def get_rules_hash(self, market_id: str):
-                    rules = await self._provider.get_rules(market_id)
-                    return rules.rules_hash
+                    # This fallback graph has no complete catalog scan, so
+                    # persisted/provider rules cannot authorize a new action.
+                    return None
+
+                async def get_rules_changed(self, market_id: str):
+                    return False
 
                 async def get_frozen_rules_hash(self, match_id: str):
                     for intent in await self._ledger.load_all_intents():

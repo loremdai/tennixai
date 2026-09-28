@@ -142,6 +142,9 @@ async def test_restart_resumes_decision_cursor_and_durable_demand(
             async def get_rules_hash(self, market_id):
                 return "rules_v1"
 
+            async def get_rules_changed(self, market_id):
+                return False
+
             async def get_frozen_rules_hash(self, match_id):
                 return None
 

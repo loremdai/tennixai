@@ -51,6 +51,7 @@ class DecisionInput:
     book: OrderBookState | None = None
     metadata: MarketExecutionMetadata | None = None
     rules_current_hash: str | None = None
+    rules_changed: bool = False
     rules_frozen_hash: str | None = None
     position: PaperPosition | None = None
     is_stale: bool = False
@@ -127,13 +128,21 @@ class DecisionEngine:
             )
 
         # 2. Rule stability gate.
-        rules_changed = (
+        frozen_rules_changed = (
             data.rules_frozen_hash is not None
             and data.rules_current_hash != data.rules_frozen_hash
         )
-        if not gate("rules", not rules_changed, "RULE_CHANGED"):
+        rules_changed = data.rules_changed or frozen_rules_changed
+        rules_available = bool(data.rules_current_hash)
+        rules_reason = "RULE_CHANGED" if rules_changed else "RULES_UNAVAILABLE"
+        if not gate("rules", rules_available and not rules_changed, rules_reason):
             return observation(
-                DecisionAction.NO_BET, reason=DecisionReason.RULE_CHANGED.value
+                DecisionAction.NO_BET,
+                reason=(
+                    DecisionReason.RULE_CHANGED.value
+                    if rules_changed
+                    else DecisionReason.RULES_UNAVAILABLE.value
+                ),
             )
 
         # 3. Model availability gates.

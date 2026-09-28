@@ -117,6 +117,7 @@ class MarketListingScan(FrozenModel):
 
     listings: tuple[MarketListing, ...]
     complete: bool
+    rules: tuple["MarketRules", ...] = ()
 
 
 class MarketExternalId(FrozenModel):

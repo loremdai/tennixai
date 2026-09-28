@@ -334,6 +334,11 @@ describe('toMarketRow', () => {
     expect(row.reason).toBe('评估标准更新，暂不提供判断')
   })
 
+  it('explains when market rules are unavailable', () => {
+    const row = toMarketRow(summary({ reason_code: 'RULES_UNAVAILABLE' }), NOW)
+    expect(row.reason).toBe('市场规则暂不可用，暂不提供判断')
+  })
+
   it('does not present a missing market phase as completed', () => {
     expect(toMarketRow(summary({ phase: null, status: 'unknown' }), NOW).phase).toBe(
       'unknown',

@@ -414,10 +414,7 @@ class MarketRuleRow(Base):
     """Immutable per-version rules audit snapshot; evidence for decisions."""
 
     __tablename__ = "market_rules"
-    __table_args__ = (
-        UniqueConstraint("market_id", "version"),
-        UniqueConstraint("market_id", "rules_hash"),
-    )
+    __table_args__ = (UniqueConstraint("market_id", "version"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     market_id: Mapped[str] = mapped_column(
@@ -426,7 +423,7 @@ class MarketRuleRow(Base):
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     rules_text: Mapped[str] = mapped_column(Text, nullable=False)
     rules_hash: Mapped[str] = mapped_column(String(128), nullable=False)
-    resolution_source: Mapped[str] = mapped_column(String(64), nullable=False)
+    resolution_source: Mapped[str] = mapped_column(Text, nullable=False)
     edge_case_semantics: Mapped[str | None] = mapped_column(Text)
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 

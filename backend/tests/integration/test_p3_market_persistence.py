@@ -140,10 +140,11 @@ async def test_rules_are_hashed_versioned_and_idempotent(
     )
     await repository.save_market(make_market(internal_id))
 
-    first = await repository.save_rules(make_rules(internal_id, rules_hash="hash_a"))
-    repeated = await repository.save_rules(make_rules(internal_id, rules_hash="hash_a"))
-    assert first == 1
-    assert repeated == 1
+    first, repeated = await asyncio.gather(
+        repository.save_rules(make_rules(internal_id, rules_hash="hash_a")),
+        repository.save_rules(make_rules(internal_id, rules_hash="hash_a")),
+    )
+    assert first == repeated == 1
 
     second = await repository.save_rules(make_rules(internal_id, rules_hash="hash_b"))
     assert second == 2
@@ -161,6 +162,45 @@ async def test_rules_are_hashed_versioned_and_idempotent(
             .where(MarketRuleRow.market_id == internal_id)
         )
     assert count == 2
+
+
+async def test_rules_return_to_prior_hash_creates_new_chronological_version(
+    database: Database,
+) -> None:
+    repository = MarketRepository(database)
+    market_id = await repository.get_or_create_market_id(
+        provider="polymarket",
+        provider_event_id="ev_itest_rules_return",
+        condition_id=f"0x{uuid4().hex}",
+    )
+    await repository.save_market(make_market(market_id))
+
+    first = make_rules(market_id, rules_hash="hash_a")
+    second = make_rules(market_id, rules_hash="hash_b")
+    returned = first.model_copy(update={"fetched_at": NOW + timedelta(minutes=2)})
+    assert await repository.save_rules(first) == 1
+    assert await repository.save_rules(second) == 2
+    assert await repository.save_rules(returned) == 3
+    assert await repository.save_rules(returned) == 3
+
+    current = await repository.get_current_rules(market_id)
+    assert current is not None
+    assert current[1] == 3
+    assert current[0].rules_hash == "hash_a"
+    assert current[0].fetched_at == returned.fetched_at
+    async with database.session() as session:
+        hashes = (
+            (
+                await session.execute(
+                    select(MarketRuleRow.rules_hash)
+                    .where(MarketRuleRow.market_id == market_id)
+                    .order_by(MarketRuleRow.version)
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert hashes == ["hash_a", "hash_b", "hash_a"]
 
 
 async def test_one_active_link_per_match_with_replacement_before_intent(

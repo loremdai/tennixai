@@ -37,6 +37,7 @@ class FakeBookSource:
         self.book = INPUTS["book"]
         self.metadata = INPUTS["metadata"]
         self.rules_hash = "rules_v1"
+        self.rules_changed = False
         self.frozen_rules_hash: str | None = None
 
     async def get_book(self, market_id: str):
@@ -47,6 +48,9 @@ class FakeBookSource:
 
     async def get_rules_hash(self, market_id: str):
         return self.rules_hash
+
+    async def get_rules_changed(self, market_id: str):
+        return self.rules_changed
 
     async def get_frozen_rules_hash(self, match_id: str):
         return self.frozen_rules_hash
@@ -245,6 +249,17 @@ async def test_rule_change_suppresses_actions(env):
     env["books"].rules_hash = "rules_v1"
 
     await worker.handle_sports("mat_1", snapshot=None)
+
+    saved = env["observations"].saved
+    assert saved[0].action is DecisionAction.NO_BET
+    assert saved[0].reason_code == "RULE_CHANGED"
+    assert env["paper"].decisions == []
+
+
+async def test_market_rule_version_change_suppresses_actions(env):
+    env["books"].rules_changed = True
+
+    await env["worker"].handle_sports("mat_1", snapshot=None)
 
     saved = env["observations"].saved
     assert saved[0].action is DecisionAction.NO_BET

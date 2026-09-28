@@ -231,12 +231,14 @@ class DecisionWorker:
         book = None
         metadata = None
         rules_current = None
+        rules_changed = False
         if market_id is not None:
             book = self._latest_book.get(market_id) or await self._books.get_book(
                 market_id
             )
             metadata = await self._books.get_metadata(market_id)
             rules_current = await self._books.get_rules_hash(market_id)
+            rules_changed = await self._books.get_rules_changed(market_id)
         rules_frozen = await self._books.get_frozen_rules_hash(match_id)
         position = await self._positions.get_position(match_id)
 
@@ -260,6 +262,7 @@ class DecisionWorker:
             book=book,
             metadata=metadata,
             rules_current_hash=rules_current,
+            rules_changed=rules_changed,
             rules_frozen_hash=rules_frozen,
             position=position,
             is_stale=overlay_stale or bool(book is not None and book.is_stale),

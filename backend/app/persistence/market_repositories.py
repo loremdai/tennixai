@@ -399,25 +399,26 @@ class MarketRepository:
 
     async def save_rules(self, rules: MarketRules) -> int:
         """Store an immutable rules snapshot; returns its per-market version.
-        Re-saving the same hash is idempotent."""
+        Re-saving the latest hash refreshes its confirmation time; A→B→A
+        creates a new chronological version."""
         async with self._database.session() as session:
             async with session.begin():
-                existing = await session.scalar(
-                    select(MarketRuleRow.version).where(
-                        MarketRuleRow.market_id == rules.market_id,
-                        MarketRuleRow.rules_hash == rules.rules_hash,
-                    )
+                await session.scalar(
+                    select(MarketRow.id)
+                    .where(MarketRow.id == rules.market_id)
+                    .with_for_update()
                 )
-                if existing is not None:
-                    return int(existing)
-                next_version = (
-                    await session.scalar(
-                        select(func.coalesce(func.max(MarketRuleRow.version), 0)).where(
-                            MarketRuleRow.market_id == rules.market_id
-                        )
-                    )
-                    or 0
-                ) + 1
+                latest = await session.scalar(
+                    select(MarketRuleRow)
+                    .where(MarketRuleRow.market_id == rules.market_id)
+                    .order_by(MarketRuleRow.version.desc())
+                    .limit(1)
+                )
+                if latest is not None and latest.rules_hash == rules.rules_hash:
+                    if rules.fetched_at > latest.fetched_at:
+                        latest.fetched_at = rules.fetched_at
+                    return int(latest.version)
+                next_version = (latest.version if latest is not None else 0) + 1
                 session.add(
                     MarketRuleRow(
                         market_id=rules.market_id,

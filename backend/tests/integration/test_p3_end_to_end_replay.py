@@ -222,6 +222,9 @@ class HotBookSource:
     async def get_rules_hash(self, market_id: str):
         return "rules_dual_v1"
 
+    async def get_rules_changed(self, market_id: str):
+        return False
+
     async def get_frozen_rules_hash(self, match_id: str):
         for intent in await self._ledger.load_all_intents():
             if intent.match_id == match_id:

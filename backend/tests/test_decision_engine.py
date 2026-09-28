@@ -173,6 +173,24 @@ def test_unmapped_market_is_market_only(engine):
     assert observation.reason_code == "MARKET_UNMAPPED"
 
 
+def test_missing_market_rules_block_action(engine):
+    observation = engine.evaluate(base_input(rules_current_hash=None))
+
+    assert observation.action is DecisionAction.NO_BET
+    assert observation.reason_code == "RULES_UNAVAILABLE"
+    assert any(
+        gate.gate == "rules" and gate.reason_code == "RULES_UNAVAILABLE"
+        for gate in observation.gates
+    )
+
+
+def test_unreviewed_rule_change_blocks_new_action(engine):
+    observation = engine.evaluate(base_input(rules_changed=True))
+
+    assert observation.action is DecisionAction.NO_BET
+    assert observation.reason_code == "RULE_CHANGED"
+
+
 def test_unpromoted_model_is_no_bet(engine):
     observation = engine.evaluate(
         base_input(

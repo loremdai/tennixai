@@ -129,6 +129,7 @@ const REASON_LABELS: Record<string, string> = {
   OUT_OF_DOMAIN: '目前仅显示市场报价',
   DATA_INCOMPLETE: '比赛数据不完整，暂不提供判断',
   MODEL_DISAGREEMENT: '模型判断不一致，暂不提供建议',
+  RULES_UNAVAILABLE: '市场规则暂不可用，暂不提供判断',
   RULE_CHANGED: '评估标准更新，暂不提供判断',
   STALE: '市场报价更新较慢，相关判断已暂停',
   GAP: '比赛数据更新中断，相关判断已暂停',

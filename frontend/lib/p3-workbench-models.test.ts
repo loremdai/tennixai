@@ -45,4 +45,14 @@ describe('toDecisionSummaryModel', () => {
     expect(model.selectionLabel).toBe('Jannik Sinner')
     expect(model.selectionLocalizedName).toBe('扬尼克·辛纳')
   })
+
+  it('explains that missing market rules pause paper decisions', () => {
+    const model = toDecisionSummaryModel(
+      { ...snapshot, action: 'no_bet', reason_code: 'RULES_UNAVAILABLE' },
+      'Jannik Sinner',
+      NOW,
+    )
+
+    expect(model.reason).toBe('市场规则暂未确认，已暂停新的模拟操作')
+  })
 })

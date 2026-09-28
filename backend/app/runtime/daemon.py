@@ -27,7 +27,6 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from app.domain import MatchStatus
-from app.errors import AppError
 from app.markets.mapping import (
     LinkDecision,
     MappingStatus,
@@ -40,6 +39,7 @@ from app.markets.models import (
     MarketStatus,
     ResolutionStatus,
 )
+from app.markets.rules_index import MarketRulesIndex, RuleAuthorization
 from app.markets.quotes import realtime_quote_record
 from app.persistence.market_repositories import LinkFrozenError
 from app.runtime.health import (
@@ -287,6 +287,7 @@ class LocalRuntimeDaemon:
         resolver: Any,
         metrics: Any = None,
         metadata_cache: TtlCache | None = None,
+        rules_index: MarketRulesIndex | None = None,
         quote_job: Any = None,
         quote_snapshots: Any = None,
         catalog_quote_feed: Any = None,
@@ -339,6 +340,10 @@ class LocalRuntimeDaemon:
             market_provider.get_execution_metadata,
             clock,
             ttl=timedelta(seconds=market_discovery_seconds),
+        )
+        self._rules_index = rules_index or MarketRulesIndex(
+            now=clock,
+            max_age=timedelta(seconds=market_discovery_seconds * 2),
         )
         self._alias_synced: set[str] = set()
         # Per-class rotation cursors for the bounded resolution recheck plus
@@ -642,9 +647,11 @@ class LocalRuntimeDaemon:
             raise RuntimeJobError("RANKINGS_SYNC_FAILED")
 
     async def _discover_markets(self) -> None:
+        self._rules_index.invalidate()
         scan: MarketListingScan = (
             await self._market_provider.list_tennis_market_listings()
         )
+        rules_by_market = {rules.market_id: rules for rules in scan.rules}
         now = self._clock()
         changed = await self._markets.reconcile_market_listings(scan, observed_at=now)
         if changed and self._quote_change_notifier is not None:
@@ -658,6 +665,7 @@ class LocalRuntimeDaemon:
             for row in await self._markets.list_active_links()
         }
         failures: list[str] = []
+        authorizations: dict[str, RuleAuthorization] = {}
         for listing in scan.listings:
             market = listing.to_market()
             if market is None:
@@ -669,21 +677,18 @@ class LocalRuntimeDaemon:
                     market, candidates, current_by_match
                 )
                 if mapped:
-                    await self._capture_rules(market.id)
+                    rules = rules_by_market.get(market.id)
+                    if rules is not None:
+                        version = await self._markets.save_rules(rules)
+                        authorizations[market.id] = RuleAuthorization(
+                            rules_hash=rules.rules_hash, version=version
+                        )
             except Exception as exc:  # noqa: BLE001 - one bad market never
                 failures.append(stable_reason_code(exc))  # aborts the batch
         if failures:
             raise RuntimeJobError(failures[0])
-
-    async def _capture_rules(self, market_id: str) -> None:
-        try:
-            rules = await self._market_provider.get_rules(market_id)
-        except AppError as exc:
-            if exc.code == "not_found":
-                # Rules are optional upstream; the market stays visible.
-                return
-            raise
-        await self._markets.save_rules(rules)
+        if scan.complete:
+            self._rules_index.publish(authorizations)
 
     async def _link_if_strict_match(
         self, market: Any, candidates: list[Any], current_by_match: dict[str, str]
@@ -744,10 +749,6 @@ class LocalRuntimeDaemon:
                 # Provider final resolutions route ONLY through the decision
                 # worker's settlement path; then notify live readers.
                 await self._apply_final_resolution(market_id, resolution)
-            # Rules maintenance is best-effort re-refresh; a rules fetch
-            # failure never blocks resolution routing nor aborts the batch.
-            with contextlib.suppress(Exception):
-                await self._capture_rules(market_id)
         if failures:
             raise RuntimeJobError(failures[0])
 

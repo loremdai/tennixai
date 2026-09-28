@@ -40,6 +40,7 @@ from app.markets.models import (
     MarketStatus,
     ResolutionStatus,
 )
+from app.markets.rules_index import MarketRulesIndex, RuleAuthorization
 from app.persistence.market_repositories import LinkFrozenError
 from app.players.models import PlayerResolution, PlayerResolutionStatus
 from app.players.sync import DirectorySyncReport
@@ -233,6 +234,7 @@ class FakeMarketProvider:
         self.metadata_raises: Exception | None = None
         self.discovery_calls = 0
         self.rules_calls: list[str] = []
+        self.scan_raises: Exception | None = None
         self.resolution_calls: list[str] = []
         self.metadata_calls: list[str] = []
 
@@ -244,6 +246,8 @@ class FakeMarketProvider:
     async def list_tennis_market_listings(self) -> MarketListingScan:
         self.log.append("job:market_discovery")
         self.discovery_calls += 1
+        if self.scan_raises is not None:
+            raise self.scan_raises
         if self.listing_scan is not None:
             return self.listing_scan
         return MarketListingScan(
@@ -268,6 +272,11 @@ class FakeMarketProvider:
                 for market in self.markets
             ),
             complete=True,
+            rules=tuple(
+                self.rules[market.id]
+                for market in self.markets
+                if market.id in self.rules and market.id not in self.rules_missing
+            ),
         )
 
     async def get_rules(self, market_id: str):
@@ -293,6 +302,8 @@ class FakeMarketsRepo:
         self.saved_listings: list[str] = []
         self.reconciled_scans: list[MarketListingScan] = []
         self.saved_rules: list[str] = []
+        self.rule_versions: dict[str, int] = {}
+        self.rule_hashes: dict[str, str] = {}
         self.links: list[tuple[str, str]] = []
         self.link_evidence: list[dict] = []
         self.active_links_rows: list[LinkRow] = []
@@ -311,7 +322,12 @@ class FakeMarketsRepo:
 
     async def save_rules(self, rules) -> int:
         self.saved_rules.append(rules.market_id)
-        return 1
+        if self.rule_hashes.get(rules.market_id) == rules.rules_hash:
+            return self.rule_versions[rules.market_id]
+        version = self.rule_versions.get(rules.market_id, 0) + 1
+        self.rule_versions[rules.market_id] = version
+        self.rule_hashes[rules.market_id] = rules.rules_hash
+        return version
 
     async def list_active_links(self) -> list[LinkRow]:
         return list(self.active_links_rows)
@@ -518,6 +534,7 @@ def make_daemon(
         "metadata_cache": None,
         "resolution_hints": set(),
     }
+    parts["rules_index"] = MarketRulesIndex(now=clock.now, max_age=timedelta(minutes=4))
     parts.update(overrides)
     daemon = LocalRuntimeDaemon(
         realtime=parts["realtime"],
@@ -544,6 +561,7 @@ def make_daemon(
         market_snapshot_seconds=parts.get("market_snapshot_seconds", 120),
         tick_seconds=tick_seconds,
         resolution_hints=parts["resolution_hints"],
+        rules_index=parts["rules_index"],
     )
     return daemon, parts
 
@@ -810,9 +828,13 @@ async def test_discovery_saves_canonical_markets_and_only_strict_links():
     assert set(evidence["player_ids"]) == {"ply_a", "ply_b"}
     assert evidence["candidate_count"] == 1
     assert "http" not in json.dumps(evidence).lower()
-    # Rules were captured for the mapped market; a not_found rules response
-    # for the unmapped market is tolerated.
+    # Only the strict mapping's supplied rule snapshot is persisted.
     assert repo.saved_rules == ["mkt_mapped"]
+    authorization = parts["rules_index"].get("mkt_mapped")
+    assert authorization == RuleAuthorization(
+        rules_hash=provider.rules["mkt_mapped"].rules_hash, version=1
+    )
+    assert provider.rules_calls == []
     assert state.saved[-1].sources["market_discovery"].status is RuntimeSourceStatus.OK
 
 
@@ -840,14 +862,45 @@ async def test_discovery_reconciles_unresolved_and_doubles_as_display_only():
         complete=False,
     )
     provider.rules = {"mkt_mapped": make_rules("mkt_mapped")}
+    provider.listing_scan = provider.listing_scan.model_copy(
+        update={"rules": (provider.rules["mkt_mapped"],)}
+    )
 
     await daemon.tick_once()
 
     assert repo.reconciled_scans == [provider.listing_scan]
     assert repo.saved_listings == ["mkt_mapped", "mkt_unknown", "mkt_doubles"]
-    assert provider.rules_calls == ["mkt_mapped"]
+    assert provider.rules_calls == []
+    assert parts["rules_index"].get("mkt_mapped") is None
     assert repo.links == [("mkt_mapped", "mat_1")]
     assert state.saved[-1].sources["market_discovery"].status is RuntimeSourceStatus.OK
+
+
+async def test_incomplete_or_failed_market_scan_invalidates_old_rule_authorization():
+    daemon, parts = make_daemon()
+    provider: FakeMarketProvider = parts["market_provider"]
+    provider.markets = [make_provider_market("mkt_mapped")]
+    provider.rules = {"mkt_mapped": make_rules("mkt_mapped")}
+    parts["catalog_store"].rows["mat_1"] = make_match("mat_1")
+
+    await daemon._discover_markets()
+    assert parts["rules_index"].get("mkt_mapped") is not None
+
+    provider.listing_scan = MarketListingScan(
+        listings=(make_market_listing("mkt_mapped"),),
+        complete=False,
+        rules=(provider.rules["mkt_mapped"],),
+    )
+    await daemon._discover_markets()
+    assert parts["rules_index"].get("mkt_mapped") is None
+
+    parts["rules_index"].publish(
+        {"mkt_mapped": RuleAuthorization(rules_hash="old", version=1)}
+    )
+    provider.scan_raises = AppError("provider_unavailable", "offline", 503)
+    with pytest.raises(AppError):
+        await daemon._discover_markets()
+    assert parts["rules_index"].get("mkt_mapped") is None
 
 
 async def test_discovery_is_idempotent_for_identical_links():
@@ -1097,25 +1150,33 @@ async def test_hot_book_failure_degrades_paper_health_and_passes_none():
 
 
 # ---------------------------------------------------------------------------
-# Decision-path caching: metadata + rules fetched once per TTL window
+# Decision-path reads: metadata is cached; rules come from a fresh scan index.
 # ---------------------------------------------------------------------------
 
 
 def make_book_source(
     clock: FakeClock, provider: FakeMarketProvider
 ) -> _PublisherBookSource:
-    """Book source wired exactly like the assembly: shared metadata cache
-    shape plus the decision-only rules cache, both at the 120s cadence."""
+    """Book source wired like assembly without decision-path rule fetches."""
     ttl = timedelta(seconds=120)
+    rules_index = MarketRulesIndex(now=clock.now, max_age=timedelta(minutes=4))
+    if "mkt_1" in provider.rules:
+        rules_index.publish(
+            {
+                "mkt_1": RuleAuthorization(
+                    rules_hash=provider.rules["mkt_1"].rules_hash, version=1
+                )
+            }
+        )
     return _PublisherBookSource(
         None,
         None,
         metadata_cache=TtlCache(provider.get_execution_metadata, clock.now, ttl=ttl),
-        rules_cache=TtlCache(provider.get_rules, clock.now, ttl=ttl),
+        rules_index=rules_index,
     )
 
 
-async def test_decision_metadata_and_rules_fetch_once_per_ttl_window():
+async def test_decisions_use_fresh_scanned_rules_without_provider_fetch():
     clock = FakeClock()
     provider = FakeMarketProvider([])
     provider.metadata["mkt_1"] = INPUTS["metadata"]
@@ -1123,51 +1184,55 @@ async def test_decision_metadata_and_rules_fetch_once_per_ttl_window():
     books = make_book_source(clock, provider)
     rules_hash = provider.rules["mkt_1"].rules_hash
 
-    # Three decision cycles inside the TTL window hit the provider once each.
+    # Repeated decision reads do not call Gamma for rules.
     for _ in range(3):
         assert await books.get_metadata("mkt_1") is INPUTS["metadata"]
         assert await books.get_rules_hash("mkt_1") == rules_hash
         clock.advance(seconds=1)
     assert provider.metadata_calls == ["mkt_1"]
-    assert provider.rules_calls == ["mkt_1"]
+    assert provider.rules_calls == []
 
-    # Past the TTL window both are refetched exactly once.
+    # Metadata expires independently; rules stay within the four-minute
+    # complete-scan freshness window.
     clock.advance(seconds=120)
     await books.get_metadata("mkt_1")
-    await books.get_rules_hash("mkt_1")
+    assert await books.get_rules_hash("mkt_1") == rules_hash
     assert len(provider.metadata_calls) == 2
-    assert len(provider.rules_calls) == 2
+    assert provider.rules_calls == []
 
 
 async def test_decision_cache_failures_raise_and_never_poison():
     clock = FakeClock()
     provider = FakeMarketProvider([])
     provider.metadata_raises = AppError("rate_limited", "slow down", 429)
-    provider.rules_missing = {"mkt_1"}
     books = make_book_source(clock, provider)
 
     # A failed fetch raises unchanged (typed failure semantics apply).
     with pytest.raises(AppError):
         await books.get_metadata("mkt_1")
-    with pytest.raises(AppError):
-        await books.get_rules_hash("mkt_1")
+    assert await books.get_rules_hash("mkt_1") is None
 
     # The error was not cached: once the provider recovers the very next
     # cycle succeeds, and that success is what the TTL window serves.
     provider.metadata_raises = None
     provider.metadata["mkt_1"] = INPUTS["metadata"]
-    provider.rules_missing = set()
     provider.rules["mkt_1"] = make_rules("mkt_1")
     assert await books.get_metadata("mkt_1") is INPUTS["metadata"]
+    books._rules_index.publish(
+        {
+            "mkt_1": RuleAuthorization(
+                rules_hash=provider.rules["mkt_1"].rules_hash, version=1
+            )
+        }
+    )
     assert await books.get_rules_hash("mkt_1") == provider.rules["mkt_1"].rules_hash
-    calls_after_recovery = (len(provider.metadata_calls), len(provider.rules_calls))
+    calls_after_recovery = len(provider.metadata_calls)
 
     clock.advance(seconds=60)
     await books.get_metadata("mkt_1")
-    await books.get_rules_hash("mkt_1")
-    assert (len(provider.metadata_calls), len(provider.rules_calls)) == (
-        calls_after_recovery
-    )
+    assert await books.get_rules_hash("mkt_1") == provider.rules["mkt_1"].rules_hash
+    assert len(provider.metadata_calls) == calls_after_recovery
+    assert provider.rules_calls == []
 
 
 async def test_paper_and_decision_paths_share_one_metadata_cache():
@@ -1184,7 +1249,7 @@ async def test_paper_and_decision_paths_share_one_metadata_cache():
         None,
         None,
         metadata_cache=shared,
-        rules_cache=TtlCache(provider.get_rules, clock.now, ttl=timedelta(seconds=120)),
+        rules_index=MarketRulesIndex(now=clock.now, max_age=timedelta(minutes=4)),
     )
 
     await daemon.tick_once()  # paper path fetches once

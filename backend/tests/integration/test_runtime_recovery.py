@@ -448,6 +448,9 @@ async def test_restarted_daemon_recovers_from_durable_state_without_duplicates(
             async def get_rules_hash(self, market: str):
                 return "hash_v1"
 
+            async def get_rules_changed(self, market: str):
+                return False
+
             async def get_frozen_rules_hash(self, match: str):
                 return None
 

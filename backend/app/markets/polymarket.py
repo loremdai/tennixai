@@ -338,6 +338,7 @@ class PolymarketProvider:
         self._skipped = []
         events = await self._all_tennis_events()
         listings: list[MarketListing] = []
+        rules: list[MarketRules] = []
         complete = True
         seen_conditions: set[str] = set()
         for event in events:
@@ -368,7 +369,12 @@ class PolymarketProvider:
                     continue
                 seen_conditions.add(external)
                 listings.append(listing)
-        return MarketListingScan(listings=tuple(listings), complete=complete)
+                snapshot = self._rules_from_dto(listing.id, dto)
+                if snapshot is not None:
+                    rules.append(snapshot)
+        return MarketListingScan(
+            listings=tuple(listings), complete=complete, rules=tuple(rules)
+        )
 
     async def _market_listing(
         self, dto: GammaMarketDto, event: GammaEventDto
@@ -710,14 +716,25 @@ class PolymarketProvider:
     async def get_rules(self, market_id: str) -> MarketRules:
         external = await self._external(market_id)
         dto = await self._gamma_market_by_condition(external.condition_id)
-        rules_text = (dto.rules or "").strip()
-        if not rules_text:
+        rules = self._rules_from_dto(market_id, dto)
+        if rules is None:
             raise AppError("not_found", "Market rules unavailable", 404)
-        source = f"polymarket-{dto.resolvedBy}" if dto.resolvedBy else "polymarket"
+        return rules
+
+    def _rules_from_dto(
+        self, market_id: str, dto: GammaMarketDto
+    ) -> MarketRules | None:
+        rules_text = (dto.description or "").strip()
+        source = (dto.resolutionSource or "").strip()
+        if not rules_text or not source:
+            return None
+        fingerprint = json.dumps(
+            [rules_text, source], ensure_ascii=False, separators=(",", ":")
+        )
         return MarketRules(
             market_id=market_id,
             rules_text=rules_text,
-            rules_hash=hashlib.sha256(rules_text.encode("utf-8")).hexdigest(),
+            rules_hash=hashlib.sha256(fingerprint.encode("utf-8")).hexdigest(),
             resolution_source=source,
             edge_case_semantics=None,
             fetched_at=self._now_fn(),

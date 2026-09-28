@@ -34,6 +34,7 @@ from app.errors import AppError
 from app.markets.live import PolymarketMarketFeed
 from app.markets.polymarket import PolymarketProvider
 from app.markets.publisher import MarketHotPublisher, QuoteCatalogPublisher
+from app.markets.rules_index import MarketRulesIndex
 from app.markets.worker import MarketWorker
 from app.paper.service import PaperTradingService
 from app.persistence.database import Database
@@ -207,11 +208,10 @@ class _SnapshotPredictor:
 
 
 class _PublisherBookSource:
-    """DecisionWorker book source: canonical hot book plus provider rules.
+    """DecisionWorker book source: canonical hot book plus scanned rules.
 
-    Metadata and rules reads go through TTL caches (the metadata cache is the
-    very instance the daemon's paper path uses) so the per-decision cycle
-    never re-issues the underlying provider REST calls inside a TTL window.
+    Market rules come only from the daemon's most recent complete scan; a
+    decision cycle never makes its own Gamma request.
     """
 
     def __init__(
@@ -220,12 +220,12 @@ class _PublisherBookSource:
         ledger: Any,
         *,
         metadata_cache: TtlCache,
-        rules_cache: TtlCache,
+        rules_index: MarketRulesIndex,
     ) -> None:
         self._publisher = publisher
         self._ledger = ledger
         self._metadata_cache = metadata_cache
-        self._rules_cache = rules_cache
+        self._rules_index = rules_index
 
     async def get_book(self, market_id: str) -> Any:
         if self._publisher is None:
@@ -235,9 +235,13 @@ class _PublisherBookSource:
     async def get_metadata(self, market_id: str) -> Any:
         return await self._metadata_cache.get(market_id)
 
-    async def get_rules_hash(self, market_id: str) -> str:
-        rules = await self._rules_cache.get(market_id)
-        return rules.rules_hash
+    async def get_rules_hash(self, market_id: str) -> str | None:
+        state = self._rules_index.get(market_id)
+        return state.rules_hash if state is not None else None
+
+    async def get_rules_changed(self, market_id: str) -> bool:
+        state = self._rules_index.get(market_id)
+        return state.rules_changed if state is not None else False
 
     async def get_frozen_rules_hash(self, match_id: str) -> str | None:
         for intent in await self._ledger.load_all_intents():
@@ -349,17 +353,15 @@ def build_local_runtime_daemon(
     )
 
     # One shared execution-metadata cache feeds both the paper path (daemon)
-    # and the decision path (book source); the rules-hash cache is decision
-    # only. Both use the discovery cadence as their TTL, matching the paper
-    # path's existing 120s window, so the two never diverge.
-    # Caching `get_rules` bounds RULE_CHANGED detection latency to the cache
-    # TTL (<= market_discovery_seconds, default 120s), matching the
-    # discovery/rules-capture cadence.
+    # and the decision path. Rules are read from the scan-fed index below.
     metadata_ttl = timedelta(seconds=live.market_discovery_seconds)
     metadata_cache = TtlCache(
         market_provider.get_execution_metadata, clock, ttl=metadata_ttl
     )
-    rules_cache = TtlCache(market_provider.get_rules, clock, ttl=metadata_ttl)
+    rules_index = MarketRulesIndex(
+        now=clock,
+        max_age=timedelta(seconds=live.market_discovery_seconds * 2),
+    )
 
     registry = RuntimeHealthRegistry(state=state, clock=clock)
     quote_catalog_publisher = QuoteCatalogPublisher(redis_client, now_fn=clock)
@@ -425,7 +427,7 @@ def build_local_runtime_daemon(
             market_publisher,
             ledger,
             metadata_cache=metadata_cache,
-            rules_cache=rules_cache,
+            rules_index=rules_index,
         ),
         links=links,
         observations=markets,
@@ -526,6 +528,7 @@ def build_local_runtime_daemon(
         resolver=resolver,
         metrics=metrics,
         metadata_cache=metadata_cache,
+        rules_index=rules_index,
         quote_job=quote_job,
         quote_snapshots=quote_snapshots,
         catalog_quote_feed=catalog_quote_feed,

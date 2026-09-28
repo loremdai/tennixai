@@ -58,6 +58,10 @@ class PaperTradingService:
         metadata: MarketExecutionMetadata | None,
         rules_hash: str | None,
     ) -> None:
+        if observation.action in (DecisionAction.BUY, DecisionAction.SELL) and not (
+            rules_hash and rules_hash.strip()
+        ):
+            return
         if observation.action is DecisionAction.BUY:
             await self._begin_entry(
                 observation, metadata=metadata, rules_hash=rules_hash

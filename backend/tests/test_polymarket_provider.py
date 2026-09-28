@@ -6,7 +6,6 @@ non-GET request, never touch an authenticated path, and never leak URLs,
 keys, condition or token identifiers through canonical models or errors.
 """
 
-import hashlib
 import json
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -432,26 +431,78 @@ async def test_execution_metadata_falls_back_to_fee_schedule(resolver):
 
 
 async def test_rules_snapshot_is_hashed_and_changed_rules_differ(resolver):
-    provider, _ = make_provider(resolver)
+    payload = _fixture("gamma_market.json")
+    rules_text = payload[0]["description"]
+    recorder = RecordingTransport(
+        overrides={
+            "gamma-api.polymarket.com/markets": httpx.Response(200, json=payload)
+        }
+    )
+    provider, _ = make_provider(resolver, recorder)
 
     rules = await provider.get_rules(INTERNAL_MARKET_ID)
     assert rules.market_id == INTERNAL_MARKET_ID
-    assert rules.resolution_source == "polymarket-uma"
-    expected_hash = hashlib.sha256(
-        _fixture("gamma_market.json")[0]["rules"].encode("utf-8")
-    ).hexdigest()
-    assert rules.rules_hash == expected_hash
+    assert rules.rules_text == rules_text
+    assert rules.resolution_source == "Official ATP Tour"
+    assert len(rules.rules_hash) == 64
 
+    source_changed = [dict(payload[0], resolutionSource="Official WTA Tour")]
     changed_recorder = RecordingTransport(
         overrides={
             "gamma-api.polymarket.com/markets": httpx.Response(
-                200, json=_fixture("rules_changed.json")
+                200, json=source_changed
             ),
         }
     )
     changed_provider, _ = make_provider(resolver, changed_recorder)
     changed_rules = await changed_provider.get_rules(INTERNAL_MARKET_ID)
     assert changed_rules.rules_hash != rules.rules_hash
+
+
+async def test_keyset_scan_carries_market_rules_without_per_market_fetch(resolver):
+    event = _fixture("events_tennis.json")[0]
+    event["description"] = "Different event-level summary that is not a market rule"
+    event["markets"][0]["description"] = "Alpha advances; walkover resolves 50-50."
+    event["markets"][0]["resolutionSource"] = "Official ATP Tour"
+    recorder = RecordingTransport(
+        overrides={
+            "gamma-api.polymarket.com/events/keyset": httpx.Response(
+                200, json={"events": [event], "next_cursor": None}
+            )
+        }
+    )
+    provider, recorder = make_provider(resolver, recorder)
+
+    scan = await provider.list_tennis_market_listings()
+
+    assert scan.complete is True
+    assert len(scan.rules) == 1
+    assert scan.rules[0].market_id == scan.listings[0].id
+    assert scan.rules[0].rules_text == "Alpha advances; walkover resolves 50-50."
+    assert scan.rules[0].resolution_source == "Official ATP Tour"
+    assert recorder.paths() == [
+        "GET gamma-api.polymarket.com/tags/slug/tennis",
+        "GET gamma-api.polymarket.com/events/keyset",
+    ]
+
+
+async def test_missing_market_description_does_not_inherit_event_rules(resolver):
+    event = _fixture("events_tennis.json")[0]
+    event["description"] = "Event-level rules must not be inherited"
+    event["markets"][0]["resolutionSource"] = "Official ATP Tour"
+    recorder = RecordingTransport(
+        overrides={
+            "gamma-api.polymarket.com/events/keyset": httpx.Response(
+                200, json={"events": [event], "next_cursor": None}
+            )
+        }
+    )
+    provider, _ = make_provider(resolver, recorder)
+
+    scan = await provider.list_tennis_market_listings()
+
+    assert len(scan.listings) == 1
+    assert scan.rules == ()
 
 
 async def test_final_resolution_maps_provider_payouts(resolver):

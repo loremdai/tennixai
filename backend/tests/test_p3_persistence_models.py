@@ -117,10 +117,9 @@ def test_unique_constraints_enforce_one_shot_ledger_and_single_mappings():
         ("market_id",),
         ("condition_id", "provider"),
     }
-    assert _unique_column_sets(Base.metadata.tables["market_rules"]) >= {
-        ("market_id", "rules_hash"),
-        ("market_id", "version"),
-    }
+    rule_unique_sets = _unique_column_sets(Base.metadata.tables["market_rules"])
+    assert ("market_id", "version") in rule_unique_sets
+    assert ("market_id", "rules_hash") not in rule_unique_sets
     assert _unique_column_sets(Base.metadata.tables["market_match_links"]) >= {
         ("market_id",),
     }

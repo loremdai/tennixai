@@ -106,6 +106,9 @@ class RedisBookSource:
     async def get_rules_hash(self, market_id: str):
         return "rules_latency_v1"
 
+    async def get_rules_changed(self, market_id: str):
+        return False
+
     async def get_frozen_rules_hash(self, match_id: str):
         return None
 
