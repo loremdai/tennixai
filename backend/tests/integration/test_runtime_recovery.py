@@ -427,6 +427,9 @@ async def test_restarted_daemon_recovers_from_durable_state_without_duplicates(
             def __init__(self) -> None:
                 self.saved: list[DecisionObservation] = []
 
+            async def save_prediction(self, prediction) -> None:
+                return None
+
             async def save_decision_observation(self, obs) -> None:
                 self.saved.append(obs)
 

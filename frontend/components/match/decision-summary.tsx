@@ -66,7 +66,7 @@ export function DecisionSummary({
               <span>
                 {decision.overlay === 'stale'
                   ? '市场报价更新较慢，已暂停新的模拟操作。'
-                  : '比赛数据更新中断，已暂停新的模拟操作。'}
+                  : '实时数据更新中断，已暂停新的模拟操作。'}
                 最近一次有效数据仍保留；恢复更新后会重新评估。
               </span>
             </div>

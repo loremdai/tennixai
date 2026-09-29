@@ -132,7 +132,7 @@ const REASON_LABELS: Record<string, string> = {
   RULES_UNAVAILABLE: '市场规则暂不可用，暂不提供判断',
   RULE_CHANGED: '评估标准更新，暂不提供判断',
   STALE: '市场报价更新较慢，相关判断已暂停',
-  GAP: '比赛数据更新中断，相关判断已暂停',
+  GAP: '实时数据更新中断，相关判断已暂停',
   INSUFFICIENT_LIQUIDITY: '可交易金额不足',
   NO_NET_EDGE: '模型与市场的差距暂不明显',
 }

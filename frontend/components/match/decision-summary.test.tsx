@@ -172,7 +172,7 @@ describe('DecisionSummaryLive', () => {
     renderSnapshot(
       snapshot({ action: 'wait', has_gap: true, max_acceptable_price: '0.55' }),
     )
-    expect(screen.getAllByText(/比赛数据更新中断/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/实时数据更新中断/).length).toBeGreaterThan(0)
   })
 
   it('keeps the state label as the single action source across all states', () => {

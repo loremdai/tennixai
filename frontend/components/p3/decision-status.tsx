@@ -95,7 +95,7 @@ export function DecisionStatusBadge({
       ) : overlay === 'gap' ? (
         <Badge variant="destructive">
           <CircleDashed data-icon="inline-start" aria-hidden="true" />
-          比赛数据更新中断
+          实时数据更新中断
         </Badge>
       ) : null}
     </span>

@@ -178,6 +178,7 @@ class DecisionWorker:
         if prediction is None:
             self._metrics.increment("decision_suppressed")
             return
+        await self._observations.save_prediction(prediction)
         self._latest_prediction[match_id] = prediction
         await self._decide(match_id, trigger="sports", started=started)
 

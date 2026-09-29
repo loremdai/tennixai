@@ -70,8 +70,12 @@ class FakeLinks:
 
 class FakeObservations:
     def __init__(self, log: list[str] | None = None) -> None:
+        self.predictions: list[object] = []
         self.saved: list[object] = []
         self.log: list[str] = log if log is not None else []
+
+    async def save_prediction(self, prediction) -> None:
+        self.predictions.append(prediction)
 
     async def save_decision_observation(self, observation) -> None:
         self.saved.append(observation)

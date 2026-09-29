@@ -74,7 +74,7 @@ export function ProbabilityMarketTrajectory({
           <div className="flex flex-wrap gap-2">
             <Badge variant="outline"><span className="h-0.5 w-5 bg-primary" aria-hidden="true" />模型估算</Badge>
             <Badge variant="outline"><span className="w-5 border-t-2 border-dashed border-chart-2" aria-hidden="true" />市场价格</Badge>
-            {decision.overlay === 'gap' ? <Badge variant="destructive"><CircleDashed data-icon="inline-start" aria-hidden="true" />比赛数据更新中断</Badge> : null}
+            {decision.overlay === 'gap' ? <Badge variant="destructive"><CircleDashed data-icon="inline-start" aria-hidden="true" />实时数据更新中断</Badge> : null}
           </div>
         </CardHeader>
 

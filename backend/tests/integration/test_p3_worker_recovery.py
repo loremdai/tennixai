@@ -121,6 +121,9 @@ async def test_restart_resumes_decision_cursor_and_durable_demand(
             def __init__(self) -> None:
                 self.saved = []
 
+            async def save_prediction(self, prediction) -> None:
+                return None
+
             async def save_decision_observation(self, obs):
                 self.saved.append(obs)
 

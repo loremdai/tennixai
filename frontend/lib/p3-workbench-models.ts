@@ -21,6 +21,8 @@ export type DecisionSummaryModel = {
   selectionLocalizedName: string | null
   modelProbability: number | null
   executableProbability: number | null
+  marketReferenceLevels: ChartSideModel[]
+  marketReferenceSide: 'ask' | 'bid'
   edgePp: number | null
   quoteSide: 'ask' | 'bid' | 'market'
   maxBuyPrice: number | null
@@ -126,7 +128,7 @@ const REASON_LABELS: Record<string, string> = {
   RULES_UNAVAILABLE: '市场规则暂未确认，已暂停新的模拟操作',
   RULE_CHANGED: '市场规则有变化，已暂停新的模拟操作',
   STALE: '市场报价更新较慢，已暂停新的模拟操作',
-  GAP: '比赛数据更新中断，已暂停新的模拟操作',
+  GAP: '实时数据更新中断，已暂停新的模拟操作',
   INSUFFICIENT_LIQUIDITY: '当前可交易金额不足',
   NO_NET_EDGE: '模型估算与市场报价差距不明显',
 }
@@ -252,7 +254,7 @@ function edgeText(value: number | null): string {
 
 const STATE_FALLBACK_REASON: Record<WorkbenchState, string> = {
   market_only: '目前只显示市场报价，暂无模型判断。',
-  no_bet: '模型与市场价格差距不明显，暂不建议模拟买入。',
+  no_bet: '暂不建议模拟买入。',
   wait: '这个方向值得关注，但当前价格偏高。',
   buy: '比赛数据与市场报价符合模拟买入条件。',
   entry_pending: '模拟买入已提交，正在确认是否成交。',
@@ -270,6 +272,8 @@ export function toDecisionSummaryModel(
   selectionName: string | null,
   now: Date,
   selectionLocalizedName: string | null = null,
+  playerNameById: Record<string, string> = {},
+  playerLocalizedNameById: Record<string, string | null> = {},
 ): DecisionSummaryModel {
   const state = deriveWorkbenchState(snapshot)
   const modelProbability =
@@ -331,6 +335,12 @@ export function toDecisionSummaryModel(
     selectionLocalizedName,
     modelProbability,
     executableProbability,
+    marketReferenceLevels: toChartSides(
+      snapshot,
+      playerNameById,
+      playerLocalizedNameById,
+    ),
+    marketReferenceSide: snapshot.position ? 'bid' : 'ask',
     edgePp,
     quoteSide:
       snapshot.quote_side === 'entry' ? 'ask' : snapshot.quote_side === 'exit' ? 'bid' : 'market',
@@ -369,7 +379,7 @@ function defaultTitle(state: WorkbenchState, selectionName: string | null): stri
     case 'market_only':
       return '目前只显示市场报价'
     case 'no_bet':
-      return '模型与市场价格差距不明显'
+      return '暂不建议模拟买入'
     case 'entry_pending':
       return '等待买入确认，尚未成交'
     case 'missed':
@@ -394,7 +404,7 @@ function defaultDescription(
     case 'market_only':
       return '这里只显示市场买入和卖出报价；这类比赛暂不提供模型估算。'
     case 'no_bet':
-      return `模型估算胜率 ${pct(modelProbability)}，10 美元模拟买入均价 ${pct(executableProbability)}；扣除成本后的价格差距不明显。`
+      return ''
     case 'entry_pending':
       return '10 美元模拟订单正在确认价格与可交易金额。'
     case 'missed':
@@ -444,7 +454,7 @@ export function toEvidenceModel(snapshot: DecisionSnapshotDto): EvidenceModel {
     }
   }
   if (snapshot.is_stale) reasons.push('市场报价更新较慢，已暂停新的模拟操作')
-  if (snapshot.has_gap) reasons.push('比赛数据更新中断，已暂停新的模拟操作')
+  if (snapshot.has_gap) reasons.push('实时数据更新中断，已暂停新的模拟操作')
   if (snapshot.lock_profit_available) reasons.push('当前价格已达到预设的模拟退出条件')
   if (reasons.length === 0) reasons.push('比赛与市场数据均符合当前评估条件。')
   const availability = snapshot.model_availability

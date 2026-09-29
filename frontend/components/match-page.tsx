@@ -160,7 +160,14 @@ export function MatchPage({ matchId, previewMatch, preview = false }: MatchPageP
       ? (playerLocalizedNameById[decision.target_player_id] ?? null)
       : null
   const summaryModel = decision
-    ? toDecisionSummaryModel(decision, selectionName, new Date(), selectionLocalizedName)
+    ? toDecisionSummaryModel(
+        decision,
+        selectionName,
+        new Date(),
+        selectionLocalizedName,
+        playerNameById,
+        playerLocalizedNameById,
+      )
     : null
   const evidenceModel = decision ? toEvidenceModel(decision) : null
   const paperModel = decision ? toPaperModel(decision) : null

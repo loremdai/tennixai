@@ -115,7 +115,7 @@ export function MatchDecisionPage({
               options: [
                 { value: 'none', label: '正常' },
                 { value: 'stale', label: '报价更新较慢' },
-                { value: 'gap', label: '比赛数据更新中断' },
+                { value: 'gap', label: '实时数据更新中断' },
               ],
             },
             {

@@ -376,7 +376,7 @@ export function getDecisionPreview(
     },
     {
       label: '数据更新情况',
-      detail: overlay === 'stale' ? '报价更新较慢，已暂停新的模拟操作' : overlay === 'gap' ? '比赛数据更新中断，已暂停新的模拟操作' : '报价 4 秒前 · 胜率估算 11 秒前',
+      detail: overlay === 'stale' ? '报价更新较慢，已暂停新的模拟操作' : overlay === 'gap' ? '实时数据更新中断，已暂停新的模拟操作' : '报价 4 秒前 · 胜率估算 11 秒前',
       status: overlay === 'none' ? 'pass' : 'fail',
     },
     {

@@ -30,7 +30,7 @@ function explain(question: string, decision: DecisionPreview): string {
       : `按 10 美元模拟金额，结合市场上的实际买卖报价估算为 ${(decision.executableProbability * 100).toFixed(1)}%。买入价和卖出价分别计算。`
   }
   if (question.includes('失效') || question.includes('撤销')) {
-    return '如果比赛数据更新中断、报价更新较慢、可交易金额不足，或暂未提供胜率估算，就会暂停新的模拟操作，并保留上次有效数据。'
+    return '如果实时数据更新中断、报价更新较慢、可交易金额不足，或暂未提供胜率估算，就会暂停新的模拟操作，并保留上次有效数据。'
   }
   return `${decision.reason} 胜率由模型估算，市场价格会随比赛进程和交易情况变化。`
 }

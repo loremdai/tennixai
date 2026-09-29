@@ -26,12 +26,28 @@ export function DecisionSummaryLive({
   decision: DecisionSummaryModel
   onAsk: () => void
 }) {
+  const marketReferenceQuotes = decision.marketReferenceLevels
+    .filter((level) => {
+      const price = decision.marketReferenceSide === 'ask' ? level.ask : level.bid
+      return price !== null && (decision.marketReferenceSide !== 'bid' || level.selected)
+    })
+    .map((level) => ({
+      playerId: level.playerId,
+      name: level.name,
+      localizedName: level.localizedName,
+      price: decision.marketReferenceSide === 'ask' ? level.ask : level.bid,
+    }))
+
   const quoteLabel =
-    decision.quoteSide === 'ask'
-      ? '10 美元模拟买入均价'
-      : decision.quoteSide === 'bid'
-        ? '10 美元模拟卖出均价'
-        : '市场参考价格'
+    decision.executableProbability !== null
+      ? decision.quoteSide === 'ask'
+        ? '10 美元模拟买入均价'
+        : decision.quoteSide === 'bid'
+          ? '10 美元模拟卖出均价'
+          : '市场参考价格'
+      : decision.marketReferenceSide === 'ask'
+        ? '双方最佳可买入价参考'
+        : '持仓方最佳可卖出价参考'
 
   return (
     <section aria-labelledby="decision-summary-title">
@@ -64,7 +80,7 @@ export function DecisionSummaryLive({
               <span>
                 {decision.overlay === 'stale'
                   ? '市场报价更新较慢，已暂停新的模拟操作。'
-                  : '比赛数据更新中断，已暂停新的模拟操作。'}
+                  : '实时数据更新中断，已暂停新的模拟操作。'}
                 最近一次有效数据仍保留；恢复更新后会重新评估。
               </span>
             </div>
@@ -84,8 +100,29 @@ export function DecisionSummaryLive({
             </dl>
             <dl className="min-h-24 bg-card p-4">
               <dt className="text-xs text-muted-foreground">{quoteLabel}</dt>
-              <dd className="mt-2 font-mono text-2xl font-semibold tabular-nums">{percent(decision.executableProbability)}</dd>
-              <dd className="mt-1 text-xs text-muted-foreground">按实时买卖报价估算</dd>
+              <dd className="mt-2 font-mono text-2xl font-semibold tabular-nums">
+                {decision.executableProbability !== null ? (
+                  percent(decision.executableProbability)
+                ) : marketReferenceQuotes.length > 0 ? (
+                  <span className="flex flex-col gap-1 text-sm font-semibold">
+                    {marketReferenceQuotes.map((quote) => (
+                      <span key={quote.playerId} className="flex items-center justify-between gap-2">
+                        <span className="min-w-0 truncate font-sans text-xs font-medium">
+                          <PlayerName name={quote.name} localizedName={quote.localizedName} />
+                        </span>
+                        <span className="shrink-0 font-mono text-base tabular-nums">{percent(quote.price)}</span>
+                      </span>
+                    ))}
+                  </span>
+                ) : '—'}
+              </dd>
+              <dd className="mt-1 text-xs text-muted-foreground">
+                {decision.executableProbability !== null
+                  ? '按实时买卖报价估算'
+                  : marketReferenceQuotes.length > 0
+                    ? '最佳单档参考价，不代表 10 美元可成交均价'
+                    : '暂未提供可用盘口报价'}
+              </dd>
             </dl>
             <dl className="min-h-24 bg-card p-4">
               <dt className="text-xs text-muted-foreground">模型与市场差距</dt>
