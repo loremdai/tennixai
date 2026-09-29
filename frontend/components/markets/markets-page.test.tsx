@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -188,6 +188,7 @@ describe('P3 markets preview', () => {
 // ---------------------------------------------------------------------------
 
 import { MarketsWorkspace } from './markets-state'
+import { OpportunityEmptyState } from './opportunity-empty-state'
 import { waitFor } from '@testing-library/react'
 import type {
   MarketSummaryDto,
@@ -379,6 +380,8 @@ describe('MarketsWorkspace (production)', () => {
       '/matches/mat_2',
     ])
     expect(rows[0].textContent).toContain('方向：Beta Two')
+    expect(rows[0].textContent!.indexOf('模拟买入机会'))
+      .toBeLessThan(rows[0].textContent!.indexOf('模型估算胜率'))
     expect(rows[1].textContent).toContain('方向：Gamma Three')
     expect(screen.getByText('模拟买入机会')).toBeTruthy()
     expect(screen.getByText('等待更好价格')).toBeTruthy()
@@ -450,6 +453,102 @@ describe('MarketsWorkspace (production)', () => {
     await user.click(screen.getByRole('tab', { name: /全部市场/ }))
 
     await waitFor(() => expect(screen.getByText('Alpha One 模型胜率')).toBeTruthy())
+  })
+
+  it('orders market quotes and freshness before optional secondary model details', async () => {
+    const playerOne = 'Alexandru Constantin Marius Popescu-Szilagyi'
+    const playerTwo = 'Maximilian Alexander Theodor von Hohenberg-Wuerttemberg'
+    listMarketsMock.mockResolvedValue({
+      markets: [summaryDto({ player_names: [playerOne, playerTwo], reason_code: 'NO_NET_EDGE' })],
+      page: 1,
+      page_size: 50,
+      total: 1,
+    })
+    render(<MarketsWorkspace initialView="all" />)
+    const row = await screen.findByRole('link', { name: /查看 .* 市场/ })
+    const content = row.textContent ?? ''
+    const quoteIndex = content.indexOf('胜出买入参考价')
+    const freshnessIndex = content.indexOf('最近报价')
+    const spreadIndex = content.indexOf('平均价差')
+    const modelIndex = content.indexOf(`${playerOne} 模型胜率`)
+    const reasonIndex = content.indexOf('模型与市场的差距暂不明显')
+
+    expect(quoteIndex).toBeGreaterThanOrEqual(0)
+    expect(within(row).getAllByText('胜出买入参考价')).toHaveLength(1)
+    expect(freshnessIndex).toBeGreaterThan(quoteIndex)
+    expect(spreadIndex).toBeGreaterThan(freshnessIndex)
+    expect(modelIndex).toBeGreaterThan(freshnessIndex)
+    expect(reasonIndex).toBeGreaterThan(freshnessIndex)
+
+    expect(row.querySelector('[data-slot="card"]')).toHaveClass('bg-[linear-gradient(105deg,#0d241a,#071811)]')
+    const cardContent = row.querySelector('[data-slot="card-content"]')
+    expect(cardContent).toHaveClass('lg:grid-cols-[minmax(0,1.05fr)_minmax(20rem,1fr)_minmax(13rem,0.72fr)]')
+    expect(cardContent).not.toHaveClass('md:grid-cols-[minmax(0,1.05fr)_minmax(20rem,1fr)_minmax(13rem,0.72fr)]')
+
+    const firstName = within(row).getByText(playerOne, { exact: true })
+    expect(firstName).toHaveClass('break-words')
+    expect(firstName).not.toHaveClass('truncate')
+  })
+
+  it('uses the reference page hierarchy with filters before the loaded count', async () => {
+    render(<MarketsWorkspace initialView="all" />)
+
+    const banner = screen.getByRole('banner')
+    expect(within(banner).getByText('TennixAI')).toBeTruthy()
+    expect(banner.querySelector('nav[aria-label="主导航"]')).toBeNull()
+    expect(screen.queryByText('比赛与最新报价')).toBeNull()
+    expect(screen.queryByRole('heading', { name: '全部市场' })).toBeNull()
+
+    const count = await screen.findByText('已加载 1 / 全部 1 个市场')
+    const filters = screen.getByRole('button', { name: '筛选 · 0 项' })
+    expect(filters.compareDocumentPosition(count) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+    const filterPanel = document.getElementById(filters.getAttribute('aria-controls')!)
+    expect(filterPanel).toHaveClass('xl:flex-nowrap')
+    expect(filterPanel).not.toHaveClass('lg:flex-nowrap')
+  })
+
+  it('keeps opportunity and Paper rows in a flexible layout until desktop width', async () => {
+    const user = userEvent.setup()
+    render(<MarketsWorkspace />)
+
+    const opportunity = await screen.findByRole('link', { name: /查看 .* 的模拟买入机会决策/ })
+    const opportunityContent = opportunity.querySelector('[data-slot="card-content"]')
+    expect(opportunityContent).toHaveClass(
+      'lg:grid-cols-[minmax(15rem,1.4fr)_minmax(8rem,0.7fr)_minmax(8rem,0.7fr)_minmax(8rem,0.7fr)_auto]',
+    )
+    expect(opportunityContent).not.toHaveClass(
+      'md:grid-cols-[minmax(15rem,1.4fr)_minmax(8rem,0.7fr)_minmax(8rem,0.7fr)_minmax(8rem,0.7fr)_auto]',
+    )
+
+    await user.click(screen.getByRole('tab', { name: /^模拟记录/ }))
+    const paper = await screen.findByRole('link', { name: /查看 .* 的模拟记录/ })
+    const paperContent = paper.querySelector('[data-slot="card-content"]')
+    expect(paperContent).toHaveClass(
+      'lg:grid-cols-[minmax(14rem,1.5fr)_minmax(7rem,0.8fr)_minmax(6rem,0.65fr)_minmax(8rem,0.9fr)_minmax(6rem,0.75fr)_minmax(7rem,0.6fr)]',
+    )
+    expect(paperContent).not.toHaveClass(
+      'md:grid-cols-[minmax(14rem,1.5fr)_minmax(7rem,0.8fr)_minmax(6rem,0.65fr)_minmax(8rem,0.9fr)_minmax(6rem,0.75fr)_minmax(7rem,0.6fr)]',
+    )
+  })
+
+  it('gives the compact unpromoted-model call to action a 44px touch height', () => {
+    render(<OpportunityEmptyState reason="ELIGIBLE_UNPROMOTED" onViewAllMarkets={() => {}} />)
+
+    expect(screen.getByRole('button', { name: '查看所有比赛报价' })).toHaveClass('h-11')
+  })
+
+  it('offers compact mobile filters and preserves canonical filter behavior when expanded', async () => {
+    const user = userEvent.setup()
+    render(<MarketsWorkspace initialView="all" />)
+    const trigger = await screen.findByRole('button', { name: '筛选 · 0 项' })
+
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    await user.click(trigger)
+    expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('group', { name: '赛事级别' })).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'WTA' }))
+    expect(trigger).toHaveAccessibleName('筛选 · 1 项')
+    expect(window.location.search).toContain('tier=wta')
   })
 
   it('shows challenger market-only rows without negative labels', async () => {
@@ -554,15 +653,15 @@ describe('MarketsWorkspace (production)', () => {
     const user = userEvent.setup()
     render(<MarketsWorkspace initialView="all" />)
 
-    await waitFor(() => expect(screen.getByText('已加载 50 / 51 场')).toBeTruthy())
-    await user.click(screen.getByRole('button', { name: '女子' }))
-    expect(screen.getByText('没有符合条件的比赛')).toBeTruthy()
+    await waitFor(() => expect(screen.getByText('已加载 50 / 全部 51 个市场')).toBeTruthy())
+    await user.click(screen.getByRole('button', { name: '女' }))
+    expect(screen.getByText('没有符合条件的市场')).toBeTruthy()
     expect(screen.getByRole('button', { name: '加载更多' })).toBeTruthy()
     await user.click(screen.getByRole('button', { name: '加载更多' }))
     await waitFor(() =>
       expect(screen.getByRole('link', { name: '查看 Player Tail vs. Opponent Tail 市场' })).toBeTruthy(),
     )
-    expect(screen.getByText('已加载 51 / 51 场')).toBeTruthy()
+    expect(screen.getByText('已加载 51 / 全部 51 个市场')).toBeTruthy()
 
     const opportunityCalls = listMarketOpportunitiesMock.mock.calls.length
     const paperCalls = getPaperPositionsMock.mock.calls.length
@@ -604,6 +703,8 @@ describe('MarketsWorkspace (production)', () => {
     await user.click(screen.getByRole('tab', { name: /^模拟记录/ }))
 
     await waitFor(() => expect(screen.getByRole('heading', { name: '模拟记录' })).toBeTruthy())
+    expect(screen.getByRole('heading', { name: '进行中' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '近期已结束' })).toBeTruthy()
     expect(screen.getByText('3 条')).toBeTruthy()
     const badges = screen.getAllByText(/^(模拟持有中|等待买入确认|已结算)$/)
     expect(badges.map((badge) => badge.textContent)).toEqual([
@@ -617,7 +718,7 @@ describe('MarketsWorkspace (production)', () => {
     expect(
       screen.getAllByText('按当前最高买价估算，未扣费用，也不保证全部份额都能按此价格卖出。').length,
     ).toBeGreaterThan(0)
-    expect(screen.getByText(/不会触发真实交易/)).toBeTruthy()
+    expect(screen.getByText(/不涉及真实交易/)).toBeTruthy()
   })
 
   it('shows a loading skeleton before data arrives', async () => {
@@ -706,8 +807,8 @@ describe('MarketsWorkspace (production)', () => {
     await waitFor(() => expect(screen.getByText('目前没有符合条件的比赛。')).toBeTruthy())
     await user.click(screen.getByRole('tab', { name: /全部市场/ }))
     await waitFor(() => expect(screen.getByText('目前没有可显示的比赛报价')).toBeTruthy())
-    await user.click(screen.getByRole('button', { name: 'ITF 巡回赛' }))
-    await waitFor(() => expect(screen.getByText('没有符合条件的比赛')).toBeTruthy())
+    await user.click(screen.getByRole('button', { name: 'ITF' }))
+    await waitFor(() => expect(screen.getByText('没有符合条件的市场')).toBeTruthy())
     await user.click(screen.getByRole('tab', { name: /^模拟记录/ }))
     await waitFor(() => expect(screen.getByText('暂无模拟记录')).toBeTruthy())
   })
@@ -761,6 +862,8 @@ describe('MarketsWorkspace opportunity empty states (T88)', () => {
       screen.getByText('模型验证尚未完成，因此暂不提供比赛判断；你仍可查看所有市场的最新报价。'),
     ).toBeTruthy()
     expect(screen.getByRole('button', { name: '查看所有比赛报价' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '模型仍在验证中' }).closest('[data-slot="card-content"]'))
+      .not.toHaveClass('min-h-72')
     expect(screen.queryByText('买入信号')).toBeNull()
     expect(screen.queryByText('等待更好价格')).toBeNull()
   })
@@ -794,6 +897,6 @@ describe('MarketsWorkspace opportunity empty states (T88)', () => {
 
     await waitFor(() => expect(screen.getByText('模型仍在验证中')).toBeTruthy())
     await user.click(screen.getByRole('button', { name: '查看所有比赛报价' }))
-    await waitFor(() => expect(screen.getByText('市场筛选')).toBeTruthy())
+    await waitFor(() => expect(screen.getByRole('tab', { name: '全部市场' })).toHaveAttribute('aria-selected', 'true'))
   })
 })

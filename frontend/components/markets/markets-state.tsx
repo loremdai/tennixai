@@ -1,12 +1,8 @@
 'use client'
 
-// Production /markets workspace (T68). Renders the approved v0 geometry with
-// live canonical data: three views backed by the read-only P3 APIs, canonical
-// enum filters, whole-row internal navigation, and the full degradation
-// matrix (loading skeletons, honest empty states, list-level transport
-// failure with retry, row-level stale/gap overlays from server flags,
-// market-only rows, incomplete books and closed markets). Never imports
-// preview fixture data; never calculates probability/edge/fill/settlement.
+// Production /markets workspace with three read-only P3 views, canonical
+// filters, internal navigation, and explicit loading/error/quote states.
+// Never imports preview fixtures or calculates probability, fills, or settlement.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertTriangle, RefreshCw, ShieldCheck } from 'lucide-react'
@@ -410,23 +406,19 @@ export function MarketsWorkspace({
     filteredListings.some((row) => row.stale || row.overlay === 'stale')
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <ProductHeader active="markets" marketsHref="/markets" />
+    <div className="markets-workspace min-h-screen bg-background text-foreground">
+      <ProductHeader active="markets" marketsHref="/markets" variant="markets" />
 
-      <main id="content" className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 md:px-6 md:py-8">
-        <section className="flex flex-col gap-4 border-b pb-6 md:flex-row md:items-end md:justify-between" aria-labelledby="markets-title">
+      <main id="content" className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-6 md:px-6 md:py-8">
+        <section className="flex flex-col gap-2" aria-labelledby="markets-title">
           <div className="max-w-3xl">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full border px-2.5 py-1 text-xs text-muted-foreground">仅模拟</span>
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 id="markets-title" className="text-balance text-3xl font-semibold tracking-[-0.035em] sm:text-4xl">比赛市场</h1>
+              <span className="rounded-full border px-2.5 py-1 text-xs text-muted-foreground sm:hidden">仅模拟</span>
             </div>
-            <h1 id="markets-title" className="mt-3 text-balance text-3xl font-semibold tracking-[-0.035em] sm:text-4xl">比赛市场</h1>
-            <p className="mt-3 max-w-2xl text-pretty text-sm leading-relaxed text-muted-foreground sm:text-base">
-              查看市场报价和模型判断。所有记录都仅供模拟，不会触发真实交易。
+            <p className="mt-1 text-pretty text-sm leading-relaxed text-muted-foreground sm:text-base">
+              查看比赛报价
             </p>
-          </div>
-          <div className="flex items-start gap-2 rounded-lg bg-muted/30 p-3 text-xs leading-relaxed text-muted-foreground md:max-w-xs">
-            <ShieldCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-primary" />
-            这里显示市场提供的比赛报价；模型判断可能暂不可用。
           </div>
         </section>
 
@@ -449,7 +441,7 @@ export function MarketsWorkspace({
         ) : (
           <>
             {anyStale ? (
-              <div role="status" className="flex items-start gap-2 rounded-xl border border-destructive/25 bg-destructive/8 p-4 text-sm text-destructive">
+              <div role="status" className="flex items-start gap-2 rounded-xl border border-destructive/25 bg-destructive/8 p-3 text-sm text-destructive">
                 <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
                 部分报价更新较慢。页面展示上次有效价格，并暂停相关比赛判断。
               </div>
@@ -459,7 +451,6 @@ export function MarketsWorkspace({
               id={`markets-panel-${view}`}
               role="tabpanel"
               aria-labelledby={`markets-tab-${view}`}
-              className="min-h-[28rem]"
             >
               {view === 'opportunities' ? (
                 data.opportunities.status === 'loading' ? (
@@ -491,17 +482,13 @@ export function MarketsWorkspace({
                         <OpportunityRow key={row.id} opportunity={row} />
                       ))}
                     </div>
-                    <div className="flex items-start gap-2 rounded-lg bg-muted/25 p-3 text-xs leading-relaxed text-muted-foreground">
-                      <ShieldCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-primary" />
-                      这些判断仅供参考；查看比赛详情不会进行真实交易。
-                    </div>
                   </section>
                 )
               ) : view === 'all' ? (
                 data.listings.status === 'loading' ? (
                   <LoadingSkeleton />
                 ) : (
-                  <div className="flex flex-col gap-4">
+                  <section className="flex flex-col gap-4" aria-label="全部市场">
                     <MarketFilters
                       tiers={tiers}
                       gender={gender}
@@ -512,15 +499,15 @@ export function MarketsWorkspace({
                       onReset={resetFilters}
                     />
                     <p className="text-sm text-muted-foreground" aria-live="polite">
-                      已加载 {data.listings.rows.length} / {data.listings.total} 场
+                      已加载 {data.listings.rows.length} / 全部 {data.listings.total} 个市场
                     </p>
                     {data.listings.status === 'error' && data.listings.rows.length === 0 ? (
                       <ErrorCard errorCode={data.listings.errorCode} onRetry={() => void data.refetch()} />
                     ) : filteredListings.length === 0 ? (
                       <Card>
-                        <CardContent className="flex min-h-64 flex-col items-center justify-center gap-3 text-center">
+                        <CardContent className="flex flex-col items-start gap-3 p-5 text-left">
                           <div>
-                            <h3 className="font-semibold">{hasFilters ? '没有符合条件的比赛' : '目前没有可显示的比赛报价'}</h3>
+                            <h3 className="font-semibold">{hasFilters ? '没有符合条件的市场' : '目前没有可显示的比赛报价'}</h3>
                             <p className="mt-1 max-w-md text-sm leading-relaxed text-muted-foreground">
                               {hasFilters
                                 ? '移除部分筛选条件，或重置筛选后再试。'
@@ -565,7 +552,7 @@ export function MarketsWorkspace({
                         ) : null}
                       </>
                     )}
-                  </div>
+                  </section>
                 )
               ) : data.paper.status === 'loading' ? (
                 <LoadingSkeleton />
@@ -573,7 +560,7 @@ export function MarketsWorkspace({
                 <ErrorCard errorCode={data.paper.errorCode} onRetry={() => void data.refetch()} />
               ) : data.paper.open.length === 0 && data.paper.recent.length === 0 ? (
                 <Card>
-                  <CardContent className="flex min-h-72 flex-col items-center justify-center gap-3 text-center">
+                  <CardContent className="flex flex-col items-start gap-2 p-5 text-left">
                     <div>
                       <h2 className="font-semibold">暂无模拟记录</h2>
                       <p className="mt-1 max-w-md text-sm leading-relaxed text-muted-foreground">
@@ -593,15 +580,28 @@ export function MarketsWorkspace({
                       {data.paper.open.length + data.paper.recent.length} 条
                     </span>
                   </div>
-                  <div className="grid gap-3">
-                    {[...data.paper.open, ...data.paper.recent].map((row) => (
-                      <PaperRow key={row.id} record={row} />
-                    ))}
-                  </div>
-                  <div className="flex items-start gap-2 rounded-lg bg-muted/25 p-3 text-xs leading-relaxed text-muted-foreground">
-                    <ShieldCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-primary" />
-                    这些结果来自模拟，不代表真实收益。
-                  </div>
+                  {data.paper.open.length > 0 ? (
+                    <section className="flex flex-col gap-3" aria-labelledby="paper-open-title">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 id="paper-open-title" className="font-semibold">进行中</h3>
+                        <span className="text-xs text-muted-foreground">{data.paper.open.length} 条</span>
+                      </div>
+                      <div className="grid gap-3">
+                        {data.paper.open.map((row) => <PaperRow key={row.id} record={row} />)}
+                      </div>
+                    </section>
+                  ) : null}
+                  {data.paper.recent.length > 0 ? (
+                    <section className="flex flex-col gap-3" aria-labelledby="paper-recent-title">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 id="paper-recent-title" className="font-semibold">近期已结束</h3>
+                        <span className="text-xs text-muted-foreground">{data.paper.recent.length} 条</span>
+                      </div>
+                      <div className="grid gap-3">
+                        {data.paper.recent.map((row) => <PaperRow key={row.id} record={row} />)}
+                      </div>
+                    </section>
+                  ) : null}
                 </section>
               )}
             </div>
@@ -612,7 +612,7 @@ export function MarketsWorkspace({
       <footer className="border-t">
         <div className="mx-auto flex max-w-7xl flex-col justify-between gap-2 px-4 py-5 text-sm text-muted-foreground sm:flex-row md:px-6">
           <span>Tennix · 比赛智能，逐分解释</span>
-          <span>仅供参考与模拟，不涉及真实资金</span>
+          <span>仅供参考与模拟，不涉及真实交易</span>
         </div>
       </footer>
     </div>

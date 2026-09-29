@@ -51,18 +51,18 @@ export function OpportunityEmptyState({
   const copy = OPPORTUNITY_EMPTY_STATES[reason ?? 'HAS_OPPORTUNITIES']
   return (
     <Card>
-      <CardContent className="flex min-h-72 flex-col items-center justify-center gap-3 text-center">
-        <div className="flex size-10 items-center justify-center rounded-lg bg-secondary text-primary">
+      <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:p-5">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-secondary text-primary">
           <Radar aria-hidden="true" className="size-5" />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="font-semibold">{copy.title}</h2>
-          <p className="mt-1 max-w-md text-sm leading-relaxed text-muted-foreground">
+          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
             {copy.body}
           </p>
         </div>
         {copy.offersAllMarkets ? (
-          <Button variant="outline" onClick={onViewAllMarkets}>
+          <Button variant="outline" onClick={onViewAllMarkets} className="h-11 w-full shrink-0 sm:w-auto">
             查看所有比赛报价
           </Button>
         ) : null}

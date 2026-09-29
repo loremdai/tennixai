@@ -52,17 +52,29 @@ export function PaperRow({ record }: { record: PaperRowData }) {
       className="group rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
       aria-label={`查看 ${record.match} 的模拟记录`}
     >
-      <Card size="sm" className="transition-[transform,box-shadow] group-hover:-translate-y-0.5 group-hover:ring-primary/35">
-        <CardContent className="grid min-h-28 grid-cols-2 items-center gap-4 py-1 md:grid-cols-[minmax(15rem,1.5fr)_minmax(8rem,0.7fr)_minmax(7rem,0.55fr)_minmax(8rem,0.65fr)_minmax(7rem,0.55fr)_auto_auto]">
-          <div className="col-span-2 min-w-0 md:col-span-1">
+      <Card size="sm" className="transition-[box-shadow] group-hover:ring-primary/35">
+        <CardContent className="grid grid-cols-2 items-center gap-3 py-4 lg:grid-cols-[minmax(14rem,1.5fr)_minmax(7rem,0.8fr)_minmax(6rem,0.65fr)_minmax(8rem,0.9fr)_minmax(6rem,0.75fr)_minmax(7rem,0.6fr)] md:gap-4">
+          <div className="col-span-2 min-w-0 lg:col-span-1">
             <div className="flex min-w-0 items-center gap-2">
               <PlayerAvatar name={record.playerNames?.[0] ?? record.match} imageUrl={record.playerImages?.[0]} className="size-8" />
               <h3 className="flex min-w-0 items-center gap-1 font-semibold">
                 {record.playerNames ? (
                   <>
-                    <PlayerName name={record.playerNames[0]} localizedName={record.playerLocalizedNames?.[0]} className="min-w-0" />
+                    <PlayerName
+                      name={record.playerNames[0]}
+                      localizedName={record.playerLocalizedNames?.[0]}
+                      className="min-w-0 max-w-full"
+                      primaryClassName="break-words text-clip overflow-visible whitespace-normal"
+                      secondaryClassName="break-words text-clip overflow-visible whitespace-normal"
+                    />
                     <span className="shrink-0 text-xs text-muted-foreground">vs.</span>
-                    <PlayerName name={record.playerNames[1]} localizedName={record.playerLocalizedNames?.[1]} className="min-w-0" />
+                    <PlayerName
+                      name={record.playerNames[1]}
+                      localizedName={record.playerLocalizedNames?.[1]}
+                      className="min-w-0 max-w-full"
+                      primaryClassName="break-words text-clip overflow-visible whitespace-normal"
+                      secondaryClassName="break-words text-clip overflow-visible whitespace-normal"
+                    />
                   </>
                 ) : record.match}
               </h3>
@@ -71,8 +83,18 @@ export function PaperRow({ record }: { record: PaperRowData }) {
             <p className="mt-1 truncate text-sm text-muted-foreground">{record.tournament}</p>
             <p className="mt-2 flex items-center gap-1 text-xs font-medium text-primary">
               <span>方向：</span>
-              <PlayerName name={record.direction} localizedName={record.directionLocalizedName} />
+              <PlayerName
+                name={record.direction}
+                localizedName={record.directionLocalizedName}
+                className="min-w-0 max-w-full"
+                primaryClassName="break-words text-clip overflow-visible whitespace-normal"
+                secondaryClassName="break-words text-clip overflow-visible whitespace-normal"
+              />
             </p>
+            <div className="mt-2 flex min-w-0 flex-wrap items-center gap-2">
+              <DecisionStatusBadge state={record.state} />
+              <span className="text-xs leading-relaxed text-muted-foreground">{record.detail}</span>
+            </div>
           </div>
           <dl><dt className="text-xs text-muted-foreground">{amountLabel}</dt><dd className="mt-1 font-mono font-semibold">{amountValue}</dd></dl>
           <dl><dt className="text-xs text-muted-foreground">{sharesLabel}</dt><dd className="mt-1 font-mono text-lg font-semibold tabular-nums">{sharesValue}</dd></dl>
@@ -86,10 +108,6 @@ export function PaperRow({ record }: { record: PaperRowData }) {
               noPosition || record.netPnl === null ? 'text-muted-foreground' : '',
             )}>{noPosition || record.netPnl === null ? '—' : `${record.netPnl > 0 ? '+' : ''}${money(record.netPnl)}`}</dd>
           </dl>
-          <div className="flex flex-col items-start gap-1">
-            <DecisionStatusBadge state={record.state} />
-            <span className="max-w-48 text-xs leading-relaxed text-muted-foreground">{record.detail}</span>
-          </div>
           <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground">
             <span>{record.freshness}</span>
             <ArrowRight aria-hidden="true" className="size-4 text-foreground transition-transform group-hover:translate-x-0.5" />

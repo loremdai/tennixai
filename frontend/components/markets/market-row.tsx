@@ -1,11 +1,8 @@
 import Link from 'next/link'
-import { ArrowRight } from 'lucide-react'
 
 import { DecisionStatusBadge } from '@/components/p3/decision-status'
-import { PlayerAvatar } from '@/components/player-avatar'
 import { PlayerName } from '@/components/player-name'
 import type { DecisionOverlay, DecisionState } from '@/components/p3/p3-preview-data'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import type {
@@ -46,82 +43,109 @@ function formatPercent(value: number | null): string {
   return `${(value * 100).toFixed(1)}%`
 }
 
+function quoteStatus(market: MarketRowData): string {
+  if (market.quoteState === 'stale') return market.freshness
+  if (market.quoteLabel.includes(' · ')) return market.quoteLabel
+  return `${market.quoteLabel} · ${market.freshness.replace(/^上次有效报价 · /, '')}`
+}
+
 const phaseLabels: Record<MarketRowData['phase'], string> = {
-  live: '直播',
-  upcoming: '即将开始',
+  live: '进行中',
+  upcoming: '未开始',
   closed: '已结束',
   unknown: '状态未知',
 }
 
 export function MarketRow({ market }: { market: MarketRowData }) {
   const overlay = market.overlay ?? (market.stale ? 'stale' : 'none')
-  const modelProbabilityLabel = market.playerOne === '—'
-    ? '模型估算胜率'
-    : `${market.playerOne} 模型胜率`
-  // A decision badge only ever comes from a real observation; without one
-  // the row states its quote state instead of inventing MARKET_ONLY.
   const decision = market.decisionAction
-  const note = market.reason ?? market.modelAvailabilityLabel
   const card = (
-    <Card size="sm" className="transition-[transform,box-shadow] group-hover:-translate-y-0.5 group-hover:ring-primary/35">
-      <CardContent className="grid min-h-28 grid-cols-2 items-center gap-4 py-1 md:grid-cols-[minmax(15rem,1.5fr)_minmax(11rem,0.9fr)_minmax(8rem,0.65fr)_minmax(11rem,1fr)_auto]">
-        <div className="col-span-2 min-w-0 md:col-span-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="truncate font-semibold">{market.match}</h3>
-            <Badge variant="outline">{phaseLabels[market.phase]}</Badge>
-            <Badge variant="secondary">{market.tierLabel}</Badge>
+    <Card size="sm" className="border-foreground/10 bg-[linear-gradient(105deg,#0d241a,#071811)] transition-colors group-hover:border-primary/35">
+      <CardContent className="grid gap-3 py-2 lg:grid-cols-[minmax(0,1.05fr)_minmax(20rem,1fr)_minmax(13rem,0.72fr)] lg:items-center lg:gap-5 lg:px-5 lg:py-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+            <p className="break-words text-muted-foreground">{market.tournament}</p>
+            <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+              <span
+                className={cn('size-2 shrink-0 rounded-full bg-muted-foreground', market.phase === 'live' && 'bg-live')}
+                aria-hidden="true"
+              />
+              {phaseLabels[market.phase]}
+            </span>
           </div>
-          <p className="mt-1 truncate text-sm text-muted-foreground">{market.tournament}</p>
-          {note ? <p className="mt-2 text-xs text-muted-foreground">{note}</p> : null}
+          <h3 className="mt-2 break-words text-lg font-semibold leading-snug md:text-xl">
+            {market.match}
+          </h3>
         </div>
 
-        <dl className="grid grid-cols-2 gap-3 rounded-lg bg-muted/30 p-3">
-          <div>
-            <dt className="flex min-w-0 items-center gap-2 truncate text-xs text-muted-foreground">
-              <PlayerAvatar name={market.playerOne} imageUrl={market.playerImages?.[0]} className="size-7" />
-              <span className="flex min-w-0 flex-col">
-                <PlayerName name={market.playerOne} localizedName={market.playerLocalizedNames?.[0]} />
-                <span>胜出报价</span>
-              </span>
-            </dt>
-            <dd className="mt-1 font-mono text-lg font-semibold tabular-nums">{formatPercent(market.playerOneAsk)}</dd>
+        <section className="min-w-0" aria-label="胜出买入参考价">
+          <h4 className="mb-2 text-sm text-muted-foreground">胜出买入参考价</h4>
+          <dl className="grid min-w-0 grid-cols-2 gap-2 md:gap-2.5">
+            {[market.playerOne, market.playerTwo].map((name, index) => (
+              <div key={`${index}-${name}`} className="min-w-0 rounded-lg border border-foreground/10 bg-muted/20 px-2.5 py-2 text-center md:px-3">
+                <dt className="break-words text-xs font-medium leading-snug text-foreground sm:text-sm">
+                  {name !== '—' ? (
+                    <PlayerName
+                      name={name}
+                      localizedName={market.playerLocalizedNames?.[index]}
+                      className="w-full min-w-0 max-w-full"
+                      primaryClassName="break-words text-clip overflow-visible whitespace-normal"
+                      secondaryClassName="break-words text-clip overflow-visible whitespace-normal"
+                    />
+                  ) : '—'}
+                </dt>
+                <dd className="mt-1.5 font-mono text-xl font-semibold tabular-nums md:text-2xl">
+                  {formatPercent(index === 0 ? market.playerOneAsk : market.playerTwoAsk)}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+
+        <div className="grid min-w-0 gap-2 pt-1 lg:border-l lg:py-1 lg:pl-5 lg:pt-0">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+            <p className="inline-flex min-w-0 items-center gap-1.5" data-quote-state={market.quoteState}>
+              <span className={cn('size-2 shrink-0 rounded-full bg-muted-foreground', market.stale && 'bg-destructive')} aria-hidden="true" />
+              {quoteStatus(market)}
+            </p>
+            {decision !== null ? (
+              <DecisionStatusBadge state={decision as DecisionState} overlay={overlay} />
+            ) : null}
           </div>
-          <div>
-            <dt className="flex min-w-0 items-center gap-2 truncate text-xs text-muted-foreground">
-              <PlayerAvatar name={market.playerTwo} imageUrl={market.playerImages?.[1]} className="size-7" />
-              <span className="flex min-w-0 flex-col">
-                <PlayerName name={market.playerTwo} localizedName={market.playerLocalizedNames?.[1]} />
-                <span>胜出报价</span>
-              </span>
-            </dt>
-            <dd className="mt-1 font-mono text-lg font-semibold tabular-nums">{formatPercent(market.playerTwoAsk)}</dd>
-          </div>
-        </dl>
-
-        <dl>
-          <dt className="text-xs text-muted-foreground">{modelProbabilityLabel}</dt>
-          <dd className="mt-1 font-mono text-lg font-semibold tabular-nums">{formatPercent(market.modelProbability)}</dd>
-          {market.modelAvailabilityLabel ? (
-            <dd className="mt-1 text-xs text-muted-foreground">{market.modelAvailabilityLabel}</dd>
-          ) : null}
-        </dl>
-
-        <dl className="grid grid-cols-2 gap-3">
-          <div><dt className="text-xs text-muted-foreground" title="每位球员都同时有买入价和卖出价时，才计入平均值。">平均价差</dt><dd className="mt-1 font-mono font-semibold">{formatPercent(market.spread)}</dd></div>
-          <div><dt className="text-xs text-muted-foreground" title="双方买卖盘最优一档的金额合计，不代表整个盘口，也不保证全部可成交。">最优档金额</dt><dd className="mt-1 font-mono font-semibold">{market.depth === null ? '—' : `$${market.depth.toLocaleString('en-US', { maximumFractionDigits: 2 })}`}</dd></div>
-          <div className="col-span-2"><dt className="sr-only">报价更新时间</dt><dd className={cn('text-xs text-muted-foreground', market.stale && 'text-destructive')}>{market.freshness}</dd></div>
-        </dl>
-
-        <div className="flex items-center justify-between gap-2 md:justify-end">
-          {decision !== null ? (
-            <DecisionStatusBadge state={decision as DecisionState} overlay={overlay} />
-          ) : (
-            <Badge variant="outline" data-quote-state={market.quoteState}>
-              {market.quoteLabel}
-            </Badge>
-          )}
-          {market.href !== null ? (
-            <ArrowRight aria-hidden="true" className="size-4 shrink-0 text-foreground transition-transform group-hover:translate-x-0.5" />
+          <dl className="grid min-w-0 grid-cols-2 gap-x-3 gap-y-3">
+            {market.spread !== null ? (
+              <div>
+                <dt className="text-xs text-muted-foreground" title="每位球员都同时有买入价和卖出价时，才计入平均值。">
+                  平均价差
+                </dt>
+                <dd className="mt-1 font-mono font-semibold tabular-nums">{formatPercent(market.spread)}</dd>
+              </div>
+            ) : null}
+            {market.depth !== null ? (
+              <div className="border-l border-foreground/10 pl-3 md:pl-4">
+                <dt className="text-xs text-muted-foreground" title="双方买卖盘最优一档的金额合计，不代表整个盘口，也不保证全部可成交。">
+                  最优档金额
+                </dt>
+                <dd className="mt-1 font-mono font-semibold tabular-nums">
+                  ${market.depth.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                </dd>
+              </div>
+            ) : null}
+            {market.modelProbability !== null ? (
+              <div className="min-w-0">
+                <dt className="break-words text-xs text-muted-foreground">
+                  {market.playerOne === '—' ? '模型估算胜率' : `${market.playerOne} 模型胜率`}
+                </dt>
+                <dd className="mt-1 font-mono font-semibold tabular-nums">
+                  {formatPercent(market.modelProbability)}
+                </dd>
+              </div>
+            ) : null}
+          </dl>
+          {decision !== null && market.reason ? (
+            <p className="break-words text-xs leading-relaxed text-muted-foreground">
+              {market.reason}
+            </p>
           ) : null}
         </div>
       </CardContent>
@@ -129,10 +153,8 @@ export function MarketRow({ market }: { market: MarketRowData }) {
   )
 
   if (market.href === null) {
-    // Unmapped market-only rows are not navigable; the card stays visible
-    // without inventing a destination.
     return (
-      <div className="group rounded-xl" aria-label={`${market.match} 市场报价`}>
+      <div className="rounded-xl" aria-label={`${market.match} 市场报价`}>
         {card}
       </div>
     )

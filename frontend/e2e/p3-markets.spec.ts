@@ -273,6 +273,12 @@ async function showAllMarkets(page: Page, rows: unknown[]) {
   await page.getByRole('heading', { name: '比赛市场' }).waitFor()
 }
 
+async function expandMobileFilters(page: Page) {
+  if ((page.viewportSize()?.width ?? 1440) < 768) {
+    await page.getByRole('button', { name: /筛选 · \d+ 项/ }).click()
+  }
+}
+
 function minutesAgo(minutes: number): string {
   return new Date(Date.now() - minutes * 60_000).toISOString()
 }
@@ -308,12 +314,13 @@ test.describe('P3 production market quote states (T88)', () => {
     await interceptP3(page)
     await page.goto('/markets?view=all')
 
-    await expect(page.getByText('已加载 50 / 51 场')).toBeVisible()
-    await page.getByRole('button', { name: '女子' }).click()
-    await expect(page.getByText('没有符合条件的比赛')).toBeVisible()
+    await expect(page.getByText('已加载 50 / 全部 51 个市场')).toBeVisible()
+    await expandMobileFilters(page)
+    await page.getByRole('button', { name: '女' }).click()
+    await expect(page.getByText('没有符合条件的市场')).toBeVisible()
     await page.getByRole('button', { name: '加载更多' }).click()
     await expect(page.getByRole('link', { name: '查看 Tail Player vs. Tail Opponent 市场' })).toBeVisible()
-    await expect(page.getByText('已加载 51 / 51 场')).toBeVisible()
+    await expect(page.getByText('已加载 51 / 全部 51 个市场')).toBeVisible()
     expect(MARKET_REQUEST_PAGES.slice(-2)).toEqual([1, 2])
   })
 
@@ -369,6 +376,48 @@ test.describe('P3 production market quote states (T88)', () => {
     ).toBeVisible()
     await expect(page.getByText('最近报价 · 1 分前')).toBeVisible()
     await expect(page.getByText(/未覆盖|不伪造模型值/)).toHaveCount(0)
+  })
+
+  test('long outcome names wrap without clipping or horizontal overflow', async ({ page }) => {
+    const playerOne = 'Alexandru Constantin Marius Popescu-Szilagyi'
+    const playerTwo = 'Maximilian Alexander Theodor von Hohenberg-Wuerttemberg'
+    await showAllMarkets(page, [
+      marketRow({
+        player_names: [playerOne, playerTwo],
+        model_availability: 'out_of_scope',
+        decision_action: null,
+        model_probability: null,
+      }),
+    ])
+    const row = page.getByRole('link', { name: /查看 .* 市场/ })
+    await expect(row).toBeVisible()
+    await expect(row.getByText(/模型/)).toHaveCount(0)
+
+    for (const name of [playerOne, playerTwo]) {
+      const label = page.getByText(name, { exact: true })
+      await expect(label).toBeVisible()
+      const textStyle = await label.evaluate((element) => {
+        const style = getComputedStyle(element)
+        return {
+          whiteSpace: style.whiteSpace,
+          textOverflow: style.textOverflow,
+          overflowWrap: style.overflowWrap,
+        }
+      })
+      expect(textStyle).toEqual({
+        whiteSpace: 'normal',
+        textOverflow: 'clip',
+        overflowWrap: 'break-word',
+      })
+    }
+
+    for (const [width, height] of [[375, 844], [390, 844], [768, 1000], [1024, 900], [1440, 1000]]) {
+      await page.setViewportSize({ width, height })
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      )
+      expect(overflow, `no horizontal overflow at ${width}px`).toBeLessThanOrEqual(0)
+    }
   })
 
   test('row navigation follows the active link only', async ({ page }) => {
@@ -448,7 +497,9 @@ test.describe('P3 production mobile', () => {
     await page.goto('/markets')
 
     await expect(page.getByRole('heading', { name: '比赛市场' })).toBeVisible()
-    await expect(page.getByText('E2E Alpha vs. E2E Beta')).toBeVisible()
+    await expect(
+      page.getByRole('link', { name: /查看 E2E Alpha vs\. E2E Beta 的模拟买入机会决策/ }),
+    ).toBeVisible()
     await expect(page.getByText('方向：E2E Alpha')).toBeVisible()
     await expect(page.getByText('+7.0 个百分点')).toBeVisible()
     await expect(
@@ -464,7 +515,8 @@ test.describe('P3 production mobile', () => {
     await page.goto('/markets')
 
     await page.getByRole('tab', { name: /全部市场/ }).click()
-    await expect(page.getByText('市场筛选')).toBeVisible()
+    await expandMobileFilters(page)
+    await expect(page.getByRole('group', { name: '赛事级别' })).toBeVisible()
     await expect(page.getByText('E2E Challenger Moneyline')).toBeVisible()
     // The low-tier row states its real quote state instead of a model label.
     await expect(page.getByText('暂无可交易报价')).toBeVisible()
@@ -481,6 +533,7 @@ test.describe('P3 production mobile', () => {
     await page.getByRole('tab', { name: /全部市场/ }).click()
     await expect(page.getByText('E2E Challenger Moneyline')).toBeVisible()
 
+    await expandMobileFilters(page)
     await page.getByRole('button', { name: '挑战赛', exact: true }).click()
     await expect(page.getByText('E2E Challenger Moneyline')).toBeVisible()
     // The ATP row is filtered out of the list.
@@ -490,6 +543,27 @@ test.describe('P3 production mobile', () => {
     await page.getByRole('button', { name: '重置' }).click()
     await expect(page.locator('h3', { hasText: 'E2E Alpha vs. E2E Beta' })).toHaveCount(1)
     expect(page.url()).not.toContain('tier=challenger')
+  })
+
+  test('market rows put both quotes and freshness before secondary details', async ({ page }) => {
+    await interceptP3(page)
+    await page.goto('/markets?view=all')
+    const row = page.getByRole('link', { name: /查看 E2E Alpha vs\. E2E Beta 市场/ })
+    await expect(row).toBeVisible()
+
+    const indices = await row.evaluate((element) => {
+      const content = element.textContent ?? ''
+      return [
+        content.indexOf('胜出买入参考价'),
+        content.indexOf('最近报价'),
+        content.indexOf('平均价差'),
+        content.lastIndexOf('胜出买入参考价'),
+      ]
+    })
+    expect(indices[0]).toBeGreaterThanOrEqual(0)
+    expect(indices[3]).toBeGreaterThan(indices[0])
+    expect(indices[1]).toBeGreaterThan(indices[3])
+    expect(indices[2]).toBeGreaterThan(indices[1])
   })
 
   test('Home pulse → Markets → Match navigation', async ({ page }) => {
@@ -503,7 +577,9 @@ test.describe('P3 production mobile', () => {
 
     await page.getByRole('link', { name: /查看全部/ }).click()
     await page.waitForURL('/markets')
-    await expect(page.getByText('E2E Alpha vs. E2E Beta')).toBeVisible()
+    await expect(
+      page.getByRole('link', { name: /查看 E2E Alpha vs\. E2E Beta 的模拟买入机会决策/ }),
+    ).toBeVisible()
 
     await page
       .getByRole('link', { name: /查看 E2E Alpha vs\. E2E Beta 的模拟买入机会决策/ })
@@ -514,17 +590,23 @@ test.describe('P3 production mobile', () => {
   test('refresh keeps the workspace functional', async ({ page }) => {
     await interceptP3(page)
     await page.goto('/markets')
-    await expect(page.getByText('E2E Alpha vs. E2E Beta')).toBeVisible()
+    await expect(
+      page.getByRole('link', { name: /查看 E2E Alpha vs\. E2E Beta 的模拟买入机会决策/ }),
+    ).toBeVisible()
 
     await page.reload()
-    await expect(page.getByText('E2E Alpha vs. E2E Beta')).toBeVisible()
+    await expect(
+      page.getByRole('link', { name: /查看 E2E Alpha vs\. E2E Beta 的模拟买入机会决策/ }),
+    ).toBeVisible()
     await expect(page.getByRole('heading', { name: '比赛市场' })).toBeVisible()
   })
 
   test('keyboard users can traverse tabs and rows', async ({ page }) => {
     await interceptP3(page)
     await page.goto('/markets')
-    await expect(page.getByText('E2E Alpha vs. E2E Beta')).toBeVisible()
+    await expect(
+      page.getByRole('link', { name: /查看 E2E Alpha vs\. E2E Beta 的模拟买入机会决策/ }),
+    ).toBeVisible()
 
     await page.getByRole('tab', { name: /机会/ }).focus()
     await page.keyboard.press('ArrowRight')
@@ -532,7 +614,8 @@ test.describe('P3 production mobile', () => {
       'aria-selected',
       'true',
     )
-    await expect(page.getByText('市场筛选')).toBeVisible()
+    await expandMobileFilters(page)
+    await expect(page.getByRole('group', { name: '赛事级别' })).toBeVisible()
   })
 })
 
@@ -566,7 +649,9 @@ test.describe('P3 production mobile', () => {
   test('no horizontal overflow and 44px touch targets', async ({ page }) => {
     await interceptP3(page)
     await page.goto('/markets')
-    await expect(page.getByText('E2E Alpha vs. E2E Beta')).toBeVisible()
+    await expect(
+      page.getByRole('link', { name: /查看 E2E Alpha vs\. E2E Beta 的模拟买入机会决策/ }),
+    ).toBeVisible()
 
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
@@ -574,6 +659,7 @@ test.describe('P3 production mobile', () => {
     expect(overflow).toBeLessThanOrEqual(0)
 
     await page.getByRole('tab', { name: /全部市场/ }).click()
+    await page.getByRole('button', { name: '筛选 · 0 项' }).click()
     const chip = page.getByRole('button', { name: '挑战赛', exact: true })
     const box = await chip.boundingBox()
     expect(box).not.toBeNull()
@@ -581,6 +667,21 @@ test.describe('P3 production mobile', () => {
 
     const tabBox = await page.getByRole('tab', { name: /全部市场/ }).boundingBox()
     expect(tabBox!.height).toBeGreaterThanOrEqual(44)
+  })
+
+  test('mobile filters begin collapsed and expand without clipping canonical options', async ({ page }) => {
+    await interceptP3(page)
+    await page.goto('/markets?view=all')
+    const trigger = page.getByRole('button', { name: '筛选 · 0 项' })
+    const tierGroup = page.getByRole('group', { name: '赛事级别' })
+
+    await expect(trigger).toBeVisible()
+    await expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    await expect(tierGroup).toBeHidden()
+    await trigger.click()
+    await expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    await expect(tierGroup).toBeVisible()
+    await expect(page.getByRole('button', { name: '挑战赛', exact: true })).toBeVisible()
   })
 })
 

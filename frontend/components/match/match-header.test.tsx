@@ -36,4 +36,10 @@ describe('ProductHeader consumer navigation', () => {
 
     expect(pushMock).toHaveBeenCalledWith('/?q=%E9%83%91%E9%92%A6%E6%96%87%E4%B8%8B%E4%B8%80%E5%9C%BA%E6%AF%94%E8%B5%9B#assistant')
   })
+
+  it('gives the markets mobile menu a 44px touch target', () => {
+    render(<ProductHeader active="markets" variant="markets" />)
+
+    expect(screen.getByRole('button', { name: '打开导航菜单' })).toHaveClass('size-11')
+  })
 })

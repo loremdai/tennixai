@@ -7,11 +7,10 @@ export type MarketsTabValue = 'opportunities' | 'all' | 'paper'
 export const MARKETS_TABS: Array<{
   value: MarketsTabValue
   label: string
-  description: string
 }> = [
-  { value: 'opportunities', label: '机会', description: '模型判断与关注理由' },
-  { value: 'all', label: '全部市场', description: '比赛与最新报价' },
-  { value: 'paper', label: '模拟记录', description: '仅供模拟，不涉及真实资金' },
+  { value: 'opportunities', label: '机会' },
+  { value: 'all', label: '全部市场' },
+  { value: 'paper', label: '模拟记录' },
 ]
 
 /** Production tablist with the approved v0 geometry (arrow-key roving). */
@@ -36,7 +35,7 @@ export function MarketsTabs({
   }
 
   return (
-    <div className="flex overflow-x-auto rounded-xl border bg-card p-1" role="tablist" aria-label="市场视图">
+    <div className="flex items-end justify-around overflow-x-auto border-b md:justify-start md:gap-3" role="tablist" aria-label="市场视图">
       {MARKETS_TABS.map((item, index) => (
         <button
           key={item.value}
@@ -49,12 +48,13 @@ export function MarketsTabs({
           onClick={() => onSelect(item.value)}
           onKeyDown={(event) => handleTabKeyDown(event, index)}
           className={cn(
-            'flex min-h-11 min-w-28 flex-1 flex-col items-center justify-center rounded-lg px-4 py-2 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
-            view === item.value ? 'bg-secondary font-semibold text-foreground' : 'text-muted-foreground hover:text-foreground',
+            'relative flex min-h-11 shrink-0 items-center justify-center px-3 text-sm outline-none transition-colors after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:content-[""] focus-visible:ring-2 focus-visible:ring-ring',
+            view === item.value
+              ? 'font-semibold text-primary after:bg-primary'
+              : 'text-muted-foreground after:bg-transparent hover:text-foreground',
           )}
         >
           <span>{item.label}</span>
-          <span className="hidden text-xs font-normal text-muted-foreground sm:block">{item.description}</span>
         </button>
       ))}
     </div>

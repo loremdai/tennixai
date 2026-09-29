@@ -27,6 +27,7 @@ export type ProductNavKey = 'home' | 'live' | 'schedule' | 'players' | 'markets'
 type ProductHeaderProps = {
   active?: ProductNavKey
   marketsHref?: string
+  variant?: 'default' | 'markets'
 }
 
 const navItems: Array<{ key: ProductNavKey; label: string; href: string }> = [
@@ -37,9 +38,14 @@ const navItems: Array<{ key: ProductNavKey; label: string; href: string }> = [
   { key: 'markets', label: '市场', href: '/markets' },
 ]
 
-export function ProductHeader({ active = 'home', marketsHref = '/markets' }: ProductHeaderProps) {
+export function ProductHeader({
+  active = 'home',
+  marketsHref = '/markets',
+  variant = 'default',
+}: ProductHeaderProps) {
   const router = useRouter()
   const [search, setSearch] = useState('')
+  const isMarketsHeader = variant === 'markets'
   const resolvedNavItems = navItems.map((item) =>
     item.key === 'markets' ? { ...item, href: marketsHref } : item,
   )
@@ -54,7 +60,7 @@ export function ProductHeader({ active = 'home', marketsHref = '/markets' }: Pro
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4 md:px-6">
+      <div className={cn('mx-auto flex items-center gap-4 px-4 md:px-6', isMarketsHeader ? 'h-14 max-w-7xl' : 'h-16 max-w-7xl')}>
         <Link
           href="/"
           className="flex shrink-0 items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -63,30 +69,36 @@ export function ProductHeader({ active = 'home', marketsHref = '/markets' }: Pro
           <span className="flex size-8 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_0_24px_color-mix(in_oklab,var(--primary)_22%,transparent)]">
             <CircleDot aria-hidden="true" className="size-5" />
           </span>
-          <span className="font-mono text-sm font-bold tracking-[0.14em]">
-            TENNIX<span className="text-primary">/AI</span>
-          </span>
+          {isMarketsHeader ? (
+            <span className="text-lg font-semibold tracking-tight">TennixAI</span>
+          ) : (
+            <span className="font-mono text-sm font-bold tracking-[0.14em]">
+              TENNIX<span className="text-primary">/AI</span>
+            </span>
+          )}
         </Link>
 
-        <nav className="hidden h-full items-center gap-1 lg:flex" aria-label="主导航">
-          {resolvedNavItems.map((item) => (
-            <Link
-              key={item.key}
-              href={item.href}
-              aria-current={active === item.key ? 'page' : undefined}
-              className={cn(
-                'relative flex h-full items-center gap-1.5 px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-                active === item.key
-                  ? 'text-foreground after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:bg-primary'
-                  : 'text-muted-foreground hover:text-foreground',
-              )}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
+        {!isMarketsHeader ? (
+          <nav className="hidden h-full items-center gap-1 lg:flex" aria-label="主导航">
+            {resolvedNavItems.map((item) => (
+              <Link
+                key={item.key}
+                href={item.href}
+                aria-current={active === item.key ? 'page' : undefined}
+                className={cn(
+                  'relative flex h-full items-center gap-1.5 px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                  active === item.key
+                    ? 'text-foreground after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:bg-primary'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+        ) : null}
 
-        {active !== 'home' ? (
+        {!isMarketsHeader && active !== 'home' ? (
           <form onSubmit={submitSearch} className="mx-auto hidden w-full max-w-md md:block">
             <label htmlFor="global-search" className="sr-only">
               搜索球员、赛事或询问任何问题
@@ -108,8 +120,14 @@ export function ProductHeader({ active = 'home', marketsHref = '/markets' }: Pro
           </form>
         ) : null}
 
-        <div className="ml-auto flex shrink-0 items-center gap-1 md:ml-0">
-          {active !== 'home' ? (
+        {isMarketsHeader ? (
+          <span className="ml-auto hidden rounded-full border px-3 py-1 text-xs text-muted-foreground sm:inline-flex">
+            仅模拟
+          </span>
+        ) : null}
+
+        <div className={cn('flex shrink-0 items-center gap-1', isMarketsHeader ? 'ml-auto md:ml-0' : 'ml-auto md:ml-0')}>
+          {!isMarketsHeader && active !== 'home' ? (
             <Link
               href="/#assistant"
               aria-label="搜索与提问"
@@ -121,11 +139,11 @@ export function ProductHeader({ active = 'home', marketsHref = '/markets' }: Pro
 
           <DropdownMenu>
             <DropdownMenuTrigger
-              render={<Button variant="ghost" size="icon" className="lg:hidden" aria-label="打开导航菜单" />}
+              render={<Button variant="ghost" size="icon" className={isMarketsHeader ? 'size-11 md:hidden' : 'lg:hidden'} aria-label="打开导航菜单" />}
             >
               <Menu aria-hidden="true" />
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-52 lg:hidden">
+            <DropdownMenuContent align="end" className={cn('min-w-52', isMarketsHeader ? 'md:hidden' : 'lg:hidden')}>
               <DropdownMenuGroup>
                 <DropdownMenuLabel>导航</DropdownMenuLabel>
                 {resolvedNavItems.map((item) => (

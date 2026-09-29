@@ -55,4 +55,13 @@ describe('PaperRow', () => {
     expect(screen.queryByText('$0.00 · —')).toBeNull()
     expect(screen.queryByText('0.00')).toBeNull()
   })
+
+  it('puts the ledger state before its financial details', () => {
+    render(<PaperRow record={paperRow({ state: 'hold', detail: '已模拟买入，持有中' })} />)
+
+    const row = screen.getByRole('link')
+    const content = row.textContent ?? ''
+    expect(content.indexOf('模拟持有中')).toBeGreaterThanOrEqual(0)
+    expect(content.indexOf('模拟持有中')).toBeLessThan(content.indexOf('模拟投入 / 买入均价'))
+  })
 })
