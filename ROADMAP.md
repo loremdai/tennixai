@@ -5,11 +5,11 @@
 
 **最后更新：** 2026-09-29（北京时间）
 
-**总体状态：** `in_progress`（P4 持续打磨；T116 市场页信息层级与扫读体验设计已交付，前端实施尚未授权；T111、T112、T115 已完成；T113 端口回退已交付，TLS 阻塞已解除，真实运行栈已在 3100 启动；3101 回退实测尚未完成；T114 已调查比赛详情页模型数据空缺，T115 已修复预测持久化与市场/GAP 文案；T110 私人测试服务器部署仍 `blocked`。所有活跃网球胜者市场展示真实名称/报价；未严格映射的市场不进入模型或 Paper。模型未晋级时机会页继续诚实为空）
+**总体状态：** `in_progress`（P4 持续打磨；T117 按已批准示意图实施市场页前端改版；T116 设计已交付；T111、T112、T115 已完成；T113 端口回退已交付，TLS 阻塞已解除，真实运行栈已在 3100 启动；3101 回退实测尚未完成；T114 已调查比赛详情页模型数据空缺，T115 已修复预测持久化与市场/GAP 文案；T110 私人测试服务器部署仍 `blocked`。所有活跃网球胜者市场展示真实名称/报价；未严格映射的市场不进入模型或 Paper。模型未晋级时机会页继续诚实为空）
 
 **当前里程碑：** P3 已关闭；P4.0–P4.4 已完成（T72–T92）；P4.5（T93–T104）、P4.6（T105）及后续打磨 T106–T109 均已完成；T113 最近核验时 runtime/API/frontend 在 3100 运行，PostgreSQL/Redis 为 external healthy。
 
-**当前阶段：** P4 后续打磨 — T116 市场页设计已交付待审阅，实施待用户后续指示；T115 已修复 Match 工作台预测持久化与空行情/GAP 文案；T114 调查已关闭。T113 端口回退代码已完成，本地初始化为 schema `0009`，TLS 恢复后只读 `verify` 通过，真实栈已在 3100 运行。3101 备用端口仍待实际有其他 ADE 占用 3100 时验证。T110 私人测试部署仍受阻。模型晋升证据链另行排期，自动下单继续 `deferred`。
+**当前阶段：** P4 后续打磨 — T117 按 T116 已批准设计实施市场页前端改版；T115 已修复 Match 工作台预测持久化与空行情/GAP 文案；T114 调查已关闭。T113 端口回退代码已完成，本地初始化为 schema `0009`，TLS 恢复后只读 `verify` 通过，真实栈已在 3100 运行。3101 备用端口仍待实际有其他 ADE 占用 3100 时验证。T110 私人测试部署仍受阻。模型晋升证据链另行排期，自动下单继续 `deferred`。
 
 ## 状态说明
 
@@ -209,6 +209,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | T114 | P4 follow-up | Investigate Missing Prediction Data on Match Detail | `done` | `444a5fc`（调查证据与收口记录） | 截图对应 match `mat_4c0f46acce4c472185587afb8613ae0d`。只读 runtime health：模型 `not_promoted`、Polymarket 决策流 `gap/CONNECTION_LOST`、tennis live `ok`；decision API 返回 `model_probabilities/model_availability/data_version=null`、`RULES_UNAVAILABLE`、`has_gap=true`，同时存在盘口档位 `0.65/0.66`、`0.34/0.35`。查明预测服务因无晋升 artifact 按设计不输出概率；另有 `save_prediction()` 无运行时调用而详情读侧查询该表的持久化断路。规则门先于 quote 导致 $10 均价为空；合并 gap 被 UI 错标为比赛数据中断；NO_BET 通用标题误称价格差距不明显。全程只读，没有产品代码变更、测试或供应商/LLM 请求。详见 `CURRENT.md`。 |
 | T115 | P4 follow-up | Repair Match Detail Prediction Persistence and Market/GAP Presentation | `done` | `30ea130`（领取），`1d6e4d4`（实现） | 接通现有 `save_prediction()` 写入与 Match 决策预测读侧；均价为空时从现有 DTO 展示双方真实盘口顶档并明确区别于 $10 可执行均价；将 gap 文案改为不推断中断来源的中性表述，并去掉不符合实际 reason_code 的 no-bet 标题。保持市场规则/stale/gap 安全门和未晋级模型空胜率语义。静态验证：TypeScript、Python AST、`git diff --check` 通过；未运行测试。详见 `CURRENT.md`。 |
 | T116 | P4 follow-up | Design a Scannable Markets Frontend | `done` | `7a15254`（设计规格） | 用户要求先交付方案和设计、后续单独指示实施。已基于真实 `/markets`、现有三视图及视觉基线提交[桌面/手机设计与状态矩阵](./docs/superpowers/specs/2026-09-29-tennixai-t116-markets-readability-design.md)，推荐优化现有信息层级。文档相对链接目标存在，暂存清单仅含设计文档且 `git diff --cached --check` 通过；未修改产品前端，也未运行产品测试或视觉回归。 |
+| T117 | P4 follow-up | Implement the Approved Markets Frontend Redesign | `in_progress` | — | 用户已明确要求按 T116 设计稿与示意图实施。范围为生产 `/markets` 三视图卡片与移动筛选，保持现有 API、URL、模型及 Paper 语义，并保护冻结 `?preview=p3`。计划与当前验收见 `CURRENT.md`。 |
 
 ## P4.1 Completion Gate 核验摘要（2026-09-18，逐条实际核验）
 
