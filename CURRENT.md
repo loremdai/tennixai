@@ -272,7 +272,7 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
-| 2026-09-29 | `0ddde48` / 本次收口提交 | T114 调查完成：当前部署 `not_promoted`；详情 prediction 读表没有运行时写入调用；规则硬门令可执行均价为空；Polymarket gap 被页面标成比赛数据中断。只读 API/UI/代码证据见上方 T114。 |
+| 2026-09-29 | `444a5fc` | T114 调查完成：当前部署 `not_promoted`；详情 prediction 读表没有运行时写入调用；规则硬门令可执行均价为空；Polymarket gap 被页面标成比赛数据中断。只读 API/UI/代码证据见上方 T114。 |
 | 2026-09-29 | `f61486f` | T113 TLS 阻塞已解除；只读 `verify` 为 `6 passed / 2 skipped / 0 failed`，真实服务已在 `3100` 启动。3101 实测仍待其他 ADE 实际占用 3100 时验证。 |
 | 2026-09-28 | `90ba194` / `fd22892` / `ea1d760` | T113 端口回退实现与回归已交付；获批 `init` 成功（schema `0009`，3979 players / 281 matches）。首次 `up` 被 Gamma/CLOB 自签名 TLS 证书链阻断；没有关闭 TLS 验证，也未触碰 3100 的其他 ADE。 |
 | 2026-09-28 | `6be5fae` / `6b7de72` | T112 完成：修复 Polymarket 官方规则字段读取、规则版本历史、扫描新鲜度与 BUY/SELL/Paper 安全门；后端 `1377 passed`、前端 `536 passed`、类型检查及 Ruff lint 通过。共享数据库未迁移、服务未重启。 |
