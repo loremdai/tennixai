@@ -2,9 +2,9 @@
 
 > 快速了解现在做到哪里、最近做完什么、接下来由谁接手。长期路线与阶段证据见 [ROADMAP.md](./ROADMAP.md)，产品定位和稳定架构见 [PROJECT.md](./PROJECT.md)。
 
-**最后更新：** 2026-09-28（北京时间）
+**最后更新：** 2026-09-29（北京时间）
 
-**当前主任务：** T113 — 本地启动器前端备用端口与真实运行验收（`blocked`）。端口回退实现已完成；本地初始化成功，但真实启动被 Polymarket Gamma/CLOB 主机的 TLS 自签名证书错误阻断。TLS 验证保持开启，未绕过；等待可信网络/证书链恢复后再完成 3101 实测。3100 上其他 ADE 的进程保持不动。T110 私人测试服务器部署仍 `blocked`。
+**当前主任务：** T113 — 本地启动器前端备用端口与真实运行验收（`blocked`）。端口回退实现已完成；2026-09-29 只读 `verify` 的 6 项上游检查通过、2 项安静窗口跳过、0 项失败，TLS 阻塞已解除。用户要求启动后，`up` 成功启动 runtime/API/frontend，实际前端地址为 `http://127.0.0.1:3100`，API 与首页 HTTP 检查通过；由于启动时 3100 空闲，3101 的真实回退场景仍待验证。服务按用户要求保持运行。T110 私人测试服务器部署仍 `blocked`。
 
 **最近任务：** T113 — 本地启动器前端备用端口与真实运行验收（`blocked`，实现 `ea1d760`）；T112 — Polymarket 规则链路修复（`done`，实现 `6b7de72`）；T111 — 修复比赛阶段显示（`done`，`84a344e`）；T110 — 私人测试服务器部署（`blocked`）。
 
@@ -19,8 +19,9 @@
 - **代码验证：** 新增端口选择回归先按预期失败，再通过；启动器 `63 passed`，完整后端确定性套件 `1379 passed, 131 deselected`，改动文件 Ruff lint/format 与 `git diff --check` 通过。
 - **已批准恢复：** 用户于 2026-09-28 明确批准现在开始完整初始化。按运行手册执行唯一受支持的 `./scripts/tennix-live init`；它会迁移专用本地 schema、同步赛程/排名与目录，并可能批量调用 LLM 补齐中文名。此前 schema 为 `0008`，T112 要求 `0009`；不手工绕过启动器迁移，不清空数据库或 Paper ledger。
 - **运行验收节点（2026-09-28 18:27 CST）：** 获批的 `init` 成功，数据库迁移到 `0009`，同步摘要 `players=3979 matches=281`。`up` 因 180 秒内未达到必需的首次健康发现而返回 `LOCAL_RUNTIME_UNHEALTHY`；按启动器保护逻辑仅停止本次 Tennix runtime，API/frontend 未启动。失败后 `status` 确认 PostgreSQL/Redis healthy、Tennix 子进程均停止；3100 的其他 ADE 未触碰。
+- **运行验收节点（2026-09-29 北京时间）：** `./scripts/tennix-live verify`：`6 passed / 2 skipped / 0 failed`（跳过项为无活跃映射盘口的 WebSocket 与未请求 LLM）；TLS 正常，未绕过验证。用户要求启动后 `./scripts/tennix-live up` 成功；状态为 stack running，runtime/API/frontend 均运行，数据库与 Redis healthy（external）；sports stream、schedule、rankings、Polymarket 均 `ok`，paper 为 `paper_only`、模型 `not_promoted`。实际前端地址 `http://127.0.0.1:3100`；`/api/v1/health` 返回 200，首页返回 Tennix 标题。服务保持运行。
 - **根因证据：** 不调用 LLM 的只读 `verify` 为 3 passed（API-Tennis 排名、赛程目录、网球 WebSocket）、4 skipped（无已映射/活跃盘口，LLM 未请求）、1 failed（Polymarket `market_discovery: PROVIDER_UNAVAILABLE`）。匿名只读 TLS 探测中，Gamma `/tags/slug/tennis` 和 CLOB `/time` 均返回 curl error 60 / TLS verify result 18：证书为自签名、当前信任链无法验证。故障发生于 HTTPS 证书验证，不是 API key、无 live 比赛或市场匹配空结果；尚不能断言是 IP 封锁。没有关闭 TLS 校验。
-- **阻塞与下一步：** 需要恢复 Polymarket 主机的有效 TLS 信任链（确认当前网络/证书链，或配置经用户批准的显式代理与 CA）。不使用 `verify=False`、不跳过市场首次发现健康门、不手工单独启动 API/frontend。TLS 恢复后重跑只读 `verify`，再 `up` 验证 3101 与真实页面。
+- **阻塞与下一步：** TLS 阻塞已解除，完整栈现运行于 3100。剩余验收仅为 3100 被其他 ADE 占用时的 3101 实测；本次启动时端口空闲，因此没有占用或停止其他进程来人为制造冲突。保留 TLS 校验，不跳过市场首次发现健康门，不手工单独启动 API/frontend。3101 场景可在实际有其他 ADE 使用 3100 时通过受支持的 `up` 验证。
 - **边界：** 根 `.env` 仅由启动器读取，不输出凭据；不终止 3100 的其他 ADE 进程，不删除或重置运行数据，不改变市场模型晋升或 paper-only 边界；所有已有用户工作区改动继续保留且不纳入提交。
 
 ## T112 修复 Polymarket 市场规则链路（`done`）
