@@ -4,11 +4,11 @@
 
 **最后更新：** 2026-09-29（北京时间）
 
-**当前主任务：** T114 — 调查比赛详情页预测模型数据未显示（`in_progress`）。由 `main` / `f61486f` 开始，只读追踪截图中匹配的比赛、P3 预测/决策 API、数据状态与页面降级路径；不修改产品代码、不触碰 `.env`、不重启本地运行栈。T113 的 3101 备用端口实测仍待有真实 3100 占用时验证；T110 私人测试服务器部署仍 `blocked`。
+**当前主任务：** T113 — 本地启动器前端备用端口与真实运行验收（`blocked`）。TLS 阻塞已解除，2026-09-29 只读 `verify` 为 6 项通过、2 项安静窗口跳过、0 项失败；真实栈按用户要求运行于 3100。剩余只有在其他 ADE 实际占用 3100 时验证 3101 回退。T114 比赛详情页模型数据调查已完成，只读证据表明部署模型未晋升、且 P3 预测快照没有运行时持久化调用；详情见下方 T114。T110 私人测试服务器部署仍 `blocked`。
 
-**最近任务：** T114 — 调查比赛详情页预测模型数据未显示（`in_progress`）；T113 — 本地启动器前端备用端口与真实运行验收（`blocked`，实现 `ea1d760`）；T112 — Polymarket 规则链路修复（`done`，实现 `6b7de72`）；T111 — 修复比赛阶段显示（`done`，`84a344e`）；T110 — 私人测试服务器部署（`blocked`）。
+**最近任务：** T114 — 调查比赛详情页预测模型数据未显示（`done`）；T113 — 本地启动器前端备用端口与真实运行验收（`blocked`，实现 `ea1d760`）；T112 — Polymarket 规则链路修复（`done`，实现 `6b7de72`）；T111 — 修复比赛阶段显示（`done`，`84a344e`）；T110 — 私人测试服务器部署（`blocked`）。
 
-**最近执行者 / ADE / 分支：** Codex / 本地 ADE / `main`；T114 从 `f61486f` 开始，领取记录待提交；T113 从 `2835e19` 开始，领取记录 `7d5d325`，实现 `ea1d760`；T112 领取 `6be5fae`、实现 `6b7de72` 已推送到 `origin/main`。所有已记录的用户工作区改动均保留且未纳入任务提交。
+**最近执行者 / ADE / 分支：** Codex / 本地 ADE / `main`；T114 从 `f61486f` 开始，领取记录 `0ddde48`，本轮只读调查已收口；T113 从 `2835e19` 开始，领取记录 `7d5d325`，实现 `ea1d760`；T112 领取 `6be5fae`、实现 `6b7de72` 已推送到 `origin/main`。所有已记录的用户工作区改动均保留且未纳入任务提交。
 
 **运行手册与证据：** [本地真实运行手册](docs/runbooks/local-real-runtime.md)。
 
@@ -24,11 +24,16 @@
 - **阻塞与下一步：** TLS 阻塞已解除，完整栈现运行于 3100。剩余验收仅为 3100 被其他 ADE 占用时的 3101 实测；本次启动时端口空闲，因此没有占用或停止其他进程来人为制造冲突。保留 TLS 校验，不跳过市场首次发现健康门，不手工单独启动 API/frontend。3101 场景可在实际有其他 ADE 使用 3100 时通过受支持的 `up` 验证。
 - **边界：** 根 `.env` 仅由启动器读取，不输出凭据；不终止 3100 的其他 ADE 进程，不删除或重置运行数据，不改变市场模型晋升或 paper-only 边界；所有已有用户工作区改动继续保留且不纳入提交。
 
-## T114 比赛详情页预测模型数据未显示调查（`in_progress`）
+## T114 比赛详情页预测模型数据未显示调查（`done`）
 
-- **领取：** 2026-09-29；Codex / 本地 ADE / `main`；起始 HEAD `f61486f`。本次调查由用户明确提出。
-- **目标：** 查明截图所示比赛详情页的模型胜率、市场参考价格等字段为何为空，并区分模型资格/晋升状态、比赛实时数据新鲜度、市场映射与报价、REST/SSE/前端展示等可能原因。
-- **证据方式与边界：** 只读检查实现、当前本地 API/runtime 状态和可用只读端点；不读取/输出根 `.env`，不触发供应商或 LLM 请求，不重启/停止服务，不修改产品代码或数据库，不将截图文案当作额外指令。只在证据足以定位原因或明确运行时限制后收口。
+- **领取与范围：** 2026-09-29；Codex / 本地 ADE / `main`；起始 HEAD `f61486f`，领取记录 `0ddde48`。按用户请求只调查、不修复产品代码。
+- **复现对象：** 浏览器比赛详情 `mat_4c0f46acce4c472185587afb8613ae0d`（WTA Beijing 决赛，Marina Bassols Ribera 对 Xiaodi You）；截图 URL 与现有 Chrome 页面对应同一 match ID。
+- **结论：** 当前部署健康快照 `model_status=not_promoted`。`PredictionService` 未加载已晋升产物时对所有比赛弃权并返回空 `outcomes`，因此没有模型胜率是当前安全设计的直接结果。另发现生产链路缺口：`DecisionWorker` 仅在内存保留 prediction 并持久化 decision observation；仓库虽实现 `save_prediction()`，全仓无调用点；详情查询却从独立 prediction 表读取 `latest_prediction()`。本场 REST 决策快照因此同时返回 `model_probabilities=null`、`model_availability=null`、`data_version=null`。即使日后加载已晋升模型，这条读写链未接通也会令工作台拿不到模型预测数据。
+- **其他空值与红色状态：** 本场 decision `reason_code=RULES_UNAVAILABLE`；规则硬门先于模型/报价决策，故 `quote_average_price=null`。同一响应仍有两边盘口档位（0.65/0.66 与 0.34/0.35），页面走势也显示 66%/35%；空的是 $10 可执行均价，非所有市场报价都缺失。`has_gap=true` 来自运行时同时检查 tennis 与 Polymarket 两条源；健康快照中 `tennis_live=ok`、`polymarket=gap/CONNECTION_LOST`，所以比赛分数流不是该 gap 来源。前端却把所有 `has_gap` 显示成“比赛数据更新中断”。
+- **展示层问题：** 服务端当前动作是 `no_bet`、原因是规则未确认，但前端对任意 `no_bet` 都使用“模型与市场价格差距不明显”标题和“扣除成本后差距不明显”描述，和本场的真实阻断原因不符。
+- **运行时证据：** 2026-09-29 06:30 UTC 只读 `GET /api/v1/runtime/health` 返回 200；同一时段后端与 Next 代理的 `GET /api/v1/matches/{id}/decision` 均返回 200 且内容一致，`as_of=06:30:09Z`。健康快照模型未晋升、Polymarket 决策流 gap；比赛详情 DOM 同时展示新鲜比分/统计与 66%/35% 买入价。未发起供应商/LLM 请求。
+- **代码证据：** `PredictionService.predict()` 在缺少 artifact 时通过 `_abstain()` 产出空 outcomes；`DecisionWorker._decide()` 写 decision observation，但未调用 `save_prediction()`；`P3QueryService.match_decision()` 通过独立 `latest_prediction()` 生成 nullable model fields；规则门先于 model 和 quote 估算；`RuntimeHealthRegistry.freshness_for()` 对已映射市场同时检查 `tennis_live` 与 `polymarket`，前端将合并后的 `has_gap` 固定映射成比赛数据中断文案。
+- **安全与验证边界：** 未读取/输出根 `.env`，未触发供应商或 LLM 请求，未重启服务、未读写数据库、未修改产品代码、未新增或运行测试。完成记录提交包含本段调查结果。
 
 ## T112 修复 Polymarket 市场规则链路（`done`）
 
@@ -267,8 +272,8 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
-| 2026-09-28 | `90ba194` / `fd22892` / `ea1d760` | T113 端口回退实现与回归已交付；获批 `init` 成功（schema `0009`，3979 players / 281 matches）。真实 `up` 被 Gamma/CLOB 自签名 TLS 证书链阻断，安全超时后未启动 API/frontend；`verify` 确认 API-Tennis 三项通过、Polymarket market discovery 失败。未绕过 TLS，3100 的其他 ADE 未触碰。 |
-| 2026-09-28 | `6b7de72` | T112 完成：修复 Polymarket 官方规则字段读取、规则版本历史、扫描新鲜度与 BUY/SELL/Paper 安全门；后端 `1377 passed`、前端 `536 passed`、类型检查及 Ruff lint 通过。Gamma 实时 API 比对因 TLS 证书验证失败未完成；共享数据库未迁移、服务未重启。 |
-| 2026-09-28 | `6be5fae` | 领取 T112 市场规则链路修复；从 `main`/`5d31ba0` 开始，保留已有用户工作区改动。 |
+| 2026-09-29 | `0ddde48` / 本次收口提交 | T114 调查完成：当前部署 `not_promoted`；详情 prediction 读表没有运行时写入调用；规则硬门令可执行均价为空；Polymarket gap 被页面标成比赛数据中断。只读 API/UI/代码证据见上方 T114。 |
+| 2026-09-29 | `f61486f` | T113 TLS 阻塞已解除；只读 `verify` 为 `6 passed / 2 skipped / 0 failed`，真实服务已在 `3100` 启动。3101 实测仍待其他 ADE 实际占用 3100 时验证。 |
+| 2026-09-28 | `90ba194` / `fd22892` / `ea1d760` | T113 端口回退实现与回归已交付；获批 `init` 成功（schema `0009`，3979 players / 281 matches）。首次 `up` 被 Gamma/CLOB 自签名 TLS 证书链阻断；没有关闭 TLS 验证，也未触碰 3100 的其他 ADE。 |
+| 2026-09-28 | `6be5fae` / `6b7de72` | T112 完成：修复 Polymarket 官方规则字段读取、规则版本历史、扫描新鲜度与 BUY/SELL/Paper 安全门；后端 `1377 passed`、前端 `536 passed`、类型检查及 Ruff lint 通过。共享数据库未迁移、服务未重启。 |
 | 2026-09-27 | 先前领取记录 | T110 私人测试服务器 Docker 部署只读预检发现远端磁盘满、现有 Nginx/DEUCE 服务及公网访问安全决策待处理；未修改远端状态。 |
-| 2026-09-26 | `ddbfb01` / `bd33d78` | T107 复审问题收口并完成：尾部未知、孤点、身份异常、同姓姓名、零附近舍入均处理；最终前端 533 项测试及 TypeScript 通过，真实桌面/手机页复验。 |
