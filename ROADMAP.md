@@ -5,11 +5,11 @@
 
 **最后更新：** 2026-09-30（北京时间）
 
-**总体状态：** `in_progress`（P4 持续打磨；T121 启动恢复、T124 内存释放与市场分页完成，T118 原启动阻塞已解决。T117 市场页改版、T111、T112、T115 已完成。T113 3101 回退实测与 T110 私人部署仍 `blocked`。模型未晋级时机会页继续诚实为空，未严格映射市场不进入模型或 Paper。）
+**总体状态：** `in_progress`（P4 持续打磨；T121 启动恢复、T124 内存释放与市场分页、T127 市场页首页强调色统一完成，T118 原启动阻塞已解决。T117 市场页改版、T111、T112、T115 已完成。T113 3101 回退实测与 T110 私人部署仍 `blocked`。模型未晋级时机会页继续诚实为空，未严格映射市场不进入模型或 Paper。）
 
-**当前里程碑：** P3 已关闭；P4.0–P4.4（T72–T92）、P4.5（T93–T104）、P4.6（T105）及打磨 T106–T109 均已完成。T121 实现 `57325c4`：临时启动标记丢失恢复及正常重启通过，单元 1425、隔离集成 98、真实浏览器 6。T124 实现 `0b1e9d1`：释放共享容器内存并将全部市场改为数据库分页，实际接口与筛选核验通过；本地数据库/Redis healthy。T125 实现 `71c3584`：按首页视觉语言完成生产市场页并通过后端 30 项、前端 553 项、桌面/手机 Playwright 20 项验证及生产构建。
+**当前里程碑：** P3 已关闭；P4.0–P4.4（T72–T92）、P4.5（T93–T104）、P4.6（T105）及打磨 T106–T109 均已完成。T121 实现 `57325c4`：临时启动标记丢失恢复及正常重启通过，单元 1425、隔离集成 98、真实浏览器 6。T124 实现 `0b1e9d1`：释放共享容器内存并将全部市场改为数据库分页，实际接口与筛选核验通过；本地数据库/Redis healthy。T125 实现 `71c3584`：按首页视觉语言完成生产市场页并通过后端 30 项、前端 553 项、桌面/手机 Playwright 20 项验证及生产构建。T127 实现 `d15ab4c`：生产市场页强调色恢复为首页共用的全局 `--primary`，相关前端测试 39 passed。
 
-**当前阶段：** P4 后续打磨 — T121 按 T120 官方方案完成关闭市场查询、需求生命周期、失败隔离、独立维护、本地就绪与持久初始化/独占所有权；T124 完成非 Tennix 容器清理和全部市场数据库分页；T125 完成生产市场页视觉优化和真实状态上下文保护。详见各任务验收证据。T117 市场页和 T115 Match 工作台修复已完成。schema 保持 `0009`，真实栈在 3100 运行；T113 3101 备用端口仍待实际占用场景验收。T110 私人部署及 T94 特定排名复验仍待独立任务，模型晋升另行排期，自动下单 `deferred`。
+**当前阶段：** P4 后续打磨 — T121 按 T120 官方方案完成关闭市场查询、需求生命周期、失败隔离、独立维护、本地就绪与持久初始化/独占所有权；T124 完成非 Tennix 容器清理和全部市场数据库分页；T125 完成生产市场页视觉优化和真实状态上下文保护；T127 统一生产市场页与首页强调色。详见各任务验收证据。T117 市场页和 T115 Match 工作台修复已完成。schema 保持 `0009`，真实栈在 3100 运行；T113 3101 备用端口仍待实际占用场景验收。T110 私人部署及 T94 特定排名复验仍待独立任务，模型晋升另行排期，自动下单 `deferred`。
 
 ## 状态说明
 
@@ -221,6 +221,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | T124 | P4 follow-up | Free Memory and Page All Markets at 50 Rows | `done` | `86de925`（领取），`0b1e9d1`（实现与证据） | 清理 80 个非 Tennix 容器（54 个运行中容器正常停止、26 个已停止容器移除），保留 Tennix PostgreSQL/Redis 及数据卷，未删 image/volume 或 prune；Colima available `40→7,113 MiB`，memory full PSI avg10 `64.57%→0.00%`。全部市场在 SQL 层筛选、排序、分页并只装载当前页依赖。实测第一页默认 50/总计 2,497，第二页无 ID 重叠，ATP 筛选 50/总计 100 且级别正确，Next 代理 200/50 行；单次约 95 ms。Python AST、Ruff、diff check 通过，未运行测试套件。最终状态中排名仍 `TIMEOUT_ERROR`，sports stream、schedule、Polymarket 为 `ok`。详见[报告](./docs/research/2026-09-30-tennixai-t124-container-memory-and-market-pagination.md)。 |
 | T125 | P4 follow-up | Implement the Final Home-Aligned Markets Mockup | `done` | `a9dd266`（筛选/数据库排序），`71c3584`（实现与回归），`1e0ea1a`（完成证据，已推送） | 生产 `/markets` 采用 Home 的近黑/荧光绿视觉、靠左下划线 Tab、ATP/WTA 默认筛选、真实双语头像行、报价胶囊与每行报价状态；级别优先，阶段顺序进行中→赛前→已结束。保留三视图、真实 DTO/API、SQL 50 行分页和 Paper 语义；`?preview=p3` 未改。比赛上下文批量读取，盘数要求比赛 live、在线且快照不超过 60 秒；完赛比分只在 canonical match status 为 finished 时显示，并按 market outcome ID 对齐。无效比分或超界盘数省略上下文值，不影响整页。验证：`backend/.venv/bin/pytest tests/test_p3_api.py tests/integration/test_p3_query_service.py -q` 30 passed；前端 Vitest 42 files/553 passed、`tsc --noEmit`、隔离临时副本 `next build --webpack` 通过；焦点桌面/手机 Playwright 20 passed；Ruff、`git diff --check` 通过。最终视觉在生产 `/markets` 检查；计划见 [T125 实施计划](./docs/superpowers/plans/2026-09-30-tennixai-t125-markets-frontend.md)。 |
 | T126 | P4 follow-up | Diagnose Stale Market Quotes and Verify US Egress | `done` | `aa887ac`（调查和完成证据） | 13:49 UTC 初查 409 个候选全部 stale，Polymarket/恢复流为 `PROVIDER_UNAVAILABLE`，snapshot 批量失败且无成功时间。未重启进程，同一美国出口的有界 `verify`：市场 discovery、book、WebSocket、quote snapshot 全 passed；6 passed/2 skipped/0 failed。13:54 UTC runtime 自行恢复：309 候选/309 已尝试、281 fresh snapshot、27 no-liquidity、1 unavailable、0 stale、0 batch failures；13:56 UTC ATP/WTA 页 50/196，20 个 open 报价新鲜，22 个 stale 全属 closed 行。`/api/geoblock` 报 `blocked=true, US`，官方文档将其定义为下单地域资格；公开只读行情可用，无需香港 IP。只读任务，无代码修改、重启或 LLM 调用。 |
+| T127 | P4 follow-up | Align Markets Accent with Home | `done` | `d15ab4c`（实现） | 删除生产 `/markets` 的局部 `--primary` 覆盖，改为使用首页全局 `--primary: oklch(0.89 0.215 126)`；报价价格、Tab、级别标签和实时状态点统一继承同一主色。浏览器运行预览已核对；`./node_modules/.bin/vitest run app/markets/page.test.tsx components/markets/markets-page.test.tsx --reporter=dot`：2 files / 39 passed；`git diff --check` 通过。 |
 
 ## P4.1 Completion Gate 核验摘要（2026-09-18，逐条实际核验）
 
