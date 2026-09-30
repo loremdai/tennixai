@@ -87,12 +87,6 @@
   --sidebar-ring: oklch(0.89 0.215 126);
 }
 
-.markets-workspace {
-  --primary: oklch(0.86 0.19 135);
-  --primary-foreground: oklch(0.11 0.02 150);
-  --ring: var(--primary);
-}
-
 @layer base {
   * {
     @apply border-border outline-ring/50;

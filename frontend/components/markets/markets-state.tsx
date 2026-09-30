@@ -459,7 +459,7 @@ export function MarketsWorkspace({
     data.listings.rows.some((row) => row.stale || row.overlay === 'stale')
 
   return (
-    <div className="markets-workspace min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background text-foreground">
       <ProductHeader active="markets" marketsHref="/markets" variant="markets" />
 
       <main id="content" className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-6 md:px-6 md:py-8">
