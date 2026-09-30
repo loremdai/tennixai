@@ -511,6 +511,15 @@ export type MarketSummaryDto = {
   tier: CircuitTier | null
   gender: Gender | null
   phase: MarketPhase | null
+  match_context?: {
+    scheduled_at: string | null
+    match_status?: MatchStatus | null
+    connection_status?: ConnectionStatus | null
+    state_as_of?: string | null
+    live_state_current?: boolean
+    current_set_number: number | null
+    score: MatchScoreDto | null
+  } | null
   model_availability: ModelAvailabilitySummaryValue
   decision_action: DecisionActionValue | null
   reason_code: string | null

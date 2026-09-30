@@ -17,6 +17,7 @@ import pytest
 from sqlalchemy import event, text
 
 from app.config import Settings
+from app.domain import ConnectionStatus, LiveMatchState, MatchScore, SetScore
 from app.decision.models import DecisionAction
 from app.markets.models import BookLevel, MarketStatus, OrderBookState, OutcomeBook
 from app.markets.quotes import QuoteSnapshotRecord, QuoteSource, QuoteState
@@ -32,7 +33,7 @@ from app.persistence.market_repositories import (
     MarketRepository,
 )
 from app.persistence.paper_repositories import PaperLedgerRepository
-from app.persistence.repositories import PostgresIdentityRepository
+from app.persistence.repositories import MatchSnapshotRepository, PostgresIdentityRepository
 from app.service import P3QueryService
 from p3_fakes import (
     NOW,
@@ -142,6 +143,7 @@ async def _seed(database: Database) -> dict[str, str]:
         "market_id": market_id,
         "player_a": player_a,
         "player_b": player_b,
+        "tournament_id": tournament_id,
     }
 
 
@@ -238,6 +240,150 @@ async def test_query_service_reads_durable_ledger(database: Database) -> None:
     assert snapshot["markets"] >= 1
     assert snapshot["opportunities"] >= 1
     assert snapshot["open_positions"] >= 1
+
+
+async def test_markets_include_safe_canonical_match_context(database: Database) -> None:
+    seeded = await _seed(database)
+    match_id = seeded["match_id"]
+    tournament_id = seeded["tournament_id"]
+    test_gender = f"g{uuid4().hex[:14]}"
+    scheduled_at = datetime(2026, 9, 30, 12, 30, tzinfo=UTC)
+    async with database.session() as session:
+        async with session.begin():
+            await session.execute(
+                text("UPDATE matches SET scheduled_at = :scheduled_at WHERE id = :id"),
+                {"scheduled_at": scheduled_at, "id": match_id},
+            )
+            await session.execute(
+                text("UPDATE tournaments SET gender = :gender WHERE id = :id"),
+                {"gender": test_gender, "id": tournament_id},
+            )
+
+    snapshot_repository = MatchSnapshotRepository(database)
+    await snapshot_repository.save_current_state(
+        match_id=match_id,
+        live_state=LiveMatchState(
+            current_set_number=2,
+            connection_status=ConnectionStatus.LIVE,
+            score=MatchScore(
+                sets_won=(1, 0),
+                sets=(SetScore(number=1, player1_games=6, player2_games=4),),
+                points=(None, None),
+                is_tiebreak=False,
+            ),
+        ),
+        as_of=NOW,
+    )
+    async with database.session() as session:
+        async with session.begin():
+            await session.execute(
+                text("UPDATE matches SET status = 'finished' WHERE id = :id"),
+                {"id": match_id},
+            )
+            await session.execute(
+                text(
+                    "UPDATE markets SET outcome_a_player_id = :player_b, "
+                    "outcome_b_player_id = :player_a WHERE id = :id"
+                ),
+                {
+                    "player_a": seeded["player_a"],
+                    "player_b": seeded["player_b"],
+                    "id": seeded["market_id"],
+                },
+            )
+
+    queries = P3QueryService(
+        database=database,
+        markets=MarketRepository(database),
+        paper=PaperLedgerRepository(database),
+        hot_books=None,
+        clock=lambda: NOW,
+    )
+    page = await queries.markets(gender=test_gender, page=1, page_size=50)
+    market = next(item for item in page.markets if item.market_id == seeded["market_id"])
+
+    assert market.match_context is not None
+    assert market.match_context.scheduled_at == scheduled_at
+    assert market.match_context.match_status == "finished"
+    assert market.match_context.connection_status == "live"
+    assert market.match_context.live_state_current is False
+    assert market.match_context.current_set_number is None
+    assert market.match_context.score is not None
+    assert market.match_context.score.sets_won == (0, 1)
+    assert market.match_context.score.sets[0].player1_games == 4
+    assert market.match_context.score.sets[0].player2_games == 6
+
+    await snapshot_repository.save_current_state(
+        match_id=match_id,
+        live_state=LiveMatchState(
+            connection_status=ConnectionStatus.LIVE,
+            score=MatchScore(
+                sets=(SetScore(number=1, player1_games=1000, player2_games=4),),
+            ),
+        ),
+        as_of=NOW,
+    )
+    page = await queries.markets(gender=test_gender, page=1, page_size=50)
+    market = next(item for item in page.markets if item.market_id == seeded["market_id"])
+    assert market.match_context is not None
+    assert market.match_context.score is None
+
+    await snapshot_repository.save_current_state(
+        match_id=match_id,
+        live_state=LiveMatchState(
+            current_set_number=2,
+            connection_status=ConnectionStatus.LIVE,
+            score=MatchScore(
+                sets_won=(1, 0),
+                sets=(SetScore(number=1, player1_games=6, player2_games=4),),
+            ),
+        ),
+        as_of=NOW,
+    )
+    async with database.session() as session:
+        async with session.begin():
+            await session.execute(
+                text("UPDATE matches SET status = 'live' WHERE id = :id"),
+                {"id": match_id},
+            )
+    page = await queries.markets(gender=test_gender, page=1, page_size=50)
+    market = next(item for item in page.markets if item.market_id == seeded["market_id"])
+    assert market.match_context is not None
+    assert market.match_context.live_state_current is True
+    assert market.match_context.current_set_number == 2
+    assert market.match_context.score is None
+
+    await snapshot_repository.save_current_state(
+        match_id=match_id,
+        live_state=LiveMatchState(
+            current_set_number=100,
+            connection_status=ConnectionStatus.LIVE,
+        ),
+        as_of=NOW,
+    )
+    page = await queries.markets(gender=test_gender, page=1, page_size=50)
+    market = next(item for item in page.markets if item.market_id == seeded["market_id"])
+    assert market.match_context is not None
+    assert market.match_context.current_set_number is None
+
+    for connection_status, as_of in (
+        (ConnectionStatus.STALE, NOW),
+        (ConnectionStatus.LIVE, NOW - timedelta(seconds=61)),
+    ):
+        await snapshot_repository.save_current_state(
+            match_id=match_id,
+            live_state=LiveMatchState(
+                current_set_number=2,
+                connection_status=connection_status,
+                score=MatchScore(sets=(SetScore(number=1, player1_games=6, player2_games=4),)),
+            ),
+            as_of=as_of,
+        )
+        page = await queries.markets(gender=test_gender, page=1, page_size=50)
+        market = next(item for item in page.markets if item.market_id == seeded["market_id"])
+        assert market.match_context is not None
+        assert market.match_context.live_state_current is False
+        assert market.match_context.current_set_number is None
 
 
 async def test_query_service_exposes_internal_ids_only(database: Database) -> None:

@@ -10,6 +10,7 @@ import {
   getPlayerRankings,
   getPlayerResults,
   getPlayers,
+  listMarkets,
   parseSse,
   searchPlayerDirectory,
   streamChat,
@@ -90,6 +91,19 @@ describe('parseSse', () => {
 })
 
 describe('REST helpers', () => {
+  it('repeats selected market tiers in the market list query', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ data: [], page: 1, page_size: 50, total: 0 }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await listMarkets({ tier: ['atp', 'wta'], page: 1, pageSize: 50 })
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      '/api/markets?tier=atp&tier=wta&page=1&page_size=50',
+    )
+  })
+
   it('unwraps the player-resolution envelope for the legacy player search helper', async () => {
     const resolutionDto = {
       status: 'resolved',

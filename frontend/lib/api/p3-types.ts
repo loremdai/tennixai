@@ -15,6 +15,7 @@ import type {
   MarketStreamEvent,
   MarketsSnapshotDto,
   MarketSummaryDto,
+  MatchScoreDto,
   ModelAvailabilitySummaryValue,
   ModelAvailabilityValue,
   OpportunityAvailabilityDto,
@@ -29,6 +30,8 @@ import type {
   QuoteSideValue,
   QuoteSourceValue,
   QuoteStateValue,
+  MatchStatus,
+  ConnectionStatus,
 } from './types'
 import type { CircuitTier, Gender } from './types'
 
@@ -73,6 +76,8 @@ const OPPORTUNITY_AVAILABILITY_REASONS = [
 ] as const
 const OPPORTUNITY_MODEL_STATUSES = ['not_promoted', 'promoted', 'unknown'] as const
 const MARKET_PHASES = ['prematch', 'live', 'closed'] as const
+const MATCH_STATUSES = ['scheduled', 'live', 'finished', 'cancelled', 'postponed', 'unknown'] as const
+const CONNECTION_STATUSES = ['connecting', 'live', 'reconnecting', 'stale', 'ended', 'unavailable'] as const
 const MODEL_AVAILABILITY = ['available', 'degraded', 'unpromoted', 'unavailable'] as const
 const QUOTE_SIDES = ['entry', 'exit'] as const
 const POSITION_STATUSES = [
@@ -172,12 +177,95 @@ function nullableLevelPair(
   return [decimalOrNull(items[0], `${path}[0]`), decimalOrNull(items[1], `${path}[1]`)]
 }
 
-function int(value: unknown, path: string, options: { min?: number } = {}): number {
+function int(value: unknown, path: string, options: { min?: number; max?: number } = {}): number {
   const min = options.min ?? Number.NEGATIVE_INFINITY
-  if (typeof value !== 'number' || !Number.isInteger(value) || value < min) {
-    throw new P3DecodeError(path, `expected an integer >= ${min}`)
+  const max = options.max ?? Number.POSITIVE_INFINITY
+  if (
+    typeof value !== 'number' ||
+    !Number.isSafeInteger(value) ||
+    value < min ||
+    value > max
+  ) {
+    throw new P3DecodeError(path, `expected a safe integer in [${min}, ${max}]`)
   }
   return value
+}
+
+function intOrNull(value: unknown, path: string, min = 0, max = 999): number | null {
+  if (value === null || value === undefined) return null
+  return int(value, path, { min, max })
+}
+
+function scoreIntPair(value: unknown, path: string): [number, number] | null {
+  if (value === null || value === undefined) return null
+  const items = rawList(value, path)
+  if (items.length !== 2) {
+    throw new P3DecodeError(path, 'expected a two-score pair')
+  }
+  return [
+    int(items[0], `${path}[0]`, { min: 0, max: 99 }),
+    int(items[1], `${path}[1]`, { min: 0, max: 99 }),
+  ]
+}
+
+function nullableTextPair(value: unknown, path: string): [string | null, string | null] {
+  const items = rawList(value, path)
+  if (items.length !== 2) {
+    throw new P3DecodeError(path, 'expected a two-value pair')
+  }
+  return [strOrNull(items[0], `${path}[0]`), strOrNull(items[1], `${path}[1]`)]
+}
+
+function decodeMatchScore(value: unknown, path: string): MatchScoreDto | null {
+  if (value === null || value === undefined) return null
+  const item = raw(value, path)
+  const sets = rawList(item.sets, `${path}.sets`).map((entry, index) => {
+    const setPath = `${path}.sets[${index}]`
+    const set = raw(entry, setPath)
+    const tieBreakPoints = (key: 'player1_tiebreak_points' | 'player2_tiebreak_points') =>
+      set[key] === undefined
+        ? {}
+        : { [key]: intOrNull(set[key], `${setPath}.${key}`, 0, 999) }
+    return {
+      number: int(set.number, `${setPath}.number`, { min: 1, max: 99 }),
+      player1_games: intOrNull(set.player1_games, `${setPath}.player1_games`),
+      player2_games: intOrNull(set.player2_games, `${setPath}.player2_games`),
+      ...tieBreakPoints('player1_tiebreak_points'),
+      ...tieBreakPoints('player2_tiebreak_points'),
+    }
+  })
+  const isTiebreak = item.is_tiebreak
+  return {
+    sets_won: scoreIntPair(item.sets_won, `${path}.sets_won`),
+    sets,
+    points: nullableTextPair(item.points, `${path}.points`),
+    is_tiebreak:
+      isTiebreak === null || isTiebreak === undefined
+        ? null
+        : bool(isTiebreak, `${path}.is_tiebreak`),
+  }
+}
+
+function decodeMarketMatchContext(value: unknown, path: string): MarketSummaryDto['match_context'] {
+  if (value === null || value === undefined) return null
+  const item = raw(value, path)
+  return {
+    scheduled_at: strOrNull(item.scheduled_at, `${path}.scheduled_at`),
+    match_status: oneOfOrNull(
+      item.match_status,
+      MATCH_STATUSES,
+      `${path}.match_status`,
+    ) as MatchStatus | null,
+    connection_status: oneOfOrNull(
+      item.connection_status,
+      CONNECTION_STATUSES,
+      `${path}.connection_status`,
+    ) as ConnectionStatus | null,
+    state_as_of: strOrNull(item.state_as_of, `${path}.state_as_of`),
+    live_state_current: boolOrFalse(item.live_state_current, `${path}.live_state_current`),
+    current_set_number: intOrNull(item.current_set_number, `${path}.current_set_number`, 1, 99),
+    score: decodeMatchScore(item.score, `${path}.score`),
+  }
 }
 
 function probability(value: unknown, path: string): number | null {
@@ -368,6 +456,7 @@ function decodeMarketSummary(value: unknown, path: string): MarketSummaryDto {
     tier: oneOfOrNull(item.tier, TIERS, `${path}.tier`) as CircuitTier | null,
     gender: oneOfOrNull(item.gender, GENDERS, `${path}.gender`) as Gender | null,
     phase: oneOfOrNull(item.phase, MARKET_PHASES, `${path}.phase`),
+    match_context: decodeMarketMatchContext(item.match_context, `${path}.match_context`),
     model_availability: oneOf(
       item.model_availability ?? 'not_evaluated',
       MODEL_AVAILABILITY_SUMMARY,

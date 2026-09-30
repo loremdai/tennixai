@@ -6,7 +6,10 @@
 import type {
   DecisionSnapshotDto,
   DecisionActionValue,
+  ConnectionStatus,
   MarketSummaryDto,
+  MatchScoreDto,
+  MatchStatus,
   ModelAvailabilitySummaryValue,
   OpportunityDto,
   PaperPositionDto,
@@ -57,6 +60,15 @@ export type MarketRowModel = {
   quoteLabel: string
   playerOne: string
   playerTwo: string
+  matchContext: {
+    scheduledAt: string | null
+    matchStatus: MatchStatus | null
+    connectionStatus: ConnectionStatus | null
+    stateAsOf: string | null
+    liveStateCurrent: boolean
+    currentSetNumber: number | null
+    score: MatchScoreDto | null
+  } | null
   playerNames: [string, string] | null
   playerLocalizedNames: [string | null, string | null] | null
   playerImages?: [string | null, string | null] | null
@@ -286,6 +298,17 @@ export function toMarketRow(dto: MarketSummaryDto, now: Date): MarketRowModel {
     quoteLabel: quoteStateLabel(dto.quote.state, dto.quote.as_of, now),
     playerOne: one,
     playerTwo: two,
+    matchContext: dto.match_context
+      ? {
+          scheduledAt: dto.match_context.scheduled_at,
+          matchStatus: dto.match_context.match_status ?? null,
+          connectionStatus: dto.match_context.connection_status ?? null,
+          stateAsOf: dto.match_context.state_as_of ?? null,
+          liveStateCurrent: dto.match_context.live_state_current === true,
+          currentSetNumber: dto.match_context.current_set_number,
+          score: dto.match_context.score,
+        }
+      : null,
     playerNames: dto.player_names,
     playerLocalizedNames: dto.player_localized_names ?? null,
     playerImages: dto.player_images,

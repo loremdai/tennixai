@@ -655,6 +655,77 @@ describe('decision stream event discriminators', () => {
 })
 
 describe('T87 explicit quote, model and decision semantics', () => {
+  it('decodes optional canonical match context for market rows', () => {
+    const page = decodeMarketPage({
+      data: [
+        marketSummary({
+          match_context: {
+            scheduled_at: NOW,
+            match_status: 'live',
+            connection_status: 'live',
+            state_as_of: NOW,
+            live_state_current: true,
+            current_set_number: 2,
+            score: {
+              sets_won: [1, 0],
+              sets: [{ number: 1, player1_games: 6, player2_games: 4 }],
+              points: [null, null],
+              is_tiebreak: false,
+            },
+          },
+        }),
+        marketSummary({ market_id: 'mkt_legacy' }),
+      ],
+      page: 1,
+      page_size: 20,
+      total: 2,
+    })
+
+    expect(page.markets[0].match_context).toEqual({
+      scheduled_at: NOW,
+      match_status: 'live',
+      connection_status: 'live',
+      state_as_of: NOW,
+      live_state_current: true,
+      current_set_number: 2,
+      score: {
+        sets_won: [1, 0],
+        sets: [{ number: 1, player1_games: 6, player2_games: 4 }],
+        points: [null, null],
+        is_tiebreak: false,
+      },
+    })
+    expect(page.markets[1].match_context).toBeNull()
+  })
+
+  it('rejects unsafe or implausibly large market score integers', () => {
+    for (const games of [Number.MAX_SAFE_INTEGER + 1, 1000]) {
+      expect(() =>
+        decodeMarketPage({
+          data: [marketSummary({
+            match_context: {
+              scheduled_at: null,
+              match_status: 'finished',
+              connection_status: 'ended',
+              state_as_of: NOW,
+              live_state_current: false,
+              current_set_number: null,
+              score: {
+                sets_won: [2, 0],
+                sets: [{ number: 1, player1_games: games, player2_games: 3 }],
+                points: [null, null],
+                is_tiebreak: false,
+              },
+            },
+          })],
+          page: 1,
+          page_size: 20,
+          total: 1,
+        }),
+      ).toThrow(P3DecodeError)
+    }
+  })
+
   it('decodes an explicit quote state, source and time', () => {
     const page = decodeMarketPage({
       data: [marketSummary({ model_availability: 'eligible_unpromoted', decision_action: null })],

@@ -17,14 +17,14 @@ const tierOptions: Array<{ value: CircuitTier; label: string }> = [
 
 const genderOptions: Array<{ value: GenderFilter; label: string }> = [
   { value: 'all', label: '全部' },
-  { value: 'men', label: '男' },
-  { value: 'women', label: '女' },
+  { value: 'men', label: '男子' },
+  { value: 'women', label: '女子' },
 ]
 
 const phaseOptions: Array<{ value: PhaseFilter; label: string }> = [
   { value: 'all', label: '全部' },
+  { value: 'live', label: '进行中' },
   { value: 'prematch', label: '赛前' },
-  { value: 'live', label: '直播' },
   { value: 'closed', label: '已结束' },
 ]
 
@@ -53,7 +53,7 @@ function FilterChip({
   )
 }
 
-/** Canonical P3 filters. Filtering stays local to the server-provided rows. */
+/** Canonical P3 filters; changes refetch the first server page. */
 export function MarketFilters({
   tiers,
   gender,
@@ -62,6 +62,7 @@ export function MarketFilters({
   onGenderChange,
   onPhaseChange,
   onReset,
+  canReset,
 }: {
   tiers: CircuitTier[]
   gender: GenderFilter
@@ -70,15 +71,19 @@ export function MarketFilters({
   onGenderChange: (gender: GenderFilter) => void
   onPhaseChange: (phase: PhaseFilter) => void
   onReset: () => void
+  canReset: boolean
 }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const filterPanelId = useId()
   const activeCount =
     tiers.length + Number(gender !== 'all') + Number(phase !== 'all')
-  const hasFilters = activeCount > 0
 
   return (
-    <section className="flex flex-col gap-2" aria-label="市场筛选">
+    <section className="flex flex-col gap-3 rounded-xl border border-foreground/10 bg-card/35 p-3 md:gap-4 md:p-4" aria-label="市场筛选">
+      <div>
+        <h2 className="text-lg font-semibold">市场筛选</h2>
+        <p className="mt-1 text-sm text-muted-foreground">可同时按赛事级别、性别和比赛阶段筛选。</p>
+      </div>
       <Button
         type="button"
         variant="outline"
@@ -99,11 +104,11 @@ export function MarketFilters({
 
       <div
         id={filterPanelId}
-        className={`flex-col gap-3 rounded-xl border bg-card/55 p-3 md:flex md:flex-row md:flex-wrap md:items-center md:gap-2.5 xl:flex-nowrap ${mobileOpen ? 'flex' : 'hidden'}`}
+        className={`flex-col gap-3 md:flex md:flex-row md:flex-wrap md:items-center md:gap-2.5 xl:flex-nowrap ${mobileOpen ? 'flex' : 'hidden'}`}
       >
         <fieldset className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center md:border-r md:pr-3">
           <legend className="sr-only">赛事级别</legend>
-          <span aria-hidden="true" className="text-xs font-medium text-muted-foreground">赛事</span>
+          <span aria-hidden="true" className="text-xs font-medium text-muted-foreground">赛事级别</span>
           <div className="flex flex-wrap gap-2">
             {tierOptions.map((option) => (
               <FilterChip
@@ -124,8 +129,8 @@ export function MarketFilters({
         </fieldset>
 
         <fieldset className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center md:border-r md:pr-3">
-          <legend className="sr-only">组别</legend>
-          <span aria-hidden="true" className="text-xs font-medium text-muted-foreground">组别</span>
+          <legend className="sr-only">性别</legend>
+          <span aria-hidden="true" className="text-xs font-medium text-muted-foreground">性别</span>
           <div className="flex flex-wrap gap-2">
             {genderOptions.map((option) => (
               <FilterChip
@@ -141,7 +146,7 @@ export function MarketFilters({
 
         <fieldset className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center md:border-r md:pr-3">
           <legend className="sr-only">比赛阶段</legend>
-          <span aria-hidden="true" className="text-xs font-medium text-muted-foreground">阶段</span>
+          <span aria-hidden="true" className="text-xs font-medium text-muted-foreground">比赛阶段</span>
           <div className="flex flex-wrap gap-2">
             {phaseOptions.map((option) => (
               <FilterChip
@@ -161,7 +166,7 @@ export function MarketFilters({
           size="lg"
           className="h-11 self-start md:ml-auto md:self-center"
           onClick={onReset}
-          disabled={!hasFilters}
+          disabled={!canReset}
         >
           <RotateCcw data-icon="inline-start" aria-hidden="true" />
           重置

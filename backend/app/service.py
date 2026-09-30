@@ -14,7 +14,7 @@ from enum import StrEnum
 from typing import cast
 from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from app.cache import AsyncTTLCache, CacheOutcome
 from app.domain import (
@@ -25,6 +25,7 @@ from app.domain import (
     HeadToHead,
     LiveMatchState,
     Match,
+    MatchScore,
     MatchSnapshot,
     MatchStatus,
     Player,
@@ -1537,6 +1538,8 @@ class TennisService:
 
 _P3_OPEN_POSITION_STATUSES = frozenset({"open", "exit_pending"})
 _P3_RECENT_POSITION_LIMIT = 10
+_P3_LIVE_STATE_FRESH_SECONDS = 60
+_P3_MAX_DISPLAYED_SET_NUMBER = 99
 
 
 def _p3_phase_from_status(status: str | None) -> str | None:
@@ -1551,6 +1554,44 @@ def _p3_phase_from_status(status: str | None) -> str | None:
 
 def _p3_decimal_text(value) -> str | None:
     return None if value is None else str(value)
+
+
+def _score_in_market_outcome_order(
+    score: MatchScore | None,
+    match_player_ids: tuple[str, str] | None,
+    outcome_player_ids: tuple[str | None, str | None],
+) -> MatchScore | None:
+    """Align canonical player1/player2 score sides with the market's outcomes."""
+    if score is None or match_player_ids is None or any(
+        player_id is None for player_id in outcome_player_ids
+    ):
+        return None
+    outcomes = cast(tuple[str, str], outcome_player_ids)
+    if outcomes == match_player_ids:
+        return score
+    if outcomes != (match_player_ids[1], match_player_ids[0]):
+        return None
+
+    swapped_sets = tuple(
+        item.model_copy(
+            update={
+                "player1_games": item.player2_games,
+                "player2_games": item.player1_games,
+                "player1_tiebreak_points": item.player2_tiebreak_points,
+                "player2_tiebreak_points": item.player1_tiebreak_points,
+            }
+        )
+        for item in score.sets
+    )
+    return score.model_copy(
+        update={
+            "sets_won": tuple(reversed(score.sets_won))
+            if score.sets_won is not None
+            else None,
+            "sets": swapped_sets,
+            "points": tuple(reversed(score.points)),
+        }
+    )
 
 
 class P3QueryService:
@@ -1593,14 +1634,42 @@ class P3QueryService:
             return {}
         from sqlalchemy import select
 
-        from app.persistence.models import MatchRow, PlayerRow, TournamentRow
+        from app.persistence.models import (
+            MatchRow,
+            MatchStateSnapshotRow,
+            PlayerRow,
+            TournamentRow,
+        )
 
         async with self._database.session() as session:
-            matches = (
-                (await session.execute(select(MatchRow).where(MatchRow.id.in_(ids))))
-                .scalars()
-                .all()
+            match_rows = list(
+                (
+                    await session.execute(
+                        select(
+                            MatchRow,
+                            MatchStateSnapshotRow.state,
+                            MatchStateSnapshotRow.connection_status,
+                            MatchStateSnapshotRow.as_of,
+                        )
+                        .outerjoin(
+                            MatchStateSnapshotRow,
+                            MatchStateSnapshotRow.match_id == MatchRow.id,
+                        )
+                        .where(MatchRow.id.in_(ids))
+                    )
+                ).all()
             )
+            matches = [match_row for match_row, *_state_facts in match_rows]
+            live_states = {
+                match.id: LiveMatchState.model_validate(state)
+                for match, state, _connection_status, _as_of in match_rows
+                if state is not None
+            }
+            state_facts = {
+                match.id: (connection_status, as_of)
+                for match, _state, connection_status, as_of in match_rows
+                if _state is not None
+            }
             player_ids = {
                 player_id
                 for row in matches
@@ -1646,7 +1715,21 @@ class P3QueryService:
         player_images = {row.id: row.image_url for row in players}
         tournament_by_id = {row.id: row for row in tournaments}
         facts = {}
+        now = self._clock()
         for row in matches:
+            live_state = live_states.get(row.id)
+            connection_status, state_as_of = state_facts.get(row.id, (None, None))
+            state_age = (
+                (now - state_as_of).total_seconds()
+                if state_as_of is not None
+                else None
+            )
+            live_state_current = (
+                row.status == "live"
+                and connection_status == "live"
+                and state_age is not None
+                and 0 <= state_age <= _P3_LIVE_STATE_FRESH_SECONDS
+            )
             names = tuple(
                 player_names.get(player_id)
                 for player_id in (row.player1_id, row.player2_id)
@@ -1684,6 +1767,24 @@ class P3QueryService:
                 "gender": tournament.gender if tournament else None,
                 "tournament_name": tournament.name if tournament else None,
                 "phase": _p3_phase_from_status(row.status),
+                "match_status": row.status,
+                "connection_status": connection_status,
+                "state_as_of": state_as_of,
+                "live_state_current": live_state_current,
+                "scheduled_at": row.scheduled_at,
+                "current_set_number": (
+                    live_state.current_set_number
+                    if live_state_current
+                    and live_state is not None
+                    and live_state.current_set_number is not None
+                    and live_state.current_set_number <= _P3_MAX_DISPLAYED_SET_NUMBER
+                    else None
+                ),
+                "score": (
+                    live_state.score
+                    if row.status == "finished" and live_state is not None
+                    else None
+                ),
             }
         return facts
 
@@ -2077,7 +2178,13 @@ class P3QueryService:
         return rows, OpportunityAvailabilityDto(reason=reason, model_status=model_status)
 
     async def markets(self, *, tier=None, gender=None, phase=None, page=1, page_size=50):
-        from app.api.schemas import MarketPageDto, MarketQuoteDto, MarketSummaryDto
+        from app.api.schemas import (
+            MarketMatchContextDto,
+            MarketMatchScoreDto,
+            MarketPageDto,
+            MarketQuoteDto,
+            MarketSummaryDto,
+        )
 
         page = max(1, page)
         page_size = min(50, max(1, page_size))
@@ -2208,6 +2315,21 @@ class P3QueryService:
                 if outcome_ids[0] is not None and outcome_ids[1] is not None
                 else None
             )
+            market_score = _score_in_market_outcome_order(
+                match_facts.get("score"),
+                fact_ids,
+                outcome_ids,
+            )
+            market_score_dto = None
+            if market_score is not None:
+                try:
+                    market_score_dto = MarketMatchScoreDto.model_validate(
+                        market_score.model_dump()
+                    )
+                except ValidationError:
+                    # Match context is optional enrichment; an invalid stored
+                    # score must not make the whole market page unavailable.
+                    pass
             summaries.append(
                 MarketSummaryDto(
                     market_id=row.market_id,
@@ -2218,6 +2340,19 @@ class P3QueryService:
                     tier=match_facts.get("tier"),
                     gender=match_facts.get("gender"),
                     phase=market_phase,
+                    match_context=(
+                        MarketMatchContextDto(
+                            scheduled_at=match_facts.get("scheduled_at"),
+                            match_status=match_facts.get("match_status"),
+                            connection_status=match_facts.get("connection_status"),
+                            state_as_of=match_facts.get("state_as_of"),
+                            live_state_current=match_facts.get("live_state_current", False),
+                            current_set_number=match_facts.get("current_set_number"),
+                            score=market_score_dto,
+                        )
+                        if match_id is not None and match_facts
+                        else None
+                    ),
                     model_availability=model_availability,
                     decision_action=(
                         observation.action.value if observation is not None else None

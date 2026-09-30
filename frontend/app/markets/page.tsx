@@ -28,14 +28,17 @@ function parseProductionView(value: string | string[] | undefined): MarketsTabVa
   const candidate = firstValue(value)
   return (VIEWS as readonly string[]).includes(candidate ?? '')
     ? (candidate as MarketsTabValue)
-    : 'opportunities'
+    : 'all'
 }
 
 function parseProductionTiers(value: string | string[] | undefined): CircuitTier[] {
+  if (value === undefined) return ['atp', 'wta']
   const values = Array.isArray(value) ? value : value ? [value] : []
-  return values.filter((tier): tier is CircuitTier =>
+  if (values.includes('all')) return []
+  const tiers = values.filter((tier): tier is CircuitTier =>
     (TIERS as readonly string[]).includes(tier),
   )
+  return tiers.length > 0 ? tiers : ['atp', 'wta']
 }
 
 function parseProductionGender(

@@ -191,7 +191,10 @@ import { MarketsWorkspace } from './markets-state'
 import { OpportunityEmptyState } from './opportunity-empty-state'
 import { waitFor } from '@testing-library/react'
 import type {
+  CircuitTier,
+  Gender,
   MarketSummaryDto,
+  MarketPhase,
   OpportunityAvailabilityReason,
   OpportunityDto,
   PaperPositionDto,
@@ -447,19 +450,27 @@ describe('MarketsWorkspace (production)', () => {
     ).toHaveLength(0)
   })
 
-  it('identifies which player the market-row model probability belongs to', async () => {
+  it('keeps the market list focused on player quotes instead of model details', async () => {
     const user = userEvent.setup()
     render(<MarketsWorkspace />)
     await user.click(screen.getByRole('tab', { name: /全部市场/ }))
 
-    await waitFor(() => expect(screen.getByText('Alpha One 模型胜率')).toBeTruthy())
+    const row = await screen.findByRole('link', { name: /查看 .* 市场/ })
+    expect(row.textContent).toContain('57¢')
+    expect(row.textContent).toContain('45¢')
+    expect(row.textContent).not.toContain('模型胜率')
   })
 
-  it('orders market quotes and freshness before optional secondary model details', async () => {
+  it('matches the home visual language and keeps the market quote scan focused', async () => {
     const playerOne = 'Alexandru Constantin Marius Popescu-Szilagyi'
     const playerTwo = 'Maximilian Alexander Theodor von Hohenberg-Wuerttemberg'
     listMarketsMock.mockResolvedValue({
-      markets: [summaryDto({ player_names: [playerOne, playerTwo], reason_code: 'NO_NET_EDGE' })],
+      markets: [summaryDto({
+        player_names: [playerOne, playerTwo],
+        player_localized_names: ['亚历山德鲁', '马克西米利安'],
+        player_images: ['https://images.example/one.jpg', null],
+        reason_code: 'NO_NET_EDGE',
+      })],
       page: 1,
       page_size: 50,
       total: 1,
@@ -467,40 +478,78 @@ describe('MarketsWorkspace (production)', () => {
     render(<MarketsWorkspace initialView="all" />)
     const row = await screen.findByRole('link', { name: /查看 .* 市场/ })
     const content = row.textContent ?? ''
-    const quoteIndex = content.indexOf('胜出买入参考价')
-    const freshnessIndex = content.indexOf('最近报价')
-    const spreadIndex = content.indexOf('平均价差')
-    const modelIndex = content.indexOf(`${playerOne} 模型胜率`)
-    const reasonIndex = content.indexOf('模型与市场的差距暂不明显')
-
-    expect(quoteIndex).toBeGreaterThanOrEqual(0)
-    expect(within(row).getAllByText('胜出买入参考价')).toHaveLength(1)
-    expect(freshnessIndex).toBeGreaterThan(quoteIndex)
-    expect(spreadIndex).toBeGreaterThan(freshnessIndex)
-    expect(modelIndex).toBeGreaterThan(freshnessIndex)
-    expect(reasonIndex).toBeGreaterThan(freshnessIndex)
-
-    expect(row.querySelector('[data-slot="card"]')).toHaveClass('bg-[linear-gradient(105deg,#0d241a,#071811)]')
+    expect(content).toContain('ATP')
+    expect(content).toContain('进行中')
+    expect(content).toContain('57¢')
+    expect(content).toContain('45¢')
+    expect(content).toContain('最近报价')
+    expect(content).not.toContain('实时报价')
+    expect(content).not.toContain('平均价差')
+    expect(content).not.toContain('最优档金额')
+    expect(within(row).getAllByRole('img', { name: /头像/ })).toHaveLength(2)
+    expect(row.querySelectorAll('[data-slot="avatar"]')).toHaveLength(2)
+    expect(content.indexOf(playerOne)).toBeLessThan(content.indexOf('亚历山德鲁'))
+    expect(content.indexOf(playerTwo)).toBeLessThan(content.indexOf('马克西米利安'))
+    expect(row.querySelector('[data-slot="card"]')).toHaveClass('bg-card/55')
+    expect(row.querySelector('[data-slot="card"]')?.className).not.toContain('linear-gradient')
+    expect(row.querySelector('[data-quote-state="snapshot"]')).toBeTruthy()
     const cardContent = row.querySelector('[data-slot="card-content"]')
-    expect(cardContent).toHaveClass('lg:grid-cols-[minmax(0,1.05fr)_minmax(20rem,1fr)_minmax(13rem,0.72fr)]')
-    expect(cardContent).not.toHaveClass('md:grid-cols-[minmax(0,1.05fr)_minmax(20rem,1fr)_minmax(13rem,0.72fr)]')
+    expect(cardContent).toHaveClass('lg:grid-cols-[minmax(13rem,1fr)_minmax(18rem,1.3fr)_minmax(8rem,0.55fr)_minmax(8rem,0.5fr)]')
 
     const firstName = within(row).getByText(playerOne, { exact: true })
     expect(firstName).toHaveClass('break-words')
-    expect(firstName).not.toHaveClass('truncate')
+    expect(firstName).toHaveClass('!overflow-visible', '!whitespace-normal')
+  })
+
+  it('labels only realtime market quotes as live quotes', async () => {
+    listMarketsMock.mockResolvedValue({
+      markets: [summaryDto({ quote: quoteDto({ state: 'realtime', source: 'realtime' }) })],
+      page: 1,
+      page_size: 50,
+      total: 1,
+    })
+    render(<MarketsWorkspace initialView="all" />)
+
+    const row = await screen.findByRole('link', { name: /查看 .* 市场/ })
+    expect(within(row).getByText('实时报价')).toBeTruthy()
+    expect(row.querySelector('[data-quote-state="realtime"]')).toBeTruthy()
+  })
+
+  it('requests ATP and WTA by default and shows API totals in left-aligned tabs', async () => {
+    const user = userEvent.setup()
+    render(<MarketsWorkspace />)
+
+    await waitFor(() => {
+      expect(listMarketsMock).toHaveBeenCalledWith({
+        tier: ['atp', 'wta'],
+        page: 1,
+        pageSize: 50,
+      })
+    })
+    expect((await screen.findByRole('tab', { name: /机会/ })).textContent).toContain('1')
+    expect(screen.getByRole('tab', { name: /全部市场/ }).textContent).toContain('1')
+    expect(screen.getByRole('tab', { name: /模拟记录/ }).textContent).toContain('1')
+    expect(screen.getByText('网球 · 市场 · 报价')).toBeTruthy()
+
+    const tablist = screen.getByRole('tablist', { name: '市场视图' })
+    expect(tablist).toHaveClass('justify-start')
+    await user.click(screen.getByRole('tab', { name: /全部市场/ }))
+    expect(screen.getByRole('heading', { name: '市场筛选' })).toBeTruthy()
+    expect(screen.getByText('可同时按赛事级别、性别和比赛阶段筛选。')).toBeTruthy()
+    expect(screen.getByText('赛事级别优先 · 进行中 → 赛前 → 已结束')).toBeTruthy()
   })
 
   it('uses the reference page hierarchy with filters before the loaded count', async () => {
     render(<MarketsWorkspace initialView="all" />)
 
     const banner = screen.getByRole('banner')
-    expect(within(banner).getByText('TennixAI')).toBeTruthy()
-    expect(banner.querySelector('nav[aria-label="主导航"]')).toBeNull()
+    expect(within(banner).getByRole('link', { name: 'Tennix 首页' })).toBeTruthy()
+    expect(banner.querySelector('nav[aria-label="主导航"]')).toBeTruthy()
     expect(screen.queryByText('比赛与最新报价')).toBeNull()
     expect(screen.queryByRole('heading', { name: '全部市场' })).toBeNull()
 
     const count = await screen.findByText('已加载 1 / 全部 1 个市场')
-    const filters = screen.getByRole('button', { name: '筛选 · 0 项' })
+    const filters = screen.getByRole('button', { name: '筛选 · 2 项' })
     expect(filters.compareDocumentPosition(count) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
     const filterPanel = document.getElementById(filters.getAttribute('aria-controls')!)
     expect(filterPanel).toHaveClass('xl:flex-nowrap')
@@ -540,15 +589,22 @@ describe('MarketsWorkspace (production)', () => {
   it('offers compact mobile filters and preserves canonical filter behavior when expanded', async () => {
     const user = userEvent.setup()
     render(<MarketsWorkspace initialView="all" />)
-    const trigger = await screen.findByRole('button', { name: '筛选 · 0 项' })
+    const trigger = await screen.findByRole('button', { name: '筛选 · 2 项' })
 
     expect(trigger).toHaveAttribute('aria-expanded', 'false')
     await user.click(trigger)
     expect(trigger).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByRole('group', { name: '赛事级别' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'ATP' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'WTA' })).toHaveAttribute('aria-pressed', 'true')
     await user.click(screen.getByRole('button', { name: 'WTA' }))
     expect(trigger).toHaveAccessibleName('筛选 · 1 项')
-    expect(window.location.search).toContain('tier=wta')
+    await waitFor(() => expect(listMarketsMock).toHaveBeenLastCalledWith({
+      tier: ['atp'],
+      page: 1,
+      pageSize: 50,
+    }))
+    expect(new URLSearchParams(window.location.search).getAll('tier')).toEqual(['atp'])
   })
 
   it('shows challenger market-only rows without negative labels', async () => {
@@ -578,7 +634,7 @@ describe('MarketsWorkspace (production)', () => {
       total: 1,
     })
     const user = userEvent.setup()
-    render(<MarketsWorkspace />)
+    render(<MarketsWorkspace initialTiers={['challenger']} />)
     await user.click(screen.getByRole('tab', { name: /全部市场/ }))
 
     await waitFor(() => expect(screen.getByText('Challenger Moneyline')).toBeTruthy())
@@ -595,21 +651,32 @@ describe('MarketsWorkspace (production)', () => {
   })
 
   it('applies canonical filters to server rows', async () => {
-    listMarketsMock.mockResolvedValue({
-      markets: [
-        summaryDto(),
-        summaryDto({
-          market_id: 'mkt_w',
-          match_id: 'mat_w',
-          tier: 'wta',
-          gender: 'women',
-          phase: 'prematch',
-          decision_action: null,
-        }),
-      ],
-      page: 1,
-      page_size: 50,
-      total: 2,
+    const rows = [
+      summaryDto(),
+      summaryDto({
+        market_id: 'mkt_w',
+        match_id: 'mat_w',
+        tier: 'wta',
+        gender: 'women',
+        phase: 'prematch',
+        decision_action: null,
+      }),
+    ]
+    listMarketsMock.mockImplementation(async ({
+      tier,
+      gender,
+      phase,
+    }: {
+      tier?: CircuitTier[]
+      gender?: Gender
+      phase?: MarketPhase
+    }) => {
+      const filtered = rows.filter((row) =>
+        (!tier || tier.includes(row.tier ?? 'other')) &&
+        (!gender || gender === row.gender) &&
+        (!phase || phase === row.phase),
+      )
+      return { markets: filtered, page: 1, page_size: 50, total: filtered.length }
     })
     const user = userEvent.setup()
     render(<MarketsWorkspace />)
@@ -622,12 +689,23 @@ describe('MarketsWorkspace (production)', () => {
     await waitFor(() =>
       expect(screen.getAllByRole('link', { name: /查看 .* 市场/ })).toHaveLength(1),
     )
-    expect(window.location.search).toContain('tier=wta')
+    expect(screen.getByRole('link', { name: /查看 Alpha One vs\. Beta Two 市场/ })).toBeTruthy()
+    expect(new URLSearchParams(window.location.search).getAll('tier')).toEqual(['atp'])
+    expect(listMarketsMock).toHaveBeenLastCalledWith({
+      tier: ['atp'],
+      page: 1,
+      pageSize: 50,
+    })
 
     await user.click(screen.getByRole('button', { name: '重置' }))
     await waitFor(() =>
       expect(screen.getAllByRole('link', { name: /查看 .* 市场/ })).toHaveLength(2),
     )
+    expect(listMarketsMock).toHaveBeenLastCalledWith({
+      tier: ['atp', 'wta'],
+      page: 1,
+      pageSize: 50,
+    })
   })
 
   it('shows the full server total, loads more, and quote changes refresh only loaded pages', async () => {
@@ -654,8 +732,6 @@ describe('MarketsWorkspace (production)', () => {
     render(<MarketsWorkspace initialView="all" />)
 
     await waitFor(() => expect(screen.getByText('已加载 50 / 全部 51 个市场')).toBeTruthy())
-    await user.click(screen.getByRole('button', { name: '女' }))
-    expect(screen.getByText('没有符合条件的市场')).toBeTruthy()
     expect(screen.getByRole('button', { name: '加载更多' })).toBeTruthy()
     await user.click(screen.getByRole('button', { name: '加载更多' }))
     await waitFor(() =>
@@ -675,8 +751,8 @@ describe('MarketsWorkspace (production)', () => {
       expect(listMarketsMock).toHaveBeenCalledTimes(marketCalls + 2),
     )
     expect(listMarketsMock.mock.calls.slice(-2)).toEqual([
-      [{ page: 1, pageSize: 50 }],
-      [{ page: 2, pageSize: 50 }],
+      [{ tier: ['atp', 'wta'], page: 1, pageSize: 50 }],
+      [{ tier: ['atp', 'wta'], page: 2, pageSize: 50 }],
     ])
     expect(listMarketOpportunitiesMock).toHaveBeenCalledTimes(opportunityCalls)
     expect(getPaperPositionsMock).toHaveBeenCalledTimes(paperCalls)
@@ -745,7 +821,7 @@ describe('MarketsWorkspace (production)', () => {
     await waitFor(() => expect(screen.getAllByText('Alpha One').length).toBeGreaterThan(0))
   })
 
-  it('keeps stale decision rows visible without marking a fresh quote stale', async () => {
+  it('keeps stale data status visible without adding model actions to quote rows', async () => {
     const user = userEvent.setup()
     listMarketsMock.mockResolvedValue({
       markets: [summaryDto({ is_stale: true, decision_action: 'wait' })],
@@ -757,8 +833,9 @@ describe('MarketsWorkspace (production)', () => {
     await user.click(screen.getByRole('tab', { name: /全部市场/ }))
     await waitFor(() => expect(screen.getAllByText(/报价更新较慢/).length).toBeGreaterThan(0))
     expect(screen.queryByText(/最后可信 ·/)).toBeNull()
-    // The decision is stale and its action is revoked; the quote timestamp is independent.
-    expect(screen.getByText('等待更好价格')).toBeTruthy()
+    // This list communicates the quote state; stale model actions stay out of the compact row.
+    expect(screen.getByText(/最近报价/)).toBeTruthy()
+    expect(screen.queryByText('等待更好价格')).toBeNull()
     expect(screen.queryByText('买入信号')).toBeNull()
   })
 
@@ -774,7 +851,116 @@ describe('MarketsWorkspace (production)', () => {
     await user.click(screen.getByRole('tab', { name: /全部市场/ }))
     // The closed badge appears on the row (plus the phase filter chip).
     await waitFor(() => expect(screen.getAllByText('已结束').length).toBeGreaterThanOrEqual(2))
-    expect(screen.getByText('暂不参与')).toBeTruthy()
+    expect(screen.queryByText('暂不参与')).toBeNull()
+  })
+
+  it('shows available match time, live set, and finished set scores in the row', async () => {
+    listMarketsMock.mockResolvedValue({
+      markets: [
+        summaryDto({
+          market_id: 'mkt_live_context',
+          match_context: {
+            scheduled_at: null,
+            match_status: 'live',
+            connection_status: 'live',
+            state_as_of: AS_OF,
+            live_state_current: true,
+            current_set_number: 2,
+            score: null,
+          },
+        }),
+        summaryDto({
+          market_id: 'mkt_prematch_context',
+          phase: 'prematch',
+          match_context: {
+            scheduled_at: '2026-09-30T12:30:00Z',
+            match_status: 'scheduled',
+            connection_status: null,
+            state_as_of: null,
+            live_state_current: false,
+            current_set_number: null,
+            score: null,
+          },
+        }),
+        summaryDto({
+          market_id: 'mkt_closed_but_match_live',
+          phase: 'closed',
+          status: 'closed',
+          match_context: {
+            scheduled_at: null,
+            match_status: 'live',
+            connection_status: 'live',
+            state_as_of: AS_OF,
+            live_state_current: true,
+            current_set_number: 2,
+            score: {
+              sets_won: [1, 0],
+              sets: [{ number: 1, player1_games: 6, player2_games: 4 }],
+              points: [null, null],
+              is_tiebreak: false,
+            },
+          },
+        }),
+        summaryDto({
+          market_id: 'mkt_stale_live_context',
+          match_context: {
+            scheduled_at: null,
+            match_status: 'live',
+            connection_status: 'stale',
+            state_as_of: '2020-01-01T00:00:00Z',
+            live_state_current: false,
+            current_set_number: 3,
+            score: null,
+          },
+        }),
+        summaryDto({
+          market_id: 'mkt_closed_context',
+          phase: 'closed',
+          status: 'closed',
+          match_context: {
+            scheduled_at: null,
+            match_status: 'finished',
+            connection_status: 'live',
+            state_as_of: AS_OF,
+            live_state_current: false,
+            current_set_number: null,
+            score: {
+              sets_won: [2, 0],
+              sets: [
+                { number: 1, player1_games: 6, player2_games: 3 },
+                { number: 2, player1_games: 6, player2_games: 4 },
+              ],
+              points: [null, null],
+              is_tiebreak: false,
+            },
+          },
+        }),
+      ],
+      page: 1,
+      page_size: 50,
+      total: 5,
+    })
+    render(<MarketsWorkspace initialView="all" />)
+
+    const rows = await screen.findAllByRole('link', { name: /查看 .* 市场/ })
+    expect(within(rows[0]).getByText('第 2 盘')).toBeTruthy()
+    expect(within(rows[1]).getByText('20:30')).toBeTruthy()
+    expect(within(rows[2]).queryByText('6–4')).toBeNull()
+    expect(within(rows[2]).queryByText('第 2 盘')).toBeNull()
+    expect(within(rows[3]).queryByText('第 3 盘')).toBeNull()
+    expect(within(rows[4]).getByText('6–3, 6–4')).toBeTruthy()
+  })
+
+  it('orders phase filters by the requested priority', () => {
+    render(<MarketsWorkspace initialView="all" />)
+
+    const phaseGroup = screen.getByRole('group', { name: '比赛阶段' })
+    expect(within(phaseGroup).getAllByRole('button').map((button) => button.textContent)).toEqual([
+      '全部',
+      '进行中',
+      '赛前',
+      '已结束',
+    ])
   })
 
   it('labels markets with missing phase as unknown instead of completed', async () => {
@@ -897,6 +1083,6 @@ describe('MarketsWorkspace opportunity empty states (T88)', () => {
 
     await waitFor(() => expect(screen.getByText('模型仍在验证中')).toBeTruthy())
     await user.click(screen.getByRole('button', { name: '查看所有比赛报价' }))
-    await waitFor(() => expect(screen.getByRole('tab', { name: '全部市场' })).toHaveAttribute('aria-selected', 'true'))
+    await waitFor(() => expect(screen.getByRole('tab', { name: /全部市场/ })).toHaveAttribute('aria-selected', 'true'))
   })
 })

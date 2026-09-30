@@ -61,6 +61,15 @@ const DEFAULT_MARKETS = {
       tier: 'atp',
       gender: 'men',
       phase: 'live',
+      match_context: {
+        scheduled_at: null,
+        match_status: 'live',
+        connection_status: 'live',
+        state_as_of: AS_OF,
+        live_state_current: true,
+        current_set_number: 2,
+        score: null,
+      },
       model_availability: 'available',
       decision_action: 'buy',
       reason_code: null,
@@ -123,12 +132,14 @@ let MARKETS: Record<string, unknown> = structuredClone(DEFAULT_MARKETS)
 let OPPORTUNITIES: Record<string, unknown> = structuredClone(DEFAULT_OPPORTUNITIES)
 let MARKET_PAGES: Record<number, Record<string, unknown>> = {}
 let MARKET_REQUEST_PAGES: number[] = []
+let MARKET_REQUEST_FILTERS: string[] = []
 
 test.beforeEach(() => {
   MARKETS = structuredClone(DEFAULT_MARKETS)
   OPPORTUNITIES = structuredClone(DEFAULT_OPPORTUNITIES)
   MARKET_PAGES = {}
   MARKET_REQUEST_PAGES = []
+  MARKET_REQUEST_FILTERS = []
 })
 
 const PAPER = {
@@ -240,8 +251,33 @@ async function interceptP3(page: Page) {
             : PULSE
     if (path === '/api/markets') {
       const pageNumber = Number(url.searchParams.get('page') ?? 1)
+      const pageSize = Number(url.searchParams.get('page_size') ?? 50)
       MARKET_REQUEST_PAGES.push(pageNumber)
-      payload = MARKET_PAGES[pageNumber] ?? MARKETS
+      MARKET_REQUEST_FILTERS.push(url.searchParams.toString())
+      const pagedRows = Object.keys(MARKET_PAGES)
+        .map(Number)
+        .sort((left, right) => left - right)
+        .flatMap((page) => (MARKET_PAGES[page].data as unknown[]) ?? [])
+      const allRows = pagedRows.length > 0
+        ? pagedRows
+        : ((MARKETS.data as unknown[]) ?? [])
+      const requestedTiers = url.searchParams.getAll('tier').filter((tier) => tier !== 'all')
+      const gender = url.searchParams.get('gender')
+      const phase = url.searchParams.get('phase')
+      const filteredRows = allRows.filter((raw) => {
+        const row = raw as Record<string, unknown>
+        return (
+          (requestedTiers.length === 0 || requestedTiers.includes(String(row.tier))) &&
+          (gender === null || gender === row.gender) &&
+          (phase === null || phase === row.phase)
+        )
+      })
+      payload = {
+        data: filteredRows.slice((pageNumber - 1) * pageSize, pageNumber * pageSize),
+        page: pageNumber,
+        page_size: pageSize,
+        total: filteredRows.length,
+      }
     }
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(payload) })
   })
@@ -269,7 +305,7 @@ function marketsPayload(rows: unknown[]) {
 async function showAllMarkets(page: Page, rows: unknown[]) {
   MARKETS = marketsPayload(rows)
   await interceptP3(page)
-  await page.goto('/markets?view=all')
+  await page.goto('/markets?view=all&tier=all')
   await page.getByRole('heading', { name: '比赛市场' }).waitFor()
 }
 
@@ -292,7 +328,7 @@ function quote(overrides: Record<string, unknown> = {}) {
 }
 
 test.describe('P3 production market quote states (T88)', () => {
-  test('loads later market pages and keeps filters local to loaded rows', async ({ page }) => {
+  test('loads later pages and refetches the filtered server page from page one', async ({ page }) => {
     const firstPage = Array.from({ length: 50 }, (_, index) =>
       marketRow({
         market_id: `mkt_page_${index}`,
@@ -312,16 +348,19 @@ test.describe('P3 production market quote states (T88)', () => {
       2: { data: [tail], page: 2, page_size: 50, total: 51 },
     }
     await interceptP3(page)
-    await page.goto('/markets?view=all')
+    await page.goto('/markets?view=all&tier=all')
 
     await expect(page.getByText('已加载 50 / 全部 51 个市场')).toBeVisible()
-    await expandMobileFilters(page)
-    await page.getByRole('button', { name: '女' }).click()
-    await expect(page.getByText('没有符合条件的市场')).toBeVisible()
     await page.getByRole('button', { name: '加载更多' }).click()
     await expect(page.getByRole('link', { name: '查看 Tail Player vs. Tail Opponent 市场' })).toBeVisible()
     await expect(page.getByText('已加载 51 / 全部 51 个市场')).toBeVisible()
-    expect(MARKET_REQUEST_PAGES.slice(-2)).toEqual([1, 2])
+    await expandMobileFilters(page)
+    await page.getByRole('button', { name: '女子' }).click()
+    await expect(page.getByRole('link', { name: '查看 Tail Player vs. Tail Opponent 市场' })).toBeVisible()
+    await expect(page.getByRole('link', { name: /查看 Player 0 vs\. Opponent 0 市场/ })).toHaveCount(0)
+    await expect(page.getByText('已加载 1 / 全部 1 个市场')).toBeVisible()
+    expect(MARKET_REQUEST_PAGES.slice(-3)).toEqual([1, 2, 1])
+    expect(MARKET_REQUEST_FILTERS.at(-1)).toContain('gender=women&page=1')
   })
 
   test('all markets show a real snapshot quote with its own time', async ({ page }) => {
@@ -333,8 +372,8 @@ test.describe('P3 production market quote states (T88)', () => {
     ])
 
     await expect(page.getByText(/最近报价 · 2 分前/)).toBeVisible()
-    await expect(page.getByText('57.0%')).toBeVisible() // player one ask
-    await expect(page.getByText('45.0%')).toBeVisible() // player two ask
+    await expect(page.getByText('57¢')).toBeVisible() // player one ask
+    await expect(page.getByText('45¢')).toBeVisible() // player two ask
   })
 
   test('partial, no-liquidity, stale and unavailable states stay distinct', async ({ page }) => {
@@ -356,7 +395,7 @@ test.describe('P3 production market quote states (T88)', () => {
     await expect(page.getByText(/上次有效报价 ·/)).toBeVisible()
     await expect(page.getByText('报价暂不可用')).toBeVisible()
     // The one-sided quote keeps its real ask instead of hiding both.
-    await expect(page.getByText('60.0%')).toBeVisible()
+    await expect(page.getByText('60¢')).toBeVisible()
   })
 
   test('low-tier markets keep real quotes and no negative model label', async ({ page }) => {
@@ -376,6 +415,20 @@ test.describe('P3 production market quote states (T88)', () => {
     ).toBeVisible()
     await expect(page.getByText('最近报价 · 1 分前')).toBeVisible()
     await expect(page.getByText(/未覆盖|不伪造模型值/)).toHaveCount(0)
+  })
+
+  test('shows the quote status with the lime marker and chevron', async ({ page }) => {
+    await showAllMarkets(page, [
+      marketRow({
+        market_id: 'mkt_realtime',
+        quote: quote({ state: 'realtime', source: 'realtime' }),
+      }),
+    ])
+
+    const row = page.getByRole('link', { name: /查看 E2E Alpha vs\. E2E Beta 市场/ })
+    await expect(row.getByText('实时报价', { exact: true })).toBeVisible()
+    await expect(row.locator('[data-quote-state="realtime"]')).toBeVisible()
+    await expect(row.locator('svg.lucide-chevron-right')).toBeVisible()
   })
 
   test('long outcome names wrap without clipping or horizontal overflow', async ({ page }) => {
@@ -492,27 +545,24 @@ test.describe('P3 production mobile', () => {
     await expect(page.getByText('入场未成交 · 不再重试')).toHaveCount(0)
   })
 
-  test('direct /markets load renders canonical opportunity rows', async ({ page }) => {
+  test('direct /markets load opens all markets with canonical match context', async ({ page }) => {
     await interceptP3(page)
     await page.goto('/markets')
 
     await expect(page.getByRole('heading', { name: '比赛市场' })).toBeVisible()
+    await expect(page.getByRole('tab', { name: /全部市场/ })).toHaveAttribute('aria-selected', 'true')
+    await expandMobileFilters(page)
+    await expect(page.getByRole('button', { name: 'ATP' })).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByRole('button', { name: 'WTA' })).toHaveAttribute('aria-pressed', 'true')
     await expect(
-      page.getByRole('link', { name: /查看 E2E Alpha vs\. E2E Beta 的模拟买入机会决策/ }),
+      page.getByRole('link', { name: '查看 E2E Alpha vs. E2E Beta 市场' }),
     ).toBeVisible()
-    await expect(page.getByText('方向：E2E Alpha')).toBeVisible()
-    await expect(page.getByText('+7.0 个百分点')).toBeVisible()
-    await expect(
-      page.getByRole('link', { name: /查看 E2E Alpha vs\. E2E Beta 的模拟买入机会决策/ }),
-    ).toHaveAttribute(
-      'href',
-      '/matches/mat_e2e_1',
-    )
+    await expect(page.getByText('第 2 盘')).toBeVisible()
   })
 
   test('each tab renders its canonical view', async ({ page }) => {
     await interceptP3(page)
-    await page.goto('/markets')
+    await page.goto('/markets?tier=all')
 
     await page.getByRole('tab', { name: /全部市场/ }).click()
     await expandMobileFilters(page)
@@ -529,7 +579,7 @@ test.describe('P3 production mobile', () => {
 
   test('canonical filters narrow rows and sync the URL', async ({ page }) => {
     await interceptP3(page)
-    await page.goto('/markets')
+    await page.goto('/markets?view=all&tier=all')
     await page.getByRole('tab', { name: /全部市场/ }).click()
     await expect(page.getByText('E2E Challenger Moneyline')).toBeVisible()
 
@@ -537,15 +587,15 @@ test.describe('P3 production mobile', () => {
     await page.getByRole('button', { name: '挑战赛', exact: true }).click()
     await expect(page.getByText('E2E Challenger Moneyline')).toBeVisible()
     // The ATP row is filtered out of the list.
-    await expect(page.locator('h3', { hasText: 'E2E Alpha vs. E2E Beta' })).toHaveCount(0)
+    await expect(page.getByRole('link', { name: /E2E Alpha vs\. E2E Beta/ })).toHaveCount(0)
     expect(page.url()).toContain('tier=challenger')
 
     await page.getByRole('button', { name: '重置' }).click()
-    await expect(page.locator('h3', { hasText: 'E2E Alpha vs. E2E Beta' })).toHaveCount(1)
+    await expect(page.getByRole('link', { name: /E2E Alpha vs\. E2E Beta/ })).toHaveCount(1)
     expect(page.url()).not.toContain('tier=challenger')
   })
 
-  test('market rows put both quotes and freshness before secondary details', async ({ page }) => {
+  test('market rows put player quotes and the current quote state in the scan path', async ({ page }) => {
     await interceptP3(page)
     await page.goto('/markets?view=all')
     const row = page.getByRole('link', { name: /查看 E2E Alpha vs\. E2E Beta 市场/ })
@@ -554,16 +604,16 @@ test.describe('P3 production mobile', () => {
     const indices = await row.evaluate((element) => {
       const content = element.textContent ?? ''
       return [
-        content.indexOf('胜出买入参考价'),
+        content.indexOf('E2E Alpha'),
+        content.indexOf('57¢'),
         content.indexOf('最近报价'),
         content.indexOf('平均价差'),
-        content.lastIndexOf('胜出买入参考价'),
       ]
     })
     expect(indices[0]).toBeGreaterThanOrEqual(0)
-    expect(indices[3]).toBeGreaterThan(indices[0])
-    expect(indices[1]).toBeGreaterThan(indices[3])
+    expect(indices[1]).toBeGreaterThan(indices[0])
     expect(indices[2]).toBeGreaterThan(indices[1])
+    expect(indices[3]).toBe(-1)
   })
 
   test('Home pulse → Markets → Match navigation', async ({ page }) => {
@@ -591,19 +641,20 @@ test.describe('P3 production mobile', () => {
     await interceptP3(page)
     await page.goto('/markets')
     await expect(
-      page.getByRole('link', { name: /查看 E2E Alpha vs\. E2E Beta 的模拟买入机会决策/ }),
+      page.getByRole('link', { name: '查看 E2E Alpha vs. E2E Beta 市场' }),
     ).toBeVisible()
+    await expect(page.getByRole('tab', { name: /全部市场/ })).toHaveAttribute('aria-selected', 'true')
 
     await page.reload()
     await expect(
-      page.getByRole('link', { name: /查看 E2E Alpha vs\. E2E Beta 的模拟买入机会决策/ }),
+      page.getByRole('link', { name: '查看 E2E Alpha vs. E2E Beta 市场' }),
     ).toBeVisible()
     await expect(page.getByRole('heading', { name: '比赛市场' })).toBeVisible()
   })
 
   test('keyboard users can traverse tabs and rows', async ({ page }) => {
     await interceptP3(page)
-    await page.goto('/markets')
+    await page.goto('/markets?view=opportunities')
     await expect(
       page.getByRole('link', { name: /查看 E2E Alpha vs\. E2E Beta 的模拟买入机会决策/ }),
     ).toBeVisible()
@@ -650,7 +701,7 @@ test.describe('P3 production mobile', () => {
     await interceptP3(page)
     await page.goto('/markets')
     await expect(
-      page.getByRole('link', { name: /查看 E2E Alpha vs\. E2E Beta 的模拟买入机会决策/ }),
+      page.getByRole('link', { name: '查看 E2E Alpha vs. E2E Beta 市场' }),
     ).toBeVisible()
 
     const overflow = await page.evaluate(
@@ -658,8 +709,7 @@ test.describe('P3 production mobile', () => {
     )
     expect(overflow).toBeLessThanOrEqual(0)
 
-    await page.getByRole('tab', { name: /全部市场/ }).click()
-    await page.getByRole('button', { name: '筛选 · 0 项' }).click()
+    await page.getByRole('button', { name: '筛选 · 2 项' }).click()
     const chip = page.getByRole('button', { name: '挑战赛', exact: true })
     const box = await chip.boundingBox()
     expect(box).not.toBeNull()
@@ -672,7 +722,7 @@ test.describe('P3 production mobile', () => {
   test('mobile filters begin collapsed and expand without clipping canonical options', async ({ page }) => {
     await interceptP3(page)
     await page.goto('/markets?view=all')
-    const trigger = page.getByRole('button', { name: '筛选 · 0 项' })
+    const trigger = page.getByRole('button', { name: '筛选 · 2 项' })
     const tierGroup = page.getByRole('group', { name: '赛事级别' })
 
     await expect(trigger).toBeVisible()

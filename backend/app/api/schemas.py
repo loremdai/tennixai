@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 
 from pydantic import BaseModel, Field
 
@@ -121,6 +121,36 @@ class MarketQuoteDto(BaseModel):
     depth_usd: str | None = None
 
 
+MarketScoreInt = Annotated[int, Field(ge=0, le=999)]
+MarketSetsWon = Annotated[int, Field(ge=0, le=99)]
+MarketSetNumber = Annotated[int, Field(ge=1, le=99)]
+
+
+class MarketSetScoreDto(BaseModel):
+    number: MarketSetNumber
+    player1_games: MarketScoreInt | None = None
+    player2_games: MarketScoreInt | None = None
+    player1_tiebreak_points: MarketScoreInt | None = None
+    player2_tiebreak_points: MarketScoreInt | None = None
+
+
+class MarketMatchScoreDto(BaseModel):
+    sets_won: tuple[MarketSetsWon, MarketSetsWon] | None = None
+    sets: tuple[MarketSetScoreDto, ...]
+    points: tuple[str | None, str | None] = (None, None)
+    is_tiebreak: bool | None = None
+
+
+class MarketMatchContextDto(BaseModel):
+    scheduled_at: datetime | None = None
+    match_status: str | None = None
+    connection_status: str | None = None
+    state_as_of: datetime | None = None
+    live_state_current: bool = False
+    current_set_number: MarketSetNumber | None = None
+    score: MarketMatchScoreDto | None = None
+
+
 class MarketSummaryDto(BaseModel):
     market_id: str
     # Only ever the ACTIVE `market_match_links` match; navigable when set.
@@ -131,6 +161,8 @@ class MarketSummaryDto(BaseModel):
     tier: str | None = None
     gender: str | None = None
     phase: str | None = None
+    # Optional canonical match context used to render factual phase details.
+    match_context: MarketMatchContextDto | None = None
     # available | eligible_unpromoted | out_of_scope | not_evaluated
     model_availability: str = "not_evaluated"
     # Only a real DecisionObservation may set this; a null action is not

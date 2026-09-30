@@ -454,7 +454,7 @@ export function listMarketOpportunities(
 }
 
 export type MarketListParams = {
-  tier?: CircuitTier
+  tier?: CircuitTier | CircuitTier[]
   gender?: Gender
   phase?: MarketPhase
   page?: number
@@ -463,7 +463,12 @@ export type MarketListParams = {
 
 export function listMarkets(params: MarketListParams = {}, signal?: AbortSignal): Promise<MarketPageDto> {
   const search = new URLSearchParams()
-  if (params.tier) search.set('tier', params.tier)
+  const tiers = Array.isArray(params.tier)
+    ? params.tier
+    : params.tier
+      ? [params.tier]
+      : []
+  tiers.forEach((tier) => search.append('tier', tier))
   if (params.gender) search.set('gender', params.gender)
   if (params.phase) search.set('phase', params.phase)
   if (params.page !== undefined) search.set('page', String(params.page))

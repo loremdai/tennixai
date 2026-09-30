@@ -17,6 +17,7 @@ import { ProductHeader } from '@/components/match/match-header'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { ApiError, getPaperPositions, listMarketOpportunities, listMarkets } from '@/lib/api/client'
+import type { MarketListParams } from '@/lib/api/client'
 import { userFacingApiError } from '@/lib/api/user-facing-errors'
 import type { CircuitTier, OpportunityAvailabilityDto } from '@/lib/api/types'
 import { useMarketStream } from '@/hooks/use-market-stream'
@@ -32,6 +33,8 @@ import {
 const REFRESH_DEBOUNCE_MS = 750
 const LISTING_QUOTE_REFRESH_INTERVAL_MS = 1_000
 const PAGE_SIZE = 50
+const DEFAULT_TIERS: CircuitTier[] = ['atp', 'wta']
+const TIER_ORDER: CircuitTier[] = ['atp', 'wta', 'challenger', 'itf', 'other']
 
 type ListStatus = 'loading' | 'ready' | 'error'
 
@@ -85,7 +88,18 @@ export type MarketsWorkspaceData = {
   loadMoreListings: () => void
 }
 
-export function useMarketsWorkspace(): MarketsWorkspaceData {
+export function useMarketsWorkspace({
+  tiers,
+  gender,
+  phase,
+}: {
+  tiers: CircuitTier[]
+  gender: GenderFilter
+  phase: PhaseFilter
+}): MarketsWorkspaceData {
+  const filterKey = `${tiers.join(',')}|${gender}|${phase}`
+  const activeFilterKeyRef = useRef(filterKey)
+  activeFilterKeyRef.current = filterKey
   const [opportunities, setOpportunities] = useState<OpportunitiesState>({
     status: 'loading',
     errorCode: null,
@@ -111,6 +125,8 @@ export function useMarketsWorkspace(): MarketsWorkspaceData {
   const listingsDebounceRef = useRef<number | null>(null)
   const lastListingsRefreshAtRef = useRef(0)
   const loadedListingsPageRef = useRef(0)
+  const listingsRequestIdRef = useRef(0)
+  const loadedFilterKeyRef = useRef<string | null>(null)
   const mountedRef = useRef(true)
   mountedRef.current = true
   useEffect(() => () => { mountedRef.current = false }, [])
@@ -148,22 +164,47 @@ export function useMarketsWorkspace(): MarketsWorkspaceData {
     const throughPage = options.throughPage ?? Math.max(loadedListingsPageRef.current, 1)
     const append = options.append ?? false
     if (append && throughPage !== loadedListingsPageRef.current + 1) return
+    const requestId = ++listingsRequestIdRef.current
+    const requestFilterKey = filterKey
+    if (!append) {
+      const sameFilter = loadedFilterKeyRef.current === requestFilterKey
+      setListings((current) => ({
+        status: sameFilter && current.rows.length > 0 ? 'ready' : 'loading',
+        errorCode: null,
+        rows: sameFilter ? current.rows : [],
+        page: sameFilter ? current.page : 0,
+        total: sameFilter ? current.total : 0,
+        loadingMore: false,
+      }))
+    }
     if (append) {
       setListings((current) => ({ ...current, loadingMore: true, errorCode: null }))
     }
     try {
       const firstPage = append ? throughPage : 1
       const pages = []
-      for (let page = firstPage; page <= throughPage; page += 1) {
-        pages.push(await listMarkets({ page, pageSize: PAGE_SIZE }))
+      const filters: Omit<MarketListParams, 'page' | 'pageSize'> = {
+        ...(tiers.length > 0 ? { tier: tiers } : {}),
+        ...(gender !== 'all' ? { gender } : {}),
+        ...(phase !== 'all' ? { phase } : {}),
       }
-      if (!mountedRef.current) return
+      for (let page = firstPage; page <= throughPage; page += 1) {
+        pages.push(await listMarkets({ ...filters, page, pageSize: PAGE_SIZE }))
+      }
+      if (
+        !mountedRef.current ||
+        requestId !== listingsRequestIdRef.current ||
+        activeFilterKeyRef.current !== requestFilterKey
+      ) return
       const now = new Date()
       const incoming = pages.flatMap((page) => page.markets.map((row) => toMarketRow(row, now)))
       const total = pages[0]?.total ?? 0
       loadedListingsPageRef.current = throughPage
+      loadedFilterKeyRef.current = requestFilterKey
       setListings((current) => {
-        const combined = append ? [...current.rows, ...incoming] : incoming
+        const combined = append && loadedFilterKeyRef.current === requestFilterKey
+          ? [...current.rows, ...incoming]
+          : incoming
         const unique = new Map(combined.map((row) => [row.id, row]))
         return {
           status: 'ready',
@@ -175,7 +216,11 @@ export function useMarketsWorkspace(): MarketsWorkspaceData {
         }
       })
     } catch (error) {
-      if (!mountedRef.current) return
+      if (
+        !mountedRef.current ||
+        requestId !== listingsRequestIdRef.current ||
+        activeFilterKeyRef.current !== requestFilterKey
+      ) return
       if (error instanceof ApiError && error.code === 'p3_disabled') {
         setDisabled(true)
         setListings((current) => ({ ...current, loadingMore: false }))
@@ -190,7 +235,7 @@ export function useMarketsWorkspace(): MarketsWorkspaceData {
         loadingMore: false,
       }))
     }
-  }, [])
+  }, [filterKey, tiers, gender, phase])
 
   const loadPaper = useCallback(async () => {
     try {
@@ -236,16 +281,27 @@ export function useMarketsWorkspace(): MarketsWorkspaceData {
   }, [loadOpportunities, loadListings, loadPaper])
 
   useEffect(() => {
-    void refetch()
-  }, [refetch])
+    void loadOpportunities()
+    void loadPaper()
+  }, [loadOpportunities, loadPaper])
+
+  useEffect(() => {
+    loadedListingsPageRef.current = 0
+    void loadListings({ throughPage: 1 })
+  }, [loadListings])
+
+  const refetchRef = useRef(refetch)
+  refetchRef.current = refetch
+  const loadListingsRef = useRef(loadListings)
+  loadListingsRef.current = loadListings
 
   const scheduleRefresh = useCallback(() => {
     if (debounceRef.current !== null) window.clearTimeout(debounceRef.current)
     debounceRef.current = window.setTimeout(() => {
       debounceRef.current = null
-      void refetch()
+      void refetchRef.current()
     }, REFRESH_DEBOUNCE_MS)
-  }, [refetch])
+  }, [])
 
   const scheduleListingsRefresh = useCallback(() => {
     if (listingsDebounceRef.current !== null) return
@@ -254,9 +310,9 @@ export function useMarketsWorkspace(): MarketsWorkspaceData {
     listingsDebounceRef.current = window.setTimeout(() => {
       listingsDebounceRef.current = null
       lastListingsRefreshAtRef.current = Date.now()
-      void loadListings({ throughPage: Math.max(loadedListingsPageRef.current, 1) })
+      void loadListingsRef.current({ throughPage: Math.max(loadedListingsPageRef.current, 1) })
     }, delay)
-  }, [loadListings])
+  }, [])
 
   useEffect(
     () => () => {
@@ -331,7 +387,7 @@ function ErrorCard({ errorCode, onRetry }: { errorCode: string | null; onRetry: 
 
 export function MarketsWorkspace({
   initialView = 'opportunities',
-  initialTiers = [],
+  initialTiers = DEFAULT_TIERS,
   initialGender = 'all',
   initialPhase = 'all',
 }: {
@@ -340,11 +396,11 @@ export function MarketsWorkspace({
   initialGender?: GenderFilter
   initialPhase?: PhaseFilter
 }) {
-  const data = useMarketsWorkspace()
   const [view, setView] = useState<MarketsTabValue>(initialView)
   const [tiers, setTiers] = useState<CircuitTier[]>(initialTiers)
   const [gender, setGender] = useState<GenderFilter>(initialGender)
   const [phase, setPhase] = useState<PhaseFilter>(initialPhase)
+  const data = useMarketsWorkspace({ tiers, gender, phase })
 
   function updateUrl(update: (url: URL) => void) {
     const url = new URL(window.location.href)
@@ -359,10 +415,12 @@ export function MarketsWorkspace({
   }
 
   function changeTiers(next: CircuitTier[]) {
-    setTiers(next)
+    const ordered = TIER_ORDER.filter((tier) => next.includes(tier))
+    setTiers(ordered)
     updateUrl((url) => {
       url.searchParams.delete('tier')
-      next.forEach((tier) => url.searchParams.append('tier', tier))
+      if (ordered.length === 0) url.searchParams.set('tier', 'all')
+      else ordered.forEach((tier) => url.searchParams.append('tier', tier))
     })
   }
 
@@ -383,7 +441,7 @@ export function MarketsWorkspace({
   }
 
   function resetFilters() {
-    setTiers([])
+    setTiers(DEFAULT_TIERS)
     setGender('all')
     setPhase('all')
     updateUrl((url) => {
@@ -393,17 +451,12 @@ export function MarketsWorkspace({
     })
   }
 
-  const hasFilters = tiers.length > 0 || gender !== 'all' || phase !== 'all'
-  const filteredListings = data.listings.rows.filter(
-    (row) =>
-      (tiers.length === 0 || tiers.includes(row.tier as CircuitTier)) &&
-      (gender === 'all' || row.gender === gender) &&
-      (phase === 'all' ||
-        (phase === 'prematch' ? row.phase === 'upcoming' : row.phase === phase)),
-  )
+  const hasDefaultTiers =
+    tiers.length === DEFAULT_TIERS.length && DEFAULT_TIERS.every((tier) => tiers.includes(tier))
+  const hasFilters = !hasDefaultTiers || gender !== 'all' || phase !== 'all'
   const anyStale =
     data.opportunities.rows.some((row) => row.stale || row.overlay === 'stale') ||
-    filteredListings.some((row) => row.stale || row.overlay === 'stale')
+    data.listings.rows.some((row) => row.stale || row.overlay === 'stale')
 
   return (
     <div className="markets-workspace min-h-screen bg-background text-foreground">
@@ -412,17 +465,26 @@ export function MarketsWorkspace({
       <main id="content" className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-6 md:px-6 md:py-8">
         <section className="flex flex-col gap-2" aria-labelledby="markets-title">
           <div className="max-w-3xl">
-            <div className="flex flex-wrap items-center gap-3">
-              <h1 id="markets-title" className="text-balance text-3xl font-semibold tracking-[-0.035em] sm:text-4xl">比赛市场</h1>
-              <span className="rounded-full border px-2.5 py-1 text-xs text-muted-foreground sm:hidden">仅模拟</span>
+            <p className="text-sm font-medium text-primary">网球 · 市场 · 报价</p>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <h1 id="markets-title" className="text-balance text-4xl font-semibold tracking-[-0.035em] sm:text-5xl">比赛市场</h1>
+              <span className="rounded-full border border-foreground/15 px-2.5 py-1 text-xs text-muted-foreground">仅模拟</span>
             </div>
             <p className="mt-1 text-pretty text-sm leading-relaxed text-muted-foreground sm:text-base">
-              查看比赛报价
+              浏览网球比赛的真实报价与数据状态。
             </p>
           </div>
         </section>
 
-        <MarketsTabs view={view} onSelect={selectView} />
+        <MarketsTabs
+          view={view}
+          onSelect={selectView}
+          counts={{
+            opportunities: data.opportunities.rows.length,
+            all: data.listings.total,
+            paper: data.paper.open.length + data.paper.recent.length,
+          }}
+        />
 
         {data.disabled ? (
           <Card>
@@ -485,75 +547,83 @@ export function MarketsWorkspace({
                   </section>
                 )
               ) : view === 'all' ? (
-                data.listings.status === 'loading' ? (
-                  <LoadingSkeleton />
-                ) : (
-                  <section className="flex flex-col gap-4" aria-label="全部市场">
-                    <MarketFilters
-                      tiers={tiers}
-                      gender={gender}
-                      phase={phase}
-                      onTiersChange={changeTiers}
-                      onGenderChange={changeGender}
-                      onPhaseChange={changePhase}
-                      onReset={resetFilters}
-                    />
-                    <p className="text-sm text-muted-foreground" aria-live="polite">
+                <section className="flex flex-col gap-4" aria-label="全部市场">
+                  <MarketFilters
+                    tiers={tiers}
+                    gender={gender}
+                    phase={phase}
+                    onTiersChange={changeTiers}
+                    onGenderChange={changeGender}
+                    onPhaseChange={changePhase}
+                    onReset={resetFilters}
+                    canReset={hasFilters}
+                  />
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground" aria-live="polite">
+                    <span className="rounded-lg border border-foreground/10 px-3 py-2">
                       已加载 {data.listings.rows.length} / 全部 {data.listings.total} 个市场
-                    </p>
-                    {data.listings.status === 'error' && data.listings.rows.length === 0 ? (
-                      <ErrorCard errorCode={data.listings.errorCode} onRetry={() => void data.refetch()} />
-                    ) : filteredListings.length === 0 ? (
-                      <Card>
-                        <CardContent className="flex flex-col items-start gap-3 p-5 text-left">
-                          <div>
-                            <h3 className="font-semibold">{hasFilters ? '没有符合条件的市场' : '目前没有可显示的比赛报价'}</h3>
-                            <p className="mt-1 max-w-md text-sm leading-relaxed text-muted-foreground">
-                              {hasFilters
-                                ? '移除部分筛选条件，或重置筛选后再试。'
-                                : '暂时没有比赛报价，请稍后再来查看。'}
-                            </p>
-                          </div>
-                          {hasFilters ? <Button variant="outline" onClick={resetFilters}>重置筛选</Button> : null}
-                          {data.listings.rows.length < data.listings.total ? (
-                            <Button
-                              variant="outline"
-                              onClick={data.loadMoreListings}
-                              disabled={data.listings.loadingMore}
-                            >
-                              {data.listings.loadingMore ? '加载中…' : '加载更多'}
-                            </Button>
-                          ) : null}
-                        </CardContent>
-                      </Card>
-                    ) : (
-                      <>
-                        {data.listings.status === 'error' ? (
-                          <div role="status" className="flex items-start gap-2 rounded-xl border border-destructive/25 bg-destructive/8 p-4 text-sm text-destructive">
-                            <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-                            {userFacingApiError(data.listings.errorCode, 'market')} 以下为上次成功获取的数据。
-                          </div>
-                        ) : null}
-                        <div className="grid gap-3" aria-live="polite">
-                          {filteredListings.map((row) => (
-                            <MarketRow key={row.id} market={row} />
-                          ))}
+                    </span>
+                    <span className="rounded-lg border border-foreground/10 px-3 py-2">
+                      赛事级别优先 · 进行中 → 赛前 → 已结束
+                    </span>
+                    <span className="ml-auto inline-flex items-center gap-1.5 px-2 py-2">
+                      <span className="size-1.5 rounded-full bg-primary" aria-hidden="true" />
+                      报价数据
+                    </span>
+                  </div>
+                  {data.listings.status === 'loading' ? (
+                    <LoadingSkeleton />
+                  ) : data.listings.status === 'error' && data.listings.rows.length === 0 ? (
+                    <ErrorCard errorCode={data.listings.errorCode} onRetry={() => void data.refetch()} />
+                  ) : data.listings.rows.length === 0 ? (
+                    <Card>
+                      <CardContent className="flex flex-col items-start gap-3 p-5 text-left">
+                        <div>
+                          <h3 className="font-semibold">{hasFilters ? '没有符合条件的市场' : '目前没有可显示的比赛报价'}</h3>
+                          <p className="mt-1 max-w-md text-sm leading-relaxed text-muted-foreground">
+                            {hasFilters
+                              ? '移除部分筛选条件，或重置筛选后再试。'
+                              : '暂时没有比赛报价，请稍后再来查看。'}
+                          </p>
                         </div>
+                        {hasFilters ? <Button variant="outline" onClick={resetFilters}>重置筛选</Button> : null}
                         {data.listings.rows.length < data.listings.total ? (
-                          <div className="flex justify-center">
-                            <Button
-                              variant="outline"
-                              onClick={data.loadMoreListings}
-                              disabled={data.listings.loadingMore}
-                            >
-                              {data.listings.loadingMore ? '加载中…' : '加载更多'}
-                            </Button>
-                          </div>
+                          <Button
+                            variant="outline"
+                            onClick={data.loadMoreListings}
+                            disabled={data.listings.loadingMore}
+                          >
+                            {data.listings.loadingMore ? '加载中…' : '加载更多'}
+                          </Button>
                         ) : null}
-                      </>
-                    )}
-                  </section>
-                )
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <>
+                      {data.listings.status === 'error' ? (
+                        <div role="status" className="flex items-start gap-2 rounded-xl border border-destructive/25 bg-destructive/8 p-4 text-sm text-destructive">
+                          <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+                          {userFacingApiError(data.listings.errorCode, 'market')} 以下为上次成功获取的数据。
+                        </div>
+                      ) : null}
+                      <div className="grid gap-3" aria-live="polite">
+                        {data.listings.rows.map((row) => (
+                          <MarketRow key={row.id} market={row} />
+                        ))}
+                      </div>
+                      {data.listings.rows.length < data.listings.total ? (
+                        <div className="flex justify-center">
+                          <Button
+                            variant="outline"
+                            onClick={data.loadMoreListings}
+                            disabled={data.listings.loadingMore}
+                          >
+                            {data.listings.loadingMore ? '加载中…' : '加载更多'}
+                          </Button>
+                        </div>
+                      ) : null}
+                    </>
+                  )}
+                </section>
               ) : data.paper.status === 'loading' ? (
                 <LoadingSkeleton />
               ) : data.paper.status === 'error' && data.paper.open.length === 0 && data.paper.recent.length === 0 ? (

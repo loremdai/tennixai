@@ -69,16 +69,12 @@ export function ProductHeader({
           <span className="flex size-8 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_0_24px_color-mix(in_oklab,var(--primary)_22%,transparent)]">
             <CircleDot aria-hidden="true" className="size-5" />
           </span>
-          {isMarketsHeader ? (
-            <span className="text-lg font-semibold tracking-tight">TennixAI</span>
-          ) : (
-            <span className="font-mono text-sm font-bold tracking-[0.14em]">
-              TENNIX<span className="text-primary">/AI</span>
-            </span>
-          )}
+          <span className="font-mono text-sm font-bold tracking-[0.14em]">
+            TENNIX<span className="text-primary">/AI</span>
+          </span>
         </Link>
 
-        {!isMarketsHeader ? (
+        {!isMarketsHeader || active === 'markets' ? (
           <nav className="hidden h-full items-center gap-1 lg:flex" aria-label="主导航">
             {resolvedNavItems.map((item) => (
               <Link
@@ -118,12 +114,6 @@ export function ProductHeader({
             </InputGroup>
             <button type="submit" className="sr-only">搜索</button>
           </form>
-        ) : null}
-
-        {isMarketsHeader ? (
-          <span className="ml-auto hidden rounded-full border px-3 py-1 text-xs text-muted-foreground sm:inline-flex">
-            仅模拟
-          </span>
         ) : null}
 
         <div className={cn('flex shrink-0 items-center gap-1', isMarketsHeader ? 'ml-auto md:ml-0' : 'ml-auto md:ml-0')}>

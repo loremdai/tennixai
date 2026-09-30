@@ -17,9 +17,11 @@ export const MARKETS_TABS: Array<{
 export function MarketsTabs({
   view,
   onSelect,
+  counts,
 }: {
   view: MarketsTabValue
   onSelect: (view: MarketsTabValue) => void
+  counts: Record<MarketsTabValue, number>
 }) {
   function handleTabKeyDown(
     event: KeyboardEvent<HTMLButtonElement>,
@@ -35,7 +37,7 @@ export function MarketsTabs({
   }
 
   return (
-    <div className="flex items-end justify-around overflow-x-auto border-b md:justify-start md:gap-3" role="tablist" aria-label="市场视图">
+    <div className="flex items-end justify-start gap-2 overflow-x-auto border-b sm:gap-4" role="tablist" aria-label="市场视图">
       {MARKETS_TABS.map((item, index) => (
         <button
           key={item.value}
@@ -48,13 +50,16 @@ export function MarketsTabs({
           onClick={() => onSelect(item.value)}
           onKeyDown={(event) => handleTabKeyDown(event, index)}
           className={cn(
-            'relative flex min-h-11 shrink-0 items-center justify-center px-3 text-sm outline-none transition-colors after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:content-[""] focus-visible:ring-2 focus-visible:ring-ring',
+            'relative flex min-h-11 shrink-0 items-center justify-center gap-2 px-3 text-sm outline-none transition-colors after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:content-[""] focus-visible:ring-2 focus-visible:ring-ring sm:px-4',
             view === item.value
               ? 'font-semibold text-primary after:bg-primary'
               : 'text-muted-foreground after:bg-transparent hover:text-foreground',
           )}
         >
           <span>{item.label}</span>
+          <span className="font-mono text-xs tabular-nums text-muted-foreground" aria-label={`${counts[item.value]} 条`}>
+            {counts[item.value].toLocaleString('zh-CN')}
+          </span>
         </button>
       ))}
     </div>
