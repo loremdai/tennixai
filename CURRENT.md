@@ -2,11 +2,17 @@
 
 > 产品与稳定架构见 [PROJECT.md](./PROJECT.md)；长期路线、任务证据与历史记录见 [ROADMAP.md](./ROADMAP.md)，完整审计由 Git 历史承担。
 
-**最后更新：** 2026-09-30 21:36（北京时间）
+**最后更新：** 2026-09-30 21:51（北京时间）
 
-**当前主任务：** T125 按最终确认示意图实施 `/markets` 前端优化（`done`）。
+**当前主任务：** T126 只读调查 `/markets` 当前报价未更新的原因（`in_progress`）。
 
-**最近执行者 / ADE / 分支：** Codex / 本地 ADE / `main`；T125 起始提交 `73a501d`，领取记录 `5a13d01` 已提交并推送。既有用户改动保留且未纳入任务提交。
+**最近执行者 / ADE / 分支：** Codex / 本地 ADE / `main`；T126 起始提交 `fc04021`，调查范围仅读取运行状态/API/代码及有界只读验证。既有用户改动保留且未纳入任务提交。
+
+## 当前执行：T126 只读调查市场报价未更新
+
+- **领取：** 2026-09-30 21:51（北京时间）；Codex / 本地 ADE / `main`；起始提交 `fc04021`。
+- **范围：** 确认 `/markets` 当前报价停更的位置及现时数据源状态；先调查，不改产品代码、不重启服务、不触碰根 `.env` 或既有用户改动。
+- **初步证据：** API 页面可访问（HTTP 200），但第一页 50 条报价均为 `stale`；运行时覆盖统计为候选 409、stale 409、fresh snapshot/realtime 均为 0，`last_successful_batch_at=null`。`polymarket`/`polymarket_recovery` 为 `gap / PROVIDER_UNAVAILABLE`，`polymarket_catalog_quotes` 与 `market_snapshot` 为 `degraded / MARKET_SNAPSHOT_BATCH_FAILED`。等待有界只读 `verify` 交叉确认上游恢复状态。
 
 ## 最近完成任务：T125 按最终确认示意图实施市场页前端优化（`done`）
 
