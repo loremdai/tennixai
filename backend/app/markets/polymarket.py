@@ -203,19 +203,28 @@ class PolymarketProvider:
         return mapping
 
     async def _gamma_market_by_condition(self, condition_id: str) -> GammaMarketDto:
-        payload = await self._get_json(
-            self._gamma, "/markets", params={"condition_ids": condition_id}
-        )
-        if not isinstance(payload, list) or not payload:
-            raise AppError("not_found", "Polymarket resource not found", 404)
-        try:
-            return GammaMarketDto.model_validate(payload[0])
-        except ValidationError as exc:
-            raise AppError(
-                "provider_invalid_response",
-                "Polymarket market payload was malformed",
-                502,
-            ) from exc
+        # Gamma defaults to closed=false. Known markets must remain readable
+        # after closing, especially for final settlement and historical rules.
+        for closed in ("false", "true"):
+            payload = await self._get_json(
+                self._gamma, "/markets",
+                params={"condition_ids": condition_id, "closed": closed},
+            )
+            if isinstance(payload, list) and not payload:
+                continue
+            try:
+                if not isinstance(payload, list) or len(payload) != 1:
+                    raise ValueError("Expected one market")
+                market = GammaMarketDto.model_validate(payload[0])
+                if market.conditionId != condition_id:
+                    raise ValueError("Condition mismatch")
+                return market
+            except (ValidationError, ValueError) as exc:
+                raise AppError(
+                    "provider_invalid_response",
+                    "Polymarket market payload was malformed", 502,
+                ) from exc
+        raise AppError("not_found", "Polymarket resource not found", 404)
 
     def _canonical_market(
         self, *, market_id: str, dto: GammaMarketDto, player_ids: tuple[str, str]
@@ -579,6 +588,11 @@ class PolymarketProvider:
     async def get_order_book(self, market_id: str) -> OrderBookState:
         external = await self._external(market_id)
         dto = await self._gamma_market_by_condition(external.condition_id)
+        if dto.closed:
+            raise AppError("market_closed", "Market is closed", 409)
+        if not (dto.active is True and dto.acceptingOrders is True
+                and dto.enableOrderBook is True):
+            raise AppError("market_not_tradable", "Market book is unavailable", 409)
         player_ids = await self._player_ids_for(external, dto)
         books: list[OutcomeBook] = []
         hashes: list[str] = []

@@ -670,3 +670,66 @@ async def test_adapter_only_issues_public_get_requests(resolver):
         target = f"{request.url.host}{request.url.path}"
         assert target.startswith(public_prefixes), f"unexpected call: {target}"
         assert "authorization" not in {k.lower() for k in request.headers}
+
+
+@pytest.mark.parametrize(
+    'uma,prices,status',
+    [('resolved', ['1', '0'], ResolutionStatus.FINAL),
+     ('resolved', ['0.5', '0.5'], ResolutionStatus.FINAL),
+     ('disputed', ['0.5', '0.5'], ResolutionStatus.DISPUTED),
+     ('', ['0', '0'], ResolutionStatus.PENDING)],
+)
+async def test_closed_market_remains_discoverable_for_resolution(resolver, uma, prices, status):
+    rows = _fixture('gamma_market.json')
+    rows[0].update(closed=True, acceptingOrders=False, umaResolutionStatus=uma,
+                   outcomePrices=json.dumps(prices))
+    def response(request):
+        return httpx.Response(200, json=rows if request.url.params.get('closed') == 'true' else [])
+    provider, recorder = make_provider(resolver, RecordingTransport(
+        {'gamma-api.polymarket.com/markets': response}))
+    resolution = await provider.get_resolution(INTERNAL_MARKET_ID)
+    assert resolution is not None and resolution.status is status
+    assert [r.url.params.get('closed') for r in recorder.requests] == ['false', 'true']
+    if status is ResolutionStatus.FINAL:
+        assert [p.payout_per_share for p in resolution.payouts] == [Decimal(p) for p in prices]
+
+
+@pytest.mark.parametrize('changes,code', [
+    ({'closed': True}, 'market_closed'),
+    ({'active': False}, 'market_not_tradable'),
+    ({'acceptingOrders': False}, 'market_not_tradable'),
+    ({'enableOrderBook': False}, 'market_not_tradable'),
+])
+async def test_nontradable_market_never_requests_clob_book(resolver, changes, code):
+    rows = _fixture('gamma_market.json')
+    rows[0].update(changes)
+    provider, recorder = make_provider(resolver, RecordingTransport(
+        {'gamma-api.polymarket.com/markets': httpx.Response(200, json=rows)}))
+    with pytest.raises(AppError) as caught:
+        await provider.get_order_book(INTERNAL_MARKET_ID)
+    assert caught.value.code == code
+    assert all(r.url.host != 'clob.polymarket.com' for r in recorder.requests)
+
+
+@pytest.mark.parametrize('shape', ['object', 'unrelated', 'duplicate'])
+async def test_known_market_lookup_rejects_invalid_identity(resolver, shape):
+    rows = _fixture('gamma_market.json')
+    if shape == 'object':
+        rows = {'data': rows}
+    elif shape == 'unrelated':
+        rows[0]['conditionId'] = 'different-condition'
+    else:
+        rows = rows + rows
+    provider, recorder = make_provider(resolver, RecordingTransport(
+        {'gamma-api.polymarket.com/markets': httpx.Response(200, json=rows)}))
+    with pytest.raises(AppError) as caught:
+        await provider.get_rules(INTERNAL_MARKET_ID)
+    assert caught.value.code == 'provider_invalid_response'
+    assert len(recorder.requests) == 1
+
+
+async def test_known_market_missing_in_both_lifecycles_is_not_found(resolver):
+    provider, recorder = make_provider(resolver, RecordingTransport(
+        {'gamma-api.polymarket.com/markets': httpx.Response(200, json=[])}))
+    assert await provider.get_resolution(INTERNAL_MARKET_ID) is None
+    assert [r.url.params.get('closed') for r in recorder.requests] == ['false', 'true']
