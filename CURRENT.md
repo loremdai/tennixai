@@ -2,19 +2,19 @@
 
 > 产品与稳定架构见 [PROJECT.md](./PROJECT.md)；长期路线、任务证据与历史记录见 [ROADMAP.md](./ROADMAP.md)，完整审计由 Git 历史承担。
 
-**最后更新：** 2026-09-30 21:57（北京时间）
+**最后更新：** 2026-09-30 21:58（北京时间）
 
-**当前主任务：** T126 只读调查 `/markets` 当前报价未更新的原因（`in_progress`）。
+**当前主任务：** T126 只读调查 `/markets` 当前报价未更新的原因（`done`）。
 
-**最近执行者 / ADE / 分支：** Codex / 本地 ADE / `main`；T126 起始提交 `fc04021`，调查范围仅读取运行状态/API/代码及有界只读验证。既有用户改动保留且未纳入任务提交。
+**最近执行者 / ADE / 分支：** Codex / 本地 ADE / `main`；T126 起始提交 `fc04021`，领取 `2d01dc3`，调查证据 `aa887ac` 已推送。既有用户改动保留且未纳入任务提交。
 
-## 当前执行：T126 只读调查市场报价未更新
+## 最近完成任务：T126 只读调查市场报价未更新
 
 - **领取：** 2026-09-30 21:51（北京时间）；Codex / 本地 ADE / `main`；起始提交 `fc04021`。
-- **范围：** 确认 `/markets` 当前报价停更的位置及现时数据源状态；先调查，不改产品代码、不重启服务、不触碰根 `.env` 或既有用户改动。
+- **完成提交：** `aa887ac`（运行时、API、地理检查及文档化证据）；只读调查，未改产品代码、未重启服务、未触碰根 `.env` 或既有用户改动。
 - **调查结论：** 21:49 初查时全部 409 个报价候选均已 stale，最新成功快照停在 10:15 UTC；市场流/批量快照报 `PROVIDER_UNAVAILABLE` / `MARKET_SNAPSHOT_BATCH_FAILED`。未重启服务，运行时随后自行恢复。
 - **美国出口实测：** Polymarket `GET /api/geoblock` 返回 `blocked=true, country=US`（只保留国家/地区结论，不记录 IP）。同一出口运行 `./scripts/tennix-live verify` 为 6 passed、2 skipped、0 failed；`market_discovery`、`market_book`、`market_websocket`、`market_quote_snapshot` 均 passed。结论：美国出口可读公开目录/盘口并连市场 WebSocket；地区检查限制下单，不是当前停更原因，无需换香港 IP。
-- **恢复证据：** 21:54 UTC 覆盖扫描 309 个候选全部尝试，281 fresh snapshot、27 no-liquidity、1 unavailable、0 stale、0 batch failures；21:56 UTC `/markets` ATP/WTA 第 1 页 50/196，其中 19 场 open/scheduled 和 1 场 open/live 报价新鲜，22 条 stale 都属于 `closed` 市场。无产品代码修改、服务重启或 LLM 调用。
+- **恢复证据：** 13:54 UTC 覆盖扫描 309 个候选全部尝试，281 fresh snapshot、27 no-liquidity、1 unavailable、0 stale、0 batch failures；13:56 UTC `/markets` ATP/WTA 第 1 页 50/196，其中 19 场 open/scheduled 和 1 场 open/live 报价新鲜，22 条 stale 都属于 `closed` 市场。无产品代码修改、服务重启或 LLM 调用。
 
 ## 最近完成任务：T125 按最终确认示意图实施市场页前端优化（`done`）
 
@@ -55,8 +55,8 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
+| 2026-09-30 | `aa887ac` | T126 只读确认初始报价停更源于 Polymarket 临时 `PROVIDER_UNAVAILABLE` 与批量快照失败；同一美国出口的 Polymarket 目录/盘口/WebSocket/批量报价检查全部通过，运行时自动恢复。US geoblock 只限制交易，当前公开只读行情可连接；详情见本文件 T126 交接。 |
 | 2026-09-30 | `a9dd266` / `71c3584` / `1e0ea1a` | T125 已推送完成：市场页采用首页视觉语言和靠左 Tab；默认 ATP/WTA，报价/身份/阶段清晰呈现；实时盘数检查新鲜度，完赛比分按市场选手顺序显示。后端 30 passed，前端 553 passed、类型检查/生产构建通过，桌面和手机 Playwright 20 passed。`?preview=p3` 未改。 |
 | 2026-09-30 | `0b1e9d1` | T124 按 SQL 页取数并只装载当前页关联数据；移除 80 个非 Tennix 容器，保留数据卷；Colima 可用内存由 40 MiB 升至 7,113 MiB。实际第一页、第二页、ATP 筛选和 Next 代理请求均返回至多 50 行；Ruff、AST、差异检查通过。排名上游仍超时，sports stream、schedule 和 Polymarket 为 `ok`，详见验收报告。 |
 | 2026-09-30 | `7e428ee` | T123 最终市场页设计图：沿用首页视觉，加入双语球员身份、报价胶囊与每场实时报价状态；筛选默认 ATP/WTA，排序为级别优先及进行中→赛前→已结束。仅设计，未实施前端。 |
 | 2026-09-30 | `a812b73` | T122 只读定位市场加载长尾：共享 VM 内存阻塞、连接超时，全量查询与重叠刷新放大负载；未实施修复。 |
-| 2026-09-30 | `57325c4` | T121 全部实现与审查修复完成；临时标记丢失及正常重启均通过，单元 1425、隔离集成 98、真实浏览器 6；T118 启动阻塞解决，服务保持 3100 运行。 |
