@@ -746,7 +746,7 @@ class MarketRepository:
     async def list_market_overview_page(
         self,
         *,
-        tier: str | None = None,
+        tier: str | Sequence[str] | None = None,
         gender: str | None = None,
         phase: str | None = None,
         page: int = 1,
@@ -756,8 +756,9 @@ class MarketRepository:
         page = max(1, page)
         page_size = min(50, max(1, page_size))
         filters = []
-        if tier is not None:
-            filters.append(TournamentRow.circuit == tier)
+        tiers = (tier,) if isinstance(tier, str) else tuple(tier or ())
+        if tiers:
+            filters.append(TournamentRow.circuit.in_(tiers))
         if gender is not None:
             filters.append(TournamentRow.gender == gender)
         if phase == "closed":
@@ -814,10 +815,35 @@ class MarketRepository:
         count_statement = with_active_match(select(func.count(MarketRow.id))).where(
             *filters
         )
+        tier_order = case(
+            (TournamentRow.circuit == "atp", 0),
+            (TournamentRow.circuit == "wta", 1),
+            (TournamentRow.circuit == "challenger", 2),
+            (TournamentRow.circuit == "itf", 3),
+            (TournamentRow.circuit == "other", 4),
+            else_=5,
+        )
+        phase_order = case(
+            (
+                or_(
+                    MarketRow.status.in_(("closed", "resolved")),
+                    MatchRow.status == "finished",
+                ),
+                2,
+            ),
+            (MatchRow.status == "live", 0),
+            (MatchRow.status == "scheduled", 1),
+            else_=3,
+        )
         statement = (
             with_active_match(select(*columns))
             .where(*filters)
-            .order_by(MarketRow.updated_at.desc(), MarketRow.id.asc())
+            .order_by(
+                tier_order,
+                phase_order,
+                MarketRow.updated_at.desc(),
+                MarketRow.id.asc(),
+            )
             .limit(page_size)
             .offset((page - 1) * page_size)
         )

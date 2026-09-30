@@ -18,7 +18,7 @@ from sqlalchemy import event, text
 
 from app.config import Settings
 from app.decision.models import DecisionAction
-from app.markets.models import BookLevel, OrderBookState, OutcomeBook
+from app.markets.models import BookLevel, MarketStatus, OrderBookState, OutcomeBook
 from app.markets.quotes import QuoteSnapshotRecord, QuoteSource, QuoteState
 from app.prediction.models import (
     ModelAvailability,
@@ -27,6 +27,7 @@ from app.prediction.models import (
 )
 from app.persistence.database import Database
 from app.persistence.market_repositories import (
+    MarketOverviewRow,
     MarketQuoteSnapshotRepository,
     MarketRepository,
 )
@@ -305,6 +306,7 @@ async def test_enriched_fields_and_pulse_selection(database: Database) -> None:
     market_id = seeded["market_id"]
     player_a = seeded["player_a"]
     player_b = seeded["player_b"]
+    test_gender = f"e{uuid4().hex[:8]}"
     async with database.session() as session:
         async with session.begin():
             await session.execute(
@@ -320,6 +322,13 @@ async def test_enriched_fields_and_pulse_selection(database: Database) -> None:
                     "WHERE id = :id"
                 ),
                 {"id": player_b},
+            )
+            await session.execute(
+                text(
+                    "UPDATE tournaments SET gender = :gender WHERE id = "
+                    "(SELECT tournament_id FROM matches WHERE id = :match_id)"
+                ),
+                {"match_id": match_id, "gender": test_gender},
             )
     markets = MarketRepository(database)
     ledger = PaperLedgerRepository(database)
@@ -350,9 +359,9 @@ async def test_enriched_fields_and_pulse_selection(database: Database) -> None:
             await session.execute(
                 text(
                     "UPDATE tournaments SET name = 'Test Trophy', circuit = 'wta',"
-                    " gender = 'women' WHERE id = :i"
+                    " gender = :gender WHERE id = :i"
                 ),
-                {"i": tournament2},
+                {"i": tournament2, "gender": test_gender},
             )
     market2 = await markets.get_or_create_market_id(
         provider="polymarket",
@@ -452,7 +461,7 @@ async def test_enriched_fields_and_pulse_selection(database: Database) -> None:
     assert decision_m2.is_stale is True
 
     # --- markets list enrichment -------------------------------------------
-    page = await queries.markets(page=1, page_size=50)
+    page = await queries.markets(gender=test_gender, page=1, page_size=50)
     summary2 = next(item for item in page.markets if item.market_id == market2)
     assert summary2.tournament_name == "Test Trophy"
     assert summary2.player_ids == (player_a, player_b)
@@ -584,6 +593,119 @@ async def test_market_overview_joins_active_links_only(database: Database) -> No
         )
     assert legacy == match_id
     assert overviews[older].active_match_id is None
+
+
+async def test_market_listing_orders_by_tier_then_phase_before_pagination(
+    database: Database,
+) -> None:
+    markets = MarketRepository(database)
+    identity = PostgresIdentityRepository(database)
+    suffix = uuid4().hex[:10]
+    test_gender = f"s{suffix}"
+    player_a = await identity.get_or_create("player", "itest-market-sort", f"a{suffix}")
+    player_b = await identity.get_or_create("player", "itest-market-sort", f"b{suffix}")
+    fixtures = (
+        ("atp", "live", "open", "atp_live"),
+        ("atp", "scheduled", "open", "atp_prematch"),
+        ("atp", "finished", "open", "atp_match_ended"),
+        ("wta", "live", "open", "wta_live"),
+        # Market closure also means ended even if the linked match remains scheduled.
+        ("wta", "scheduled", "closed", "wta_market_closed"),
+        ("challenger", "live", "open", "challenger_live"),
+        ("itf", "live", "open", "itf_live"),
+        ("other", "live", "open", "other_live"),
+        ("other", "cancelled", "open", "other_unknown_phase"),
+    )
+    market_ids: dict[str, str] = {}
+
+    for tier, match_status, market_status, label in fixtures:
+        key = f"{suffix}_{label}"
+        match_id = await identity.get_or_create("match", "itest-market-sort", key)
+        tournament_id = await identity.get_or_create(
+            "tournament", "itest-market-sort", key
+        )
+        async with database.session() as session:
+            async with session.begin():
+                await session.execute(
+                    text(
+                        "UPDATE matches SET status = :status, player1_id = :p1,"
+                        " player2_id = :p2, tournament_id = :t WHERE id = :m"
+                    ),
+                    {
+                        "status": match_status,
+                        "p1": player_a,
+                        "p2": player_b,
+                        "t": tournament_id,
+                        "m": match_id,
+                    },
+                )
+                await session.execute(
+                    text(
+                        "UPDATE tournaments SET circuit = :tier, gender = :gender"
+                        " WHERE id = :t"
+                    ),
+                    {"tier": tier, "gender": test_gender, "t": tournament_id},
+                )
+
+        market_id = await markets.get_or_create_market_id(
+            provider="polymarket",
+            provider_event_id=f"ev_sort_{key}",
+            condition_id=f"cond_sort_{uuid4().hex}",
+        )
+        await markets.save_market(
+            make_market(
+                market_id,
+                match_id=match_id,
+                status=MarketStatus(market_status),
+                player_a=player_a,
+                player_b=player_b,
+            )
+        )
+        await markets.link_match(
+            market_id=market_id,
+            match_id=match_id,
+            evidence={"pair": [player_a, player_b]},
+        )
+        market_ids[label] = market_id
+
+    queries = P3QueryService(
+        database=database,
+        markets=markets,
+        paper=PaperLedgerRepository(database),
+        hot_books=None,
+        clock=lambda: NOW,
+    )
+
+    first = await queries.markets(gender=test_gender, page=1, page_size=3)
+    second = await queries.markets(gender=test_gender, page=2, page_size=3)
+    third = await queries.markets(gender=test_gender, page=3, page_size=3)
+    assert [row.market_id for row in first.markets] == [
+        market_ids["atp_live"],
+        market_ids["atp_prematch"],
+        market_ids["atp_match_ended"],
+    ]
+    assert [row.market_id for row in second.markets] == [
+        market_ids["wta_live"],
+        market_ids["wta_market_closed"],
+        market_ids["challenger_live"],
+    ]
+    assert [row.market_id for row in third.markets] == [
+        market_ids["itf_live"],
+        market_ids["other_live"],
+        market_ids["other_unknown_phase"],
+    ]
+
+    filtered = await queries.markets(
+        tier=["atp", "wta"],
+        gender=test_gender,
+        page=2,
+        page_size=2,
+    )
+    assert filtered.total == 5
+    assert [row.market_id for row in filtered.markets] == [
+        market_ids["atp_match_ended"],
+        market_ids["wta_live"],
+    ]
 
 
 async def test_markets_query_issues_a_constant_number_of_statements(
@@ -840,15 +962,40 @@ async def test_catalog_realtime_quote_follows_its_own_connection_health(
 async def test_unmapped_market_has_no_action_and_no_fabricated_navigation(
     database: Database,
 ) -> None:
-    markets = MarketRepository(database)
-    market_id = await markets.get_or_create_market_id(
-        provider="polymarket",
-        provider_event_id=f"ev87_{uuid4().hex[:10]}",
-        condition_id=f"cond87_{uuid4().hex}",
+    market_id = "mkt_unmapped_test"
+    overview = MarketOverviewRow(
+        market_id=market_id,
+        question="Unmapped moneyline",
+        status="open",
+        rules_version=1,
+        observed_at=NOW,
+        event_start=None,
+        updated_at=NOW,
+        outcome_a_player_id=None,
+        outcome_a_name=None,
+        outcome_b_player_id=None,
+        outcome_b_name=None,
+        active_match_id=None,
+        link_evidence_available=False,
     )
-    await markets.save_market(make_market(market_id, match_id=None))
-    queries = _quote_service(database)
 
+    class OneUnmappedMarket:
+        async def list_market_overview_page(self, **kwargs):
+            return [overview], 1
+
+        async def latest_decision_observations(self, match_ids):
+            return []
+
+        async def latest_predictions_for_matches(self, match_ids):
+            return {}
+
+    queries = P3QueryService(
+        database=database,
+        markets=OneUnmappedMarket(),
+        paper=None,
+        hot_books=None,
+        clock=lambda: NOW,
+    )
     page = await queries.markets(page=1, page_size=50)
     summary = next(item for item in page.markets if item.market_id == market_id)
     assert summary.match_id is None

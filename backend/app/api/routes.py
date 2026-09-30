@@ -309,7 +309,9 @@ async def market_pulse(queries=Depends(get_p3_queries)):
 
 @router.get("/markets", response_model=MarketListResponse)
 async def list_markets(
-    tier: Literal["atp", "wta", "challenger", "itf", "other"] | None = Query(None),
+    tier: list[Literal["atp", "wta", "challenger", "itf", "other"]] | None = Query(
+        None
+    ),
     gender: Literal["men", "women", "mixed", "unknown"] | None = Query(None),
     phase: Literal["prematch", "live", "closed"] | None = Query(None),
     page: int = Query(1, ge=1),

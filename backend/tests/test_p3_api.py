@@ -118,6 +118,20 @@ class FakeP3Queries:
                 ),
                 as_of=NOW,
             ),
+            MarketSummaryDto(
+                market_id="mkt_wta",
+                match_id="mat_wta",
+                question="WTA match winner",
+                status="open",
+                tier="wta",
+                gender="women",
+                phase="prematch",
+                model_availability="not_evaluated",
+                decision_action=None,
+                reason_code=None,
+                quote=MarketQuoteDto(state="unavailable"),
+                as_of=NOW,
+            ),
         ]
         self.positions = [
             PaperPositionDto(
@@ -172,7 +186,8 @@ class FakeP3Queries:
     ):
         rows = self.market_rows
         if tier is not None:
-            rows = [row for row in rows if row.tier == tier]
+            tiers = {tier} if isinstance(tier, str) else set(tier)
+            rows = [row for row in rows if row.tier in tiers]
         if gender is not None:
             rows = [row for row in rows if row.gender == gender]
         if phase is not None:
@@ -270,6 +285,18 @@ async def test_markets_list_supports_canonical_filters_and_pagination(client):
     assert body["data"][0]["player_names"] == ["Alpha One", "Beta Two"]
     assert body["data"][0]["player_localized_names"] == ["甲球员", "乙球员"]
     assert_no_forbidden(response.text)
+
+
+async def test_markets_list_accepts_multiple_tiers(client):
+    response = await client.get(
+        "/api/v1/markets",
+        params=[("tier", "atp"), ("tier", "wta"), ("page_size", "50")],
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 2
+    assert [row["tier"] for row in body["data"]] == ["atp", "wta"]
 
 
 async def test_markets_list_rejects_unknown_enum(client):
