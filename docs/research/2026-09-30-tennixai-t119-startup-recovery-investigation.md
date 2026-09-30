@@ -19,7 +19,7 @@
 | 09-30 09:00–11:00 | 比赛原定 11:00，进入默认两小时跟踪窗口。 |
 | 09-30 09:20 | 冻结该时刻调用实际 TrackingDemand，取消市场仍在需求集合，且按 ID 排序为第一个。 |
 
-昨天上午，这场原定今天 11:00 的比赛未进入两小时窗口；此后市场关闭、上游当前查询不再返回该资源。今天启动时，终态过滤与失败隔离缺陷被这组时间/数据条件触发。无需代码发生新变化也会出现这种差异。
+昨天上午，这场原定今天 11:00 的比赛未进入两小时窗口；此后市场关闭、上游默认查询不再返回该资源。T120 官方文档与显式过滤核验确认资源仍存在：Gamma `/markets` 默认 `closed=false`，显式 `closed=true` 可查到该市场。今天启动时，终态过滤、查询语义与失败隔离缺陷被这组时间/数据条件触发。无需代码发生新变化也会出现这种差异。
 
 昨天成功启动提交 `f61486f` 到调查 HEAD，runtime/realtime/markets/API-Tennis 恢复路径无代码变更；DecisionWorker 唯一相关差异为 T115 的 `save_prediction()` 接线，它不参与本次失败的 Gamma baseline 查找。T117 为前端改版。已有用户 service.py 差异只改变 Paper 查询展示时间，未改恢复路径。
 
@@ -33,6 +33,7 @@
 4. 两个同批对照市场正常：各为 Gamma HTTP 200 + 双边 CLOB book HTTP 200。成都旧 live 比赛的 API-Tennis fixtures 查询有 1 行、livescore 为 0 行；它不是已证实的本次 `not_found` 对象。
 5. 以实际 TrackingDemand 冻结 09:20 时刻，返回 9 个需求市场，取消市场在首位。
 6. 隔离复现使用实际 TrackingDemand、MarketWorker、PolymarketProvider、LocalRuntimeDaemon，HTTP MockTransport 返回已观测的 `200 []`，其余依赖为内存替身。结果：`cancelled_in_demand=true`、`recovered=false`、recovery `NOT_FOUND`、tick 抛 `not_found`、后续 pump/jobs 调用列表为空。没有数据库/Redis/网络写入。
+7. T120 补充核验：同一 condition 的默认查询与显式 `closed=false` 均为 HTTP 200、0 行；显式 `closed=true` 为 HTTP 200、1 行，`active=true / closed=true / acceptingOrders=false / umaResolutionStatus=resolved`。资源没有删除；`active=true` 单独不能判断可交易。官方依据与方案见 [T120](./2026-09-30-tennixai-t120-official-recovery-solution.md)。
 
 真实 probe 数据库连接设置 `default_transaction_read_only=on`。输出仅内部 ID、聚合状态、HTTP 状态及脱敏代码栈；凭据和上游原始 payload 未输出。脚本在 `/tmp`，没有修改产品代码或测试文件。
 
@@ -47,10 +48,10 @@
 
 ## 修复方向（未实施）
 
-优先修复不含未结持仓的终态需求筛选，并在单市场 baseline/订阅失败时隔离错误，允许其他市场及低频目录任务继续推进。未结持仓的持续跟踪/最终结算不得被终态过滤误删。不要删除历史比赛、市场链接或 Paper 数据，也不要跳过启动健康门。
+优先修复不含未结持仓的终态需求筛选，并在单市场 baseline/订阅失败时隔离错误，允许其他市场及低频目录任务继续推进。Gamma 元数据查询必须显式区分开放与关闭市场；`get_resolution()` 复用当前默认查询且把 not_found 返回为 None，存在关闭市场结算被遗漏的潜在问题（当前零未结持仓，未观察到实际账本损害）。未结持仓的最终结算不得被终态过滤误删；关闭市场可停止盘口跟踪但仍应保留结算查询。不要删除历史比赛、市场链接或 Paper 数据，也不要跳过启动健康门。
 
 启动标记的临时目录持久性是另一个已暴露的问题，应独立评估，不能用重跑 init 掩盖这次运行时恢复缺陷。
 
 ## 结论边界
 
-已确认本次具体请求、代码传播机制及隔离复现；没有昨天的逐请求历史，不能确定上游资源消失的精确时间或原因，也不能证明所有其他市场永远没有独立问题。未修改 `.env`、数据库/Redis 数据、产品代码；未启停服务、未调用 LLM、未执行完整测试套件或浏览器门。当前应用仍停止。
+已确认本次具体请求、代码传播机制及隔离复现；T120 已纠正“上游资源消失”的推断，资源仍可通过关闭市场查询获取。没有昨天的逐请求历史，不能确定供应商状态切换的精确时间，也不能证明所有其他市场永远没有独立问题。未修改 `.env`、数据库/Redis 数据、产品代码；未启停服务、未调用 LLM、未执行完整测试套件或浏览器门。当前应用仍停止。
