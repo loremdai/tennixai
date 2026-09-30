@@ -119,3 +119,10 @@ TENNIX_E2E_LOCAL_RUNTIME_URL=http://127.0.0.1:3100 \
 | 旧 live 已不在 livescore | runtime 每次 live sync 有界轮转最多 8 条旧记录，使用 fixtures 按 match key 校准；失败保留旧资料与 stale，不按时间推断赛果 |
 
 回放（replay）流程与专用 live 测试门见 [p2-local.md](./p2-local.md)。
+
+## 7. 启动恢复保证（T121）
+
+- 已知 Polymarket condition 显式查询开放集合，合法空列表才回查关闭集合；只接受唯一、精确匹配的市场。`closed` 本身不代表最终结算，只有供应商 final 且 payout 有效才结算（支持 50/50）。依据：[Gamma List markets](https://docs.polymarket.com/api-reference/markets/list-markets)、[Market Details](https://docs.polymarket.com/market-data/market-details)、[Resolution](https://docs.polymarket.com/concepts/resolution)。
+- 单市场恢复有 30 秒尝试上限；每轮也有 30 秒预算，逐次轮转续跑并记录 5–60 秒退避，不通过外层取消来截断整个市场恢复。赛前窗口只用于 scheduled；live 的旧观测才按 live cadence 判 stale。
+- runtime 在上游连接和就绪发布前持有专用 DB 的 PostgreSQL session advisory lock；即使临时 PID 文件丢失，同库第二个 runtime 也无法取得所有权。退出时显式释放锁后才归还池连接。该锁无需新表或 migration，语义见 [PostgreSQL Advisory Locks](https://www.postgresql.org/docs/current/explicit-locking.html#ADVISORY-LOCKS)。就绪记录还匹配启动实例指纹；指纹不进入公开健康 DTO。
+- 关闭/不可用市场的待执行模拟 intent 独立于盘口订阅维护，到期后按既有 BOOK_UNVERIFIABLE/EXPIRED 规则收尾；exit missed 仓位继续持有到最终结算。低频 jobs 每项结束或失败都持久化健康，避免只显示数分钟前的启动状态。

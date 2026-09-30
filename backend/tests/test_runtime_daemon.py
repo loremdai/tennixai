@@ -1493,7 +1493,6 @@ async def test_recover_once_keeps_gap_and_retries_when_reconciliation_fails():
 async def test_recover_once_survives_persist_failure_and_repersists_later():
     daemon, parts = make_daemon()
     state: FakeStateRepo = parts["state"]
-    health: RuntimeHealthRegistry = parts["health"]
     state.raise_error = RuntimeError("db_down")
 
     # A failing state persist never aborts recovery nor escapes to run().
