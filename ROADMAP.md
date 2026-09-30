@@ -213,6 +213,8 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 
 | T118 | P4 follow-up | Start Local Real Runtime | `blocked` | 领取 `591b4ef` | Colima 恢复后依赖 healthy；临时初始化标记丢失，依据 T113 既有批准执行幂等 init 成功（schema `0009`、3989 players / 529 matches，含 LLM 补名）。两次 up 均 `LOCAL_RUNTIME_UNHEALTHY`；持久源 recovery/daemon_tick 为 `NOT_FOUND`，应用均未启动成功。数据和用户工作区改动保留，未做 HTTP/浏览器验收；详见 CURRENT.md。 |
 
+| T119 | P4 follow-up | Investigate Overnight Startup Failure | `done` | `763f42b`（调查证据） | 已确认取消比赛/关闭市场仍被两小时 TrackingDemand 纳入；Gamma `200 []` → `not_found`，单市场失败中断 recovery/tick 并阻止后置 jobs，首次健康门超时。强制只读 DB、有界真实 probe、两市场对照、实际生产类隔离复现均有证据；未实施修复或再次启动。详见 [报告](./docs/research/2026-09-30-tennixai-t119-startup-recovery-investigation.md)。 |
+
 ## P4.1 Completion Gate 核验摘要（2026-09-18，逐条实际核验）
 
 1. **日常入口** `./scripts/tennix-live init/up/status/down/logs` 只用根 `.env`，stop 保留全部数据 — 真实手工流程两轮 up/down exit 0，数据/容器保留（T80 证据 ⑦⑨）。
