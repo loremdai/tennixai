@@ -2,7 +2,7 @@
 
 > 产品与稳定架构见 [PROJECT.md](./PROJECT.md)；长期路线、任务证据与历史记录见 [ROADMAP.md](./ROADMAP.md)，完整审计由 Git 历史承担。
 
-**最后更新：** 2026-09-30 21:51（北京时间）
+**最后更新：** 2026-09-30 21:57（北京时间）
 
 **当前主任务：** T126 只读调查 `/markets` 当前报价未更新的原因（`in_progress`）。
 
@@ -12,7 +12,9 @@
 
 - **领取：** 2026-09-30 21:51（北京时间）；Codex / 本地 ADE / `main`；起始提交 `fc04021`。
 - **范围：** 确认 `/markets` 当前报价停更的位置及现时数据源状态；先调查，不改产品代码、不重启服务、不触碰根 `.env` 或既有用户改动。
-- **初步证据：** API 页面可访问（HTTP 200），但第一页 50 条报价均为 `stale`；运行时覆盖统计为候选 409、stale 409、fresh snapshot/realtime 均为 0，`last_successful_batch_at=null`。`polymarket`/`polymarket_recovery` 为 `gap / PROVIDER_UNAVAILABLE`，`polymarket_catalog_quotes` 与 `market_snapshot` 为 `degraded / MARKET_SNAPSHOT_BATCH_FAILED`。等待有界只读 `verify` 交叉确认上游恢复状态。
+- **调查结论：** 21:49 初查时全部 409 个报价候选均已 stale，最新成功快照停在 10:15 UTC；市场流/批量快照报 `PROVIDER_UNAVAILABLE` / `MARKET_SNAPSHOT_BATCH_FAILED`。未重启服务，运行时随后自行恢复。
+- **美国出口实测：** Polymarket `GET /api/geoblock` 返回 `blocked=true, country=US`（只保留国家/地区结论，不记录 IP）。同一出口运行 `./scripts/tennix-live verify` 为 6 passed、2 skipped、0 failed；`market_discovery`、`market_book`、`market_websocket`、`market_quote_snapshot` 均 passed。结论：美国出口可读公开目录/盘口并连市场 WebSocket；地区检查限制下单，不是当前停更原因，无需换香港 IP。
+- **恢复证据：** 21:54 UTC 覆盖扫描 309 个候选全部尝试，281 fresh snapshot、27 no-liquidity、1 unavailable、0 stale、0 batch failures；21:56 UTC `/markets` ATP/WTA 第 1 页 50/196，其中 19 场 open/scheduled 和 1 场 open/live 报价新鲜，22 条 stale 都属于 `closed` 市场。无产品代码修改、服务重启或 LLM 调用。
 
 ## 最近完成任务：T125 按最终确认示意图实施市场页前端优化（`done`）
 
