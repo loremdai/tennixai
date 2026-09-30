@@ -25,7 +25,7 @@ Colima VM 清理前总内存 7,922 MiB、可用 40 MiB、swap 为 0；memory PSI
 - 第二页返回 50 行，第一页和第二页的市场 ID 不重叠。
 - ATP 筛选返回 50 行、`total=100`，本页所有行的赛事级别均为 ATP。
 - 通过 Next `/api/markets?page=1&page_size=50` 请求也返回 HTTP 200 和 50 行。
-- `tennix-live status` 复核期间本地 API/数据库/Redis 均可用，比赛列表接口正常；同一时点上游状态仍显示排名 `TIMEOUT_ERROR`、Polymarket `PROVIDER_UNAVAILABLE`，不会把这两项算作健康或列表延迟。
+- 最终 `tennix-live status` 复核显示本地栈运行中，数据库/Redis healthy，sports stream 和 schedule 为 `ok`；排名上游仍为 `TIMEOUT_ERROR`，Polymarket 已恢复 `ok`。市场列表端点独立实测正常。
 - 四个修改的 Python 源文件通过 `ast.parse`；Ruff 检查通过；`git diff --check` 通过。本任务未新增测试文件，也未运行测试套件。
 
 SQLAlchemy 的 [`SELECT` 文档](https://docs.sqlalchemy.org/en/20/tutorial/data_select.html)记录了 `Select.limit()` 与 `Select.offset()` 生成分页查询的用法。

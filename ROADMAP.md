@@ -5,11 +5,11 @@
 
 **最后更新：** 2026-09-30（北京时间）
 
-**总体状态：** `in_progress`（P4 持续打磨；T121 启动恢复修复完成，T118 原启动阻塞已解决，真实栈保持 3100 运行。T117 市场页改版、T111、T112、T115 已完成。T113 3101 回退实测与 T110 私人部署仍 `blocked`。模型未晋级时机会页继续诚实为空，未严格映射市场不进入模型或 Paper。）
+**总体状态：** `in_progress`（P4 持续打磨；T121 启动恢复、T124 内存释放与市场分页完成，T118 原启动阻塞已解决。T117 市场页改版、T111、T112、T115 已完成。T113 3101 回退实测与 T110 私人部署仍 `blocked`。模型未晋级时机会页继续诚实为空，未严格映射市场不进入模型或 Paper。）
 
-**当前里程碑：** P3 已关闭；P4.0–P4.4（T72–T92）、P4.5（T93–T104）、P4.6（T105）及打磨 T106–T109 均已完成。T121 实现 `57325c4`：临时启动标记丢失恢复及正常重启通过，单元 1425、隔离集成 98、真实浏览器 6；runtime/API/frontend 运行，数据库/Redis healthy。
+**当前里程碑：** P3 已关闭；P4.0–P4.4（T72–T92）、P4.5（T93–T104）、P4.6（T105）及打磨 T106–T109 均已完成。T121 实现 `57325c4`：临时启动标记丢失恢复及正常重启通过，单元 1425、隔离集成 98、真实浏览器 6。T124 实现 `0b1e9d1`：释放共享容器内存并将全部市场改为数据库分页，实际接口与筛选核验通过；本地数据库/Redis healthy。
 
-**当前阶段：** P4 后续打磨 — T121 按 T120 官方方案完成关闭市场查询、需求生命周期、失败隔离、独立维护、本地就绪与持久初始化/独占所有权；T117 市场页和 T115 Match 工作台修复已完成。schema 保持 `0009`，真实栈在 3100 运行；T113 3101 备用端口仍待实际占用场景验收。T110 私人部署及 T94 特定排名复验仍待独立任务，模型晋升另行排期，自动下单 `deferred`。
+**当前阶段：** P4 后续打磨 — T121 按 T120 官方方案完成关闭市场查询、需求生命周期、失败隔离、独立维护、本地就绪与持久初始化/独占所有权；T124 完成非 Tennix 容器清理和全部市场数据库分页，详见验收报告。T117 市场页和 T115 Match 工作台修复已完成。schema 保持 `0009`，真实栈在 3100 运行；T113 3101 备用端口仍待实际占用场景验收。T110 私人部署及 T94 特定排名复验仍待独立任务，模型晋升另行排期，自动下单 `deferred`。
 
 ## 状态说明
 
@@ -218,6 +218,7 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | T121 | P4 follow-up | Make Startup Recovery Durable and Isolate Market Failures | `done` | `ac97af6`、`63c671e`、`26eba0e`、`e13c0ec`、`57325c4` | 领取 `594276d`。显式 Gamma open/closed 查询保留 final/50-50 结算；终态/stale live 退出报价需求；每市场失败隔离、30 秒轮转预算与退避；低频 jobs/结算独立推进，失败持续 GAP；当前 DB/Redis 本地就绪与上游健康分离，旧实例健康不满足启动门；持久初始化记录与双 migration head 核验，专用 session advisory lock 保证单 owner。五项 Important 审查发现 RED→GREEN，最终单元 1425 passed/37 skipped/97 deselected、隔离集成 98 passed、受影响 246 passed、真实桌面/手机浏览器 6 passed；Ruff 零新增诊断、diff check 通过。标记丢失直接 up 及正常 down/up 均成功，旧 ID 和初始化记录不变，API/首页 HTTP 200，服务保持 3100 运行；未调用 LLM、迁移生产库、删除数据或晋升模型。详见 [验收与取舍](./docs/research/2026-09-30-tennixai-t121-startup-recovery-validation.md)。 |
 | T122 | P4 follow-up | Investigate All-Markets Loading Latency | `done` | `a812b73`（只读证据） | 领取 `f22cdc6`，起始 `b9bd51d`。直连/代理 API 9.558/9.588 秒，后续 30 秒超时；首 P3 查询 14.900 秒，复用连接 0.525 秒。共享 Colima available 39MiB/7922MiB、swap 0，memory full PSI avg10 53.58%，56 个 running 容器中 Tennix 2 个。已确认 DB 连接/访问长停顿、每页全量组装 2497 市场及前端事件刷新缺少在途合并、多页串行重取。浏览器复现加载与 50/2497 行；只读 SQL、日志/资源计时和代码追踪。没有产品修复、资源调整、停其他项目、LLM 或数据删除；不能声称延迟已修复，建议先资源减负再真分页/刷新合并。详见 [调查](./docs/research/2026-09-30-tennixai-t122-all-markets-latency-investigation.md)。 |
 | T123 | P4 follow-up | Design a Home-Aligned Markets Page | `done` | `7e428ee`（最终图稿） | 等 T122 完成后，以 Home 视觉语言交付市场页设计图：[图稿](./docs/mockups/2026-09-30-markets-home-style.png)。近黑底/荧光黄绿、圆形头像、英文主名与中文辅名、用户指定的报价胶囊及每场“实时报价”状态均已体现；默认 ATP+WTA，按赛事级别优先并依进行中→赛前→已结束排列。赛事、球员及报价为示意数据。PNG 1505×1045，`git diff --cached --check` 通过；未改产品代码或运行产品测试，前端实施待用户后续明确安排。 |
+| T124 | P4 follow-up | Free Memory and Page All Markets at 50 Rows | `done` | `86de925`（领取），`0b1e9d1`（实现与证据） | 清理 80 个非 Tennix 容器（54 个运行中容器正常停止、26 个已停止容器移除），保留 Tennix PostgreSQL/Redis 及数据卷，未删 image/volume 或 prune；Colima available `40→7,113 MiB`，memory full PSI avg10 `64.57%→0.00%`。全部市场在 SQL 层筛选、排序、分页并只装载当前页依赖。实测第一页默认 50/总计 2,497，第二页无 ID 重叠，ATP 筛选 50/总计 100 且级别正确，Next 代理 200/50 行；单次约 95 ms。Python AST、Ruff、diff check 通过，未运行测试套件。最终状态中排名仍 `TIMEOUT_ERROR`，sports stream、schedule、Polymarket 为 `ok`。详见[报告](./docs/research/2026-09-30-tennixai-t124-container-memory-and-market-pagination.md)。 |
 
 ## P4.1 Completion Gate 核验摘要（2026-09-18，逐条实际核验）
 
