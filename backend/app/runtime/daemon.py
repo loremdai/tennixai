@@ -130,11 +130,13 @@ class BoundedJobScheduler:
     """
 
     def __init__(
-        self, *, jobs: list[RuntimeJob], health: RuntimeHealthRegistry
+        self, *, jobs: list[RuntimeJob], health: RuntimeHealthRegistry,
+        job_timeout_seconds: float = 60,
     ) -> None:
         self._jobs = jobs
         self._health = health
         self._last_run: dict[str, datetime] = {}
+        self._job_timeout = job_timeout_seconds
 
     async def run_due(self, now: datetime) -> None:
         for job in self._jobs:
@@ -143,7 +145,8 @@ class BoundedJobScheduler:
                 continue
             self._last_run[job.name] = now
             try:
-                await job.run()
+                async with asyncio.timeout(self._job_timeout):
+                    await job.run()
             except Exception as exc:  # noqa: BLE001 - contained by design
                 await self._health.mark_degraded(job.name, stable_reason_code(exc))
             else:
@@ -210,6 +213,11 @@ class MarketBridge:
         await self._decision_worker.submit_book(market_id, state)
 
     async def on_connection(self, market_id: str, state: str) -> None:
+        if state == "closed":
+            self._health.mark_market_closed(market_id)
+            return
+        if state == "live":
+            self._health.mark_market_live(market_id)
         await _apply_connection(self._health, self._source, state)
 
 
@@ -302,6 +310,7 @@ class LocalRuntimeDaemon:
         market_discovery_seconds: int = 120,
         max_resolution_targets: int = 32,
         closed_market_window: timedelta = timedelta(hours=24),
+        readiness_probe: Callable[[], Awaitable[Any]] | None = None,
     ) -> None:
         self._realtime = realtime
         self._market_worker = market_worker
@@ -332,6 +341,10 @@ class LocalRuntimeDaemon:
         # resolution remains the sole authority used for paper settlement.
         self._resolution_hints = resolution_hints if resolution_hints is not None else set()
         self._closed_window = closed_market_window
+        self._readiness_probe = readiness_probe
+        self._market_recovery_failed = False
+        self._live_max_age = timedelta(seconds=live_catalog_seconds * 2)
+        self._stale_live_offset = 0
 
         self._recently_closed: dict[str, datetime] = {}
         # Shared with the decision book source when the assembly injects one
@@ -455,12 +468,40 @@ class LocalRuntimeDaemon:
             await task
 
     async def tick_once(self) -> None:
-        await self._realtime.reconcile_demand_once()
-        await self._market_worker.reconcile_demand_once()
-        await self._pump_markets()
+        # Refresh demand before recovery; a failed subscription must not
+        # starve discovery or final settlement.
         await self._jobs.run_due(self._clock())
-        await self._recheck_resolution_hints()
+        failures = []
+        for source, worker in ((SPORTS_SOURCE, self._realtime), (MARKET_SOURCE, self._market_worker)):
+            try:
+                async with asyncio.timeout(30):
+                    await worker.reconcile_demand_once()
+            except Exception as exc:
+                code = stable_reason_code(exc)
+                failures.append(code)
+                await self._health.mark_gap(source, code)
+        await self._update_market_recovery()
+        await self._pump_markets()
+        try:
+            await self._recheck_resolution_hints()
+        except Exception as exc:
+            failures.append(stable_reason_code(exc))
         await self._health.persist()
+        if failures:
+            raise RuntimeJobError(failures[0])
+
+    async def _update_market_recovery(self) -> None:
+        failures = getattr(self._market_worker, "reconciliation_failures", {})
+        if failures:
+            self._market_recovery_failed = True
+            code = next(iter(failures.values()))
+            await self._health.mark_gap("polymarket_recovery", code)
+            await self._health.mark_gap(MARKET_SOURCE, code)
+        else:
+            await self._health.mark_success("polymarket_recovery")
+            if self._market_recovery_failed:
+                self._market_recovery_failed = False
+                await self._health.mark_success(MARKET_SOURCE)
 
     async def _recheck_resolution_hints(self) -> None:
         targets = sorted(self._resolution_hints)[: self._max_resolution_targets]
@@ -522,8 +563,20 @@ class LocalRuntimeDaemon:
         try:
             rows = await self._markets.list_active_links()
             await self._decision_worker.recover_cursors({row.match_id for row in rows})
-            await self._realtime.reconcile_demand_once()
-            await self._market_worker.reconcile_demand_once()
+            if self._readiness_probe is not None:
+                async with asyncio.timeout(10):
+                    await self._readiness_probe()
+            await self._health.mark_success("runtime_ready")
+            await self._health.persist()
+        except Exception as exc:
+            await self._health.mark_degraded("runtime_ready", stable_reason_code(exc))
+            with contextlib.suppress(Exception):
+                await self._health.persist()
+            return
+        try:
+            async with asyncio.timeout(30):
+                await self._realtime.reconcile_demand_once()
+                await self._market_worker.reconcile_demand_once()
         except Exception as exc:  # noqa: BLE001 - retry on the next loop pass
             # The gap stays: new BUY/SELL remain revoked until reconciliation
             # actually succeeds. Health is persisted so `status` is truthful.
@@ -531,6 +584,7 @@ class LocalRuntimeDaemon:
             with contextlib.suppress(Exception):
                 await self._health.persist()
             return
+        await self._update_market_recovery()
         await self._health.mark_recovered(SPORTS_SOURCE)
         await self._health.mark_recovered(
             MARKET_SOURCE, tracked=len(self._market_worker.active_market_ids())
@@ -547,7 +601,9 @@ class LocalRuntimeDaemon:
         degraded = False
         book = None
         try:
-            book = await self._hot_books.get_hot_book(market_id)
+            overlay = await self._health.freshness_for("", market_id)
+            if not overlay.has_gap and not overlay.is_stale:
+                book = await self._hot_books.get_hot_book(market_id)
         except Exception as exc:  # noqa: BLE001 - fail closed to None
             degraded = True
             await self._health.mark_degraded(PAPER_SOURCE, stable_reason_code(exc))
@@ -627,6 +683,29 @@ class LocalRuntimeDaemon:
     async def _sync_live_catalog(self) -> None:
         matches = await self._catalog_provider.get_live_matches()
         await self._store_matches(matches)
+        # Empty livescore is not a result. Calibrate missing stale live rows
+        # with the existing match-key fixtures lookup; never guess a winner.
+        live_ids = {match.id for match in matches}
+        old = sorted((match for match in await self._catalog_store.list_matches(MatchStatus.LIVE)
+                      if match.id not in live_ids and self._clock() - match.freshness.observed_at > self._live_max_age),
+                     key=lambda match: match.id)
+        if not old:
+            return
+        offset = self._stale_live_offset % len(old)
+        targets = (old[offset:] + old[:offset])[:8]
+        self._stale_live_offset = (offset + len(targets)) % len(old)
+        failures = []
+        for match in targets:
+            try:
+                async with asyncio.timeout(10):
+                    refreshed = await self._catalog_provider.get_match(match.id)
+                if refreshed.id != match.id:
+                    raise RuntimeJobError("MATCH_IDENTITY_MISMATCH")
+                await self._store_matches([refreshed])
+            except Exception as exc:
+                failures.append(stable_reason_code(exc))
+        if failures:
+            raise RuntimeJobError(failures[0])
 
     async def _sync_upcoming_catalog(self) -> None:
         matches = await self._catalog_provider.get_fixtures()

@@ -562,6 +562,7 @@ def make_daemon(
         tick_seconds=tick_seconds,
         resolution_hints=parts["resolution_hints"],
         rules_index=parts["rules_index"],
+        readiness_probe=parts.get("readiness_probe"),
     )
     return daemon, parts
 
@@ -692,15 +693,15 @@ async def test_tick_once_follows_the_exact_bounded_sequence():
     await daemon.tick_once()
 
     assert parts["log"] == [
-        "realtime.reconcile",
-        "market.reconcile",
-        "pump:mkt_1",
-        "intents:mkt_1",
         "job:live_catalog",
         "job:upcoming_catalog",
         "job:rankings",
         "job:market_discovery",
         "job:resolution_recheck",
+        "realtime.reconcile",
+        "market.reconcile",
+        "pump:mkt_1",
+        "intents:mkt_1",
         "persist",
     ]
 
@@ -1487,12 +1488,13 @@ async def test_recover_once_survives_persist_failure_and_repersists_later():
     # A failing state persist never aborts recovery nor escapes to run().
     await daemon.recover_once()
 
-    assert daemon.recovered is True
+    assert daemon.recovered is False
     assert state.saved == []
 
     # Once the database returns, persisting writes the same truthful state.
     state.raise_error = None
-    await health.persist()
+    await daemon.recover_once()
+    assert daemon.recovered is True
 
     final = state.saved[-1]
     assert final.sources[SPORTS_SOURCE].status is RuntimeSourceStatus.OK
@@ -1610,7 +1612,7 @@ async def test_run_loop_survives_state_persist_failures():
     await asyncio.sleep(0.05)
     # Recovery and repeated ticks keep running even though every persist —
     # including the degraded handler's own — fails against the state store.
-    assert daemon.recovered is True
+    assert daemon.recovered is False
     assert parts["realtime"].reconcile_calls >= 2
     assert state.saved == []
 
@@ -1817,3 +1819,111 @@ async def test_snapshot_lane_has_no_decision_or_paper_side_effects():
     assert parts["decision_worker"].sports == []
     assert parts["paper"].calls == []
     assert daemon._market_worker.active_market_ids() == ()
+
+
+@pytest.mark.parametrize('source', ['realtime', 'market_worker'])
+async def test_reconcile_failure_still_runs_catalog_settlement_and_health(source):
+    daemon, parts = make_daemon()
+    parts[source].reconcile_raises = AppError('provider_unavailable', 'down', 503)
+    with pytest.raises(Exception):
+        await daemon.tick_once()
+    assert 'job:live_catalog' in parts['log']
+    assert 'job:resolution_recheck' in parts['log']
+    assert parts['state'].saved
+    assert (await parts['health'].freshness_for('mat_1', 'mkt_1')).has_gap
+
+
+async def test_partial_market_recovery_stays_gap_even_if_other_book_reports_success():
+    daemon, parts = make_daemon()
+    worker = parts['market_worker']
+    worker.reconciliation_failures = {'mkt_bad': 'NOT_FOUND'}
+    original = worker.reconcile_demand_once
+    async def reconcile():
+        await original()
+        await parts['health'].mark_success(MARKET_SOURCE)
+    worker.reconcile_demand_once = reconcile
+    await daemon.recover_once()
+    assert daemon.recovered
+    assert parts['state'].saved[-1].sources[MARKET_SOURCE].status is RuntimeSourceStatus.GAP
+    assert (await parts['health'].freshness_for('mat_1', 'mkt_1')).has_gap
+    worker.reconciliation_failures.clear()
+    await daemon.tick_once()
+    assert not (await parts['health'].freshness_for('mat_1', 'mkt_1')).has_gap
+
+
+async def test_local_readiness_persists_before_blocked_provider_recovery():
+    checked = []
+    async def redis_ready():
+        checked.append('redis')
+    daemon, parts = make_daemon(readiness_probe=redis_ready)
+    original = parts['realtime'].reconcile_demand_once
+    async def reconcile():
+        assert parts['state'].saved[-1].sources['runtime_ready'].status is RuntimeSourceStatus.OK
+        assert checked == ['redis']
+        await original()
+    parts['realtime'].reconcile_demand_once = reconcile
+    await daemon.recover_once()
+    assert daemon.recovered
+
+
+async def test_failed_redis_never_publishes_runtime_readiness():
+    async def redis_down():
+        raise ConnectionError('down')
+    daemon, parts = make_daemon(readiness_probe=redis_down)
+    await daemon.recover_once()
+    assert not daemon.recovered
+    assert parts['state'].saved[-1].sources['runtime_ready'].status is RuntimeSourceStatus.DEGRADED
+    assert parts['realtime'].reconcile_calls == 0
+
+
+async def test_old_live_missing_from_livescore_is_calibrated_by_fixture():
+    daemon, parts = make_daemon()
+    old = make_match('mat_old', status=MatchStatus.LIVE).model_copy(update={
+        'freshness': DataFreshness(provider='test', observed_at=NOW - timedelta(hours=1))})
+    parts['catalog_store'].rows[old.id] = old
+    queried = []
+    async def get_match(match_id):
+        queried.append(match_id)
+        return old.model_copy(update={'status': MatchStatus.FINISHED})
+    parts['catalog_provider'].get_match = get_match
+    await daemon.tick_once()
+    assert queried == ['mat_old']
+    assert parts['catalog_store'].rows['mat_old'].status is MatchStatus.FINISHED
+
+
+async def test_old_live_fixture_failure_keeps_old_data_and_reports_degraded():
+    daemon, parts = make_daemon()
+    old = make_match('mat_old', status=MatchStatus.LIVE).model_copy(update={
+        'freshness': DataFreshness(provider='test', observed_at=NOW - timedelta(hours=1))})
+    parts['catalog_store'].rows[old.id] = old
+    async def get_match(match_id):
+        raise AppError('provider_unavailable', 'down', 503)
+    parts['catalog_provider'].get_match = get_match
+    await daemon.tick_once()
+    assert parts['catalog_store'].rows['mat_old'] == old
+    assert parts['state'].saved[-1].sources['live_catalog'].status is RuntimeSourceStatus.DEGRADED
+
+
+async def test_existing_paper_intent_cannot_fill_from_hot_book_during_gap():
+    daemon, parts = make_daemon()
+    parts['hot_books'].books['mkt_1'] = INPUTS['book']
+    await parts['health'].mark_gap(MARKET_SOURCE, 'NOT_FOUND')
+    await daemon._execute_due_intents('mkt_1')
+    assert parts['paper'].calls[-1] == ('mkt_1', False, False)
+
+
+async def test_slow_job_times_out_without_starving_next_maintenance_job():
+    from app.runtime.daemon import BoundedJobScheduler, RuntimeJob
+    daemon, parts = make_daemon()
+    ran = []
+    async def slow():
+        await asyncio.Event().wait()
+    async def next_job():
+        ran.append('settlement')
+    scheduler = BoundedJobScheduler(health=parts['health'], job_timeout_seconds=0.01,
+        jobs=[RuntimeJob('slow', timedelta(seconds=60), slow),
+              RuntimeJob('settlement', timedelta(seconds=60), next_job)])
+    await scheduler.run_due(NOW)
+    assert ran == ['settlement']
+    health = await parts['health'].persist()
+    assert health.sources['slow'].status is RuntimeSourceStatus.DEGRADED

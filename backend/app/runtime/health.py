@@ -95,6 +95,13 @@ class RuntimeHealthRegistry:
         default_factory=list
     )
     _market_coverage: MarketQuoteCoverage | None = None
+    _closed_markets: set[str] = field(default_factory=set)
+
+    def mark_market_closed(self, market_id: str) -> None:
+        self._closed_markets.add(market_id)
+
+    def mark_market_live(self, market_id: str) -> None:
+        self._closed_markets.discard(market_id)
 
     # ------------------------------------------------------------------
     # Marking
@@ -158,18 +165,18 @@ class RuntimeHealthRegistry:
     async def freshness_for(
         self, match_id: str, market_id: str | None
     ) -> FreshnessOverlay:
-        considered = [SPORTS_SOURCE]
+        considered = [SPORTS_SOURCE, "runtime_ready"]
         if market_id is not None:
-            considered.append(MARKET_SOURCE)
-        has_gap = False
+            considered.extend((MARKET_SOURCE, "polymarket_recovery"))
+        has_gap = market_id in self._closed_markets
         is_stale = False
-        reason: str | None = None
+        reason: str | None = "MARKET_CLOSED" if has_gap else None
         now = self.clock()
         for source in considered:
             record = self._sources.get(source)
             if record is None:
                 continue
-            if record.status is RuntimeSourceStatus.GAP:
+            if record.status in (RuntimeSourceStatus.GAP, RuntimeSourceStatus.DEGRADED):
                 has_gap = True
                 reason = reason or record.reason_code
             bound = (self.stale_after or {}).get(source)

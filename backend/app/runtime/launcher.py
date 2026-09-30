@@ -64,7 +64,6 @@ FRONTEND_PORTS = (DEFAULT_FRONTEND_PORT, FALLBACK_FRONTEND_PORT)
 API_HEALTH_URL = f"http://127.0.0.1:{API_PORT}/api/v1/health"
 LIVE_LOCAL_DATABASE_NAME = "tennix_live_local"
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
-HEALTHY_FIRST_DISCOVERY_SOURCES = ("tennis_live", "polymarket", "live_catalog")
 STATUS_SOURCE_ROWS = {
     "sports_stream": "tennis_live",
     "schedule": "upcoming_catalog",
@@ -203,14 +202,13 @@ def default_state_dir() -> Path:
     return Path(tempfile.gettempdir()) / f"tennix-live-{os.getuid()}"
 
 
-def _is_healthy_first_discovery(health: RuntimeHealth | None) -> bool:
+def _is_runtime_ready(health: RuntimeHealth | None, started_at: datetime) -> bool:
     if health is None:
         return False
-    return all(
-        (source := health.sources.get(name)) is not None
-        and source.status is RuntimeSourceStatus.OK
-        for name in HEALTHY_FIRST_DISCOVERY_SOURCES
-    )
+    source = health.sources.get("runtime_ready")
+    return (source is not None and source.status is RuntimeSourceStatus.OK
+            and source.last_success_at is not None
+            and source.last_success_at >= started_at)
 
 
 class RuntimeLauncher:
@@ -370,6 +368,7 @@ class RuntimeLauncher:
             return frontend_failure
 
         spawned: list[ManagedProcess] = []
+        runtime_started_at = self._wall_clock()
         runtime_process = self._spawn_child(
             settings,
             role="runtime",
@@ -379,19 +378,19 @@ class RuntimeLauncher:
         spawned.append(runtime_process)
         self.state.processes = spawned
         self._persist()
-        runtime_outcome = asyncio.run(self._wait_for_healthy_runtime(runtime_process))
+        runtime_outcome = asyncio.run(self._wait_for_healthy_runtime(runtime_process, runtime_started_at))
         if runtime_outcome == "child_exited":
             self._say(
                 "up failed: LOCAL_RUNTIME_CHILD_EXITED "
                 "(the runtime child process exited before persisting a healthy "
-                f"first discovery; see {runtime_process.log_path})"
+                f"local readiness; see {runtime_process.log_path})"
             )
             self._stop_processes(spawned)
             return EXIT_PRECONDITION
         if runtime_outcome != "healthy":
             self._say(
                 "up failed: LOCAL_RUNTIME_UNHEALTHY "
-                "(the runtime child did not persist a healthy first discovery in time; "
+                "(the runtime child did not persist a current local readiness in time; "
                 f"see {runtime_process.log_path})"
             )
             self._stop_processes(spawned)
@@ -868,8 +867,8 @@ class RuntimeLauncher:
                 return False
             await self._sleep(self.poll_interval)
 
-    async def _wait_for_healthy_runtime(self, process: ManagedProcess) -> str:
-        """Wait for the persisted healthy first discovery.
+    async def _wait_for_healthy_runtime(self, process: ManagedProcess, started_at: datetime) -> str:
+        """Wait for the persisted current local readiness.
 
         Returns ``"healthy"``, ``"child_exited"`` (fail fast — a dead child
         can never persist health, so the full timeout is never burned) or
@@ -883,11 +882,11 @@ class RuntimeLauncher:
                 health = await self.health_probe()
             except Exception:  # noqa: BLE001 - transient probe failure keeps waiting
                 health = None
-            if _is_healthy_first_discovery(health):
-                outcome = "healthy"
-                return True
             if not self.inspector.is_alive(process.pid):
                 outcome = "child_exited"
+                return True
+            if _is_runtime_ready(health, started_at):
+                outcome = "healthy"
                 return True
             return False
 

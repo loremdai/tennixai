@@ -544,6 +544,7 @@ def build_local_runtime_daemon(
         upcoming_catalog_seconds=live.upcoming_catalog_seconds,
         ranking_seconds=live.ranking_seconds,
         market_discovery_seconds=live.market_discovery_seconds,
+        readiness_probe=redis_client.ping,
     )
     return LocalRuntimeDaemonGraph(
         daemon=daemon,

@@ -82,6 +82,7 @@ def healthy_health() -> RuntimeHealth:
     return RuntimeHealth(
         generated_at=NOW,
         sources={
+            "runtime_ready": RuntimeSourceHealth(status=RuntimeSourceStatus.OK, last_success_at=NOW),
             "tennis_live": source_health(RuntimeSourceStatus.OK),
             "polymarket": source_health(RuntimeSourceStatus.OK),
             "live_catalog": source_health(RuntimeSourceStatus.OK),
@@ -344,6 +345,7 @@ def launcher(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> RuntimeLauncher
         database_probe=database_probe,
         health_probe=health_probe,
         http_probe=http_probe,
+        wall_clock=lambda: NOW,
         health_timeout=5.0,
         api_timeout=5.0,
         poll_interval=1.0,
@@ -1397,3 +1399,35 @@ def test_status_without_health_reports_no_persisted_record(launcher):
     data = json.loads(joined_output(launcher))
     assert data["health_generated_at"] is None
     assert data["health_age_seconds"] is None
+
+
+def test_up_accepts_current_local_readiness_with_upstream_gap(launcher):
+    health = RuntimeHealth(generated_at=NOW, sources={
+        'runtime_ready': RuntimeSourceHealth(status=RuntimeSourceStatus.OK, last_success_at=NOW),
+        'polymarket': source_health(RuntimeSourceStatus.GAP, 'NOT_FOUND'),
+    })
+    launcher._wall_clock = lambda: NOW
+    launcher.health_probe = FakeHealthProbe(final=health)
+    assert launcher.up() == 0
+    assert spawned_roles(launcher.runner) == ['runtime', 'api', 'frontend']
+
+
+def test_up_rejects_readiness_from_previous_runtime_instance(launcher):
+    launcher._wall_clock = lambda: NOW + timedelta(seconds=1)
+    health = healthy_health().model_copy(update={'sources': {
+        **healthy_health().sources,
+        'runtime_ready': RuntimeSourceHealth(status=RuntimeSourceStatus.OK, last_success_at=NOW),
+    }})
+    launcher.health_probe = FakeHealthProbe(final=health)
+    assert launcher.up() == 1
+    assert spawned_roles(launcher.runner) == ['runtime']
+
+
+def test_dead_runtime_cannot_use_persisted_healthy_record(launcher):
+    async def probe():
+        for process in launcher.state.processes:
+            _mark_dead(launcher.inspector, process.pid)
+        return healthy_health()
+    launcher.health_probe = probe
+    assert launcher.up() == 2
+    assert spawned_roles(launcher.runner) == ['runtime']

@@ -248,6 +248,7 @@ class MarketWorker:
         self._retry.pop(market_id, None)
         await self._close(market_id)
         await self._deps.publisher.publish_gap(market_id, "MARKET_CLOSED")
+        await self._notify_connection(market_id, "closed")
         if self._on_resolution_hint is not None:
             try:
                 self._on_resolution_hint(market_id)

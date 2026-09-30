@@ -324,3 +324,21 @@ def test_market_coverage_requires_timezone_aware_timestamps():
             generated_at=datetime(2026, 9, 22, 8, 0, tzinfo=UTC),
             retry_after_until=datetime(2026, 9, 22, 8, 0),
         )
+
+
+async def test_degraded_market_revokes_new_actions(health):
+    await health.mark_success(MARKET_SOURCE)
+    await health.mark_degraded(MARKET_SOURCE, 'PROVIDER_UNAVAILABLE')
+    assert (await health.freshness_for('mat_1', 'mkt_1')).has_gap
+
+
+async def test_closed_market_stays_revoked_when_another_market_is_live(health):
+    from app.runtime.daemon import MarketBridge
+    class Decision:
+        async def submit_book(self, market_id, state):
+            pass
+    bridge = MarketBridge(decision_worker=Decision(), health=health)
+    await bridge.on_connection('mkt_closed', 'closed')
+    await bridge.on_connection('mkt_good', 'live')
+    assert (await health.freshness_for('mat_1', 'mkt_closed')).has_gap
+    assert not (await health.freshness_for('mat_2', 'mkt_good')).has_gap
