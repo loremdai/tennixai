@@ -16,6 +16,7 @@ import asyncio
 import json
 from dataclasses import dataclass
 from datetime import timedelta
+from types import SimpleNamespace
 
 import pytest
 from p3_fakes import make_book, make_resolution, make_rules
@@ -347,6 +348,10 @@ class FakeLedger:
         self.intents: dict[str, int] = {}
         self.unsettled: set[str] = set()
         self.unsettled_calls = 0
+        self.pending = []
+
+    async def load_pending_intents(self):
+        return tuple(self.pending)
 
     async def count_intents_for_match(self, match_id: str) -> int:
         return self.intents.get(match_id, 0)
@@ -694,10 +699,16 @@ async def test_tick_once_follows_the_exact_bounded_sequence():
 
     assert parts["log"] == [
         "job:live_catalog",
+        "persist",
         "job:upcoming_catalog",
+        "persist",
         "job:rankings",
+        "persist",
         "job:market_discovery",
+        "persist",
         "job:resolution_recheck",
+        "persist",
+        "persist",  # quote snapshot has no fake log, but persists its result
         "realtime.reconcile",
         "market.reconcile",
         "pump:mkt_1",
@@ -1927,3 +1938,104 @@ async def test_slow_job_times_out_without_starving_next_maintenance_job():
     assert ran == ['settlement']
     health = await parts['health'].persist()
     assert health.sources['slow'].status is RuntimeSourceStatus.DEGRADED
+
+
+async def test_daemon_and_real_market_worker_isolate_a_timeout_before_next_market():
+    from test_market_worker import make_worker, DemandSource, FakeRest, MKT_1, MKT_2
+    class SlowRest(FakeRest):
+        async def get_order_book(self, market_id):
+            if market_id == MKT_1:
+                await asyncio.Event().wait()
+            return await super().get_order_book(market_id)
+    clock = FakeClock()
+    worker, _ = make_worker(clock, rest=SlowRest(), demand=DemandSource({MKT_1, MKT_2}),
+                            reconcile_timeout_seconds=0.01, reconcile_cycle_seconds=0.01)
+    daemon, _ = make_daemon(clock, market_worker=worker)
+    try:
+        await daemon.recover_once()
+        await daemon.tick_once()
+        assert worker.reconciliation_failures == {MKT_1: 'UPSTREAM_TIMEOUT'}
+        assert worker.active_market_ids() == (MKT_2,)
+    finally:
+        await worker.stop()
+
+
+async def test_retired_market_pending_intents_receive_no_book_maintenance():
+    daemon, parts = make_daemon()
+    parts['market_worker'].markets = ()
+    parts['hot_books'].books['mkt_closed'] = INPUTS['book']
+    parts['ledger'].pending = [SimpleNamespace(market_id='mkt_closed')]
+    await daemon.tick_once()
+    assert ('mkt_closed', False, False) in parts['paper'].calls
+
+
+async def test_stale_live_rotation_survives_job_timeout():
+    daemon, parts = make_daemon()
+    for i in range(8):
+        match = make_match(f'mat_{i}', status=MatchStatus.LIVE).model_copy(update={
+            'freshness': DataFreshness(provider='test', observed_at=NOW - timedelta(hours=1))})
+        parts['catalog_store'].rows[match.id] = match
+    attempted = []
+    async def get_match(match_id):
+        attempted.append(match_id)
+        await asyncio.Event().wait()
+    parts['catalog_provider'].get_match = get_match
+    for _ in range(8):
+        with pytest.raises(TimeoutError):
+            async with asyncio.timeout(0.01):
+                await daemon._sync_live_catalog()
+    assert set(attempted) == {f'mat_{i}' for i in range(8)}
+
+
+async def test_scheduler_persists_each_job_result_before_next_job():
+    from app.runtime.daemon import BoundedJobScheduler, RuntimeJob
+    _, parts = make_daemon()
+    async def first():
+        pass
+    async def second():
+        assert parts['state'].saved[-1].sources['first'].status is RuntimeSourceStatus.OK
+    scheduler = BoundedJobScheduler(health=parts['health'], jobs=[
+        RuntimeJob('first', timedelta(seconds=60), first), RuntimeJob('second', timedelta(seconds=60), second)])
+    await scheduler.run_due(NOW)
+    assert (await parts['health'].persist()).sources['second'].status is RuntimeSourceStatus.OK
+
+
+@pytest.mark.parametrize('exit_pending', [False, True])
+async def test_closed_delayed_entry_and_exit_intents_finish_without_fill(exit_pending):
+    from app.paper.models import IntentSide, IntentStatus, PositionStatus
+    from app.paper.service import PaperTradingService
+    from tests_support import InMemoryPaperLedger
+    from p3_fakes import make_intent, make_entry_fill, make_position
+    clock = FakeClock()
+    ledger = InMemoryPaperLedger()
+    if exit_pending:
+        entry = await ledger.create_intent(make_intent('mat_closed', 'mkt_closed'))
+        await ledger.record_fill(make_entry_fill(entry.id), position=make_position('mat_closed', 'mkt_closed'))
+        await ledger.update_position_status('mat_closed', PositionStatus.EXIT_PENDING)
+    intent = await ledger.create_intent(make_intent('mat_closed', 'mkt_closed',
+        side=IntentSide.EXIT if exit_pending else IntentSide.ENTRY))
+    async def publish(marker):
+        pass
+    paper = PaperTradingService(ledger=ledger, clock=clock.now, publish=publish)
+    daemon, parts = make_daemon(clock, ledger=ledger, paper=paper)
+    parts['market_worker'].markets = ()
+    await daemon._pump_markets()
+    assert ledger.intents[intent.id].status is IntentStatus.PENDING
+    clock.advance(20)
+    await daemon._pump_markets()
+    stored = ledger.intents[intent.id]
+    assert stored.status is IntentStatus.NO_FILL
+    assert stored.no_fill_reason == 'BOOK_UNVERIFIABLE'
+    if exit_pending:
+        assert ledger.positions['mat_closed'].status is PositionStatus.EXIT_MISSED
+    else:
+        assert not ledger.positions
+
+
+async def test_lost_local_readiness_prevents_jobs_and_new_subscriptions():
+    async def unavailable():
+        raise ConnectionError('redis unavailable')
+    daemon, parts = make_daemon(readiness_probe=unavailable)
+    await daemon.tick_once()
+    assert not parts['catalog_provider'].live_calls
+    assert not parts['market_worker'].reconcile_calls

@@ -16,6 +16,7 @@ them. Only canonical data with internal IDs flows through this module.
 """
 
 import time
+import os
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -25,6 +26,7 @@ from typing import Any
 
 import httpx
 import redis.asyncio as aioredis
+from sqlalchemy import text
 
 from app.config import Settings
 from app.decision.engine import DecisionEngine
@@ -250,6 +252,53 @@ class _PublisherBookSource:
         return None
 
 
+class RuntimeOwnership:
+    """A session advisory lock outlives disposable launcher files.
+
+    PostgreSQL scopes advisory locks to one database and releases them when
+    this dedicated connection closes; no table/schema/lease row is added.
+    """
+    LOCK_KEY = 0x54454E4E4958
+
+    def __init__(self, database: Database) -> None:
+        self._database = database
+        self._connection = None
+
+    async def acquire(self) -> None:
+        if self._connection is not None:
+            return
+        connection = await self._database.engine.connect()
+        try:
+            owned = await connection.scalar(text("SELECT pg_try_advisory_lock(:key)"), {"key": self.LOCK_KEY})
+            if not owned:
+                raise LiveLocalConfigurationError("LOCAL_RUNTIME_OWNER_EXISTS")
+            await connection.commit()
+        except BaseException:
+            await connection.invalidate()
+            await connection.close()
+            raise
+        self._connection = connection
+
+    async def check(self) -> None:
+        if self._connection is None:
+            raise LiveLocalConfigurationError("LOCAL_RUNTIME_OWNER_LOST")
+        try:
+            await self._connection.execute(text("SELECT 1"))
+            await self._connection.commit()
+        except Exception:
+            raise LiveLocalConfigurationError("LOCAL_RUNTIME_OWNER_LOST") from None
+
+    async def aclose(self) -> None:
+        connection, self._connection = self._connection, None
+        if connection is not None:
+            try:
+                await connection.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": self.LOCK_KEY})
+            except Exception:
+                await connection.invalidate()
+            finally:
+                await connection.close()
+
+
 @dataclass
 class LocalRuntimeDaemonGraph:
     """Owned object graph for the `runtime` role child process (T79).
@@ -272,6 +321,10 @@ class LocalRuntimeDaemonGraph:
     _api_client: httpx.AsyncClient = field(repr=False)
     _redis: Any = field(repr=False)
     _database: Database = field(repr=False)
+    _ownership: RuntimeOwnership = field(repr=False)
+
+    async def acquire_ownership(self) -> None:
+        await self._ownership.acquire()
 
     async def aclose(self) -> None:
         """Release every resource this graph owns, exactly once."""
@@ -281,6 +334,7 @@ class LocalRuntimeDaemonGraph:
         redis_aclose = getattr(self._redis, "aclose", None)
         if redis_aclose is not None:
             await redis_aclose()
+        await self._ownership.aclose()
         await self._database.dispose()
 
 
@@ -363,7 +417,14 @@ def build_local_runtime_daemon(
         max_age=timedelta(seconds=live.market_discovery_seconds * 2),
     )
 
-    registry = RuntimeHealthRegistry(state=state, clock=clock)
+    ownership = RuntimeOwnership(database)
+    registry = RuntimeHealthRegistry(state=state, clock=clock,
+                                    runtime_instance_id=os.environ.get("TENNIX_RUNTIME_INSTANCE_ID"))
+
+    async def local_readiness() -> None:
+        await ownership.check()
+        if not await redis_client.ping():
+            raise LiveLocalConfigurationError("LOCAL_REDIS_UNAVAILABLE")
     quote_catalog_publisher = QuoteCatalogPublisher(redis_client, now_fn=clock)
 
     async def notify_quotes_changed(*, count: int) -> None:
@@ -544,7 +605,7 @@ def build_local_runtime_daemon(
         upcoming_catalog_seconds=live.upcoming_catalog_seconds,
         ranking_seconds=live.ranking_seconds,
         market_discovery_seconds=live.market_discovery_seconds,
-        readiness_probe=redis_client.ping,
+        readiness_probe=local_readiness,
     )
     return LocalRuntimeDaemonGraph(
         daemon=daemon,
@@ -560,4 +621,5 @@ def build_local_runtime_daemon(
         _api_client=api_client,
         _redis=redis_client,
         _database=database,
+        _ownership=ownership,
     )

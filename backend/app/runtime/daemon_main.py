@@ -44,6 +44,9 @@ async def run_daemon(graph: Any, *, stop_requested: list[bool] | None = None) ->
         with contextlib.suppress(RuntimeError, NotImplementedError):
             loop.add_signal_handler(signum, request_stop)
     try:
+        acquire_ownership = getattr(graph, "acquire_ownership", None)
+        if acquire_ownership is not None:
+            await acquire_ownership()
         # One loop iteration lets an already-delivered signal callback run
         # before the entry decision; a stop requested before this point is
         # honored as an immediate graceful stop, never discarded.

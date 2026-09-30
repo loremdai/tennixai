@@ -16,6 +16,7 @@ from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
 
 from app.decision.worker import MatchTrackingInfo
+from app.domain import MatchStatus
 from app.runtime.catalog import MatchCatalogStore
 
 ACTIVE = "active"
@@ -70,7 +71,8 @@ def catalog_match_info(
             circuit=match.tournament.circuit,
             discipline=match.tournament.discipline,
             is_stale=(match.freshness.is_stale or (
-                now is not None and now() - match.freshness.observed_at > max_age
+                match.status is MatchStatus.LIVE and now is not None
+                and now() - match.freshness.observed_at > max_age
             )),
         )
 

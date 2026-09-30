@@ -201,6 +201,7 @@ def make_worker(
     on_resolution_hint=None,
     metrics=None,
     reconcile_timeout_seconds=30,
+    reconcile_cycle_seconds=30,
 ) -> tuple[MarketWorker, dict]:
     parts = {
         "feed": feed or FakeMarketFeed(),
@@ -229,6 +230,7 @@ def make_worker(
         on_resolution_hint=on_resolution_hint,
         metrics=metrics,
         reconcile_timeout_seconds=reconcile_timeout_seconds,
+        reconcile_cycle_seconds=reconcile_cycle_seconds,
     )
     return worker, parts
 
@@ -627,7 +629,8 @@ async def test_normal_close_parks_the_subscription_without_a_gap():
     # Parked closed: no gap, no reconnect, no transition, no REST storm.
     assert worker.subscription_state(MKT_1) == "closed"
     assert parts["publisher"].gaps == []
-    assert connections == []
+    assert connections == [(MKT_1, "closed")]
+    assert worker.active_market_ids() == ()
     assert parts["rest"].calls == [MKT_1]
     assert parts["sink"].gaps == []
 

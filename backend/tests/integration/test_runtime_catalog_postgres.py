@@ -689,3 +689,21 @@ async def test_database_probe_rejects_init_record_revision_mismatch(database, sc
     await state.mark_initialized(RuntimeInitRecord(completed_at=NOW, migration_revision='0009'))
     result = await probe_database_status(SimpleNamespace(database_url=scratch_database_url))
     assert result.initialized and result.schema_head == '0009'
+
+
+async def test_runtime_owner_is_exclusive_without_any_launcher_state_file(database):
+    from app.runtime.assembly import RuntimeOwnership
+    from app.runtime.models import LiveLocalConfigurationError
+    first = RuntimeOwnership(database)
+    second = RuntimeOwnership(database)
+    try:
+        await first.acquire()
+        with pytest.raises(LiveLocalConfigurationError) as caught:
+            await second.acquire()
+        assert caught.value.code == 'LOCAL_RUNTIME_OWNER_EXISTS'
+        await first.aclose()
+        await second.acquire()
+        await second.check()
+    finally:
+        await first.aclose()
+        await second.aclose()

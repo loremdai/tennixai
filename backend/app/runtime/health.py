@@ -90,6 +90,7 @@ class RuntimeHealthRegistry:
     stale_after: Mapping[str, timedelta] | None = None
     paper_status: str = "paper_only"
     model_status: str = "not_promoted"
+    runtime_instance_id: str | None = None
     _sources: dict[str, _SourceRecord] = field(default_factory=dict)
     _counter_sources: list[Callable[[], Mapping[str, int]]] = field(
         default_factory=list
@@ -215,6 +216,7 @@ class RuntimeHealthRegistry:
             counters.update({str(key): int(value) for key, value in source().items()})
         health = RuntimeHealth(
             generated_at=self.clock(),
+            runtime_instance_id=self.runtime_instance_id,
             sources={
                 name: RuntimeSourceHealth(
                     status=record.status,

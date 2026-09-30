@@ -21,6 +21,7 @@ Ownership discipline (non-negotiable):
 """
 
 import asyncio
+import hashlib
 import json
 import os
 import secrets
@@ -209,11 +210,12 @@ def repository_schema_head() -> str | None:
     return ScriptDirectory(str(Path(__file__).resolve().parents[2] / "migrations")).get_current_head()
 
 
-def _is_runtime_ready(health: RuntimeHealth | None, started_at: datetime) -> bool:
+def _is_runtime_ready(health: RuntimeHealth | None, started_at: datetime, instance_id: str) -> bool:
     if health is None:
         return False
     source = health.sources.get("runtime_ready")
     return (source is not None and source.status is RuntimeSourceStatus.OK
+            and health.runtime_instance_id == instance_id
             and source.last_success_at is not None
             and source.last_success_at >= started_at)
 
@@ -856,6 +858,8 @@ class RuntimeLauncher:
             *inner,
         ]
         env = self._child_env(settings, runtime_role=runtime_role, extra_env=extra_env)
+        if role == "runtime":
+            env["TENNIX_RUNTIME_INSTANCE_ID"] = hashlib.sha256(token.encode()).hexdigest()
         self.state_dir.mkdir(parents=True, exist_ok=True)
         log_path = self.state_dir / f"{role}.log"
         pid = self.runner.spawn(argv, cwd=str(cwd), env=env, log_path=str(log_path))
@@ -896,7 +900,7 @@ class RuntimeLauncher:
             if not self.inspector.is_alive(process.pid):
                 outcome = "child_exited"
                 return True
-            if _is_runtime_ready(health, started_at):
+            if _is_runtime_ready(health, started_at, hashlib.sha256(process.token.encode()).hexdigest()):
                 outcome = "healthy"
                 return True
             return False

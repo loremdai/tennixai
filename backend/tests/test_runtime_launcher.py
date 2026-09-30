@@ -7,6 +7,7 @@ network.
 """
 
 import json
+import hashlib
 import os
 import signal
 import stat
@@ -265,6 +266,7 @@ _HEALTH_UNSET = object()
 
 
 class FakeHealthProbe:
+    instance_id_provider = None
     def __init__(
         self,
         results: list[RuntimeHealth | None] | None = None,
@@ -278,9 +280,10 @@ class FakeHealthProbe:
 
     async def __call__(self) -> RuntimeHealth | None:
         self.calls += 1
-        if self.results:
-            return self.results.pop(0)
-        return self.final
+        health = self.results.pop(0) if self.results else self.final
+        if health is not None and health.runtime_instance_id is None and self.instance_id_provider is not None:
+            health = health.model_copy(update={"runtime_instance_id": self.instance_id_provider()})
+        return health
 
 
 class FakeHttpProbe:
@@ -352,6 +355,8 @@ def launcher(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> RuntimeLauncher
         poll_interval=1.0,
         stop_grace_seconds=2.0,
     )
+    monkeypatch.setattr(FakeHealthProbe, "instance_id_provider",
+        lambda probe: hashlib.sha256(next((p.token for p in instance.state.processes if p.role == "runtime"), "tok-1").encode()).hexdigest())
     instance.state.initialized = True
     instance.state.schema_head = "rev_test"
 
@@ -1459,3 +1464,10 @@ def test_up_compares_database_to_repository_head_even_when_local_cache_matches(l
     launcher.database_probe.schema_head = 'old_revision'
     assert launcher.up() == 2
     assert launcher.runner.spawned == []
+
+
+def test_other_running_owner_cannot_satisfy_current_readiness(launcher):
+    health = healthy_health().model_copy(update={'runtime_instance_id': 'older-owner'})
+    launcher.health_probe = FakeHealthProbe(final=health)
+    assert launcher.up() == 1
+    assert spawned_roles(launcher.runner) == ['runtime']

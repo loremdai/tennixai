@@ -123,6 +123,8 @@ class RuntimeHealth(FrozenModel):
     """
 
     generated_at: datetime
+    # Process fingerprint for the launcher only; omitted from public DTOs.
+    runtime_instance_id: str | None = None
     sources: dict[str, RuntimeSourceHealth] = Field(default_factory=dict)
     counters: dict[str, int] = Field(default_factory=dict)
     paper_status: str | None = None

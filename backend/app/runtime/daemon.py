@@ -151,6 +151,8 @@ class BoundedJobScheduler:
                 await self._health.mark_degraded(job.name, stable_reason_code(exc))
             else:
                 await self._health.mark_success(job.name)
+            with contextlib.suppress(Exception):
+                await self._health.persist()
 
 
 # ---------------------------------------------------------------------------
@@ -470,11 +472,26 @@ class LocalRuntimeDaemon:
     async def tick_once(self) -> None:
         # Refresh demand before recovery; a failed subscription must not
         # starve discovery or final settlement.
-        await self._jobs.run_due(self._clock())
         failures = []
+        if self._readiness_probe is not None:
+            try:
+                async with asyncio.timeout(10):
+                    await self._readiness_probe()
+                await self._health.mark_success("runtime_ready")
+            except Exception as exc:
+                await self._health.mark_degraded("runtime_ready", stable_reason_code(exc))
+                with contextlib.suppress(Exception):
+                    await self._health.persist()
+                if getattr(exc, "code", None) == "LOCAL_RUNTIME_OWNER_LOST":
+                    await self.stop()
+                return
+        await self._jobs.run_due(self._clock())
         for source, worker in ((SPORTS_SOURCE, self._realtime), (MARKET_SOURCE, self._market_worker)):
             try:
-                async with asyncio.timeout(30):
+                if source == SPORTS_SOURCE:
+                    async with asyncio.timeout(30):
+                        await worker.reconcile_demand_once()
+                else:
                     await worker.reconcile_demand_once()
             except Exception as exc:
                 code = stable_reason_code(exc)
@@ -537,13 +554,22 @@ class LocalRuntimeDaemon:
         """
         failures: list[str] = []
         pumped = False
+        maintained: set[str] = set()
         for market_id in self._market_worker.active_market_ids():
             pumped = True
             try:
                 await self._decision_worker.pump_once(market_id)
                 await self._execute_due_intents(market_id)
+                maintained.add(market_id)
                 await self._mirror_hot_book(market_id)
             except Exception as exc:  # noqa: BLE001 - per-market isolation
+                failures.append(stable_reason_code(exc))
+        # Delayed intents remain durable after their quote stream retires.
+        pending = await self._ledger.load_pending_intents()
+        for market_id in sorted({intent.market_id for intent in pending} - maintained):
+            try:
+                await self._execute_due_intents(market_id, force_no_book=True)
+            except Exception as exc:
                 failures.append(stable_reason_code(exc))
         if failures:
             await self._health.mark_degraded(DECISION_SOURCE, failures[0])
@@ -576,7 +602,7 @@ class LocalRuntimeDaemon:
         try:
             async with asyncio.timeout(30):
                 await self._realtime.reconcile_demand_once()
-                await self._market_worker.reconcile_demand_once()
+            await self._market_worker.reconcile_demand_once()
         except Exception as exc:  # noqa: BLE001 - retry on the next loop pass
             # The gap stays: new BUY/SELL remain revoked until reconciliation
             # actually succeeds. Health is persisted so `status` is truthful.
@@ -597,12 +623,12 @@ class LocalRuntimeDaemon:
     # Paper maintenance
     # ------------------------------------------------------------------
 
-    async def _execute_due_intents(self, market_id: str) -> None:
+    async def _execute_due_intents(self, market_id: str, *, force_no_book: bool = False) -> None:
         degraded = False
         book = None
         try:
             overlay = await self._health.freshness_for("", market_id)
-            if not overlay.has_gap and not overlay.is_stale:
+            if not force_no_book and not overlay.has_gap and not overlay.is_stale:
                 book = await self._hot_books.get_hot_book(market_id)
         except Exception as exc:  # noqa: BLE001 - fail closed to None
             degraded = True
@@ -693,9 +719,9 @@ class LocalRuntimeDaemon:
             return
         offset = self._stale_live_offset % len(old)
         targets = (old[offset:] + old[:offset])[:8]
-        self._stale_live_offset = (offset + len(targets)) % len(old)
         failures = []
-        for match in targets:
+        for index, match in enumerate(targets):
+            self._stale_live_offset = (offset + index + 1) % len(old)
             try:
                 async with asyncio.timeout(10):
                     refreshed = await self._catalog_provider.get_match(match.id)

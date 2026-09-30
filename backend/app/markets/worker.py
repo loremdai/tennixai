@@ -71,6 +71,7 @@ class MarketWorker:
         on_resolution_hint: Callable[[str], None] | None = None,
         metrics: Any = None,
         reconcile_timeout_seconds: float = 30,
+        reconcile_cycle_seconds: float = 30,
     ) -> None:
         self._deps = _WorkerDeps(feed, rest, publisher, observations, raw)
         self._demand_source = demand_source
@@ -86,6 +87,9 @@ class MarketWorker:
         self._on_resolution_hint = on_resolution_hint
         self._metrics = metrics
         self._reconcile_timeout = reconcile_timeout_seconds
+        self._cycle_seconds = reconcile_cycle_seconds
+        self._start_cursor: str | None = None
+        self._repair_cursor: str | None = None
         self.reconciliation_failures: dict[str, str] = {}
         self._retry: dict[str, tuple[int, datetime]] = {}
         self._retired: set[str] = set()
@@ -122,13 +126,15 @@ class MarketWorker:
     def active_market_ids(self) -> tuple[str, ...]:
         """Sorted copy of the currently subscribed market IDs; safe to call
         from any owner at any time without touching worker internals."""
-        return tuple(sorted(self._subs))
+        return tuple(sorted(key for key, sub in self._subs.items() if sub.state != "closed"))
 
     async def reconcile_demand_once(self) -> None:
         # Let reader tasks surface queued frames/disconnects before pumping.
         await asyncio.sleep(0)
         self._cycles += 1
         demand = await self._demand_source()
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + self._cycle_seconds
         self._retired.intersection_update(demand)
         self._capacity_blocked.intersection_update(demand)
         for market_id in set(self._retry) - demand:
@@ -140,7 +146,7 @@ class MarketWorker:
                 await self._close(market_id)
 
         active = sum(1 for sub in self._subs.values() if sub.state != "closed")
-        for market_id in sorted(demand):
+        for market_id in self._rotated(demand, self._start_cursor):
             if market_id in self._retired or not self._retry_due(market_id):
                 continue
             if market_id in self._subs:
@@ -150,16 +156,27 @@ class MarketWorker:
                 self._capacity_blocked.add(market_id)
                 continue
             self._capacity_blocked.discard(market_id)
-            if await self._recover_market(market_id, self._start(market_id)):
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                break
+            self._start_cursor = market_id
+            if await self._recover_market(market_id, self._start(market_id), timeout=remaining):
                 active += 1
 
-        for sub in list(self._subs.values()):
+        for market_id in self._rotated(self._subs, self._repair_cursor):
+            sub = self._subs.get(market_id)
+            if sub is None:
+                continue
             if sub.state == "closed":
                 # A normally closed subscription has no stream to reconcile
                 # and must not be restarted while it is still in demand.
                 continue
             if self._retry_due(sub.market_id):
-                await self._recover_market(sub.market_id, self._reconcile_subscription(sub))
+                remaining = deadline - loop.time()
+                if remaining <= 0:
+                    break
+                self._repair_cursor = market_id
+                await self._recover_market(sub.market_id, self._reconcile_subscription(sub), timeout=remaining)
 
         await self._flush_observations()
 
@@ -207,6 +224,13 @@ class MarketWorker:
         retry = self._retry.get(market_id)
         return retry is None or self._now() >= retry[1]
 
+    @staticmethod
+    def _rotated(markets, cursor: str | None) -> list[str]:
+        ordered = sorted(markets)
+        if cursor is None:
+            return ordered
+        return [key for key in ordered if key > cursor] + [key for key in ordered if key <= cursor]
+
     async def _reconcile_subscription(self, sub: _MarketSubscription) -> None:
         if sub.state == "reconnecting":
             await self._rest_reconcile(sub, reason="reconnect", record_gap=True)
@@ -216,9 +240,9 @@ class MarketWorker:
             await self._rest_reconcile(sub, reason="hot_state_lost", record_gap=False)
         await self._pump(sub)
 
-    async def _recover_market(self, market_id: str, operation) -> bool:
+    async def _recover_market(self, market_id: str, operation, *, timeout: float | None = None) -> bool:
         try:
-            async with asyncio.timeout(self._reconcile_timeout):
+            async with asyncio.timeout(min(self._reconcile_timeout, timeout if timeout is not None else self._reconcile_timeout)):
                 await operation
         except Exception as exc:
             if isinstance(exc, AppError) and exc.code == "market_closed":
@@ -312,6 +336,7 @@ class MarketWorker:
             # without a gap and without marking the source failed. The entry
             # stays parked until the demand source drops it.
             sub.state = "closed"
+            await self._notify_connection(sub.market_id, "closed")
         except MarketFeedDisconnected:
             sub.state = "reconnecting"
         except Exception:

@@ -216,3 +216,10 @@ async def test_catalog_match_info_marks_old_live_stale_without_guessing_result()
     info = await factory('mat_old')
     assert info.status is MatchStatus.LIVE
     assert info.is_stale
+
+
+async def test_scheduled_catalog_row_uses_its_own_refresh_cadence():
+    from datetime import timedelta
+    match = catalog_match('mat_scheduled', status=MatchStatus.SCHEDULED, scheduled_at=NOW + timedelta(hours=1))
+    info = await catalog_match_info(FakeCatalog([match]), now=lambda: NOW + timedelta(seconds=121))('mat_scheduled')
+    assert not info.is_stale
