@@ -153,7 +153,7 @@ class MarketSummaryDto(BaseModel):
 class MarketPageDto(BaseModel):
     markets: list[MarketSummaryDto]
     page: int = 1
-    page_size: int = 20
+    page_size: int = 50
     total: int = 0
 
 

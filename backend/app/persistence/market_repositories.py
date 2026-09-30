@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import case, func, select, update
+from sqlalchemy import case, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 
@@ -41,8 +41,10 @@ from app.persistence.models import (
     MarketQuoteSnapshotRow,
     MarketRow,
     MarketRuleRow,
+    MatchRow,
     PaperOrderIntentRow,
     PredictionSnapshotRow,
+    TournamentRow,
 )
 from app.prediction.models import PredictionSnapshot
 
@@ -74,6 +76,24 @@ class MarketOverviewRow:
     outcome_b_name: str | None
     active_match_id: str | None
     link_evidence_available: bool
+
+
+def _market_overview_row(row) -> MarketOverviewRow:
+    return MarketOverviewRow(
+        market_id=row[0],
+        question=row[1],
+        status=row[2],
+        rules_version=int(row[3]),
+        observed_at=row[4],
+        event_start=row[5],
+        updated_at=row[6],
+        outcome_a_player_id=row[7],
+        outcome_a_name=row[8],
+        outcome_b_player_id=row[9],
+        outcome_b_name=row[10],
+        active_match_id=row[11],
+        link_evidence_available=bool(row[11]) and bool(row[12]),
+    )
 
 
 def _parse_observed_at(value: Any) -> datetime:
@@ -721,38 +741,111 @@ class MarketRepository:
         )
         async with self._database.session() as session:
             rows = (await session.execute(statement)).all()
-        return [
-            MarketOverviewRow(
-                market_id=row[0],
-                question=row[1],
-                status=row[2],
-                rules_version=int(row[3]),
-                observed_at=row[4],
-                event_start=row[5],
-                updated_at=row[6],
-                outcome_a_player_id=row[7],
-                outcome_a_name=row[8],
-                outcome_b_player_id=row[9],
-                outcome_b_name=row[10],
-                active_match_id=row[11],
-                link_evidence_available=bool(row[11]) and bool(row[12]),
-            )
-            for row in rows
-        ]
+        return [_market_overview_row(row) for row in rows]
 
-    async def latest_decision_observations(self) -> list[DecisionObservation]:
+    async def list_market_overview_page(
+        self,
+        *,
+        tier: str | None = None,
+        gender: str | None = None,
+        phase: str | None = None,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> tuple[list[MarketOverviewRow], int]:
+        """Load a filtered page before materializing market summaries."""
+        page = max(1, page)
+        page_size = min(50, max(1, page_size))
+        filters = []
+        if tier is not None:
+            filters.append(TournamentRow.circuit == tier)
+        if gender is not None:
+            filters.append(TournamentRow.gender == gender)
+        if phase == "closed":
+            filters.append(
+                or_(
+                    MarketRow.status.in_(("closed", "resolved")),
+                    MatchRow.status == "finished",
+                )
+            )
+        elif phase == "live":
+            filters.extend(
+                (
+                    MarketRow.status.not_in(("closed", "resolved")),
+                    MatchRow.status == "live",
+                )
+            )
+        elif phase == "prematch":
+            filters.extend(
+                (
+                    MarketRow.status.not_in(("closed", "resolved")),
+                    MatchRow.status == "scheduled",
+                )
+            )
+
+        def with_active_match(statement):
+            return (
+                statement.select_from(MarketRow)
+                .outerjoin(
+                    MarketMatchLinkRow,
+                    (MarketMatchLinkRow.market_id == MarketRow.id)
+                    & (MarketMatchLinkRow.status == "active"),
+                )
+                .outerjoin(MatchRow, MarketMatchLinkRow.match_id == MatchRow.id)
+                .outerjoin(
+                    TournamentRow, MatchRow.tournament_id == TournamentRow.id
+                )
+            )
+
+        columns = (
+            MarketRow.id,
+            MarketRow.question,
+            MarketRow.status,
+            MarketRow.rules_version,
+            MarketRow.observed_at,
+            MarketRow.event_start,
+            MarketRow.updated_at,
+            MarketRow.outcome_a_player_id,
+            MarketRow.outcome_a_name,
+            MarketRow.outcome_b_player_id,
+            MarketRow.outcome_b_name,
+            MarketMatchLinkRow.match_id,
+            MarketMatchLinkRow.evidence,
+        )
+        count_statement = with_active_match(select(func.count(MarketRow.id))).where(
+            *filters
+        )
+        statement = (
+            with_active_match(select(*columns))
+            .where(*filters)
+            .order_by(MarketRow.updated_at.desc(), MarketRow.id.asc())
+            .limit(page_size)
+            .offset((page - 1) * page_size)
+        )
+        async with self._database.session() as session:
+            total = await session.scalar(count_statement)
+            rows = (await session.execute(statement)).all()
+        return [_market_overview_row(row) for row in rows], int(total or 0)
+
+    async def latest_decision_observations(
+        self, match_ids: Sequence[str] | None = None
+    ) -> list[DecisionObservation]:
         """The newest decision observation per match, newest decision first."""
+        statement = select(DecisionObservationRow).distinct(
+            DecisionObservationRow.match_id
+        )
+        if match_ids is not None:
+            ids = {match_id for match_id in match_ids if match_id}
+            if not ids:
+                return []
+            statement = statement.where(DecisionObservationRow.match_id.in_(ids))
+        statement = statement.order_by(
+            DecisionObservationRow.match_id,
+            DecisionObservationRow.observation_version.desc(),
+        )
         async with self._database.session() as session:
             rows = (
                 (
-                    await session.execute(
-                        select(DecisionObservationRow)
-                        .distinct(DecisionObservationRow.match_id)
-                        .order_by(
-                            DecisionObservationRow.match_id,
-                            DecisionObservationRow.observation_version.desc(),
-                        )
-                    )
+                    await session.execute(statement)
                 )
                 .scalars()
                 .all()

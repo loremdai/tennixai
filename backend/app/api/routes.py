@@ -313,7 +313,7 @@ async def list_markets(
     gender: Literal["men", "women", "mixed", "unknown"] | None = Query(None),
     phase: Literal["prematch", "live", "closed"] | None = Query(None),
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=50),
+    page_size: int = Query(50, ge=1, le=50),
     queries=Depends(get_p3_queries),
 ):
     page_dto = await queries.markets(

@@ -2076,17 +2076,25 @@ class P3QueryService:
         )
         return rows, OpportunityAvailabilityDto(reason=reason, model_status=model_status)
 
-    async def markets(self, *, tier=None, gender=None, phase=None, page=1, page_size=20):
+    async def markets(self, *, tier=None, gender=None, phase=None, page=1, page_size=50):
         from app.api.schemas import MarketPageDto, MarketQuoteDto, MarketSummaryDto
 
-        market_rows = await self._markets.list_market_overviews()
-        observations = await self._markets.latest_decision_observations()
+        page = max(1, page)
+        page_size = min(50, max(1, page_size))
+        market_rows, total = await self._markets.list_market_overview_page(
+            tier=tier,
+            gender=gender,
+            phase=phase,
+            page=page,
+            page_size=page_size,
+        )
+        match_ids = [row.active_match_id for row in market_rows if row.active_match_id]
+        observations = await self._markets.latest_decision_observations(match_ids)
         decision_by_match = {
             observation.match_id: observation for observation in observations
         }
         # ACTIVE links are the only match truth; every dependency below is
         # loaded in ONE bulk call regardless of row count (T84: no N+1).
-        match_ids = [row.active_match_id for row in market_rows if row.active_match_id]
         facts = await self._match_facts(match_ids)
         predictions = await self._markets.latest_predictions_for_matches(match_ids)
         hot_books = await self._bulk_hot_books([row.market_id for row in market_rows])
@@ -2247,16 +2255,8 @@ class P3QueryService:
                     as_of=row.observed_at,
                 )
             )
-        if tier is not None:
-            summaries = [item for item in summaries if item.tier == tier]
-        if gender is not None:
-            summaries = [item for item in summaries if item.gender == gender]
-        if phase is not None:
-            summaries = [item for item in summaries if item.phase == phase]
-        total = len(summaries)
-        start = (page - 1) * page_size
         return MarketPageDto(
-            markets=summaries[start : start + page_size],
+            markets=summaries,
             page=page,
             page_size=page_size,
             total=total,
