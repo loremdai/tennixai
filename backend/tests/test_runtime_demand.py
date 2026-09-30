@@ -207,3 +207,12 @@ async def test_tracking_demand_consumes_catalog_match_info_factory():
     )
 
     assert await tracking.demanded_markets() == {"mkt_1"}
+
+
+async def test_catalog_match_info_marks_old_live_stale_without_guessing_result():
+    from datetime import timedelta
+    match = catalog_match('mat_old')
+    factory = catalog_match_info(FakeCatalog([match]), now=lambda: NOW + timedelta(hours=1))
+    info = await factory('mat_old')
+    assert info.status is MatchStatus.LIVE
+    assert info.is_stale

@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
+from app.errors import AppError
 from app.markets.live import MarketFeedClosed, MarketFeedDisconnected
 from app.markets.publisher import MarketHotPublisher
 from app.markets.reducer import MarketBookReducer, RawMarketEvent
@@ -69,6 +70,7 @@ class MarketWorker:
         on_connection: Callable[[str, str], Awaitable[None]] | None = None,
         on_resolution_hint: Callable[[str], None] | None = None,
         metrics: Any = None,
+        reconcile_timeout_seconds: float = 30,
     ) -> None:
         self._deps = _WorkerDeps(feed, rest, publisher, observations, raw)
         self._demand_source = demand_source
@@ -83,6 +85,10 @@ class MarketWorker:
         self._on_connection = on_connection
         self._on_resolution_hint = on_resolution_hint
         self._metrics = metrics
+        self._reconcile_timeout = reconcile_timeout_seconds
+        self.reconciliation_failures: dict[str, str] = {}
+        self._retry: dict[str, tuple[int, datetime]] = {}
+        self._retired: set[str] = set()
         # Public so the runtime daemon can aggregate hook failures into one
         # health surface; only counts, never identifiers.
         self.callback_failures: dict[str, int] = {
@@ -123,6 +129,11 @@ class MarketWorker:
         await asyncio.sleep(0)
         self._cycles += 1
         demand = await self._demand_source()
+        self._retired.intersection_update(demand)
+        self._capacity_blocked.intersection_update(demand)
+        for market_id in set(self._retry) - demand:
+            self._retry.pop(market_id, None)
+            self.reconciliation_failures.pop(market_id, None)
 
         for market_id in list(self._subs):
             if market_id not in demand:
@@ -130,6 +141,8 @@ class MarketWorker:
 
         active = sum(1 for sub in self._subs.values() if sub.state != "closed")
         for market_id in sorted(demand):
+            if market_id in self._retired or not self._retry_due(market_id):
+                continue
             if market_id in self._subs:
                 self._capacity_blocked.discard(market_id)
                 continue
@@ -137,25 +150,16 @@ class MarketWorker:
                 self._capacity_blocked.add(market_id)
                 continue
             self._capacity_blocked.discard(market_id)
-            await self._start(market_id)
-            active += 1
+            if await self._recover_market(market_id, self._start(market_id)):
+                active += 1
 
         for sub in list(self._subs.values()):
             if sub.state == "closed":
                 # A normally closed subscription has no stream to reconcile
                 # and must not be restarted while it is still in demand.
                 continue
-            if sub.state == "reconnecting":
-                await self._rest_reconcile(sub, reason="reconnect", record_gap=True)
-            elif sub.needs_reconcile:
-                await self._rest_reconcile(
-                    sub, reason="queue_overflow", record_gap=True
-                )
-            elif await self._deps.publisher.get_hot_book(sub.market_id) is None:
-                await self._rest_reconcile(
-                    sub, reason="hot_state_lost", record_gap=False
-                )
-            await self._pump(sub)
+            if self._retry_due(sub.market_id):
+                await self._recover_market(sub.market_id, self._reconcile_subscription(sub))
 
         await self._flush_observations()
 
@@ -198,6 +202,57 @@ class MarketWorker:
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
+
+    def _retry_due(self, market_id: str) -> bool:
+        retry = self._retry.get(market_id)
+        return retry is None or self._now() >= retry[1]
+
+    async def _reconcile_subscription(self, sub: _MarketSubscription) -> None:
+        if sub.state == "reconnecting":
+            await self._rest_reconcile(sub, reason="reconnect", record_gap=True)
+        elif sub.needs_reconcile:
+            await self._rest_reconcile(sub, reason="queue_overflow", record_gap=True)
+        elif await self._deps.publisher.get_hot_book(sub.market_id) is None:
+            await self._rest_reconcile(sub, reason="hot_state_lost", record_gap=False)
+        await self._pump(sub)
+
+    async def _recover_market(self, market_id: str, operation) -> bool:
+        try:
+            async with asyncio.timeout(self._reconcile_timeout):
+                await operation
+        except Exception as exc:
+            if isinstance(exc, AppError) and exc.code == "market_closed":
+                await self._retire(market_id)
+                return False
+            code = "UPSTREAM_TIMEOUT" if isinstance(exc, TimeoutError) else "MARKET_RECOVERY_FAILED"
+            if isinstance(exc, AppError) and exc.code.isidentifier():
+                code = exc.code.upper()
+            self.reconciliation_failures[market_id] = code
+            attempt = self._retry.get(market_id, (0, self._now()))[0] + 1
+            self._retry[market_id] = (attempt, self._now() + timedelta(seconds=min(60, 5 * 2 ** min(attempt - 1, 4))))
+            sub = self._subs.get(market_id)
+            if sub is not None:
+                sub.state = "reconnecting"
+            await self._deps.publisher.publish_gap(market_id, code)
+            await self._notify_connection(market_id, "reconnecting")
+            return False
+        self.reconciliation_failures.pop(market_id, None)
+        self._retry.pop(market_id, None)
+        return True
+
+    async def _retire(self, market_id: str) -> None:
+        if market_id in self._retired:
+            return
+        self._retired.add(market_id)
+        self.reconciliation_failures.pop(market_id, None)
+        self._retry.pop(market_id, None)
+        await self._close(market_id)
+        await self._deps.publisher.publish_gap(market_id, "MARKET_CLOSED")
+        if self._on_resolution_hint is not None:
+            try:
+                self._on_resolution_hint(market_id)
+            except Exception:
+                self.callback_failures["on_resolution_hint"] += 1
 
     async def _start(self, market_id: str) -> None:
         # Re-entrancy guard: the runtime daemon is the single sequential
@@ -375,11 +430,7 @@ class MarketWorker:
                     }
                 )
         if reduction.resolution_requested:
-            if self._on_resolution_hint is not None:
-                try:
-                    self._on_resolution_hint(sub.market_id)
-                except Exception:
-                    self.callback_failures["on_resolution_hint"] += 1
+            await self._retire(sub.market_id)
             self._observation_buffer.append(
                 {
                     "market_id": sub.market_id,

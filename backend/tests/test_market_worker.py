@@ -200,6 +200,7 @@ def make_worker(
     on_connection=None,
     on_resolution_hint=None,
     metrics=None,
+    reconcile_timeout_seconds=30,
 ) -> tuple[MarketWorker, dict]:
     parts = {
         "feed": feed or FakeMarketFeed(),
@@ -227,6 +228,7 @@ def make_worker(
         on_connection=on_connection,
         on_resolution_hint=on_resolution_hint,
         metrics=metrics,
+        reconcile_timeout_seconds=reconcile_timeout_seconds,
     )
     return worker, parts
 
@@ -660,3 +662,104 @@ async def test_abnormal_close_still_records_a_gap_and_reconciles():
     assert parts["sink"].gaps and parts["sink"].gaps[-1]["reason"] == "reconnect"
     assert worker.subscription_state(MKT_1) == "live"
     assert parts["rest"].calls == [MKT_1, MKT_1]
+
+
+class FailingRest(FakeRest):
+    def __init__(self, error):
+        super().__init__()
+        self.error = error
+    async def get_order_book(self, market_id):
+        if market_id == MKT_1 and self.error is not None:
+            self.calls.append(market_id)
+            raise self.error
+        return await super().get_order_book(market_id)
+
+
+async def test_failed_market_does_not_take_capacity_and_retries_with_backoff():
+    from app.errors import AppError
+    for error in (AppError('not_found', 'missing', 404), AppError('provider_rate_limited', 'limited', 429),
+                  AppError('provider_unavailable', 'unavailable', 503), AppError('provider_invalid_response', 'invalid', 502)):
+        clock = FakeClock()
+        rest = FailingRest(error)
+        worker, parts = make_worker(clock, rest=rest, demand=DemandSource({MKT_1, MKT_2}), max_subscriptions=1)
+        try:
+            await worker.reconcile_demand_once()
+            assert worker.active_market_ids() == (MKT_2,)
+            assert worker.reconciliation_failures[MKT_1] == error.code.upper()
+            await worker.reconcile_demand_once()
+            assert rest.calls.count(MKT_1) == 1
+            rest.error = None
+            parts['demand'].markets = {MKT_1}
+            clock.advance(5)
+            await worker.reconcile_demand_once()
+            assert worker.active_market_ids() == (MKT_1,)
+            assert not worker.reconciliation_failures
+        finally:
+            await worker.stop()
+
+
+async def test_closed_market_retires_quotes_and_requests_resolution_once():
+    from app.errors import AppError
+    hints = []
+    clock = FakeClock()
+    rest = FailingRest(AppError('market_closed', 'closed', 409))
+    worker, parts = make_worker(clock, rest=rest, demand=DemandSource({MKT_1, MKT_2}), on_resolution_hint=hints.append)
+    try:
+        await worker.reconcile_demand_once()
+        clock.advance(100)
+        await worker.reconcile_demand_once()
+        assert worker.active_market_ids() == (MKT_2,)
+        assert hints == [MKT_1]
+        assert rest.calls.count(MKT_1) == 1
+        assert not worker.reconciliation_failures
+    finally:
+        await worker.stop()
+
+
+async def test_reconnect_failure_does_not_block_other_books_and_closure_retires():
+    from app.errors import AppError
+    clock = FakeClock()
+    rest = FailingRest(None)
+    hints = []
+    worker, parts = make_worker(clock, rest=rest, demand=DemandSource({MKT_1, MKT_2}), on_resolution_hint=hints.append)
+    try:
+        await worker.reconcile_demand_once()
+        rest.error = AppError('provider_unavailable', 'down', 503)
+        await parts['feed'].disconnect(MKT_1)
+        await asyncio.sleep(0)
+        parts['publisher'].hot.pop(MKT_2)
+        await worker.reconcile_demand_once()
+        assert MKT_2 in parts['publisher'].hot
+        assert MKT_1 in worker.reconciliation_failures
+        rest.error = AppError('market_closed', 'closed', 409)
+        clock.advance(5)
+        await worker.reconcile_demand_once()
+        assert worker.active_market_ids() == (MKT_2,)
+        assert hints == [MKT_1]
+    finally:
+        await worker.stop()
+
+
+async def test_market_recovery_timeout_is_isolated_and_cancellation_propagates():
+    import pytest
+    class SlowRest(FakeRest):
+        async def get_order_book(self, market_id):
+            if market_id == MKT_1:
+                await asyncio.Event().wait()
+            return await super().get_order_book(market_id)
+    worker, _ = make_worker(FakeClock(), rest=SlowRest(), demand=DemandSource({MKT_1, MKT_2}), reconcile_timeout_seconds=0.01)
+    try:
+        await worker.reconcile_demand_once()
+        assert worker.active_market_ids() == (MKT_2,)
+        assert worker.reconciliation_failures == {MKT_1: 'UPSTREAM_TIMEOUT'}
+    finally:
+        await worker.stop()
+    worker, _ = make_worker(FakeClock(), rest=SlowRest(), reconcile_timeout_seconds=60)
+    task = asyncio.create_task(worker.reconcile_demand_once())
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert not worker.active_market_ids()
+    await worker.stop()

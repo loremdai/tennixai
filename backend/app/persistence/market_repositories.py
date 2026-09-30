@@ -612,6 +612,14 @@ class MarketRepository:
             )
         return list(rows)
 
+    async def list_trackable_market_ids(self) -> set[str]:
+        """Quote demand only; closed links and positions remain durable."""
+        async with self._database.session() as session:
+            rows = await session.execute(
+                select(MarketRow.id).where(MarketRow.status == MarketStatus.OPEN.value)
+            )
+            return set(rows.scalars().all())
+
     async def save_prediction(self, snapshot: PredictionSnapshot) -> None:
         """Idempotent per (match, model, input state version); evidence is
         immutable once written."""

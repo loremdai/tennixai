@@ -28,6 +28,7 @@ class MatchTrackingInfo:
     scheduled_at: datetime | None
     circuit: CircuitTier
     discipline: Discipline
+    is_stale: bool = False
 
 
 class MarketRepositoryLinks:
@@ -62,12 +63,14 @@ class TrackingDemand:
         ledger,
         now: Callable[[], datetime],
         coverage_window: timedelta = timedelta(minutes=120),
+        eligible_markets: Callable[[], Awaitable[set[str]]] | None = None,
     ) -> None:
         self._links = links
         self._match_info = match_info
         self._ledger = ledger
         self._now = now
         self._window = coverage_window
+        self._eligible_markets = eligible_markets
 
     async def demanded_markets(self) -> set[str]:
         demanded: set[str] = set(await self._ledger.unsettled_position_market_ids())
@@ -89,14 +92,18 @@ class TrackingDemand:
                 or info.discipline is not Discipline.SINGLES
             ):
                 continue
+            if info.is_stale:
+                continue
             if info.status is MatchStatus.LIVE:
                 demanded.add(market_id)
-            elif info.scheduled_at is not None:
+            elif info.status is MatchStatus.SCHEDULED and info.scheduled_at is not None:
                 delta = info.scheduled_at - now
                 if timedelta(0) <= delta <= self._window:
                     demanded.add(market_id)
             elif info.status is MatchStatus.SCHEDULED:
                 demanded.add(market_id)
+        if self._eligible_markets is not None:
+            demanded.intersection_update(await self._eligible_markets())
         return demanded
 
 

@@ -144,3 +144,26 @@ def test_demand_never_depends_on_viewer_leases():
     assert "lease_store" not in parameters
     source = inspect.getsource(TrackingDemand)
     assert "ViewerLeaseStore" not in source
+
+
+async def test_terminal_or_unknown_matches_never_enter_prematch_window():
+    for status in (MatchStatus.CANCELLED, MatchStatus.FINISHED, MatchStatus.POSTPONED, MatchStatus.UNKNOWN):
+        demand = make_demand({'mat_1': 'mkt_1'}, {'mat_1': info(status=status)})
+        assert await demand.demanded_markets() == set(), status
+
+
+async def test_stale_live_does_not_keep_quote_subscription_alive():
+    demand = make_demand({'mat_1': 'mkt_1'}, {'mat_1': MatchTrackingInfo(
+        status=MatchStatus.LIVE, scheduled_at=None, circuit=CircuitTier.ATP,
+        discipline=Discipline.SINGLES, is_stale=True)})
+    assert await demand.demanded_markets() == set()
+
+
+async def test_closed_position_keeps_ledger_but_not_quote_demand():
+    ledger = FakeLedger(('mkt_closed', 'mkt_open'))
+    async def eligible():
+        return {'mkt_open'}
+    demand = TrackingDemand(links=FakeLinksSource({}), match_info=None,
+        ledger=ledger, now=lambda: NOW, eligible_markets=eligible)
+    assert await demand.demanded_markets() == {'mkt_open'}
+    assert await ledger.unsettled_position_market_ids() == ('mkt_closed', 'mkt_open')

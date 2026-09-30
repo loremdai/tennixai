@@ -13,6 +13,7 @@ identifiers never pass through this module.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from datetime import datetime, timedelta
 
 from app.decision.worker import MatchTrackingInfo
 from app.runtime.catalog import MatchCatalogStore
@@ -53,6 +54,9 @@ class RuntimeDemand:
 
 def catalog_match_info(
     catalog: MatchCatalogStore,
+    *,
+    now: Callable[[], datetime] | None = None,
+    max_age: timedelta = timedelta(minutes=2),
 ) -> Callable[[str], Awaitable[MatchTrackingInfo | None]]:
     """Build the `TrackingDemand` `match_info` callable on the canonical catalog."""
 
@@ -65,6 +69,9 @@ def catalog_match_info(
             scheduled_at=match.scheduled_at,
             circuit=match.tournament.circuit,
             discipline=match.tournament.discipline,
+            is_stale=(match.freshness.is_stale or (
+                now is not None and now() - match.freshness.observed_at > max_age
+            )),
         )
 
     return match_info

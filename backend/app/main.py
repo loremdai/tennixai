@@ -391,6 +391,7 @@ def create_app(
                 match_info=None,
                 ledger=paper_ledger,
                 now=clock,
+                eligible_markets=market_repository.list_trackable_market_ids,
                 coverage_window=timedelta(
                     minutes=settings.p3_tracking_window_minutes
                 ),

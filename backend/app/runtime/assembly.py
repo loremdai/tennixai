@@ -379,10 +379,14 @@ def build_local_runtime_daemon(
     links = MarketRepositoryLinks(markets)
     tracking = TrackingDemand(
         links=links,
-        match_info=catalog_match_info(catalog),
+        match_info=catalog_match_info(
+            catalog, now=clock,
+            max_age=timedelta(seconds=live.live_catalog_seconds * 2),
+        ),
         ledger=ledger,
         now=clock,
         coverage_window=timedelta(minutes=settings.p3_tracking_window_minutes),
+        eligible_markets=markets.list_trackable_market_ids,
     )
 
     realtime_publisher = RealtimePublisher(redis_client, now=clock)
