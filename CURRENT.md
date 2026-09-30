@@ -2,7 +2,7 @@
 
 > 产品与稳定架构见 [PROJECT.md](./PROJECT.md)；长期路线、任务证据与历史记录见 [ROADMAP.md](./ROADMAP.md)，完整审计由 Git 历史承担。
 
-**最后更新：** 2026-09-30 21:33（北京时间）
+**最后更新：** 2026-09-30 21:36（北京时间）
 
 **当前主任务：** T125 按最终确认示意图实施 `/markets` 前端优化（`done`）。
 
@@ -13,7 +13,7 @@
 - **领取：** 2026-09-30 16:27（北京时间）；Codex / 本地 ADE / `main`；起始提交 `73a501d`（T124 已完成并推送）。
 - **授权与范围：** 用户明确表示“嗯呢，就按照这个做”，授权将最终示意图落实到生产 `/markets` 前端。只优化视觉层级与用户明确要求的筛选/排序默认值；保留现有三个视图、真实 DTO/API、T124 数据库 50 行分页及 P3/Paper 业务语义。最终参考图位于 `docs/mockups/2026-09-30-markets-home-style.png`（由已确认的左对齐 Tab 修订图归档）。
 - **设计约束：** 页头沿用首页近黑底、荧光黄绿；“机会 / 全部市场 / 模拟记录”采用靠左紧凑 Tab，当前项绿字+下划线及整行分隔线；市场卡保留圆形球员头像、英文主名/中文辅名、报价胶囊、每行右侧真实报价状态和箭头。默认 ATP+WTA、性别/阶段全部；赛事级别优先，阶段按 `进行中 → 赛前 → 已结束`。
-- **实现提交：** 后端多级别数据库过滤和排序 `a9dd266`；市场页及比分上下文实现 `71c3584`。保留三视图、真实 DTO/API、每页 50 行分页和 Paper 语义；`?preview=p3` 与预览 fixture 未改。
+- **实现提交与推送：** 后端多级别数据库过滤和排序 `a9dd266`；市场页及比分上下文实现 `71c3584`；完成记录 `1e0ea1a`。这三项已推送；在该次推送后复核时，`origin/main` 与 HEAD 同为 `1e0ea1a`。保留三视图、真实 DTO/API、每页 50 行分页和 Paper 语义；`?preview=p3` 与预览 fixture 未改。
 - **验证证据：** `backend/.venv/bin/pytest tests/test_p3_api.py tests/integration/test_p3_query_service.py -q`：30 passed；`ruff check app/api/schemas.py app/service.py tests/test_p3_api.py tests/integration/test_p3_query_service.py`、`git diff --check` 通过。`frontend/node_modules/.bin/vitest run --reporter=dot`：42 files / 553 passed；`tsc --noEmit`、隔离临时副本的 `next build --webpack` 通过；市场页桌面/手机 Playwright 20 passed。最终截图：[市场页运行预览](/private/tmp/t125-markets-viewport.png)。
 - **准确性保护：** 实时盘数只在比赛确为 live、快照连接在线且 60 秒内时展示；最终比分按市场球员顺序映射，且只为已结束比赛展示。无效比分和超界盘数会省略该可选细节，不影响市场列表。
 - **保护边界：** `backend/app/service.py` 中既有的 Paper 报价 freshness 改动仍留在工作区、未暂存或提交。未跟踪 `.codex/`、`.superpowers/`、`REALTIME_LATENCY_INVESTIGATION.md`、`backend/tests/test_p3_query_freshness.py`、`frontend/next-env.d.ts` 均保留且未纳入任务提交。
@@ -47,7 +47,7 @@
 
 | 日期 | 提交 | 事实 |
 |---|---|---|
-| 2026-09-30 | `71c3584` | T125 完成：市场页采用首页视觉语言和靠左 Tab；默认 ATP/WTA，报价/身份/阶段清晰呈现；实时盘数检查新鲜度，完赛比分按市场选手顺序显示。后端 30 passed，前端 553 passed、类型检查/生产构建通过，桌面和手机 Playwright 20 passed。`?preview=p3` 未改。 |
+| 2026-09-30 | `a9dd266` / `71c3584` / `1e0ea1a` | T125 已推送完成：市场页采用首页视觉语言和靠左 Tab；默认 ATP/WTA，报价/身份/阶段清晰呈现；实时盘数检查新鲜度，完赛比分按市场选手顺序显示。后端 30 passed，前端 553 passed、类型检查/生产构建通过，桌面和手机 Playwright 20 passed。`?preview=p3` 未改。 |
 | 2026-09-30 | `0b1e9d1` | T124 按 SQL 页取数并只装载当前页关联数据；移除 80 个非 Tennix 容器，保留数据卷；Colima 可用内存由 40 MiB 升至 7,113 MiB。实际第一页、第二页、ATP 筛选和 Next 代理请求均返回至多 50 行；Ruff、AST、差异检查通过。排名上游仍超时，sports stream、schedule 和 Polymarket 为 `ok`，详见验收报告。 |
 | 2026-09-30 | `7e428ee` | T123 最终市场页设计图：沿用首页视觉，加入双语球员身份、报价胶囊与每场实时报价状态；筛选默认 ATP/WTA，排序为级别优先及进行中→赛前→已结束。仅设计，未实施前端。 |
 | 2026-09-30 | `a812b73` | T122 只读定位市场加载长尾：共享 VM 内存阻塞、连接超时，全量查询与重叠刷新放大负载；未实施修复。 |

@@ -88,4 +88,4 @@
 - [x] **Step 1: Run final focused backend and frontend tests**, frontend typecheck/build, and `git diff --check`; inspect staged paths to exclude user-owned changes.
 - [x] **Step 2: Update `CURRENT.md` and `ROADMAP.md`** with actual commits and command results.
 - [x] **Step 3: Commit only T125 artifacts and docs.**
-- [ ] **Step 4: Verify pushed HEAD, clean T125 diff, and preservation of pre-existing user changes.**
+- [x] **Step 4: Verify pushed HEAD, clean T125 diff, and preservation of pre-existing user changes** — `HEAD == origin/main == 1e0ea1a`; only documented user-owned working-tree changes remain.
