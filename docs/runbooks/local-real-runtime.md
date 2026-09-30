@@ -14,8 +14,9 @@
 ```
 
 - **只使用仓库根目录 `.env`**：不得创建或读取 `backend/.env`、`frontend/.env`、`frontend/.env.local`；凭据绝不提交、绝不写入日志。
-- `init` 是一次性准备：校验配置、创建并迁移专用回环库 `tennix_live_local`（Redis DB 11）、同步目录；缺失的中文名会在这一步**一次性**调用 LLM 补全。该补全按 25 条一批循环到不再缺失，只要根 `.env` 配了 LLM 凭据就无法跳过，实测可能持续数十分钟并消耗可观配额——因此即使只是为了补一次 schema 迁移，也请把这一步的耗时与配额计入计划（`up` 会在库落后于已初始化 schema 时以 `LOCAL_SCHEMA_BEHIND` 拒绝启动，`init` 是唯一受支持的迁移入口）。
-- `up` 是日常启动：拉起 runtime/api/frontend 三个受管子进程，**绝不调用 LLM、绝不自动执行 init**。
+- `init` 是一次性准备：校验配置、创建并迁移专用回环库 `tennix_live_local`（Redis DB 11）、同步目录；缺失的中文名会在这一步**一次性**调用 LLM 补全。该补全按 25 条一批循环到不再缺失，只要根 `.env` 配了 LLM 凭据就无法跳过，实测可能持续数十分钟并消耗可观配额——因此即使只是为了补一次 schema 迁移，也请把这一步的耗时与配额计入计划（`up` 将数据库实际 revision 与仓库 migration head、持久初始化记录对照；不兼容时拒绝启动，`init` 是唯一受支持的迁移入口）。
+- `up` 是日常启动：以 PostgreSQL `local_runtime_init` 记录及实际/仓库 schema head 为初始化事实；临时 launcher 标记丢失会从库重建缓存，**绝不调用 LLM、绝不自动执行 init**。PID/token 仍用于进程所有权，发现端口或其他执行者冲突时拒绝覆盖。
+- runtime 完成当前进程 DB/cursor 读取、Redis 探测并持久化 `runtime_ready=ok` 后，启动器才拉起 API/frontend；昨日的健康记录或已死亡子进程不能满足就绪门。上游市场/赛程失败会如实保留 GAP/degraded，API/UI 可读取历史数据；新模拟动作与未执行 intent 仍受 stale/gap 门限制。合法零订阅可以启动。
 - `up` 直接运行仓库已安装的 `frontend/node_modules/.bin/next`；启动过程不调用 pnpm，也不会尝试重装或清理 `node_modules`。如果该文件不存在或不可执行，启动器会在拉起其他子进程前明确拒绝并提示先安装前端依赖。
 - `down` 优雅停止自有子进程与本次启动的容器，**保留全部真实数据与 paper ledger**；再次 `up` 后 ID、数据与账本原样存在。
 
@@ -54,7 +55,7 @@ TENNIX_LOCAL_RUNTIME_MARKET_QUOTE_FRESH_SECONDS=300      # 120–1800（快照�
 - **fresh**：连接开放且心跳确认，数据在预期窗口内——网球比分安静时保持 fresh，沉默不等于过期。
 - **degraded**：低频任务失败但既有规范数据路径仍在（保留最近成功时间与计数）。
 - **stale**：超过预期窗口没有任何新数据到达。
-- **gap**：流序列出现断口；系统保留最后可信状态，并在 REST 对账成功前撤销新的 BUY/SELL 决策。
+- **gap**：流序列出现断口或恢复失败；系统保留最后可信状态，并在 REST 对账成功前撤销新的 BUY/SELL 决策。市场 source degraded 也执行同样阻断；其他市场的成功不能清除恢复失败汇总。
 - **market coverage**：`runtime/health` 的 `market_coverage` 只含聚合数字——candidate/attempted、各报价状态计数、batch_failures、rate_limited/retry_after_until 与 last_successful_batch_at；不含 token、URL 或 provider ID。
 
 ## 3. 正常事实状态（不是故障）
@@ -113,6 +114,8 @@ TENNIX_E2E_LOCAL_RUNTIME_URL=http://127.0.0.1:3100 \
 | 全部源 `skipped` | 多为安静窗口（无 live 比赛/无映射市场），属诚实结果；换个时间重跑 |
 | 浏览器验收失败于 preview 标记 | 确认访问的是无 `?preview=` 参数的生产页面且前端由 launcher 启动 |
 | 数据库连不上 | 确认 compose 的 postgres 在跑且已执行过 `./scripts/tennix-live init` |
-| `up refused: LOCAL_SCHEMA_BEHIND` / `LOCAL_NOT_INITIALIZED` | 库或 launcher 状态落后于已初始化 schema：重跑 `init`（含上面的 LLM 补名，见 §1）。中断过 `init` 时状态文件可能被重置，`status` 会同时显示两者 |
+| `up refused: LOCAL_SCHEMA_BEHIND` / `LOCAL_NOT_INITIALIZED` | 确认 DB 可连接，持久 init 记录有效且与实际/仓库 head 一致；真正缺初始化或不兼容才执行 `init`（含 LLM 补名，见 §1）。只丢失临时标记无需 init，直接 up 恢复 |
+| runtime 已就绪，但某上游 GAP/degraded | API/UI 可运行；查看稳定 reason code、最近成功时间与数据 freshness。单市场恢复有 30 秒超时和 5–60 秒退避；关闭市场不请求盘口，已有持仓仍由最终 resolution 结算 |
+| 旧 live 已不在 livescore | runtime 每次 live sync 有界轮转最多 8 条旧记录，使用 fixtures 按 match key 校准；失败保留旧资料与 stale，不按时间推断赛果 |
 
 回放（replay）流程与专用 live 测试门见 [p2-local.md](./p2-local.md)。

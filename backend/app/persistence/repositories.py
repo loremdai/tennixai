@@ -1042,6 +1042,11 @@ class RuntimeStateRepository:
             )
         return key is not None
 
+    async def load_initialization(self) -> RuntimeInitRecord | None:
+        async with self._database.session() as session:
+            row = await session.get(RuntimeStateRow, RUNTIME_INIT_STATE_KEY)
+        return RuntimeInitRecord.model_validate(row.payload) if row is not None else None
+
     async def mark_initialized(self, record: RuntimeInitRecord) -> None:
         await self._upsert_payload(
             RUNTIME_INIT_STATE_KEY,

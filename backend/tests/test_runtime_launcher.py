@@ -346,6 +346,7 @@ def launcher(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> RuntimeLauncher
         health_probe=health_probe,
         http_probe=http_probe,
         wall_clock=lambda: NOW,
+        expected_schema_head="rev_test",
         health_timeout=5.0,
         api_timeout=5.0,
         poll_interval=1.0,
@@ -387,6 +388,7 @@ def joined_output(launcher: RuntimeLauncher) -> str:
 
 def test_up_refuses_uninitialized_database_without_starting_children(launcher):
     launcher.state.initialized = False
+    launcher.database_probe.initialized = False
     assert launcher.up() == 2
     assert launcher.runner.spawned == []
 
@@ -1431,3 +1433,29 @@ def test_dead_runtime_cannot_use_persisted_healthy_record(launcher):
     launcher.health_probe = probe
     assert launcher.up() == 2
     assert spawned_roles(launcher.runner) == ['runtime']
+
+
+def test_up_recovers_missing_temp_init_cache_without_bootstrap(launcher):
+    launcher.state = LauncherState()
+    assert launcher.up() == 0
+    assert launcher.state.initialized
+    assert launcher.state.schema_head == 'rev_test'
+    assert launcher.bootstrap.calls == 0
+    assert launcher.migrations.calls == 0
+    assert launcher.database_ensure.calls == []
+    assert launcher.down() == 0
+    assert launcher.up() == 0
+    assert launcher.bootstrap.calls == 0
+
+
+def test_up_ignores_stale_local_schema_cache_when_durable_schema_is_current(launcher):
+    launcher.state.schema_head = 'lost-or-old-local-cache'
+    assert launcher.up() == 0
+    assert launcher.state.schema_head == 'rev_test'
+
+
+def test_up_compares_database_to_repository_head_even_when_local_cache_matches(launcher):
+    launcher.state.schema_head = 'old_revision'
+    launcher.database_probe.schema_head = 'old_revision'
+    assert launcher.up() == 2
+    assert launcher.runner.spawned == []

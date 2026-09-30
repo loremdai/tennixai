@@ -202,6 +202,13 @@ def default_state_dir() -> Path:
     return Path(tempfile.gettempdir()) / f"tennix-live-{os.getuid()}"
 
 
+def repository_schema_head() -> str | None:
+    """Read migration metadata only; daily up never executes migrations."""
+    from alembic.script import ScriptDirectory
+
+    return ScriptDirectory(str(Path(__file__).resolve().parents[2] / "migrations")).get_current_head()
+
+
 def _is_runtime_ready(health: RuntimeHealth | None, started_at: datetime) -> bool:
     if health is None:
         return False
@@ -245,6 +252,7 @@ class RuntimeLauncher:
         frontend_startup_seconds: float = 3.0,
         python_executable: str | None = None,
         frontend_executable: str | Path | None = None,
+        expected_schema_head: str | None = None,
     ) -> None:
         self.root_dir = Path(root_dir)
         self.backend_dir = self.root_dir / "backend"
@@ -276,6 +284,7 @@ class RuntimeLauncher:
             frontend_executable or self.frontend_dir / "node_modules" / ".bin" / "next"
         )
         self.state = LauncherState.load(self.state_dir / "state.json")
+        self._expected_schema_head = expected_schema_head or repository_schema_head()
 
     # ------------------------------------------------------------------
     # init
@@ -339,17 +348,16 @@ class RuntimeLauncher:
             return EXIT_FAILURE
         if self._ensure_compose() is None:
             return EXIT_FAILURE
-        if not self.state.initialized:
+        database_status = asyncio.run(self.database_probe())
+        if not database_status.initialized:
             self._say(
                 "up refused: LOCAL_NOT_INITIALIZED "
                 "(run ./scripts/tennix-live init first; up never initializes or enriches)"
             )
             return EXIT_PRECONDITION
-        database_status = asyncio.run(self.database_probe())
         if (
-            not database_status.initialized
-            or database_status.schema_head is None
-            or database_status.schema_head != self.state.schema_head
+            database_status.schema_head is None
+            or database_status.schema_head != self._expected_schema_head
         ):
             self._say(
                 "up refused: LOCAL_SCHEMA_BEHIND "
@@ -357,6 +365,9 @@ class RuntimeLauncher:
                 "run ./scripts/tennix-live init first)"
             )
             return EXIT_PRECONDITION
+        self.state.initialized = True
+        self.state.schema_head = database_status.schema_head
+        self._persist()
         recorded_failure = self._check_recorded_processes()
         if recorded_failure is not None:
             return recorded_failure
@@ -1160,14 +1171,15 @@ async def probe_database_status(live: LocalRuntimeSettings) -> DatabaseStatus:
 
     database = Database(live.database_url)
     try:
-        initialized = await RuntimeStateRepository(database).is_initialized()
+        record = await RuntimeStateRepository(database).load_initialization()
         schema_head: str | None = None
         async with database.session() as session:
             result = await session.execute(
                 text("SELECT version_num FROM alembic_version")
             )
-            row = result.first()
-            schema_head = str(row[0]) if row else None
+            revisions = list(result.scalars().all())
+            schema_head = str(revisions[0]) if len(revisions) == 1 else None
+        initialized = record is not None and record.migration_revision == schema_head
         return DatabaseStatus(initialized=initialized, schema_head=schema_head)
     except Exception:  # noqa: BLE001 - unreachable database reads as not initialized
         return DatabaseStatus(initialized=False, schema_head=None)

@@ -670,3 +670,22 @@ async def test_runtime_writes_never_delete_existing_p2_p3_rows(
 
     async with database.session() as session:
         assert await session.get(MarketRow, market_id) is not None
+
+
+async def test_durable_initialization_payload_survives_repository_restart(database):
+    record = RuntimeInitRecord(completed_at=NOW, migration_revision='0009', player_count=3, match_count=2)
+    await RuntimeStateRepository(database).mark_initialized(record)
+    assert await RuntimeStateRepository(database).load_initialization() == record
+
+
+async def test_database_probe_rejects_init_record_revision_mismatch(database, scratch_database_url):
+    from types import SimpleNamespace
+    from app.runtime.launcher import probe_database_status
+    state = RuntimeStateRepository(database)
+    await state.mark_initialized(RuntimeInitRecord(completed_at=NOW, migration_revision='old_revision'))
+    result = await probe_database_status(SimpleNamespace(database_url=scratch_database_url))
+    assert not result.initialized
+    assert result.schema_head == '0009'
+    await state.mark_initialized(RuntimeInitRecord(completed_at=NOW, migration_revision='0009'))
+    result = await probe_database_status(SimpleNamespace(database_url=scratch_database_url))
+    assert result.initialized and result.schema_head == '0009'
