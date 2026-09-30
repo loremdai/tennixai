@@ -5,9 +5,9 @@
 
 **最后更新：** 2026-09-30（北京时间）
 
-**总体状态：** `in_progress`（P4 持续打磨；T117 按批准示意图实施市场页前端改版已完成；T116 设计已交付；T111、T112、T115 已完成；T113 端口回退已交付，TLS 阻塞已解除，真实运行栈已在 3100 启动；3101 回退实测尚未完成；T114 已调查比赛详情页模型数据空缺，T115 已修复预测持久化与市场/GAP 文案；T110 私人测试服务器部署仍 `blocked`。所有活跃网球胜者市场展示真实名称/报价；未严格映射的市场不进入模型或 Paper。模型未晋级时机会页继续诚实为空）
+**总体状态：** `in_progress`（T118 本地启动 `blocked`：初始化成功，但恢复阶段 `NOT_FOUND` 导致两次首次健康门超时；应用均已停止。P4 持续打磨；T117 按批准示意图实施市场页前端改版已完成；T116 设计已交付；T111、T112、T115 已完成；T113 端口回退已交付，TLS 阻塞已解除，真实运行栈已在 3100 启动；3101 回退实测尚未完成；T114 已调查比赛详情页模型数据空缺，T115 已修复预测持久化与市场/GAP 文案；T110 私人测试服务器部署仍 `blocked`。所有活跃网球胜者市场展示真实名称/报价；未严格映射的市场不进入模型或 Paper。模型未晋级时机会页继续诚实为空）
 
-**当前里程碑：** P3 已关闭；P4.0–P4.4 已完成（T72–T92）；P4.5（T93–T104）、P4.6（T105）及后续打磨 T106–T109 均已完成；T113 最近核验时 runtime/API/frontend 在 3100 运行，PostgreSQL/Redis 为 external healthy。
+**当前里程碑：** P3 已关闭；P4.0–P4.4 已完成（T72–T92）；P4.5（T93–T104）、P4.6（T105）及后续打磨 T106–T109 均已完成；T118 于 2026-09-30 实测 PostgreSQL/Redis healthy，runtime/API/frontend 均停止；恢复 `NOT_FOUND` 阻断首次健康门。
 
 **当前阶段：** P4 后续打磨 — T117 已按 T116 批准设计和用户选定示意图完成市场页前端改版；T115 已修复 Match 工作台预测持久化与空行情/GAP 文案；T114 调查已关闭。T113 端口回退代码已完成，本地初始化为 schema `0009`，TLS 恢复后只读 `verify` 通过，真实栈已在 3100 运行。3101 备用端口仍待实际有其他 ADE 占用 3100 时验证。T110 私人测试部署仍受阻。模型晋升证据链另行排期，自动下单继续 `deferred`。
 
@@ -210,6 +210,8 @@ P2.0–P2.5 的产品、架构和数据语义见 [P2 设计规格](./docs/superp
 | T115 | P4 follow-up | Repair Match Detail Prediction Persistence and Market/GAP Presentation | `done` | `30ea130`（领取），`1d6e4d4`（实现） | 接通现有 `save_prediction()` 写入与 Match 决策预测读侧；均价为空时从现有 DTO 展示双方真实盘口顶档并明确区别于 $10 可执行均价；将 gap 文案改为不推断中断来源的中性表述，并去掉不符合实际 reason_code 的 no-bet 标题。保持市场规则/stale/gap 安全门和未晋级模型空胜率语义。静态验证：TypeScript、Python AST、`git diff --check` 通过；未运行测试。详见 `CURRENT.md`。 |
 | T116 | P4 follow-up | Design a Scannable Markets Frontend | `done` | `7a15254`（设计规格） | 用户要求先交付方案和设计、后续单独指示实施。已基于真实 `/markets`、现有三视图及视觉基线提交[桌面/手机设计与状态矩阵](./docs/superpowers/specs/2026-09-29-tennixai-t116-markets-readability-design.md)，推荐优化现有信息层级。文档相对链接目标存在，暂存清单仅含设计文档且 `git diff --cached --check` 通过；未修改产品前端，也未运行产品测试或视觉回归。 |
 | T117 | P4 follow-up | Implement the Approved Markets Frontend Redesign | `done` | `ed6f6a7`（实现、回归与计划） | 生产 `/markets` 三视图按示意图优化层级、筛选和报价卡片；报价卡深绿、页面背景保持原样。长名称可换行；机会/Paper 行在桌面断点切换多列；移动菜单和机会 CTA 达到 44px。保留 URL/DTO/分页/模型/Paper 语义，冻结 `?preview=p3` 未改。focused Vitest `3 files / 38 passed`、`tsc --noEmit`、`git diff --check` 通过；真实页 375/390/768/1024/1440px 视觉检查，手机筛选 URL/重置交互通过。Playwright 因沙盒拒绝 Chromium `bootstrap_check_in` 未能启动；运行时无 Paper 行/机会数据，实际两类数据行的浏览器视觉检查未完成，见 `CURRENT.md` 与[T117 计划](./docs/superpowers/plans/2026-09-29-tennixai-t117-markets-redesign-implementation.md)。 |
+
+| T118 | P4 follow-up | Start Local Real Runtime | `blocked` | 领取 `591b4ef` | Colima 恢复后依赖 healthy；临时初始化标记丢失，依据 T113 既有批准执行幂等 init 成功（schema `0009`、3989 players / 529 matches，含 LLM 补名）。两次 up 均 `LOCAL_RUNTIME_UNHEALTHY`；持久源 recovery/daemon_tick 为 `NOT_FOUND`，应用均未启动成功。数据和用户工作区改动保留，未做 HTTP/浏览器验收；详见 CURRENT.md。 |
 
 ## P4.1 Completion Gate 核验摘要（2026-09-18，逐条实际核验）
 

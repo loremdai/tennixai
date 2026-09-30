@@ -2,13 +2,13 @@
 
 > 快速了解现在做到哪里、最近做完什么、接下来由谁接手。长期路线与阶段证据见 [ROADMAP.md](./ROADMAP.md)，产品定位和稳定架构见 [PROJECT.md](./PROJECT.md)。
 
-**最后更新：** 2026-09-30 09:04（北京时间）
+**最后更新：** 2026-09-30 09:23（北京时间）
 
-**当前主任务：** T118 — 启动本地真实项目（`in_progress`）；Codex / 本地 ADE / `main`，起始提交 `3f41bc6`，2026-09-30 09:04 CST 领取。最近完成 T117 — 按批准示意图实施市场页前端改版（`done`）；完成提交 `ed6f6a7`，验收与实现说明见下方。T113 本地启动器备用端口验收仍 `blocked`，服务栈按用户要求运行于 3100，剩余 3101 回退场景待其他 ADE 实际占用 3100 时验证。T110 私人测试服务器部署仍 `blocked`。
+**当前主任务：** T118 — 启动本地真实项目（`blocked`）；Codex / 本地 ADE / `main`，起始提交 `3f41bc6`，2026-09-30 09:04 CST 领取。最近完成 T117 — 按批准示意图实施市场页前端改版（`done`）；完成提交 `ed6f6a7`，验收与实现说明见下方。T113 本地启动器备用端口验收仍 `blocked`，此前服务栈运行于 3100；本次实际应用均已停止，T118 启动被恢复健康门阻断。3101 回退场景仍待验证。T110 私人测试服务器部署仍 `blocked`。
 
 **最近任务：** T117 — 按批准示意图实施市场页前端改版（`done`，实现 `ed6f6a7`）；T116 — 市场页信息层级与扫读体验设计（`done`，设计 `7a15254`）；T115 — 修复比赛详情页预测快照持久化与市场/GAP 展示（`done`，实现 `1d6e4d4`）；T114 — 调查比赛详情页预测模型数据未显示（`done`）；T113 — 本地启动器前端备用端口与真实运行验收（`blocked`，实现 `ea1d760`）。
 
-**最近执行者 / ADE / 分支：** Codex / 本地 ADE / `main`；T117 从 `c276bb0` 开始，2026-09-29 21:36 CST 领取，代码完成提交 `ed6f6a7`；截至收口前已 fetch `origin/main` 并确认基线一致。T116 从 `98aada0` 开始，设计 `7a15254`；T115 领取 `30ea130`、实现 `1d6e4d4`。已知用户工作区改动全部保留且不纳入任务提交。
+**最近执行者 / ADE / 分支：** Codex / 本地 ADE / `main`；T118 从 `3f41bc6` 开始，领取 `591b4ef`，当前启动受恢复错误阻塞；T117 从 `c276bb0` 开始，2026-09-29 21:36 CST 领取，代码完成提交 `ed6f6a7`；截至收口前已 fetch `origin/main` 并确认基线一致。T116 从 `98aada0` 开始，设计 `7a15254`；T115 领取 `30ea130`、实现 `1d6e4d4`。已知用户工作区改动全部保留且不纳入任务提交。
 
 **运行手册与证据：** [本地真实运行手册](docs/runbooks/local-real-runtime.md)。
 
@@ -17,6 +17,9 @@
 - **授权与领取：** 用户要求“启动项目”；Codex / 本地 ADE / `main`；起始提交 `3f41bc6`；2026-09-30 09:04 CST。
 - **核对：** 已 fetch；本地与 `origin/main` 同步。已有用户改动全部在保护清单内，保留且不提交。实际 `status` 为 stack stopped、PostgreSQL/Redis absent、三个子进程 stopped；修正此前服务仍运行的记录。
 - **范围与验收：** 使用 `./scripts/tennix-live up/status` 启动既有本地栈，检查 API 与首页 HTTP；保留数据库和 Paper 数据，不改产品代码或根 `.env`，不主动执行 LLM 核验。
+- **实际操作与证据：** 领取 `591b4ef` 已推送。首次 Compose 失败原因是 Colima 未运行；启动 Colima 后依赖健康，但 OS 临时 launcher 初始化标记已丢失，`up` 返回 `LOCAL_NOT_INITIALIZED`。依据 T113 已保存的完整初始化批准执行幂等 `init`，成功返回 `revision=0009 players=3989 matches=529`，含实际 LLM 中文名补齐；未改根 `.env`，未重置数据，未发生 schema 升级。
+- **启动阻塞：** 初始化后两次受支持 `up` 都以 `LOCAL_RUNTIME_UNHEALTHY` 失败（180 秒首次健康门未通过）；第二次持久健康源明确记录 `recovery=degraded/NOT_FOUND`、`daemon_tick=degraded/NOT_FOUND`，sports/Polymarket 为 `gap/STARTUP_RECOVERY`。日志为空，当前证据不能确定具体缺失对象。最终 `status`：PostgreSQL/Redis healthy；runtime 已被启动器停止，API/frontend 未启动。未通过 HTTP/浏览器验收。
+- **交接：** 需定位并修复恢复阶段 `NOT_FOUND` 后再执行 `up`；不绕过健康门、不手工单独启动服务、不删除旧链接或账本来掩盖错误。Colima 启动自动恢复的其他项目容器未触碰，已有用户改动全部保留。
 
 ## T116 市场页信息层级与扫读体验设计（`done`）
 
